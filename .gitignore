@@ -1,0 +1,24 @@
+# Frontend
+apps/web/node_modules/
+apps/web/.next/
+apps/web/.env.local
+apps/web/tsconfig.tsbuildinfo
+
+# Backend
+apps/api/__pycache__/
+apps/api/**/__pycache__/
+apps/api/*.pyc
+apps/api/**/*.pyc
+apps/api/.venv/
+apps/api/venv/
+apps/api/*.egg-info/
+apps/api/.env
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp

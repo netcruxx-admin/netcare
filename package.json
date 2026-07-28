@@ -1,0 +1,24 @@
+{
+  "name": "carbonhealth",
+  "version": "1.0.0",
+  "private": true,
+  "description": "CarbonHealth — Hospital Management Software (Monorepo)",
+  "scripts": {
+    "dev": "pnpm --filter web dev",
+    "dev:api": "cd apps/api && uvicorn app.main:app --reload --port 8000",
+    "dev:all": "concurrently \"pnpm dev\" \"pnpm dev:api\"",
+    "build": "pnpm --filter web build",
+    "lint": "pnpm --filter web lint",
+    "install:api": "cd apps/api && pip install -r requirements.txt",
+    "db:migrate": "cd apps/api && alembic upgrade head",
+    "db:seed": "cd apps/api && python -c 'from app.seed import seed_database; from app.database import SessionLocal; db = SessionLocal(); seed_database(db)'",
+    "setup": "pnpm install && pnpm install:api && pnpm db:migrate"
+  },
+  "devDependencies": {
+    "concurrently": "^9.0.0"
+  },
+  "engines": {
+    "node": ">=18",
+    "pnpm": ">=9"
+  }
+}
