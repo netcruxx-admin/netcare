@@ -5,7 +5,7 @@
   "description": "CarbonHealth — Hospital Management Software (Monorepo)",
   "scripts": {
     "dev": "npm run dev --prefix apps/web",
-    "dev:api": "cd apps/api && uvicorn app.main:app --reload --port 8000",
+    "dev:api": "cd apps/api && ./venv/bin/uvicorn app.main:app --reload --port 8000",
     "dev:all": "concurrently \"npm run dev\" \"npm run dev:api\"",
     "build": "npm run build --prefix apps/web",
     "lint": "npm run lint --prefix apps/web",

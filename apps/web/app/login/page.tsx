@@ -6,9 +6,9 @@ import Link from 'next/link';
 import { useFormik, FormikProvider } from 'formik';
 import * as Yup from 'yup';
 import { Heart, Mail, Lock, AlertCircle } from 'lucide-react';
-import { useActiveHospital } from '@/hooks/useActiveHospital';
-import { authOperations, authStorage } from '@/lib/auth';
+import { authStorage } from '@/lib/auth';
 import { FormField } from '@/components/form/FormField';
+import { useGetCurrentHospitalQuery, useLoginMutation } from '@/store/api';
 
 type LoginType = 'patient' | 'doctor' | 'admin' | 'lab' | 'nurse';
 
@@ -27,9 +27,12 @@ const loginSchema = Yup.object({
 
 export default function LoginPage() {
   const router = useRouter();
-  const hospital = useActiveHospital();
+  const { data: hospital } = useGetCurrentHospitalQuery();
+  const [loginMutation, { isLoading }] = useLoginMutation();
   const [error, setError] = useState('');
   const [loginType, setLoginType] = useState<LoginType>('patient');
+
+  const hospitalName = hospital?.name ?? 'Hospital';
 
   const formik = useFormik({
     initialValues: DEMO_CREDENTIALS.patient,
@@ -37,34 +40,33 @@ export default function LoginPage() {
     onSubmit: async (values, { setSubmitting }) => {
       setError('');
       try {
-        const session = await authOperations.login(values.email, values.password);
+        const result = await loginMutation({
+          email: values.email,
+          password: values.password,
+        }).unwrap();
 
-        if (!session) {
-          setError('Invalid email or password');
-          return;
-        }
-
-        // Verify role matches login type
-        if (session.user.role !== loginType) {
+        if (result.user.role !== loginType) {
           setError(`This account is not a ${loginType} account`);
           return;
         }
 
-        authStorage.setSession(session);
+        authStorage.setSession({
+          user: result.user,
+          patient: result.patient,
+          hospitalId: result.user.hospitalId ?? '',
+          token: result.token,
+          isAuthenticated: true,
+        });
 
-        if (session.user.role === 'patient') {
-          router.push('/dashboard/patient');
-        } else if (session.user.role === 'doctor') {
-          router.push('/dashboard/doctor');
-        } else if (session.user.role === 'admin') {
-          router.push('/dashboard/admin');
-        } else if (session.user.role === 'lab') {
-          router.push('/dashboard/lab');
-        } else if (session.user.role === 'nurse') {
-          router.push('/dashboard/nurse');
-        }
-      } catch (err) {
-        setError('An error occurred. Please try again.');
+        const role = result.user.role;
+        if (role === 'patient') router.push('/dashboard/patient');
+        else if (role === 'doctor') router.push('/dashboard/doctor');
+        else if (role === 'admin') router.push('/dashboard/admin');
+        else if (role === 'lab') router.push('/dashboard/lab');
+        else if (role === 'nurse') router.push('/dashboard/nurse');
+      } catch (err: unknown) {
+        const detail = (err as { data?: { detail?: string } })?.data?.detail;
+        setError(detail ?? 'Invalid email or password');
       } finally {
         setSubmitting(false);
       }
@@ -74,7 +76,6 @@ export default function LoginPage() {
   const handleTypeSelect = (type: LoginType) => {
     setLoginType(type);
     setError('');
-    // Prefill the matching demo credentials for convenience.
     formik.setValues(DEMO_CREDENTIALS[type]);
     formik.setTouched({});
   };
@@ -88,7 +89,7 @@ export default function LoginPage() {
             <Heart className="w-6 h-6 text-white" />
           </div>
           <Link href="/" className="text-2xl font-bold bg-gradient-to-r from-cyan-600 to-teal-600 bg-clip-text text-transparent hover:opacity-80">
-            {hospital.name}
+            {hospitalName}
           </Link>
         </div>
       </div>
@@ -98,7 +99,7 @@ export default function LoginPage() {
         <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl p-8 space-y-8 border border-cyan-100">
           <div className="text-center">
             <h2 className="text-3xl font-bold bg-gradient-to-r from-cyan-600 to-teal-600 bg-clip-text text-transparent">Sign In</h2>
-            <p className="text-slate-600 mt-2">Access your {hospital.name} account</p>
+            <p className="text-slate-600 mt-2">Access your {hospitalName} account</p>
           </div>
 
           {/* Login Type Selector */}
@@ -150,10 +151,10 @@ export default function LoginPage() {
 
               <button
                 type="submit"
-                disabled={formik.isSubmitting}
+                disabled={isLoading || formik.isSubmitting}
                 className="w-full bg-gradient-to-r from-cyan-500 to-teal-600 text-white py-2 rounded-lg font-semibold hover:shadow-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {formik.isSubmitting ? 'Signing in...' : 'Sign In'}
+                {isLoading || formik.isSubmitting ? 'Signing in...' : 'Sign In'}
               </button>
             </form>
           </FormikProvider>

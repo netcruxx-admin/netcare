@@ -6,62 +6,45 @@ import Link from 'next/link';
 import { Search, UserRound } from 'lucide-react';
 import { ExportButton } from '@/components/ExportButton';
 import { authStorage } from '@/lib/auth';
-import { dbOperations, Appointment, Patient, User } from '@/lib/db';
 import { DashboardShell } from '@/components/DashboardShell';
-
-interface RawData {
-  patients: Patient[];
-  users: User[];
-  appointments: Appointment[];
-}
+import { useListPatientsQuery, useListAppointmentsQuery } from '@/store/api';
 
 export default function AdminPatientsPage() {
   const router = useRouter();
   const [session, setSession] = useState<ReturnType<typeof authStorage.getSession>>(null);
-  const [raw, setRaw] = useState<RawData | null>(null);
   const [query, setQuery] = useState('');
 
   useEffect(() => {
-    const session = authStorage.getSession();
-    if (!session || session.user.role !== 'admin') {
+    const s = authStorage.getSession();
+    if (!s || s.user.role !== 'admin') {
       router.push('/login');
       return;
     }
-    setSession(session);
-    setRaw({
-      patients: dbOperations.getAllPatients(),
-      users: dbOperations.getAllUsers(),
-      appointments: dbOperations.getAllAppointments(),
-    });
+    setSession(s);
   }, [router]);
 
+  const { data: patients = [] } = useListPatientsQuery();
+  const { data: appointments = [] } = useListAppointmentsQuery();
+
   const rows = useMemo(() => {
-    if (!raw) return [];
-    const userById = new Map(raw.users.map((u) => [u.id, u]));
     const apptCount = new Map<string, number>();
-    raw.appointments.forEach((a) => apptCount.set(a.patientId, (apptCount.get(a.patientId) ?? 0) + 1));
+    appointments.forEach((a) => apptCount.set(a.patientId, (apptCount.get(a.patientId) ?? 0) + 1));
 
     const q = query.trim().toLowerCase();
-    return raw.patients
-      .map((p) => {
-        const user = userById.get(p.userId);
-        return {
-          id: p.id,
-          name: user?.name ?? '—',
-          email: user?.email ?? '—',
-          gender: p.gender || '—',
-          bloodGroup: p.bloodGroup || '—',
-          phone: p.emergencyPhone || '—',
-          appointments: apptCount.get(p.id) ?? 0,
-        };
-      })
-      .filter((r) => !q || r.name.toLowerCase().includes(q) || r.email.toLowerCase().includes(q))
-      .sort((a, b) => a.name.localeCompare(b.name));
-  }, [raw, query]);
+    return patients
+      .map((p) => ({
+        id: p.id,
+        userId: p.userId,
+        gender: p.gender || '—',
+        bloodGroup: p.bloodGroup || '—',
+        phone: p.phone || '—',
+        appointments: apptCount.get(p.id) ?? 0,
+      }))
+      .filter((r) => !q || r.id.toLowerCase().includes(q) || r.phone.toLowerCase().includes(q))
+      .sort((a, b) => b.appointments - a.appointments);
+  }, [patients, appointments, query]);
 
-  if (!session) {
-    return null;
-  }
+  if (!session) return null;
 
   return (
     <DashboardShell
@@ -78,14 +61,14 @@ export default function AdminPatientsPage() {
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search patient name or email…"
+              placeholder="Search by patient ID or phone…"
               className="w-full pl-9 pr-3 py-2 bg-white rounded-lg shadow text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
             />
           </div>
           <ExportButton
             filename="patients"
-            headers={['Name', 'Email', 'Gender', 'Blood Group', 'Appointments']}
-            rows={rows.map((r) => [r.name, r.email, r.gender, r.bloodGroup, r.appointments])}
+            headers={['Patient ID', 'Gender', 'Blood Group', 'Phone', 'Appointments']}
+            rows={rows.map((r) => [r.id, r.gender, r.bloodGroup, r.phone, r.appointments])}
           />
         </div>
 
@@ -104,10 +87,10 @@ export default function AdminPatientsPage() {
               <table className="w-full">
                 <thead>
                   <tr className="border-b bg-slate-50">
-                    <th className="text-left py-3 px-6 font-semibold text-slate-900">Name</th>
-                    <th className="text-left py-3 px-6 font-semibold text-slate-900">Email</th>
+                    <th className="text-left py-3 px-6 font-semibold text-slate-900">Patient ID</th>
                     <th className="text-left py-3 px-6 font-semibold text-slate-900">Gender</th>
                     <th className="text-left py-3 px-6 font-semibold text-slate-900">Blood Group</th>
+                    <th className="text-left py-3 px-6 font-semibold text-slate-900">Phone</th>
                     <th className="text-left py-3 px-6 font-semibold text-slate-900">Appointments</th>
                     <th className="text-right py-3 px-6 font-semibold text-slate-900">Actions</th>
                   </tr>
@@ -115,10 +98,10 @@ export default function AdminPatientsPage() {
                 <tbody>
                   {rows.map((r) => (
                     <tr key={r.id} className="border-b hover:bg-slate-50">
-                      <td className="py-3 px-6 font-medium">{r.name}</td>
-                      <td className="py-3 px-6 text-slate-600">{r.email}</td>
+                      <td className="py-3 px-6 font-mono text-sm text-slate-700">{r.id}</td>
                       <td className="py-3 px-6 text-slate-600">{r.gender}</td>
                       <td className="py-3 px-6 text-slate-600">{r.bloodGroup}</td>
+                      <td className="py-3 px-6 text-slate-600">{r.phone}</td>
                       <td className="py-3 px-6 font-semibold text-slate-900">{r.appointments}</td>
                       <td className="py-3 px-6 text-right">
                         <Link href={`/patient/${r.id}`} className="text-cyan-600 hover:text-cyan-700 font-semibold text-sm">

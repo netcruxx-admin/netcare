@@ -6,11 +6,15 @@ import { Formik, Form } from 'formik';
 import * as Yup from 'yup';
 import { Plus, X, Building2, AlertTriangle } from 'lucide-react';
 import { authStorage } from '@/lib/auth';
-import { dbOperations, Department } from '@/lib/db';
 import { DashboardShell } from '@/components/DashboardShell';
 import { FormField } from '@/components/form/FormField';
-
-const generateId = () => `dept-${Math.random().toString(36).slice(2, 9)}`;
+import {
+  useListDepartmentsQuery,
+  useCreateDepartmentMutation,
+  useUpdateDepartmentMutation,
+  useDeleteDepartmentMutation,
+} from '@/store/api';
+import type { Department } from '@/lib/types';
 
 const departmentSchema = Yup.object({
   name: Yup.string().trim().required('Name is required').max(100, 'Keep it under 100 characters'),
@@ -20,52 +24,38 @@ const departmentSchema = Yup.object({
 export default function AdminDepartmentsPage() {
   const router = useRouter();
   const [session, setSession] = useState<ReturnType<typeof authStorage.getSession>>(null);
-  const [departments, setDepartments] = useState<Department[]>([]);
-
-  // Modal state: null = closed, otherwise holds the department being edited/created
   const [editing, setEditing] = useState<Department | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
-
-  // Department pending deletion (null = no delete modal open)
   const [deleting, setDeleting] = useState<Department | null>(null);
 
-  const refresh = () => setDepartments([...dbOperations.getAllDepartments()]);
-
   useEffect(() => {
-    const session = authStorage.getSession();
-    if (!session || session.user.role !== 'admin') {
+    const s = authStorage.getSession();
+    if (!s || s.user.role !== 'admin') {
       router.push('/login');
     } else {
-      setSession(session);
-      refresh();
+      setSession(s);
     }
   }, [router]);
 
-  const openAdd = () => {
-    setEditing(null);
-    setModalOpen(true);
-  };
+  const { data: departments = [] } = useListDepartmentsQuery();
+  const [createDepartment] = useCreateDepartmentMutation();
+  const [updateDepartment] = useUpdateDepartmentMutation();
+  const [deleteDepartment] = useDeleteDepartmentMutation();
 
-  const openEdit = (dept: Department) => {
-    setEditing(dept);
-    setModalOpen(true);
-  };
+  const openAdd = () => { setEditing(null); setModalOpen(true); };
+  const openEdit = (dept: Department) => { setEditing(dept); setModalOpen(true); };
+  const closeModal = () => { setModalOpen(false); setEditing(null); };
 
-  const closeModal = () => {
-    setModalOpen(false);
-    setEditing(null);
-  };
-
-  const confirmDelete = () => {
+  const confirmDelete = async () => {
     if (!deleting) return;
-    dbOperations.deleteDepartment(deleting.id);
-    refresh();
-    setDeleting(null);
+    try {
+      await deleteDepartment(deleting.id).unwrap();
+    } finally {
+      setDeleting(null);
+    }
   };
 
-  if (!session) {
-    return null;
-  }
+  if (!session) return null;
 
   return (
     <DashboardShell
@@ -153,47 +143,52 @@ export default function AdminDepartmentsPage() {
                 description: editing?.description ?? '',
               }}
               validationSchema={departmentSchema}
-              onSubmit={(values) => {
-                if (editing) {
-                  dbOperations.updateDepartment(editing.id, {
-                    name: values.name.trim(),
-                    description: values.description.trim(),
-                  });
-                } else {
-                  dbOperations.createDepartment({
-                    id: generateId(),
-                    name: values.name.trim(),
-                    description: values.description.trim(),
-                  });
+              onSubmit={async (values, { setSubmitting }) => {
+                try {
+                  if (editing) {
+                    await updateDepartment({
+                      id: editing.id,
+                      body: { name: values.name.trim(), description: values.description.trim() },
+                    }).unwrap();
+                  } else {
+                    await createDepartment({
+                      name: values.name.trim(),
+                      description: values.description.trim(),
+                    }).unwrap();
+                  }
+                  closeModal();
+                } finally {
+                  setSubmitting(false);
                 }
-                refresh();
-                closeModal();
               }}
             >
-              <Form className="space-y-4">
-                <FormField name="name" label="Name" placeholder="e.g. Obstetrics & Gynecology" autoFocus required />
-                <FormField
-                  name="description"
-                  label="Description"
-                  as="textarea"
-                  placeholder="Short description of the department"
-                />
-                <div className="flex gap-3 pt-2">
-                  <button
-                    type="button"
-                    onClick={closeModal}
-                    className="flex-1 px-4 py-2 bg-slate-200 text-slate-700 rounded hover:bg-slate-300 transition"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    className="flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-teal-600 text-white rounded hover:shadow-lg font-semibold transition"
-                  >
-                    {editing ? 'Save Changes' : 'Add Department'}
-                  </button>
-                </div>
-              </Form>
+              {({ isSubmitting }) => (
+                <Form className="space-y-4">
+                  <FormField name="name" label="Name" placeholder="e.g. Obstetrics & Gynecology" autoFocus required />
+                  <FormField
+                    name="description"
+                    label="Description"
+                    as="textarea"
+                    placeholder="Short description of the department"
+                  />
+                  <div className="flex gap-3 pt-2">
+                    <button
+                      type="button"
+                      onClick={closeModal}
+                      className="flex-1 px-4 py-2 bg-slate-200 text-slate-700 rounded hover:bg-slate-300 transition"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={isSubmitting}
+                      className="flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-teal-600 text-white rounded hover:shadow-lg font-semibold transition disabled:opacity-50"
+                    >
+                      {isSubmitting ? 'Saving…' : editing ? 'Save Changes' : 'Add Department'}
+                    </button>
+                  </div>
+                </Form>
+              )}
             </Formik>
           </div>
         </div>

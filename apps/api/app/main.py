@@ -11,13 +11,20 @@ from .database import SessionLocal
 from .routers import (
     appointments,
     auth,
+    babies,
     departments,
     doctors,
     hospitals,
+    lab,
+    lab_tests,
+    maternity,
     medical_records,
+    medicines,
     patients,
     payments,
     prescriptions,
+    schedule,
+    video_slots,
     vitals,
 )
 from .seed import seed_database
@@ -74,6 +81,13 @@ for module in (
     payments,
     prescriptions,
     vitals,
+    medicines,
+    lab_tests,
+    lab,
+    schedule,
+    video_slots,
+    maternity,
+    babies,
 ):
     app.include_router(module.router)
 

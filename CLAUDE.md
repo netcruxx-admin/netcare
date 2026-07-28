@@ -123,4 +123,4 @@ pnpm dev:all   # starts both frontend and backend
 - **Phase 3:** Email notifications, Payments (Razorpay), File uploads, Pagination, Superadmin panel
 - **Phase 4:** Telemedicine, WhatsApp, Mobile app
 
-Full roadmap: `apps/web/PRODUCT_ROADMAP.md`
+Full roadmap: `/PRODUCT_ROADMAP.md`

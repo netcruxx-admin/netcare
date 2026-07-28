@@ -15,8 +15,6 @@ import {
   Building2,
   IndianRupee,
   Wallet,
-  FlaskConical,
-  AlertTriangle,
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -34,9 +32,15 @@ import {
   Tooltip,
 } from 'recharts';
 import { authStorage } from '@/lib/auth';
-import { dbOperations, Appointment, Payment, Department, Doctor, Patient, User, TestOrder, TestResult } from '@/lib/db';
 import { DashboardShell } from '@/components/DashboardShell';
-import { isAbnormal } from '@/lib/lab';
+import {
+  useListAppointmentsQuery,
+  useListPaymentsQuery,
+  useListDepartmentsQuery,
+  useListDoctorsQuery,
+  useListPatientsQuery,
+} from '@/store/api';
+import type { Appointment } from '@/lib/types';
 
 interface Kpi {
   label: string;
@@ -57,7 +61,6 @@ const dayFmt = (offset: number) =>
 const shortLabel = (dateStr: string) =>
   new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 
-// Inclusive list of YYYY-MM-DD strings between two dates.
 function daysBetween(startStr: string, endStr: string) {
   const out: string[] = [];
   const end = new Date(endStr);
@@ -74,97 +77,43 @@ const PERIODS: { label: string; value: number | null }[] = [
   { label: 'All', value: null },
 ];
 
-interface RawData {
-  appointments: Appointment[];
-  payments: Payment[];
-  departments: Department[];
-  doctors: Doctor[];
-  patients: Patient[];
-  users: User[];
-  testOrders: TestOrder[];
-  testResults: TestResult[];
-}
-
 export default function AdminDashboard() {
   const router = useRouter();
   const [session, setSession] = useState<ReturnType<typeof authStorage.getSession>>(null);
-  const [raw, setRaw] = useState<RawData | null>(null);
-  const [period, setPeriod] = useState<number | null>(null); // null = all time
+  const [period, setPeriod] = useState<number | null>(null);
   const [deptId, setDeptId] = useState<string>('all');
 
   useEffect(() => {
-    const session = authStorage.getSession();
-    if (!session || session.user.role !== 'admin') {
+    const s = authStorage.getSession();
+    if (!s || s.user.role !== 'admin') {
       router.push('/login');
       return;
     }
-    setSession(session);
-    setRaw({
-      appointments: dbOperations.getAllAppointments(),
-      payments: dbOperations.getAllPayments(),
-      departments: dbOperations.getAllDepartments(),
-      doctors: dbOperations.getAllDoctors(),
-      patients: dbOperations.getAllPatients(),
-      users: dbOperations.getAllUsers(),
-      testOrders: dbOperations.getAllTestOrders(),
-      testResults: dbOperations.getAllTestResults(),
-    });
+    setSession(s);
   }, [router]);
 
-  const labStats = useMemo(() => {
-    if (!raw) return null;
-    const { testOrders, testResults } = raw;
-    const resultsByOrder = new Map<string, TestResult[]>();
-    testResults.forEach((r) => {
-      const list = resultsByOrder.get(r.orderId) ?? [];
-      list.push(r);
-      resultsByOrder.set(r.orderId, list);
-    });
-
-    const published = testOrders.filter((o) => o.status === 'completed' || o.status === 'reviewed');
-    const revenue = published.reduce((sum, o) => sum + o.items.reduce((s, i) => s + i.price, 0), 0);
-    const abnormalReports = published.filter((o) =>
-      (resultsByOrder.get(o.id) ?? []).some((r) => r.parameters.some((p) => isAbnormal(p.flag))),
-    ).length;
-
-    // Most-ordered tests
-    const counts = new Map<string, number>();
-    testOrders.forEach((o) => o.items.forEach((i) => counts.set(i.name, (counts.get(i.name) ?? 0) + 1)));
-    const topTests = [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5);
-    const maxTop = topTests[0]?.[1] ?? 1;
-
-    return {
-      total: testOrders.length,
-      pending: testOrders.filter((o) => o.status !== 'reviewed' && o.status !== 'completed').length,
-      published: published.length,
-      revenue,
-      abnormalReports,
-      topTests,
-      maxTop,
-    };
-  }, [raw]);
+  const { data: appointments = [] } = useListAppointmentsQuery();
+  const { data: payments = [] } = useListPaymentsQuery();
+  const { data: departments = [] } = useListDepartmentsQuery();
+  const { data: doctors = [] } = useListDoctorsQuery();
+  const { data: patients = [] } = useListPatientsQuery();
 
   const data = useMemo(() => {
-    if (!raw) return null;
-    const { appointments, payments, departments, doctors, patients, users } = raw;
     const today = new Date().toISOString().split('T')[0];
 
-    const userById = new Map(users.map((u) => [u.id, u]));
     const doctorById = new Map(doctors.map((d) => [d.id, d]));
-    const patientById = new Map(patients.map((p) => [p.id, p]));
     const deptById = new Map(departments.map((d) => [d.id, d]));
-    const apptById = new Map(appointments.map((a) => [a.id, a]));
+    const patientById = new Map(patients.map((p) => [p.id, p]));
 
-    const doctorName = (id: string) => {
-      const u = doctorById.get(id) ? userById.get(doctorById.get(id)!.userId) : null;
-      return u ? `Dr. ${u.name}` : '—';
+    const doctorLabel = (id: string) => {
+      const doc = doctorById.get(id);
+      return doc ? `Dr. (${doc.specialization || id.slice(-6)})` : '—';
     };
-    const patientName = (id: string) => {
-      const u = patientById.get(id) ? userById.get(patientById.get(id)!.userId) : null;
-      return u ? u.name : '—';
+    const patientLabel = (id: string) => {
+      const pat = patientById.get(id);
+      return pat?.phone ? pat.phone : `#${id.slice(-6)}`;
     };
 
-    // Chart day range + scoping window
     let chartStart: string;
     let chartEnd: string;
     if (period) {
@@ -192,7 +141,7 @@ export default function AdminDashboard() {
       { label: 'Scheduled', value: String(byStatus('scheduled')), icon: Clock, tint: 'bg-blue-100 text-blue-600' },
       { label: 'Completed', value: String(byStatus('completed')), icon: CheckCircle, tint: 'bg-green-100 text-green-600' },
       { label: 'Cancelled', value: String(byStatus('cancelled')), icon: XCircle, tint: 'bg-red-100 text-red-600' },
-      { label: 'Patients', value: String(users.filter((u) => u.role === 'patient').length), icon: Users, tint: 'bg-cyan-100 text-cyan-600' },
+      { label: 'Patients', value: String(patients.length), icon: Users, tint: 'bg-cyan-100 text-cyan-600' },
       { label: 'Doctors', value: String(doctors.length), icon: Stethoscope, tint: 'bg-teal-100 text-teal-600' },
       { label: 'Departments', value: String(departments.length), icon: Building2, tint: 'bg-indigo-100 text-indigo-600' },
       { label: 'Revenue Collected', value: inr(revenue), icon: IndianRupee, tint: 'bg-emerald-100 text-emerald-600' },
@@ -216,6 +165,7 @@ export default function AdminDashboard() {
     ];
 
     const deptScope = deptId === 'all' ? departments : departments.filter((d) => d.id === deptId);
+    const apptById = new Map(appointments.map((a) => [a.id, a]));
     const deptData = deptScope.map((dep) => ({
       name: dep.name,
       count: scoped.filter((a) => a.departmentId === dep.id).length,
@@ -233,7 +183,6 @@ export default function AdminDashboard() {
       { name: 'Failed', value: scopedPay.filter((p) => p.status === 'failed').length, color: PAYMENT_COLORS.failed },
     ];
 
-    // Upcoming: forward-looking, department-filtered (ignores the period window)
     const upcoming = appointments
       .filter((a) => a.status === 'scheduled' && a.date >= today && (deptId === 'all' || a.departmentId === deptId))
       .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0))
@@ -242,8 +191,8 @@ export default function AdminDashboard() {
         id: a.id,
         date: a.date,
         time: a.time,
-        patient: patientName(a.patientId),
-        doctor: doctorName(a.doctorId),
+        patient: patientLabel(a.patientId),
+        doctor: doctorLabel(a.doctorId),
         dept: deptById.get(a.departmentId)?.name ?? '—',
       }));
 
@@ -261,11 +210,9 @@ export default function AdminDashboard() {
       tickInterval,
       upcoming,
     };
-  }, [raw, period, deptId]);
+  }, [appointments, payments, departments, doctors, patients, period, deptId]);
 
-  if (!session || !data) {
-    return null;
-  }
+  if (!session) return null;
 
   return (
     <DashboardShell
@@ -299,10 +246,8 @@ export default function AdminDashboard() {
             className="bg-white rounded-lg shadow px-3 py-2 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-cyan-500"
           >
             <option value="all">All Departments</option>
-            {raw?.departments.map((d) => (
-              <option key={d.id} value={d.id}>
-                {d.name}
-              </option>
+            {departments.map((d) => (
+              <option key={d.id} value={d.id}>{d.name}</option>
             ))}
           </select>
           <span className="text-sm text-slate-500 ml-auto">
@@ -456,54 +401,6 @@ export default function AdminDashboard() {
             </div>
           </div>
         </div>
-
-        {/* Laboratory */}
-        {labStats && (
-          <>
-            <h2 className="text-lg font-bold text-slate-900 pt-2">Laboratory</h2>
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-              {[
-                { label: 'Total Orders', value: String(labStats.total), icon: FlaskConical, tint: 'bg-cyan-100 text-cyan-600' },
-                { label: 'Pending', value: String(labStats.pending), icon: Clock, tint: 'bg-amber-100 text-amber-600' },
-                { label: 'Lab Revenue', value: inr(labStats.revenue), icon: IndianRupee, tint: 'bg-emerald-100 text-emerald-600' },
-                { label: 'Abnormal Reports', value: String(labStats.abnormalReports), icon: AlertTriangle, tint: 'bg-red-100 text-red-600' },
-              ].map((c) => {
-                const Icon = c.icon;
-                return (
-                  <div key={c.label} className="bg-white rounded-lg shadow p-4 flex items-center gap-3">
-                    <div className={`w-11 h-11 rounded-lg flex items-center justify-center shrink-0 ${c.tint}`}>
-                      <Icon className="w-5 h-5" />
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-2xl font-bold text-slate-900 leading-tight">{c.value}</p>
-                      <p className="text-xs text-slate-500">{c.label}</p>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-            <div className="bg-white rounded-lg shadow p-6">
-              <h3 className="font-semibold text-slate-900 mb-4">Most Ordered Tests</h3>
-              {labStats.topTests.length === 0 ? (
-                <p className="text-slate-500 text-sm">No test orders yet.</p>
-              ) : (
-                <ul className="space-y-3">
-                  {labStats.topTests.map(([name, count]) => (
-                    <li key={name}>
-                      <div className="flex items-center justify-between text-sm mb-1">
-                        <span className="text-slate-700">{name}</span>
-                        <span className="font-semibold text-slate-900">{count}</span>
-                      </div>
-                      <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
-                        <div className="h-full rounded-full bg-gradient-to-r from-cyan-500 to-teal-600" style={{ width: `${(count / labStats.maxTop) * 100}%` }} />
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          </>
-        )}
 
         {/* Upcoming appointments */}
         <div className="bg-white rounded-lg shadow">

@@ -12,6 +12,17 @@ AppointmentMode = Literal["in-person", "video"]
 PaymentStatus = Literal["pending", "completed", "failed"]
 HospitalCategory = Literal["maternity", "multi-specialty", "dental", "eye", "diagnostic"]
 HospitalStatus = Literal["active", "suspended"]
+TestOrderStatus = Literal[
+    "ordered", "sample_collected", "in_progress", "completed", "reviewed"
+]
+TestPriority = Literal["routine", "urgent"]
+ResultFlag = Literal["normal", "low", "high", "critical"]
+BlockType = Literal["break", "ot", "block"]
+VideoSlotStatus = Literal["open", "booked"]
+PregnancyStatus = Literal["active", "delivered", "closed"]
+BabySex = Literal["male", "female"]
+DeliveryType = Literal["normal", "c-section", "assisted"]
+ImmunizationStatus = Literal["pending", "given"]
 
 
 class CamelModel(BaseModel):
@@ -289,6 +300,339 @@ class VitalsOut(CamelModel):
     weight: float = 0
     height: float = 0
     notes: str = ""
+    created_at: str
+
+
+# ---------- Payment update ----------
+class PaymentUpdate(CamelModel):
+    status: Optional[PaymentStatus] = None
+    payment_method: Optional[str] = None
+
+
+# ---------- Medicine (pharmacy catalog) ----------
+class MedicineCreate(CamelModel):
+    name: str
+    category: str = ""
+    form: str = ""
+    strength: str = ""
+    price: float = 0
+    stock: int = 0
+
+
+class MedicineUpdate(CamelModel):
+    name: Optional[str] = None
+    category: Optional[str] = None
+    form: Optional[str] = None
+    strength: Optional[str] = None
+    price: Optional[float] = None
+    stock: Optional[int] = None
+
+
+class MedicineOut(CamelModel):
+    id: str
+    hospital_id: Optional[str] = None
+    name: str
+    category: str = ""
+    form: str = ""
+    strength: str = ""
+    price: float = 0
+    stock: int = 0
+
+
+# ---------- Lab test (diagnostics catalog) ----------
+class TestParameterTemplate(CamelModel):
+    name: str
+    unit: str = ""
+    reference_range: str = ""
+    low: Optional[float] = None
+    high: Optional[float] = None
+
+
+class LabTestCreate(CamelModel):
+    name: str
+    category: str = ""
+    sample_type: str = ""
+    price: float = 0
+    turnaround_time: str = ""
+    parameters: List[TestParameterTemplate] = []
+
+
+class LabTestUpdate(CamelModel):
+    name: Optional[str] = None
+    category: Optional[str] = None
+    sample_type: Optional[str] = None
+    price: Optional[float] = None
+    turnaround_time: Optional[str] = None
+    parameters: Optional[List[TestParameterTemplate]] = None
+
+
+class LabTestOut(CamelModel):
+    id: str
+    hospital_id: Optional[str] = None
+    name: str
+    category: str = ""
+    sample_type: str = ""
+    price: float = 0
+    turnaround_time: str = ""
+    parameters: List[TestParameterTemplate] = []
+
+
+# ---------- Test order + result ----------
+class TestOrderItem(CamelModel):
+    test_id: str
+    name: str
+    price: float = 0
+
+
+class TestOrderCreate(CamelModel):
+    patient_id: str
+    doctor_id: str
+    appointment_id: Optional[str] = None
+    items: List[TestOrderItem] = []
+    priority: TestPriority = "routine"
+    clinical_note: str = ""
+
+
+class TestOrderUpdate(CamelModel):
+    status: Optional[TestOrderStatus] = None
+    priority: Optional[TestPriority] = None
+    clinical_note: Optional[str] = None
+
+
+class TestOrderOut(CamelModel):
+    id: str
+    hospital_id: Optional[str] = None
+    patient_id: str
+    doctor_id: str
+    appointment_id: Optional[str] = None
+    items: List[TestOrderItem] = []
+    status: TestOrderStatus = "ordered"
+    priority: TestPriority = "routine"
+    clinical_note: str = ""
+    ordered_at: str
+    updated_at: str
+
+
+class TestResultParameter(CamelModel):
+    name: str
+    value: str = ""
+    unit: str = ""
+    reference_range: str = ""
+    flag: ResultFlag = "normal"
+
+
+class TestResultUpsert(CamelModel):
+    order_id: str
+    test_id: str
+    test_name: str = ""
+    parameters: List[TestResultParameter] = []
+    remarks: str = ""
+    reported_by: str = ""
+
+
+class TestResultOut(CamelModel):
+    id: str
+    hospital_id: Optional[str] = None
+    order_id: str
+    test_id: str
+    test_name: str = ""
+    parameters: List[TestResultParameter] = []
+    remarks: str = ""
+    reported_by: str = ""
+    reported_at: str
+
+
+# ---------- Schedule block ----------
+class ScheduleBlockCreate(CamelModel):
+    doctor_id: str
+    date: str
+    start_time: str
+    end_time: str
+    type: BlockType = "block"
+    note: str = ""
+
+
+class ScheduleBlockOut(CamelModel):
+    id: str
+    hospital_id: Optional[str] = None
+    doctor_id: str
+    date: str
+    start_time: str
+    end_time: str
+    type: BlockType = "block"
+    note: str = ""
+    created_at: str
+
+
+# ---------- Video slot ----------
+class VideoSlotCreate(CamelModel):
+    doctor_id: str
+    date: str
+    time: str
+
+
+class VideoSlotBook(CamelModel):
+    appointment_id: str
+
+
+class VideoSlotOut(CamelModel):
+    id: str
+    hospital_id: Optional[str] = None
+    doctor_id: str
+    date: str
+    time: str
+    status: VideoSlotStatus = "open"
+    appointment_id: Optional[str] = None
+    created_at: str
+
+
+# ---------- Pregnancy record ----------
+class PregnancyCreate(CamelModel):
+    patient_id: str
+    lmp: str
+    edd: str
+    gravida: int = 0
+    para: int = 0
+    height: float = 0
+    pre_pregnancy_weight: float = 0
+    blood_group: str = ""
+    risk_factors: List[str] = []
+    status: PregnancyStatus = "active"
+    notes: str = ""
+
+
+class PregnancyUpdate(CamelModel):
+    edd: Optional[str] = None
+    gravida: Optional[int] = None
+    para: Optional[int] = None
+    height: Optional[float] = None
+    pre_pregnancy_weight: Optional[float] = None
+    blood_group: Optional[str] = None
+    risk_factors: Optional[List[str]] = None
+    status: Optional[PregnancyStatus] = None
+    notes: Optional[str] = None
+
+
+class PregnancyOut(CamelModel):
+    id: str
+    hospital_id: Optional[str] = None
+    patient_id: str
+    lmp: str
+    edd: str
+    gravida: int = 0
+    para: int = 0
+    height: float = 0
+    pre_pregnancy_weight: float = 0
+    blood_group: str = ""
+    risk_factors: List[str] = []
+    status: PregnancyStatus = "active"
+    notes: str = ""
+    created_at: str
+
+
+# ---------- ANC visit ----------
+class ANCVisitCreate(CamelModel):
+    pregnancy_id: str
+    patient_id: str
+    doctor_id: str
+    date: str
+    weeks: int = 0
+    weight: float = 0
+    systolic: int = 0
+    diastolic: int = 0
+    fundal_height: float = 0
+    hemoglobin: float = 0
+    fetal_heart_rate: int = 0
+    notes: str = ""
+
+
+class ANCVisitOut(CamelModel):
+    id: str
+    hospital_id: Optional[str] = None
+    pregnancy_id: str
+    patient_id: str
+    doctor_id: str
+    date: str
+    weeks: int = 0
+    weight: float = 0
+    systolic: int = 0
+    diastolic: int = 0
+    fundal_height: float = 0
+    hemoglobin: float = 0
+    fetal_heart_rate: int = 0
+    notes: str = ""
+    created_at: str
+
+
+# ---------- Baby / growth / immunization ----------
+class BabyCreate(CamelModel):
+    mother_patient_id: str
+    pregnancy_id: Optional[str] = None
+    name: str
+    date_of_birth: str
+    sex: BabySex = "female"
+    birth_weight: float = 0
+    birth_length: float = 0
+    head_circumference: float = 0
+    delivery_type: DeliveryType = "normal"
+    gestational_weeks: int = 0
+
+
+class BabyOut(CamelModel):
+    id: str
+    hospital_id: Optional[str] = None
+    mother_patient_id: str
+    pregnancy_id: Optional[str] = None
+    name: str
+    date_of_birth: str
+    sex: BabySex = "female"
+    birth_weight: float = 0
+    birth_length: float = 0
+    head_circumference: float = 0
+    delivery_type: DeliveryType = "normal"
+    gestational_weeks: int = 0
+    created_at: str
+
+
+class GrowthMeasurementCreate(CamelModel):
+    date: str
+    weight: float = 0
+    height: float = 0
+    head_circumference: float = 0
+
+
+class GrowthMeasurementOut(CamelModel):
+    id: str
+    hospital_id: Optional[str] = None
+    baby_id: str
+    date: str
+    weight: float = 0
+    height: float = 0
+    head_circumference: float = 0
+    created_at: str
+
+
+class ImmunizationCreate(CamelModel):
+    vaccine: str
+    age_label: str = ""
+    due_date: str
+    status: ImmunizationStatus = "pending"
+    given_date: Optional[str] = None
+
+
+class ImmunizationMarkGiven(CamelModel):
+    given_date: str
+
+
+class ImmunizationOut(CamelModel):
+    id: str
+    hospital_id: Optional[str] = None
+    baby_id: str
+    vaccine: str
+    age_label: str = ""
+    due_date: str
+    status: ImmunizationStatus = "pending"
+    given_date: Optional[str] = None
     created_at: str
 
 

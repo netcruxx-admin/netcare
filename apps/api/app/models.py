@@ -194,3 +194,205 @@ class Vitals(Base):
     height = Column(Float, default=0)
     notes = Column(Text, default="")
     created_at = Column(String, nullable=False)
+
+
+# -----------------------------------------------------------------------------
+# Catalog — pharmacy + diagnostics offerings, seeded per hospital.
+# -----------------------------------------------------------------------------
+
+
+class Medicine(Base):
+    __tablename__ = "medicines"
+
+    id = Column(String, primary_key=True)
+    hospital_id = Column(String, ForeignKey("hospitals.id"), index=True, nullable=False)
+    name = Column(String, nullable=False)
+    category = Column(String, default="")
+    form = Column(String, default="")
+    strength = Column(String, default="")
+    price = Column(Float, default=0)
+    stock = Column(Integer, default=0)
+
+
+class LabTest(Base):
+    __tablename__ = "lab_tests"
+
+    id = Column(String, primary_key=True)
+    hospital_id = Column(String, ForeignKey("hospitals.id"), index=True, nullable=False)
+    name = Column(String, nullable=False)
+    category = Column(String, default="")
+    sample_type = Column(String, default="")
+    price = Column(Float, default=0)
+    turnaround_time = Column(String, default="")
+    # Optional result template: [{"name","unit","referenceRange","low?","high?"}]
+    parameters = Column(JSON, default=list)
+
+
+# -----------------------------------------------------------------------------
+# Lab orders + results.
+# -----------------------------------------------------------------------------
+
+
+class TestOrder(Base):
+    __tablename__ = "test_orders"
+
+    id = Column(String, primary_key=True)
+    hospital_id = Column(String, ForeignKey("hospitals.id"), index=True, nullable=False)
+    patient_id = Column(String, index=True, nullable=False)
+    doctor_id = Column(String, index=True, nullable=False)
+    appointment_id = Column(String, nullable=True)
+    # [{"testId","name","price"}]
+    items = Column(JSON, default=list)
+    # ordered | sample_collected | in_progress | completed | reviewed
+    status = Column(String, default="ordered")
+    priority = Column(String, default="routine")  # routine | urgent
+    clinical_note = Column(Text, default="")
+    ordered_at = Column(String, nullable=False)
+    updated_at = Column(String, nullable=False)
+
+
+class TestResult(Base):
+    __tablename__ = "test_results"
+
+    id = Column(String, primary_key=True)
+    hospital_id = Column(String, ForeignKey("hospitals.id"), index=True, nullable=False)
+    order_id = Column(String, index=True, nullable=False)
+    test_id = Column(String, nullable=False)
+    test_name = Column(String, default="")
+    # [{"name","value","unit","referenceRange","flag"}]
+    parameters = Column(JSON, default=list)
+    remarks = Column(Text, default="")
+    reported_by = Column(String, default="")
+    reported_at = Column(String, nullable=False)
+
+
+# -----------------------------------------------------------------------------
+# Scheduling — doctor blocks (breaks / OT / unavailable).
+# -----------------------------------------------------------------------------
+
+
+class ScheduleBlock(Base):
+    __tablename__ = "schedule_blocks"
+
+    id = Column(String, primary_key=True)
+    hospital_id = Column(String, ForeignKey("hospitals.id"), index=True, nullable=False)
+    doctor_id = Column(String, index=True, nullable=False)
+    date = Column(String, nullable=False)
+    start_time = Column(String, nullable=False)
+    end_time = Column(String, nullable=False)
+    type = Column(String, default="block")  # break | ot | block
+    note = Column(Text, default="")
+    created_at = Column(String, nullable=False)
+
+
+# -----------------------------------------------------------------------------
+# Telemedicine — video-consultation slots.
+# -----------------------------------------------------------------------------
+
+
+class VideoSlot(Base):
+    __tablename__ = "video_slots"
+
+    id = Column(String, primary_key=True)
+    hospital_id = Column(String, ForeignKey("hospitals.id"), index=True, nullable=False)
+    doctor_id = Column(String, index=True, nullable=False)
+    date = Column(String, nullable=False)
+    time = Column(String, nullable=False)
+    status = Column(String, default="open")  # open | booked
+    appointment_id = Column(String, nullable=True)
+    created_at = Column(String, nullable=False)
+
+
+# -----------------------------------------------------------------------------
+# Maternity signature tables — pregnancy records + antenatal (ANC) visits.
+# Only used when the `anc` module is enabled for the hospital.
+# -----------------------------------------------------------------------------
+
+
+class PregnancyRecord(Base):
+    __tablename__ = "pregnancy_records"
+
+    id = Column(String, primary_key=True)
+    hospital_id = Column(String, ForeignKey("hospitals.id"), index=True, nullable=False)
+    patient_id = Column(String, index=True, nullable=False)
+    lmp = Column(String, nullable=False)  # last menstrual period
+    edd = Column(String, nullable=False)  # estimated due date
+    gravida = Column(Integer, default=0)
+    para = Column(Integer, default=0)
+    height = Column(Float, default=0)
+    pre_pregnancy_weight = Column(Float, default=0)
+    blood_group = Column(String, default="")
+    risk_factors = Column(JSON, default=list)
+    status = Column(String, default="active")  # active | delivered | closed
+    notes = Column(Text, default="")
+    created_at = Column(String, nullable=False)
+
+
+class ANCVisit(Base):
+    __tablename__ = "anc_visits"
+
+    id = Column(String, primary_key=True)
+    hospital_id = Column(String, ForeignKey("hospitals.id"), index=True, nullable=False)
+    pregnancy_id = Column(String, index=True, nullable=False)
+    patient_id = Column(String, index=True, nullable=False)
+    doctor_id = Column(String, nullable=False)
+    date = Column(String, nullable=False)
+    weeks = Column(Integer, default=0)
+    weight = Column(Float, default=0)
+    systolic = Column(Integer, default=0)
+    diastolic = Column(Integer, default=0)
+    fundal_height = Column(Float, default=0)
+    hemoglobin = Column(Float, default=0)
+    fetal_heart_rate = Column(Integer, default=0)
+    notes = Column(Text, default="")
+    created_at = Column(String, nullable=False)
+
+
+# -----------------------------------------------------------------------------
+# Newborn — baby records, growth measurements, immunizations.
+# -----------------------------------------------------------------------------
+
+
+class Baby(Base):
+    __tablename__ = "babies"
+
+    id = Column(String, primary_key=True)
+    hospital_id = Column(String, ForeignKey("hospitals.id"), index=True, nullable=False)
+    mother_patient_id = Column(String, index=True, nullable=False)
+    pregnancy_id = Column(String, nullable=True)
+    name = Column(String, nullable=False)
+    date_of_birth = Column(String, nullable=False)
+    sex = Column(String, default="female")  # male | female
+    birth_weight = Column(Float, default=0)
+    birth_length = Column(Float, default=0)
+    head_circumference = Column(Float, default=0)
+    delivery_type = Column(String, default="normal")  # normal | c-section | assisted
+    gestational_weeks = Column(Integer, default=0)
+    created_at = Column(String, nullable=False)
+
+
+class GrowthMeasurement(Base):
+    __tablename__ = "growth_measurements"
+
+    id = Column(String, primary_key=True)
+    hospital_id = Column(String, ForeignKey("hospitals.id"), index=True, nullable=False)
+    baby_id = Column(String, index=True, nullable=False)
+    date = Column(String, nullable=False)
+    weight = Column(Float, default=0)
+    height = Column(Float, default=0)
+    head_circumference = Column(Float, default=0)
+    created_at = Column(String, nullable=False)
+
+
+class Immunization(Base):
+    __tablename__ = "immunizations"
+
+    id = Column(String, primary_key=True)
+    hospital_id = Column(String, ForeignKey("hospitals.id"), index=True, nullable=False)
+    baby_id = Column(String, index=True, nullable=False)
+    vaccine = Column(String, nullable=False)
+    age_label = Column(String, default="")
+    due_date = Column(String, nullable=False)
+    status = Column(String, default="pending")  # pending | given
+    given_date = Column(String, nullable=True)
+    created_at = Column(String, nullable=False)

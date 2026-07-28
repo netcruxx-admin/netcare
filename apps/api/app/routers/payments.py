@@ -1,11 +1,12 @@
 from typing import Optional
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from .. import models, schemas
 from ..auth import get_current_user
 from ..database import get_db
+from ..tenancy import get_tenant_id, scoped
 from ..utils import new_id, now_iso
 
 router = APIRouter(prefix="/payments", tags=["payments"])
@@ -17,8 +18,9 @@ def list_payments(
     appointment_id: Optional[str] = None,
     db: Session = Depends(get_db),
     _: models.User = Depends(get_current_user),
+    tenant_id: str = Depends(get_tenant_id),
 ):
-    query = db.query(models.Payment)
+    query = scoped(db, models.Payment, tenant_id)
     if patient_id:
         query = query.filter(models.Payment.patient_id == patient_id)
     if appointment_id:
@@ -31,9 +33,37 @@ def create_payment(
     body: schemas.PaymentCreate,
     db: Session = Depends(get_db),
     _: models.User = Depends(get_current_user),
+    tenant_id: str = Depends(get_tenant_id),
 ):
-    payment = models.Payment(id=new_id("pay"), created_at=now_iso(), **body.model_dump())
+    payment = models.Payment(
+        id=new_id("pay"),
+        hospital_id=tenant_id,
+        created_at=now_iso(),
+        **body.model_dump(),
+    )
     db.add(payment)
+    db.commit()
+    db.refresh(payment)
+    return payment
+
+
+@router.put("/{payment_id}", response_model=schemas.PaymentOut)
+def update_payment(
+    payment_id: str,
+    body: schemas.PaymentUpdate,
+    db: Session = Depends(get_db),
+    _: models.User = Depends(get_current_user),
+    tenant_id: str = Depends(get_tenant_id),
+):
+    payment = (
+        scoped(db, models.Payment, tenant_id)
+        .filter(models.Payment.id == payment_id)
+        .first()
+    )
+    if payment is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Payment not found")
+    for field, value in body.model_dump(exclude_unset=True).items():
+        setattr(payment, field, value)
     db.commit()
     db.refresh(payment)
     return payment

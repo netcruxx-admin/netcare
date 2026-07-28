@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from .. import models, schemas
 from ..auth import get_current_user
 from ..database import get_db
+from ..tenancy import get_tenant_id, scoped
 from ..utils import new_id, now_iso
 
 router = APIRouter(prefix="/medical-records", tags=["medical-records"])
@@ -17,8 +18,9 @@ def list_medical_records(
     appointment_id: Optional[str] = None,
     db: Session = Depends(get_db),
     _: models.User = Depends(get_current_user),
+    tenant_id: str = Depends(get_tenant_id),
 ):
-    query = db.query(models.MedicalRecord)
+    query = scoped(db, models.MedicalRecord, tenant_id)
     if patient_id:
         query = query.filter(models.MedicalRecord.patient_id == patient_id)
     if appointment_id:
@@ -33,9 +35,13 @@ def create_medical_record(
     body: schemas.MedicalRecordCreate,
     db: Session = Depends(get_db),
     _: models.User = Depends(get_current_user),
+    tenant_id: str = Depends(get_tenant_id),
 ):
     record = models.MedicalRecord(
-        id=new_id("med"), created_at=now_iso(), **body.model_dump()
+        id=new_id("med"),
+        hospital_id=tenant_id,
+        created_at=now_iso(),
+        **body.model_dump(),
     )
     db.add(record)
     db.commit()

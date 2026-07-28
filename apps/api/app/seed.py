@@ -255,4 +255,73 @@ def seed_database(db: Session) -> None:
         )
     )
 
+    # --- Catalog: pharmacy (medicines) --------------------------------------
+    medicines = [
+        ("med-c1", "Prenatal Multivitamin", "Prenatal", "Tablet", "1 tablet", 250, 120),
+        ("med-c2", "Folic Acid", "Supplement", "Tablet", "400 mcg", 80, 300),
+        ("med-c3", "Ferrous Sulfate (Iron)", "Supplement", "Tablet", "300 mg", 120, 200),
+        ("med-c4", "Paracetamol", "Analgesic", "Tablet", "500 mg", 30, 500),
+        ("med-c5", "Amoxicillin", "Antibiotic", "Capsule", "500 mg", 150, 90),
+        ("med-c6", "Calcium + Vitamin D3", "Supplement", "Tablet", "500 mg", 180, 150),
+        ("med-c7", "Ondansetron", "Antiemetic", "Tablet", "4 mg", 90, 60),
+        ("med-c8", "Tetanus Toxoid (TT)", "Other", "Injection", "0.5 ml", 50, 100),
+    ]
+    for mid, name, cat, form, strength, price, stock in medicines:
+        db.add(
+            models.Medicine(
+                id=mid, hospital_id=HOSP, name=name, category=cat, form=form,
+                strength=strength, price=price, stock=stock,
+            )
+        )
+
+    # --- Catalog: diagnostics (lab tests) -----------------------------------
+    lab_tests = [
+        ("test-1", "Complete Blood Count (CBC)", "Blood Test", "Blood", 400, "Same day", [
+            {"name": "Hemoglobin", "unit": "g/dL", "referenceRange": "12.0 - 15.5", "low": 12, "high": 15.5},
+            {"name": "WBC Count", "unit": "/uL", "referenceRange": "4000 - 11000", "low": 4000, "high": 11000},
+            {"name": "Platelet Count", "unit": "/uL", "referenceRange": "150000 - 410000", "low": 150000, "high": 410000},
+        ]),
+        ("test-2", "Blood Glucose (Fasting)", "Blood Test", "Blood", 150, "Same day", [
+            {"name": "Fasting Blood Sugar", "unit": "mg/dL", "referenceRange": "70 - 100", "low": 70, "high": 100},
+        ]),
+        ("test-3", "Obstetric Ultrasound", "Imaging", "Imaging", 1500, "30 minutes", []),
+        ("test-4", "Urine Routine", "Urine Test", "Urine", 200, "Same day", []),
+        ("test-5", "Thyroid Profile (TSH)", "Blood Test", "Blood", 600, "24 hours", [
+            {"name": "TSH", "unit": "uIU/mL", "referenceRange": "0.4 - 4.0", "low": 0.4, "high": 4.0},
+        ]),
+        ("test-20", "Oral Glucose Tolerance Test (OGTT)", "Blood Test", "Blood", 500, "Same day", []),
+    ]
+    for tid, name, cat, sample, price, tat, params in lab_tests:
+        db.add(
+            models.LabTest(
+                id=tid, hospital_id=HOSP, name=name, category=cat,
+                sample_type=sample, price=price, turnaround_time=tat, parameters=params,
+            )
+        )
+
+    # --- Maternity signature demo: pregnancy + ANC visits -------------------
+    db.add(
+        models.PregnancyRecord(
+            id="preg-1", hospital_id=HOSP, patient_id="pat-1",
+            lmp=date_offset(-224), edd=date_offset(56), gravida=1, para=0,
+            height=165, pre_pregnancy_weight=58, blood_group="A+",
+            risk_factors=[], status="active",
+            notes="Healthy first pregnancy, 32 weeks", created_at=iso_offset(-210),
+        )
+    )
+    anc_visits = [
+        ("anc-1", -140, 12, 60.5, 110, 70, 12.0, 11.8, 150),
+        ("anc-2", -84, 20, 63.0, 115, 72, 18.0, 11.5, 148),
+        ("anc-3", -28, 28, 66.5, 118, 76, 26.0, 11.2, 145),
+    ]
+    for aid, off, weeks, weight, sys, dia, fundal, hb, fhr in anc_visits:
+        db.add(
+            models.ANCVisit(
+                id=aid, hospital_id=HOSP, pregnancy_id="preg-1", patient_id="pat-1",
+                doctor_id="doc-1", date=date_offset(off), weeks=weeks, weight=weight,
+                systolic=sys, diastolic=dia, fundal_height=fundal, hemoglobin=hb,
+                fetal_heart_rate=fhr, notes="", created_at=iso_offset(off),
+            )
+        )
+
     db.commit()

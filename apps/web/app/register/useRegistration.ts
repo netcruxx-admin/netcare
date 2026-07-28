@@ -7,8 +7,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useFormik } from 'formik';
-import { authOperations, authStorage, PatientDetails, DoctorDetails } from '@/lib/auth';
+import { authStorage } from '@/lib/auth';
+import type { PatientDetails, DoctorDetails } from '@/lib/auth';
 import { dbOperations, Department } from '@/lib/db';
+import { useRegisterMutation } from '@/store/api';
 import { lookupDoctorRegistration } from '@/lib/doctorRegistry';
 import { lookupNurseRegistration } from '@/lib/nurseRegistry';
 import { lookupAadhaar } from '@/lib/aadhaarRegistry';
@@ -30,6 +32,7 @@ type Verified = { status?: string; rows: [string, string][] } | null;
 
 export function useRegistration() {
   const router = useRouter();
+  const [registerMutation] = useRegisterMutation();
   const [step, setStep] = useState<Step>('role');
   const [userType, setUserType] = useState<Role | null>(null);
   const [departments, setDepartments] = useState<Department[]>([]);
@@ -58,65 +61,40 @@ export function useRegistration() {
   const doRegister = async (values: FormValues) => {
     setServerError('');
 
-    const details: PatientDetails | DoctorDetails | undefined =
-      userType === 'patient'
-        ? {
-            dateOfBirth: values.dateOfBirth,
-            gender: values.gender,
-            bloodGroup: values.bloodGroup,
-            allergies: values.allergies,
-            chronicDiseases: values.chronicDiseases,
-            emergencyContact: values.emergencyContact,
-            emergencyPhone: values.emergencyPhone,
-            insuranceProvider: values.insuranceProvider,
-            insuranceNumber: values.insuranceNumber,
-          }
-        : userType === 'doctor'
-        ? {
-            licenseNumber: values.licenseNumber,
-            medicalCouncil: values.medicalCouncil,
-            registrationYear: values.registrationYear,
-            qualification: values.qualification,
-            specialization: values.specialization,
-            experienceYears: Number(values.experienceYears) || 0,
-            consultationFee: Number(values.consultationFee) || 0,
-          }
-        : undefined;
-
     try {
-      const session = await authOperations.register(
-        values.email,
-        values.password,
-        values.name,
-        userType || 'patient',
-        values.phone.trim(),
-        details
-      );
+      const result = await registerMutation({
+        email: values.email,
+        password: values.password,
+        name: values.name,
+        role: (userType ?? 'patient') as 'patient' | 'doctor' | 'nurse' | 'lab',
+        phone: values.phone.trim(),
+      }).unwrap();
 
-      if (!session) {
-        setServerError('Email already registered');
-        setStep('account');
-        return;
-      }
-
-      authStorage.setSession(session);
+      authStorage.setSession({
+        user: result.user,
+        patient: result.patient,
+        hospitalId: result.user.hospitalId ?? '',
+        token: result.token,
+        isAuthenticated: true,
+      });
       setSuccess(true);
 
       setTimeout(() => {
-        if (session.user.role === 'patient') {
-          router.push('/dashboard/patient/profile');
-        } else if (session.user.role === 'doctor') {
-          router.push('/dashboard/doctor');
-        } else if (session.user.role === 'lab') {
-          router.push('/dashboard/lab');
-        } else if (session.user.role === 'nurse') {
-          router.push('/dashboard/nurse');
-        } else {
-          router.push('/dashboard/admin');
-        }
+        const role = result.user.role;
+        if (role === 'patient') router.push('/dashboard/patient/profile');
+        else if (role === 'doctor') router.push('/dashboard/doctor');
+        else if (role === 'lab') router.push('/dashboard/lab');
+        else if (role === 'nurse') router.push('/dashboard/nurse');
+        else router.push('/dashboard/admin');
       }, 2000);
-    } catch (err) {
-      setServerError('An error occurred. Please try again.');
+    } catch (err: unknown) {
+      const detail = (err as { data?: { detail?: string } })?.data?.detail;
+      if (detail?.toLowerCase().includes('already')) {
+        setServerError('Email already registered');
+        setStep('account');
+      } else {
+        setServerError(detail ?? 'An error occurred. Please try again.');
+      }
     }
   };
 
