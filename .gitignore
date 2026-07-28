@@ -14,6 +14,8 @@ apps/api/venv/
 apps/api/*.egg-info/
 apps/api/.env
 
+node_modules
+
 # OS
 .DS_Store
 Thumbs.db
