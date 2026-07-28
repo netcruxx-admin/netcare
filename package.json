@@ -9,10 +9,11 @@
     "dev:all": "concurrently \"npm run dev\" \"npm run dev:api\"",
     "build": "npm run build --prefix apps/web",
     "lint": "npm run lint --prefix apps/web",
-    "install:api": "cd apps/api && pip install -r requirements.txt",
-    "db:migrate": "cd apps/api && alembic upgrade head",
-    "db:seed": "cd apps/api && python -c 'from app.seed import seed_database; from app.database import SessionLocal; db = SessionLocal(); seed_database(db)'",
-    "setup": "npm install && npm run install:api && npm run db:migrate"
+    "install:api": "cd apps/api && python3 -m venv venv && ./venv/bin/python -m pip install -q --upgrade pip && ./venv/bin/pip install -r requirements.txt",
+    "env:api": "cd apps/api && cp -n .env.example .env || true",
+    "db:migrate": "cd apps/api && ./venv/bin/alembic upgrade head",
+    "db:seed": "cd apps/api && ./venv/bin/python -c 'from app.seed import seed_database; from app.database import SessionLocal; db = SessionLocal(); seed_database(db)'",
+    "setup": "npm install && npm run install:api && npm run env:api && npm run db:migrate"
   },
   "devDependencies": {
     "concurrently": "^9.0.0"
