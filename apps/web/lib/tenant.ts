@@ -53,8 +53,10 @@ export function resolveFromSubdomain(): string | null {
  */
 export function getCurrentHospitalId(): string {
   if (typeof window === 'undefined') return DEFAULT_HOSPITAL_ID;
-  const sub = resolveFromSubdomain();
-  if (sub) return sub; // URL wins
+  // If on a hospital subdomain (e.g. cityeyecare.localhost:3000), send the
+  // subdomain label — the backend resolves it to the real hospital ID.
+  const label = currentSubdomain();
+  if (label) return label;
   const stored = localStorage.getItem(ACTIVE_HOSPITAL_KEY);
   if (stored) return stored;
   return DEFAULT_HOSPITAL_ID;

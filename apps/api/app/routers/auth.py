@@ -63,6 +63,19 @@ def register(
                 documents=[],
             )
         )
+    elif body.role == "doctor":
+        db.add(
+            models.Doctor(
+                id=new_id("doc"),
+                hospital_id=tenant_id,
+                user_id=user.id,
+                specialization=body.specialization or "",
+                qualification=body.qualification or "",
+                experience_years=body.experience_years or 0,
+                available_slots=[],
+                verification_status="verified",
+            )
+        )
 
     db.commit()
     db.refresh(user)

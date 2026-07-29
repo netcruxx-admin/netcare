@@ -5,49 +5,37 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Clock, CalendarPlus } from 'lucide-react';
 import { authStorage } from '@/lib/auth';
-import { dbOperations, Appointment } from '@/lib/db';
 import { DashboardShell } from '@/components/DashboardShell';
+import { useGetPatientAppointmentsQuery } from '@/store/api';
+import type { Appointment } from '@/lib/types';
 
 export default function PatientAppointmentsPage() {
   const router = useRouter();
   const [session, setSession] = useState<ReturnType<typeof authStorage.getSession>>(null);
-  const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [statusFilter, setStatusFilter] = useState<'all' | Appointment['status']>('all');
 
   useEffect(() => {
-    const session = authStorage.getSession();
-    if (!session || session.user.role !== 'patient') {
+    const s = authStorage.getSession();
+    if (!s || s.user.role !== 'patient') {
       router.push('/login');
     } else {
-      setSession(session);
-      const patientId = dbOperations.getPatientByUserId(session.user.id)?.id;
-      if (patientId) {
-        setAppointments(dbOperations.getAppointmentsByPatientId(patientId));
-      }
+      setSession(s);
     }
   }, [router]);
 
-  const doctorName = (doctorId: string) => {
-    const doctor = dbOperations.getDoctor(doctorId);
-    const user = doctor ? dbOperations.getUserById(doctor.userId) : null;
-    return user ? `Dr. ${user.name}` : 'Doctor';
-  };
+  const patientId = session?.patient?.id ?? '';
+  const { data: appointments = [] } = useGetPatientAppointmentsQuery(patientId, { skip: !patientId });
 
   const statusStyle = (status: Appointment['status']) =>
-    status === 'completed'
-      ? 'bg-green-100 text-green-700'
-      : status === 'cancelled'
-      ? 'bg-red-100 text-red-700'
-      : 'bg-blue-100 text-blue-700';
+    status === 'completed' ? 'bg-green-100 text-green-700'
+    : status === 'cancelled' ? 'bg-red-100 text-red-700'
+    : 'bg-blue-100 text-blue-700';
 
-  if (!session) {
-    return null;
-  }
-
-  // Most recent first, honoring the status filter
   const sorted = [...appointments]
     .filter((a) => statusFilter === 'all' || a.status === statusFilter)
     .sort((a, b) => (a.date < b.date ? 1 : -1));
+
+  if (!session) return null;
 
   return (
     <DashboardShell
@@ -73,7 +61,6 @@ export default function PatientAppointmentsPage() {
         <div className="px-6 py-4 border-b">
           <h3 className="font-semibold text-slate-900">All Appointments ({sorted.length})</h3>
         </div>
-
         {sorted.length === 0 ? (
           <div className="text-center py-16">
             <Clock className="w-16 h-16 text-slate-300 mx-auto mb-4" />
@@ -101,11 +88,11 @@ export default function PatientAppointmentsPage() {
                 {sorted.map((apt) => (
                   <tr key={apt.id} className="border-b hover:bg-slate-50">
                     <td className="py-3 px-6 font-medium">{apt.date} at {apt.time}</td>
-                    <td className="py-3 px-6 text-slate-600">{doctorName(apt.doctorId)}</td>
+                    <td className="py-3 px-6 text-slate-600">Dr. {apt.doctorId}</td>
                     <td className="py-3 px-6 text-slate-600">
                       {apt.reason || 'Checkup'}
                       {apt.followUpOf && (
-                        <span className="ml-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-cyan-100 text-cyan-700 align-middle">
+                        <span className="ml-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-cyan-100 text-cyan-700">
                           <CalendarPlus className="w-3 h-3" /> Follow-up
                         </span>
                       )}
@@ -116,10 +103,7 @@ export default function PatientAppointmentsPage() {
                       </span>
                     </td>
                     <td className="py-3 px-6 text-right">
-                      <Link
-                        href={`/appointment/${apt.id}`}
-                        className="text-cyan-600 hover:text-cyan-700 font-semibold text-sm"
-                      >
+                      <Link href={`/appointment/${apt.id}`} className="text-cyan-600 hover:text-cyan-700 font-semibold text-sm">
                         View
                       </Link>
                     </td>

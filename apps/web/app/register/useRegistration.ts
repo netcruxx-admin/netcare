@@ -4,13 +4,13 @@
 // the Formik instance (with per-step validation), the "verify & auto-fill"
 // lookups, and final account creation. The page and step components stay
 // purely presentational and read from what this returns.
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useFormik } from 'formik';
 import { authStorage } from '@/lib/auth';
 import type { PatientDetails, DoctorDetails } from '@/lib/auth';
-import { dbOperations, Department } from '@/lib/db';
-import { useRegisterMutation } from '@/store/api';
+import type { Department } from '@/lib/db';
+import { useRegisterMutation, useListDepartmentsQuery } from '@/store/api';
 import { lookupDoctorRegistration } from '@/lib/doctorRegistry';
 import { lookupNurseRegistration } from '@/lib/nurseRegistry';
 import { lookupAadhaar } from '@/lib/aadhaarRegistry';
@@ -35,16 +35,12 @@ export function useRegistration() {
   const [registerMutation] = useRegisterMutation();
   const [step, setStep] = useState<Step>('role');
   const [userType, setUserType] = useState<Role | null>(null);
-  const [departments, setDepartments] = useState<Department[]>([]);
+  const { data: departments = [] } = useListDepartmentsQuery();
   const [serverError, setServerError] = useState('');
   const [success, setSuccess] = useState(false);
   const [lookupState, setLookupState] = useState<LookupState>('idle');
   // Normalized verified result for display, independent of the lookup source.
   const [verified, setVerified] = useState<Verified>(null);
-
-  useEffect(() => {
-    setDepartments(dbOperations.getAllDepartments());
-  }, []);
 
   const needsDetails = userType === 'patient' || userType === 'doctor';
   const verifyConfig =

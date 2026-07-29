@@ -23,6 +23,7 @@ def provision_hospital(
     subdomain: str,
     category: str,
     hospital_id: Optional[str] = None,
+    theme: Optional[dict] = None,
     admin_email: Optional[str] = None,
     admin_password: str = "password123",
     admin_name: Optional[str] = None,
@@ -39,7 +40,7 @@ def provision_hospital(
         tagline=template["tagline"],
         currency=template["currency"],
         modules=template["modules"],
-        theme=template["theme"],
+        theme=theme or template["theme"],
         status="active",
         created_at=created,
     )

@@ -4,32 +4,27 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Pill, Activity, FileText } from 'lucide-react';
 import { authStorage } from '@/lib/auth';
-import { dbOperations, Prescription, Vitals } from '@/lib/db';
 import { DashboardShell } from '@/components/DashboardShell';
+import { useGetPatientPrescriptionsQuery, useGetPatientVitalsQuery } from '@/store/api';
 
 export default function PatientRecordsPage() {
   const router = useRouter();
   const [session, setSession] = useState<ReturnType<typeof authStorage.getSession>>(null);
-  const [prescriptions, setPrescriptions] = useState<Prescription[]>([]);
-  const [vitals, setVitals] = useState<Vitals[]>([]);
 
   useEffect(() => {
-    const session = authStorage.getSession();
-    if (!session || session.user.role !== 'patient') {
+    const s = authStorage.getSession();
+    if (!s || s.user.role !== 'patient') {
       router.push('/login');
     } else {
-      setSession(session);
-      const patientId = dbOperations.getPatientByUserId(session.user.id)?.id;
-      if (patientId) {
-        setPrescriptions(dbOperations.getPrescriptionsByPatientId(patientId));
-        setVitals(dbOperations.getVitalsByPatientId(patientId));
-      }
+      setSession(s);
     }
   }, [router]);
 
-  if (!session) {
-    return null;
-  }
+  const patientId = session?.patient?.id ?? '';
+  const { data: prescriptions = [] } = useGetPatientPrescriptionsQuery(patientId, { skip: !patientId });
+  const { data: vitals = [] } = useGetPatientVitalsQuery(patientId, { skip: !patientId });
+
+  if (!session) return null;
 
   return (
     <DashboardShell
@@ -56,27 +51,13 @@ export default function PatientRecordsPage() {
                 <div key={rx.id} className="bg-white rounded-lg shadow p-6">
                   <div className="flex items-center justify-between mb-4">
                     <h4 className="font-semibold text-slate-900">{rx.medicineName}</h4>
-                    <span className="text-xs text-slate-400">
-                      {new Date(rx.createdAt).toLocaleDateString()}
-                    </span>
+                    <span className="text-xs text-slate-400">{new Date(rx.createdAt).toLocaleDateString()}</span>
                   </div>
                   <div className="grid md:grid-cols-4 gap-4 text-sm">
-                    <div>
-                      <p className="text-slate-500">Dosage</p>
-                      <p className="font-medium">{rx.dosage}</p>
-                    </div>
-                    <div>
-                      <p className="text-slate-500">Frequency</p>
-                      <p className="font-medium">{rx.frequency}</p>
-                    </div>
-                    <div>
-                      <p className="text-slate-500">Duration</p>
-                      <p className="font-medium">{rx.duration}</p>
-                    </div>
-                    <div>
-                      <p className="text-slate-500">Instructions</p>
-                      <p className="font-medium">{rx.instructions || '—'}</p>
-                    </div>
+                    <div><p className="text-slate-500">Dosage</p><p className="font-medium">{rx.dosage}</p></div>
+                    <div><p className="text-slate-500">Frequency</p><p className="font-medium">{rx.frequency}</p></div>
+                    <div><p className="text-slate-500">Duration</p><p className="font-medium">{rx.duration}</p></div>
+                    <div><p className="text-slate-500">Instructions</p><p className="font-medium">{rx.instructions || '—'}</p></div>
                   </div>
                 </div>
               ))}
@@ -101,35 +82,15 @@ export default function PatientRecordsPage() {
                 <div key={v.id} className="bg-white rounded-lg shadow p-6">
                   <div className="flex items-center justify-between mb-4">
                     <h4 className="font-semibold text-slate-900">Vitals Record</h4>
-                    <span className="text-xs text-slate-400">
-                      {new Date(v.createdAt).toLocaleDateString()}
-                    </span>
+                    <span className="text-xs text-slate-400">{new Date(v.createdAt).toLocaleDateString()}</span>
                   </div>
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
-                    <div>
-                      <p className="text-slate-500">Temperature</p>
-                      <p className="font-medium">{v.temperature}°C</p>
-                    </div>
-                    <div>
-                      <p className="text-slate-500">Blood Pressure</p>
-                      <p className="font-medium">{v.bloodPressure}</p>
-                    </div>
-                    <div>
-                      <p className="text-slate-500">Heart Rate</p>
-                      <p className="font-medium">{v.heartRate} bpm</p>
-                    </div>
-                    <div>
-                      <p className="text-slate-500">Respiratory Rate</p>
-                      <p className="font-medium">{v.respiratoryRate} /min</p>
-                    </div>
-                    <div>
-                      <p className="text-slate-500">Weight</p>
-                      <p className="font-medium">{v.weight} kg</p>
-                    </div>
-                    <div>
-                      <p className="text-slate-500">Height</p>
-                      <p className="font-medium">{v.height} cm</p>
-                    </div>
+                    <div><p className="text-slate-500">Temperature</p><p className="font-medium">{v.temperature}°C</p></div>
+                    <div><p className="text-slate-500">Blood Pressure</p><p className="font-medium">{v.bloodPressure}</p></div>
+                    <div><p className="text-slate-500">Heart Rate</p><p className="font-medium">{v.heartRate} bpm</p></div>
+                    <div><p className="text-slate-500">Respiratory Rate</p><p className="font-medium">{v.respiratoryRate} /min</p></div>
+                    <div><p className="text-slate-500">Weight</p><p className="font-medium">{v.weight} kg</p></div>
+                    <div><p className="text-slate-500">Height</p><p className="font-medium">{v.height} cm</p></div>
                   </div>
                   {v.notes && (
                     <div className="mt-4 pt-4 border-t border-slate-100 text-sm">

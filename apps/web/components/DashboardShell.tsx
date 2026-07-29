@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import type { LucideIcon } from 'lucide-react';
 import {
   Heart,
@@ -31,17 +31,15 @@ import {
   Baby,
   Search,
   Video,
+  Globe,
 } from 'lucide-react';
 import { authStorage } from '@/lib/auth';
-import { dbOperations } from '@/lib/db';
-import { getAllHospitals, type HospitalConfig, type HospitalModules } from '@/lib/hospitalConfig';
-import { getEnabledModules } from '@/lib/hospitalCategories';
-import { setCurrentHospitalId } from '@/lib/tenant';
-import { useActiveHospital } from '@/hooks/useActiveHospital';
+import type { HospitalModules } from '@/lib/hospitalConfig';
+import { useGetCurrentHospitalQuery, useListHospitalsQuery } from '@/store/api';
 import { NotificationBell } from '@/components/NotificationBell';
 import { CommandPalette } from '@/components/CommandPalette';
 
-type Role = 'patient' | 'doctor' | 'admin' | 'lab' | 'nurse';
+type Role = 'patient' | 'doctor' | 'admin' | 'lab' | 'nurse' | 'superadmin';
 
 // A patient's care context, derived from their own data — used to show only the
 // sidebar items relevant to the care they're actually receiving.
@@ -69,6 +67,18 @@ interface NavItem {
 }
 
 const MENUS: Record<Role, { title: string; items: NavItem[] }> = {
+  superadmin: {
+    title: 'NetCare Platform',
+    items: [
+      { label: 'Overview', href: '/dashboard/platform', icon: LayoutDashboard },
+      { label: 'Hospitals', href: '/dashboard/platform/hospitals', icon: Building2 },
+      { label: 'Patients', href: '/dashboard/platform/patients', icon: UserRound },
+      { label: 'Doctors', href: '/dashboard/platform/doctors', icon: Stethoscope },
+      { label: 'Appointments', href: '/dashboard/platform/appointments', icon: CalendarDays },
+      { label: 'Departments', href: '/dashboard/platform/departments', icon: Globe },
+      { label: 'Users', href: '/dashboard/platform/users', icon: Users },
+    ],
+  },
   patient: {
     title: 'Patient Portal',
     items: [
@@ -115,7 +125,6 @@ const MENUS: Record<Role, { title: string; items: NavItem[] }> = {
       { label: 'Tests', href: '/dashboard/admin/tests', icon: FlaskConical, module: 'lab' },
       { label: 'Users', href: '/dashboard/admin/users', icon: Users },
       { label: 'Hospital Setup', href: '/dashboard/admin/setup', icon: Settings },
-      { label: 'Onboard Hospital', href: '/dashboard/platform', icon: Building2 },
     ],
   },
   lab: {
@@ -154,21 +163,37 @@ export function DashboardShell({
 }) {
   const router = useRouter();
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [open, setOpen] = useState(false);
   const [cmdOpen, setCmdOpen] = useState(false);
-  const [sessionUser, setSessionUser] = useState<{ id: string; name: string; role: Role } | null>(null);
-  // The logged-in doctor's specialization, used to tailor the sidebar by
-  // department. Empty for non-doctors.
-  const [specialization, setSpecialization] = useState('');
-  // The patient's care context, used to tailor the patient sidebar.
-  const [patientCtx, setPatientCtx] = useState<PatientContext>({ specializations: [], hasPregnancy: false, hasBaby: false });
+  const [sessionUser, setSessionUser] = useState<{ id: string; name: string; role: string } | null>(null);
+  const specialization = '';
+  const patientCtx: PatientContext = { specializations: [], hasPregnancy: false, hasBaby: false };
 
-  // Active tenant (branding) + all tenants (for the switcher).
-  const hospital = useActiveHospital();
-  const [hospitals, setHospitals] = useState<HospitalConfig[]>([]);
-  useEffect(() => {
-    setHospitals(getAllHospitals());
-  }, []);
+  // Hospital selector for superadmin — preserves ?h= across nav clicks.
+  const { data: allHospitals = [] } = useListHospitalsQuery(undefined, { skip: role !== 'superadmin' });
+  const selectedHospitalId = searchParams.get('h') ?? '';
+
+  const handleHospitalChange = (id: string) => {
+    const params = new URLSearchParams(searchParams.toString());
+    if (id) params.set('h', id);
+    else params.delete('h');
+    router.push(`${pathname}?${params.toString()}`);
+  };
+
+  // Active tenant branding from the real backend (skipped for superadmin).
+  const { data: hospitalData } = useGetCurrentHospitalQuery(undefined, { skip: role === 'superadmin' });
+  const hospital = role === 'superadmin'
+    ? { id: '', name: 'NetCare Platform', theme: { primary: '#0f172a', primaryDark: '#1e293b' }, modules: {} as HospitalModules }
+    : {
+        id: hospitalData?.id ?? '',
+        name: hospitalData?.name ?? '…',
+        theme: {
+          primary: (hospitalData?.theme as Record<string, string>)?.primary ?? '#0891b2',
+          primaryDark: (hospitalData?.theme as Record<string, string>)?.primaryDark ?? '#0d9488',
+        },
+        modules: (hospitalData?.modules ?? {}) as HospitalModules,
+      };
 
   // Paint the active tenant's brand colours so each hospital looks distinct.
   const brandGradient = {
@@ -181,35 +206,11 @@ export function DashboardShell({
     color: 'transparent',
   } as React.CSSProperties;
 
-  // Switch tenants (demo tool): clear the session and land on the target
-  // hospital's login, since accounts are per-tenant.
-  const switchHospital = (id: string) => {
-    setCurrentHospitalId(id);
-    authStorage.clearSession();
-    window.location.href = '/login';
-  };
-
   // Load the current user (for notifications + command palette) after mount.
   useEffect(() => {
     const s = authStorage.getSession();
     if (!s) return;
-    setSessionUser({ id: s.user.id, name: s.user.name, role: s.user.role as Role });
-    if (s.user.role === 'doctor') {
-      setSpecialization(dbOperations.getDoctorByUserId(s.user.id)?.specialization ?? '');
-    } else if (s.user.role === 'patient') {
-      const patientId = dbOperations.getPatientByUserId(s.user.id)?.id;
-      if (patientId) {
-        const specializations = dbOperations
-          .getAppointmentsByPatientId(patientId)
-          .map((a) => dbOperations.getDoctorById(a.doctorId)?.specialization?.toLowerCase() ?? '')
-          .filter(Boolean);
-        setPatientCtx({
-          specializations,
-          hasPregnancy: !!dbOperations.getActivePregnancyByPatientId(patientId),
-          hasBaby: dbOperations.getBabiesByMother(patientId).length > 0,
-        });
-      }
-    }
+    setSessionUser({ id: s.user.id, name: s.user.name, role: s.user.role });
   }, []);
 
   // Cmd/Ctrl+K opens the command palette.
@@ -226,13 +227,8 @@ export function DashboardShell({
 
   const menu = MENUS[role];
 
-  // Enabled modules come from the active hospital category. Read after mount so
-  // a category switch (stored in localStorage) re-shapes the nav live; the
-  // initial value matches SSR to avoid a hydration mismatch.
-  const [modules, setModules] = useState<HospitalModules>(() => getEnabledModules());
-  useEffect(() => {
-    setModules(getEnabledModules());
-  }, [pathname]);
+  // Enabled modules come from the real hospital config fetched from the backend.
+  const modules = hospital.modules;
 
   // Show a nav item when (a) its module is enabled, and (b) for doctors, its
   // specialty tag matches the doctor's department (untagged items always show).
@@ -249,6 +245,11 @@ export function DashboardShell({
   });
 
   const isActive = (href: string) => pathname === href;
+
+  // Build an href that carries the ?h= param forward so selecting a hospital
+  // persists when clicking nav items.
+  const navHref = (href: string) =>
+    selectedHospitalId ? `${href}?h=${selectedHospitalId}` : href;
 
   const handleLogout = () => {
     authStorage.clearSession();
@@ -270,13 +271,32 @@ export function DashboardShell({
       </div>
 
       <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-1">
+        {/* Hospital filter — superadmin only */}
+        {role === 'superadmin' && allHospitals.length > 0 && (
+          <div className="mb-3 px-1">
+            <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-1.5 px-2">
+              Filter by Hospital
+            </label>
+            <select
+              value={selectedHospitalId}
+              onChange={(e) => handleHospitalChange(e.target.value)}
+              className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700 focus:outline-none focus:border-slate-400 focus:bg-white transition"
+            >
+              <option value="">All Hospitals</option>
+              {allHospitals.map((h) => (
+                <option key={h.id} value={h.id}>{h.name}</option>
+              ))}
+            </select>
+          </div>
+        )}
+
         {navItems.map((item) => {
           const active = isActive(item.href);
           const Icon = item.icon;
           return (
             <Link
               key={item.href}
-              href={item.href}
+              href={navHref(item.href)}
               onClick={() => setOpen(false)}
               className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition ${
                 active
@@ -377,19 +397,6 @@ export function DashboardShell({
               {subtitle && <p className="text-sm text-slate-500">{subtitle}</p>}
             </div>
             <div className="flex items-center gap-3">
-              {hospitals.length > 1 && (
-                <select
-                  value={hospital.id}
-                  onChange={(e) => switchHospital(e.target.value)}
-                  className="text-sm border border-slate-200 rounded-lg px-2 py-1.5 bg-slate-50 text-slate-700 hover:bg-slate-100 transition"
-                  aria-label="Switch hospital"
-                  title="Switch hospital (demo)"
-                >
-                  {hospitals.map((h) => (
-                    <option key={h.id} value={h.id}>{h.name}</option>
-                  ))}
-                </select>
-              )}
               <button
                 onClick={() => setCmdOpen(true)}
                 className="flex items-center gap-2 text-sm text-slate-400 bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 hover:bg-slate-100 hover:text-slate-600 transition"
