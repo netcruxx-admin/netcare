@@ -7,32 +7,27 @@ import {
   ShieldCheck, Loader2, X,
 } from 'lucide-react';
 import { authStorage } from '@/lib/auth';
-import { dbOperations, type Payment } from '@/lib/db';
+import type { Payment } from '@/lib/types';
 import { DashboardShell } from '@/components/DashboardShell';
+import { useGetPatientPaymentsQuery } from '@/store/api';
 
 export default function PaymentsPage() {
   const router = useRouter();
   const [session, setSession] = useState<ReturnType<typeof authStorage.getSession>>(null);
-  const [patientId, setPatientId] = useState('');
-  const [payments, setPayments] = useState<Payment[]>([]);
   const [invoiceModal, setInvoiceModal] = useState(false);
   const [checkout, setCheckout] = useState<Payment | null>(null);
 
   useEffect(() => {
-    const session = authStorage.getSession();
-    if (!session || session.user.role !== 'patient') {
+    const s = authStorage.getSession();
+    if (!s || s.user.role !== 'patient') {
       router.push('/login');
     } else {
-      setSession(session);
-      const pid = dbOperations.getPatientByUserId(session.user.id)?.id ?? '';
-      setPatientId(pid);
-      if (pid) setPayments([...dbOperations.getPaymentsByPatientId(pid)]);
+      setSession(s);
     }
   }, [router]);
 
-  const refresh = () => {
-    if (patientId) setPayments([...dbOperations.getPaymentsByPatientId(patientId)]);
-  };
+  const patientId = session?.patient?.id ?? '';
+  const { data: payments = [] } = useGetPatientPaymentsQuery(patientId, { skip: !patientId });
 
   if (!session) {
     return null;
@@ -165,9 +160,7 @@ export default function PaymentsPage() {
             payment={checkout}
             onClose={() => setCheckout(null)}
             onPaid={() => {
-              dbOperations.updatePayment(checkout.id, { status: 'completed', paymentMethod: 'Online' });
               setCheckout(null);
-              refresh();
             }}
           />
         )}

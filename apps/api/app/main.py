@@ -24,6 +24,7 @@ from .routers import (
     payments,
     prescriptions,
     schedule,
+    superadmin,
     video_slots,
     vitals,
 )
@@ -53,7 +54,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="Medicare Hospital Platform API",
+    title="NetCare Hospital Platform API",
     description="Multi-tenant backend for the Medicare hospital platform.",
     version="2.0.0",
     lifespan=lifespan,
@@ -85,6 +86,7 @@ for module in (
     lab_tests,
     lab,
     schedule,
+    superadmin,
     video_slots,
     maternity,
     babies,
@@ -94,4 +96,4 @@ for module in (
 
 @app.get("/", tags=["health"])
 def health():
-    return {"status": "ok", "service": "Medicare Hospital Platform API"}
+    return {"status": "ok", "service": "NetCare Hospital Platform API"}

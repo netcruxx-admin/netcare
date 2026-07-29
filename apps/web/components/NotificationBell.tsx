@@ -15,7 +15,7 @@ import {
 interface SessionUser {
   id: string;
   name: string;
-  role: 'patient' | 'doctor' | 'admin' | 'lab' | 'nurse';
+  role: string;
 }
 
 const toneIcon: Record<NotificationTone, typeof Info> = {

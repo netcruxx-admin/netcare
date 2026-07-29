@@ -49,6 +49,7 @@ def onboard_hospital(
         name=body.name,
         subdomain=body.subdomain,
         category=body.category,
+        theme=body.theme,
         admin_email=body.admin_email,
         admin_password=body.admin_password or "password123",
         admin_name=body.admin_name,

@@ -5,41 +5,28 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Calendar, Plus, User, Clock, FileText } from 'lucide-react';
 import { authStorage } from '@/lib/auth';
-import { dbOperations, Appointment } from '@/lib/db';
 import { DashboardShell } from '@/components/DashboardShell';
+import { useGetPatientAppointmentsQuery } from '@/store/api';
 
 export default function PatientDashboard() {
   const router = useRouter();
   const [session, setSession] = useState<ReturnType<typeof authStorage.getSession>>(null);
-  const [appointments, setAppointments] = useState<Appointment[]>([]);
 
   useEffect(() => {
-    const session = authStorage.getSession();
-    if (!session || session.user.role !== 'patient') {
+    const s = authStorage.getSession();
+    if (!s || s.user.role !== 'patient') {
       router.push('/login');
     } else {
-      setSession(session);
-      const patientId = dbOperations.getPatientByUserId(session.user.id)?.id;
-      if (patientId) {
-        setAppointments(dbOperations.getAppointmentsByPatientId(patientId));
-      }
+      setSession(s);
     }
   }, [router]);
 
-  const doctorName = (doctorId: string) => {
-    const doctor = dbOperations.getDoctor(doctorId);
-    const user = doctor ? dbOperations.getUserById(doctor.userId) : null;
-    return user ? `Dr. ${user.name}` : 'Doctor';
-  };
-
-  const departmentName = (departmentId: string) =>
-    dbOperations.getAllDepartments().find((d) => d.id === departmentId)?.name ?? '—';
+  const patientId = session?.patient?.id ?? '';
+  const { data: appointments = [] } = useGetPatientAppointmentsQuery(patientId, { skip: !patientId });
 
   const upcomingAppointments = appointments.filter((a) => a.status === 'scheduled');
 
-  if (!session) {
-    return null;
-  }
+  if (!session) return null;
 
   return (
     <DashboardShell
@@ -77,14 +64,10 @@ export default function PatientDashboard() {
         <div className="bg-white rounded-lg shadow">
           <div className="flex items-center justify-between px-6 py-4 border-b">
             <h3 className="font-semibold text-slate-900">Upcoming Appointments</h3>
-            <Link
-              href="/dashboard/patient/appointments"
-              className="text-sm text-cyan-600 hover:text-cyan-700 font-semibold"
-            >
+            <Link href="/dashboard/patient/appointments" className="text-sm text-cyan-600 hover:text-cyan-700 font-semibold">
               View history →
             </Link>
           </div>
-
           <div className="p-6 space-y-4">
             {upcomingAppointments.length === 0 ? (
               <div className="text-center py-12">
@@ -99,10 +82,7 @@ export default function PatientDashboard() {
               </div>
             ) : (
               upcomingAppointments.map((apt) => (
-                <div
-                  key={apt.id}
-                  className="border border-slate-200 rounded-lg p-4 hover:shadow-lg transition"
-                >
+                <div key={apt.id} className="border border-slate-200 rounded-lg p-4 hover:shadow-lg transition">
                   <div className="grid md:grid-cols-4 gap-4 items-start">
                     <div>
                       <p className="text-slate-600 text-sm">Date &amp; Time</p>
@@ -110,11 +90,11 @@ export default function PatientDashboard() {
                     </div>
                     <div>
                       <p className="text-slate-600 text-sm">Doctor</p>
-                      <p className="font-semibold">{doctorName(apt.doctorId)}</p>
+                      <p className="font-semibold">Dr. {apt.doctorId}</p>
                     </div>
                     <div>
                       <p className="text-slate-600 text-sm">Department</p>
-                      <p className="font-semibold">{departmentName(apt.departmentId)}</p>
+                      <p className="font-semibold">{apt.departmentId}</p>
                     </div>
                     <div className="flex gap-2 justify-end">
                       <Link
@@ -123,9 +103,6 @@ export default function PatientDashboard() {
                       >
                         View
                       </Link>
-                      <button className="px-4 py-2 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 transition">
-                        Cancel
-                      </button>
                     </div>
                   </div>
                 </div>
@@ -136,30 +113,21 @@ export default function PatientDashboard() {
 
         {/* Quick Links */}
         <div className="grid md:grid-cols-3 gap-6">
-          <Link
-            href="/dashboard/patient/records"
-            className="bg-white rounded-lg shadow p-6 hover:shadow-lg transition flex items-center gap-4"
-          >
+          <Link href="/dashboard/patient/records" className="bg-white rounded-lg shadow p-6 hover:shadow-lg transition flex items-center gap-4">
             <FileText className="w-10 h-10 text-cyan-600" />
             <div>
               <h3 className="font-semibold text-slate-900">Medical Records</h3>
               <p className="text-slate-600 text-sm">Prescriptions &amp; vitals</p>
             </div>
           </Link>
-          <Link
-            href="/dashboard/patient/profile"
-            className="bg-white rounded-lg shadow p-6 hover:shadow-lg transition flex items-center gap-4"
-          >
+          <Link href="/dashboard/patient/profile" className="bg-white rounded-lg shadow p-6 hover:shadow-lg transition flex items-center gap-4">
             <User className="w-10 h-10 text-teal-600" />
             <div>
               <h3 className="font-semibold text-slate-900">Update Profile</h3>
               <p className="text-slate-600 text-sm">Manage your information</p>
             </div>
           </Link>
-          <Link
-            href="/dashboard/patient/appointments"
-            className="bg-white rounded-lg shadow p-6 hover:shadow-lg transition flex items-center gap-4"
-          >
+          <Link href="/dashboard/patient/appointments" className="bg-white rounded-lg shadow p-6 hover:shadow-lg transition flex items-center gap-4">
             <Clock className="w-10 h-10 text-cyan-600" />
             <div>
               <h3 className="font-semibold text-slate-900">Appointment History</h3>

@@ -51,8 +51,17 @@ def resolve_public_tenant(
     if x_hospital_id:
         hospital = db.get(models.Hospital, x_hospital_id)
         if hospital is None:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "Unknown hospital")
-        return hospital.id
+            # Also try treating the value as a subdomain label (frontend sends
+            # the label when on e.g. cityeyecare.localhost:3000).
+            hospital = (
+                db.query(models.Hospital)
+                .filter(models.Hospital.subdomain == x_hospital_id)
+                .first()
+            )
+        if hospital is not None:
+            return hospital.id
+        # Still not found — fall through so superadmin can log in before
+        # any hospital has been onboarded.
 
     label = _subdomain_label(request.headers.get("host", ""))
     if label:

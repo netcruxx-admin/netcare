@@ -56,6 +56,8 @@ class HospitalCreate(CamelModel):
     name: str
     subdomain: str
     category: HospitalCategory
+    # Optional theme override (primary/primaryDark colours from the UI picker).
+    theme: Optional[dict] = None
     # Optional first admin for the hospital; defaults are derived if omitted.
     admin_email: Optional[str] = None
     admin_password: Optional[str] = None
@@ -79,6 +81,10 @@ class RegisterRequest(CamelModel):
     name: str
     role: RegisterRole
     phone: str = ""
+    # Doctor-specific (ignored for other roles)
+    specialization: Optional[str] = None
+    qualification: Optional[str] = None
+    experience_years: Optional[int] = None
 
 
 class LoginRequest(CamelModel):
@@ -113,6 +119,7 @@ class PatientOut(CamelModel):
     insurance_provider: str = ""
     insurance_number: str = ""
     documents: List[str] = []
+    user: Optional["UserOut"] = None
 
 
 class PatientUpdate(CamelModel):
@@ -150,6 +157,7 @@ class DoctorOut(CamelModel):
     medical_council: str = ""
     registration_year: str = ""
     verification_status: str = "verified"
+    user: Optional["UserOut"] = None
 
 
 # ---------- Department ----------

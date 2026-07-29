@@ -13,7 +13,7 @@ import {
 } from '@/components/ui/command';
 import { dbOperations } from '@/lib/db';
 
-type Role = 'patient' | 'doctor' | 'admin' | 'lab' | 'nurse';
+type Role = 'patient' | 'doctor' | 'admin' | 'lab' | 'nurse' | 'superadmin';
 
 interface NavLink {
   label: string;

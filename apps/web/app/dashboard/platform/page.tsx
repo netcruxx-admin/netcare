@@ -1,172 +1,124 @@
 'use client';
 
-// -----------------------------------------------------------------------------
-// Platform onboarding — create a new tenant (hospital) at runtime.
-//
-// Picks a vertical category (which supplies modules / departments /
-// specializations), captures branding, persists the config to localStorage as a
-// custom tenant, registers its subdomain, and seeds it into the store. The new
-// hospital is then reachable via its subdomain or the in-app switcher.
-// -----------------------------------------------------------------------------
+import { useEffect, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { Building2, Users, UserRound, Stethoscope, CalendarDays, LayoutDashboard, Plus } from 'lucide-react';
+import { authStorage } from '@/lib/auth';
+import { DashboardShell } from '@/components/DashboardShell';
+import { OnboardHospitalModal } from '@/components/OnboardHospitalModal';
+import { useGetSuperadminOverviewQuery, useListHospitalsQuery } from '@/store/api';
 
-import { useState } from 'react';
-import Link from 'next/link';
-import { Building2, ArrowLeft, CheckCircle } from 'lucide-react';
+export default function PlatformOverviewPage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const selectedHospitalId = searchParams.get('h') ?? '';
 
-import { CATEGORY_LIST, HOSPITAL_CATEGORIES, type HospitalCategoryId } from '@/lib/hospitalCategories';
-import { getAllHospitals, saveCustomHospital, type HospitalConfig } from '@/lib/hospitalConfig';
-import { dbOperations } from '@/lib/db';
-import { registerTenantSubdomains, setCurrentHospitalId } from '@/lib/tenant';
+  const [session, setSession] = useState<ReturnType<typeof authStorage.getSession>>(null);
+  const [modalOpen, setModalOpen] = useState(false);
 
-const slugify = (s: string) =>
-  s.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  useEffect(() => {
+    const s = authStorage.getSession();
+    if (!s || s.user.role !== 'superadmin') router.push('/login');
+    else setSession(s);
+  }, [router]);
 
-export default function PlatformOnboardingPage() {
-  const [name, setName] = useState('');
-  const [subdomain, setSubdomain] = useState('');
-  const [category, setCategory] = useState<HospitalCategoryId>('multi-specialty');
-  const [primary, setPrimary] = useState('#0891b2');
-  const [primaryDark, setPrimaryDark] = useState('#0d9488');
-  const [created, setCreated] = useState<HospitalConfig | null>(null);
-  const [error, setError] = useState('');
+  const { data: overview } = useGetSuperadminOverviewQuery();
+  const { data: allHospitals = [], isLoading } = useListHospitalsQuery();
 
-  const cat = HOSPITAL_CATEGORIES[category];
-  const effectiveSubdomain = subdomain || slugify(name);
+  if (!session) return null;
 
-  const handleCreate = () => {
-    setError('');
-    if (!name.trim()) return setError('Hospital name is required.');
-    const sub = effectiveSubdomain;
-    if (!sub) return setError('A subdomain is required.');
-    const taken = getAllHospitals().some((h) => h.subdomain === sub);
-    if (taken) return setError(`Subdomain "${sub}" is already in use.`);
+  const hospitals = selectedHospitalId
+    ? allHospitals.filter((h) => h.id === selectedHospitalId)
+    : allHospitals;
 
-    const cfg: HospitalConfig = {
-      id: `hosp-${Date.now()}`,
-      subdomain: sub,
-      name: name.trim(),
-      tagline: cat.tagline,
-      type: category,
-      currency: 'INR',
-      theme: { primary, primaryDark },
-      modules: cat.modules,
-      specializations: cat.specializations,
-      // Catalog seeded from the category's department template; medicines/lab
-      // tests start empty and are added by the hospital's admin.
-      departments: cat.departments,
-      medicines: [],
-      labTests: [],
-    };
-
-    saveCustomHospital(cfg);
-    registerTenantSubdomains({ [cfg.subdomain]: cfg.id });
-    dbOperations.ensureTenantSeeded(cfg.id);
-    setCreated(cfg);
-  };
-
-  const goToHospital = () => {
-    if (!created) return;
-    setCurrentHospitalId(created.id);
-    window.location.href = '/login';
-  };
+  const stats = [
+    { label: 'Hospitals', value: selectedHospitalId ? hospitals.length : (overview?.hospitals ?? '—'), icon: Building2, color: 'bg-slate-100 text-slate-700' },
+    { label: 'Users', value: selectedHospitalId ? '—' : (overview?.users ?? '—'), icon: Users, color: 'bg-blue-50 text-blue-700' },
+    { label: 'Patients', value: selectedHospitalId ? '—' : (overview?.patients ?? '—'), icon: UserRound, color: 'bg-emerald-50 text-emerald-700' },
+    { label: 'Doctors', value: selectedHospitalId ? '—' : (overview?.doctors ?? '—'), icon: Stethoscope, color: 'bg-violet-50 text-violet-700' },
+    { label: 'Appointments', value: selectedHospitalId ? '—' : (overview?.appointments ?? '—'), icon: CalendarDays, color: 'bg-amber-50 text-amber-700' },
+    { label: 'Departments', value: selectedHospitalId ? '—' : (overview?.departments ?? '—'), icon: LayoutDashboard, color: 'bg-rose-50 text-rose-700' },
+  ];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100 p-6">
-      <div className="max-w-2xl mx-auto">
-        <Link href="/dashboard/admin" className="inline-flex items-center gap-2 text-sm text-slate-500 hover:text-slate-800 mb-6">
-          <ArrowLeft className="w-4 h-4" /> Back to admin
-        </Link>
-
-        <div className="flex items-center gap-3 mb-6">
-          <div className="w-11 h-11 rounded-xl bg-slate-900 flex items-center justify-center">
-            <Building2 className="w-6 h-6 text-white" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-bold text-slate-900">Onboard a Hospital</h1>
-            <p className="text-sm text-slate-500">Create a new tenant on the platform.</p>
-          </div>
+    <DashboardShell
+      role="superadmin"
+      userName={session.user.name}
+      title="Platform Overview"
+      subtitle={selectedHospitalId ? `Showing: ${hospitals[0]?.name ?? '…'}` : 'All hospitals across NetCare'}
+    >
+      <div className="space-y-8">
+        {/* Stats */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+          {stats.map((s) => {
+            const Icon = s.icon;
+            return (
+              <div key={s.label} className="bg-white rounded-xl border border-slate-100 shadow-sm p-4 flex flex-col gap-2">
+                <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${s.color}`}>
+                  <Icon className="w-5 h-5" />
+                </div>
+                <p className="text-2xl font-bold text-slate-900">{s.value}</p>
+                <p className="text-xs text-slate-500">{s.label}</p>
+              </div>
+            );
+          })}
         </div>
 
-        {created ? (
-          <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
-            <div className="flex items-center gap-2 text-emerald-600 mb-3">
-              <CheckCircle className="w-5 h-5" />
-              <span className="font-semibold">{created.name} created</span>
-            </div>
-            <p className="text-sm text-slate-600 mb-1">
-              Tenant id: <code className="bg-slate-100 px-1.5 py-0.5 rounded">{created.id}</code>
-            </p>
-            <p className="text-sm text-slate-600 mb-4">
-              Reachable at <code className="bg-slate-100 px-1.5 py-0.5 rounded">{created.subdomain}.localhost:3000</code>{' '}
-              (or via the in-app hospital switcher). Demo logins: <code>admin@example.com</code> / <code>password123</code>.
-            </p>
-            <div className="flex gap-3">
-              <button onClick={goToHospital} className="px-4 py-2 rounded-lg bg-slate-900 text-white text-sm font-medium hover:bg-slate-800">
-                Go to {created.name}
-              </button>
-              <button onClick={() => { setCreated(null); setName(''); setSubdomain(''); }} className="px-4 py-2 rounded-lg border border-slate-200 text-sm font-medium text-slate-700 hover:bg-slate-50">
-                Create another
-              </button>
-            </div>
-          </div>
-        ) : (
-          <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm space-y-5">
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Hospital name</label>
-              <input
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="e.g. Aster Eye Care"
-                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-300"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Subdomain</label>
-              <div className="flex items-center gap-2">
-                <input
-                  value={effectiveSubdomain}
-                  onChange={(e) => setSubdomain(slugify(e.target.value))}
-                  placeholder="aster"
-                  className="w-40 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-300"
-                />
-                <span className="text-sm text-slate-400">.localhost:3000</span>
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Category (vertical)</label>
-              <select
-                value={category}
-                onChange={(e) => setCategory(e.target.value as HospitalCategoryId)}
-                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-slate-300"
-              >
-                {CATEGORY_LIST.map((c) => (
-                  <option key={c.id} value={c.id}>{c.label}</option>
-                ))}
-              </select>
-              <p className="text-xs text-slate-500 mt-1">{cat.description}</p>
-            </div>
-
-            <div className="flex gap-6">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Primary colour</label>
-                <input type="color" value={primary} onChange={(e) => setPrimary(e.target.value)} className="h-9 w-16 rounded border border-slate-200" />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Accent colour</label>
-                <input type="color" value={primaryDark} onChange={(e) => setPrimaryDark(e.target.value)} className="h-9 w-16 rounded border border-slate-200" />
-              </div>
-            </div>
-
-            {error && <p className="text-sm text-red-600">{error}</p>}
-
-            <button onClick={handleCreate} className="px-4 py-2 rounded-lg bg-slate-900 text-white text-sm font-medium hover:bg-slate-800">
-              Create hospital
+        {/* Hospitals table */}
+        <div className="bg-white rounded-xl border border-slate-100 shadow-sm">
+          <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+            <h2 className="font-semibold text-slate-900">
+              Hospitals {selectedHospitalId && <span className="text-sm font-normal text-slate-400">(filtered)</span>}
+            </h2>
+            <button
+              onClick={() => setModalOpen(true)}
+              className="flex items-center gap-2 px-3 py-1.5 bg-slate-900 text-white rounded-lg text-sm font-medium hover:bg-slate-700 transition"
+            >
+              <Plus className="w-4 h-4" /> Onboard Hospital
             </button>
           </div>
-        )}
+          {isLoading ? (
+            <div className="py-12 text-center text-slate-400 text-sm">Loading…</div>
+          ) : hospitals.length === 0 ? (
+            <div className="py-12 text-center text-slate-400 text-sm">No hospitals found.</div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="bg-slate-50 border-b border-slate-100">
+                    {['Name', 'Subdomain', 'Category', 'Theme', 'Status', 'Created'].map((h) => (
+                      <th key={h} className="text-left py-3 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wide">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {hospitals.map((h) => (
+                    <tr key={h.id} className="border-b border-slate-50 hover:bg-slate-50 transition">
+                      <td className="py-3 px-6 font-medium text-slate-900">{h.name}</td>
+                      <td className="py-3 px-6 font-mono text-sm text-slate-600">{h.subdomain}</td>
+                      <td className="py-3 px-6 text-slate-600 capitalize">{h.category.replace('-', ' ')}</td>
+                      <td className="py-3 px-6">
+                        <div className="flex items-center gap-1.5">
+                          <span className="w-5 h-5 rounded-full border border-slate-200 inline-block" style={{ background: (h.theme as Record<string, string>)?.primary ?? '#888' }} />
+                          <span className="w-5 h-5 rounded-full border border-slate-200 inline-block" style={{ background: (h.theme as Record<string, string>)?.primaryDark ?? '#555' }} />
+                        </div>
+                      </td>
+                      <td className="py-3 px-6">
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${h.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-600'}`}>
+                          {h.status}
+                        </span>
+                      </td>
+                      <td className="py-3 px-6 text-slate-500 text-sm">{new Date(h.createdAt).toLocaleDateString()}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
       </div>
-    </div>
+
+      <OnboardHospitalModal open={modalOpen} onClose={() => setModalOpen(false)} />
+    </DashboardShell>
   );
 }

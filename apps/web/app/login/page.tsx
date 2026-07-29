@@ -12,13 +12,6 @@ import { useGetCurrentHospitalQuery, useLoginMutation } from '@/store/api';
 
 type LoginType = 'patient' | 'doctor' | 'admin' | 'lab' | 'nurse';
 
-const DEMO_CREDENTIALS: Record<LoginType, { email: string; password: string }> = {
-  patient: { email: 'patient@example.com', password: 'password123' },
-  doctor: { email: 'obgyn@example.com', password: 'password123' },
-  admin: { email: 'admin@example.com', password: 'password123' },
-  lab: { email: 'lab@example.com', password: 'password123' },
-  nurse: { email: 'nurse@example.com', password: 'password123' },
-};
 
 const loginSchema = Yup.object({
   email: Yup.string().email('Please enter a valid email').required('Email is required'),
@@ -32,10 +25,10 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const [loginType, setLoginType] = useState<LoginType>('patient');
 
-  const hospitalName = hospital?.name ?? 'Hospital';
+  const hospitalName = hospital?.name ?? 'NetCare';
 
   const formik = useFormik({
-    initialValues: DEMO_CREDENTIALS.patient,
+    initialValues: { email: '', password: '' },
     validationSchema: loginSchema,
     onSubmit: async (values, { setSubmitting }) => {
       setError('');
@@ -45,7 +38,7 @@ export default function LoginPage() {
           password: values.password,
         }).unwrap();
 
-        if (result.user.role !== loginType) {
+        if (result.user.role !== 'superadmin' && result.user.role !== loginType) {
           setError(`This account is not a ${loginType} account`);
           return;
         }
@@ -59,7 +52,8 @@ export default function LoginPage() {
         });
 
         const role = result.user.role;
-        if (role === 'patient') router.push('/dashboard/patient');
+        if (role === 'superadmin') router.push('/dashboard/platform');
+        else if (role === 'patient') router.push('/dashboard/patient');
         else if (role === 'doctor') router.push('/dashboard/doctor');
         else if (role === 'admin') router.push('/dashboard/admin');
         else if (role === 'lab') router.push('/dashboard/lab');
@@ -76,7 +70,6 @@ export default function LoginPage() {
   const handleTypeSelect = (type: LoginType) => {
     setLoginType(type);
     setError('');
-    formik.setValues(DEMO_CREDENTIALS[type]);
     formik.setTouched({});
   };
 
@@ -131,18 +124,6 @@ export default function LoginPage() {
             </div>
           )}
 
-          {/* Demo Credentials */}
-          <div className="bg-gradient-to-br from-cyan-50 to-teal-50 border border-cyan-200 rounded-xl p-4">
-            <p className="text-sm font-semibold text-cyan-900 mb-2">Demo Credentials:</p>
-            <p className="text-sm text-cyan-800">Email: <span className="font-mono">{DEMO_CREDENTIALS[loginType].email}</span></p>
-            <p className="text-sm text-cyan-800">Password: <span className="font-mono">{DEMO_CREDENTIALS[loginType].password}</span></p>
-            {loginType === 'doctor' && (
-              <p className="text-xs text-cyan-700 mt-2">
-                By department: <span className="font-mono">obgyn@</span>, <span className="font-mono">neonatology@</span>,{' '}
-                <span className="font-mono">maternal@</span>, <span className="font-mono">pediatrics@</span> — all <span className="font-mono">@example.com</span>. The sidebar adapts to each department.
-              </p>
-            )}
-          </div>
 
           <FormikProvider value={formik}>
             <form onSubmit={formik.handleSubmit} className="space-y-4" noValidate>

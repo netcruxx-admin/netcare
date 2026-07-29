@@ -40,6 +40,7 @@ export interface Patient {
   insuranceProvider: string;
   insuranceNumber: string;
   documents: string[];
+  user?: User;
 }
 
 export interface Doctor {
@@ -51,6 +52,7 @@ export interface Doctor {
   experienceYears: number;
   consultationFee: number;
   availableSlots: TimeSlot[];
+  user?: User;
   // Medical council credentials (collected at registration). Optional so
   // existing/seeded doctors remain valid.
   licenseNumber?: string;
