@@ -1,4 +1,14 @@
-from sqlalchemy import Column, Float, ForeignKey, Index, Integer, JSON, String, Text
+from sqlalchemy import (
+    Boolean,
+    Column,
+    Float,
+    ForeignKey,
+    Index,
+    Integer,
+    JSON,
+    String,
+    Text,
+)
 
 from .database import Base
 
@@ -34,6 +44,30 @@ class Hospital(Base):
     created_at = Column(String, nullable=False)
 
 
+class Role(Base):
+    """The catalog of user roles.
+
+    A lookup table rather than a free-text column so `users.role` gains
+    referential integrity and the UI has one source for display names. This is
+    deliberately NOT tenant-scoped: every hospital uses the same fixed set of
+    roles, which is what lets `schemas.Role` stay a Literal and the frontend
+    keep its role-keyed dashboard routes. Adding a role is a migration.
+    """
+
+    __tablename__ = "roles"
+
+    # The stable identifier stored on users.role — "admin", "doctor", ...
+    # Also the PK, so the FK reads naturally and needs no extra join to resolve.
+    code = Column(String, primary_key=True)
+    label = Column(String, nullable=False)  # display name, e.g. "Hospital Admin"
+    description = Column(String, default="")
+    # True for platform-level roles that belong to no hospital (superadmin),
+    # mirroring the users.hospital_id IS NULL case.
+    is_platform = Column(Boolean, nullable=False, default=False)
+    # Ascending display order for role pickers.
+    sort_order = Column(Integer, nullable=False, default=0)
+
+
 class User(Base):
     __tablename__ = "users"
 
@@ -44,8 +78,8 @@ class User(Base):
     password = Column(String, nullable=False)  # bcrypt hash
     name = Column(String, nullable=False)
     phone = Column(String, default="")
-    # superadmin | admin | doctor | nurse | lab | patient
-    role = Column(String, nullable=False)
+    # superadmin | admin | doctor | nurse | lab | patient (see Role above)
+    role = Column(String, ForeignKey("roles.code"), index=True, nullable=False)
     created_at = Column(String, nullable=False)
 
     __table_args__ = (
