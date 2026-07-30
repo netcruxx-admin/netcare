@@ -32,6 +32,7 @@ import {
   Search,
   Video,
   Globe,
+  ShieldCheck,
 } from 'lucide-react';
 import { authStorage } from '@/lib/auth';
 import type { HospitalModules } from '@/lib/hospitalConfig';
@@ -77,6 +78,7 @@ const MENUS: Record<Role, { title: string; items: NavItem[] }> = {
       { label: 'Appointments', href: '/dashboard/platform/appointments', icon: CalendarDays },
       { label: 'Departments', href: '/dashboard/platform/departments', icon: Globe },
       { label: 'Users', href: '/dashboard/platform/users', icon: Users },
+      { label: 'Roles', href: '/dashboard/platform/roles', icon: ShieldCheck },
     ],
   },
   patient: {

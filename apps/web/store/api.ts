@@ -127,6 +127,29 @@ export interface VitalsCreateBody {
   height?: number;
   notes?: string;
 }
+// Role catalog (platform-wide, superadmin only)
+export interface RoleInfo {
+  code: string;
+  label: string;
+  description: string;
+  isPlatform: boolean;
+  sortOrder: number;
+  userCount: number;
+}
+export interface RoleCreateBody {
+  code: string;
+  label: string;
+  description?: string;
+  isPlatform?: boolean;
+  sortOrder?: number;
+}
+export interface RoleUpdateBody {
+  label?: string;
+  description?: string;
+  isPlatform?: boolean;
+  sortOrder?: number;
+}
+
 export interface DepartmentCreateBody { name: string; description?: string }
 export interface DepartmentUpdateBody { name?: string; description?: string }
 
@@ -169,6 +192,7 @@ export const api = createApi({
     'Prescription',
     'Payment',
     'Vitals',
+    'Role',
   ],
 
   endpoints: (build) => ({
@@ -184,6 +208,30 @@ export const api = createApi({
     getSuperadminAppointments: build.query<Appointment[], void>({ query: () => '/superadmin/appointments' }),
     getSuperadminDepartments: build.query<Department[], void>({ query: () => '/superadmin/departments' }),
     getSuperadminUsers: build.query<User[], void>({ query: () => '/superadmin/users' }),
+
+    // ── Roles (platform catalog, superadmin only) ────────────────────────────
+    listRoles: build.query<RoleInfo[], void>({
+      query: () => '/roles',
+      providesTags: (result) =>
+        result
+          ? [
+              ...result.map(({ code }) => ({ type: 'Role' as const, id: code })),
+              { type: 'Role', id: 'LIST' },
+            ]
+          : [{ type: 'Role', id: 'LIST' }],
+    }),
+    createRole: build.mutation<RoleInfo, RoleCreateBody>({
+      query: (body) => ({ url: '/roles', method: 'POST', body }),
+      invalidatesTags: [{ type: 'Role', id: 'LIST' }],
+    }),
+    updateRole: build.mutation<RoleInfo, { code: string; body: RoleUpdateBody }>({
+      query: ({ code, body }) => ({ url: `/roles/${code}`, method: 'PUT', body }),
+      invalidatesTags: [{ type: 'Role', id: 'LIST' }],
+    }),
+    deleteRole: build.mutation<void, string>({
+      query: (code) => ({ url: `/roles/${code}`, method: 'DELETE' }),
+      invalidatesTags: [{ type: 'Role', id: 'LIST' }],
+    }),
 
     // ── Hospitals ────────────────────────────────────────────────────────────
     getCurrentHospital: build.query<HospitalInfo, void>({
@@ -402,6 +450,10 @@ export const {
   useGetSuperadminAppointmentsQuery,
   useGetSuperadminDepartmentsQuery,
   useGetSuperadminUsersQuery,
+  useListRolesQuery,
+  useCreateRoleMutation,
+  useUpdateRoleMutation,
+  useDeleteRoleMutation,
   useGetCurrentHospitalQuery,
   useListHospitalsQuery,
   useOnboardHospitalMutation,

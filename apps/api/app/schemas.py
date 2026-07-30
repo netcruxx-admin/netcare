@@ -74,6 +74,36 @@ class HospitalUpdate(CamelModel):
     status: Optional[HospitalStatus] = None
 
 
+# ---------- Role (platform-wide catalog, superadmin-managed) ----------
+class RoleOut(CamelModel):
+    code: str
+    label: str
+    description: str = ""
+    is_platform: bool = False
+    sort_order: int = 0
+    # How many users currently hold this role (superadmin needs it to know
+    # whether a role is safe to delete).
+    user_count: int = 0
+
+
+class RoleCreate(CamelModel):
+    # Lowercase slug; becomes users.role for anyone assigned this role.
+    code: str
+    label: str
+    description: str = ""
+    is_platform: bool = False
+    sort_order: int = 0
+
+
+class RoleUpdate(CamelModel):
+    """`code` is the primary key users.role points at, so it is not editable."""
+
+    label: Optional[str] = None
+    description: Optional[str] = None
+    is_platform: Optional[bool] = None
+    sort_order: Optional[int] = None
+
+
 # ---------- Auth ----------
 class RegisterRequest(CamelModel):
     email: str
