@@ -7,7 +7,7 @@ import { authStorage } from '@/lib/auth';
 import { DashboardShell } from '@/components/DashboardShell';
 import { AddPatientModal } from '@/components/superadmin/AddPatientModal';
 import { HospitalBadge } from '@/components/superadmin/HospitalBadge';
-import { useGetSuperadminPatientsQuery, useListHospitalsQuery } from '@/store/api';
+import { useGetSuperadminPatientsQuery, useGetSuperadminAppointmentsQuery, useListHospitalsQuery } from '@/store/api';
 
 export default function PlatformPatientsPage() {
   const router = useRouter();
@@ -24,6 +24,7 @@ export default function PlatformPatientsPage() {
   }, [router]);
 
   const { data: allPatients = [], isLoading, refetch } = useGetSuperadminPatientsQuery();
+  const { data: allAppointments = [] } = useGetSuperadminAppointmentsQuery();
   const { data: hospitals = [] } = useListHospitalsQuery();
 
   if (!session) return null;
@@ -31,6 +32,9 @@ export default function PlatformPatientsPage() {
   const patients = selectedHospitalId
     ? allPatients.filter((p) => p.hospitalId === selectedHospitalId)
     : allPatients;
+
+  const apptCount = new Map<string, number>();
+  allAppointments.forEach((a) => apptCount.set(a.patientId, (apptCount.get(a.patientId) ?? 0) + 1));
 
   const showHospital = !selectedHospitalId;
 
@@ -67,7 +71,7 @@ export default function PlatformPatientsPage() {
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-100">
                   {showHospital && <th className="text-left py-3 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wide">Hospital</th>}
-                  {['Name', 'Email', 'Gender', 'Blood Group', 'Phone'].map((h) => (
+                  {['Name', 'Email', 'Gender', 'Blood Group', 'Phone', 'Appointments'].map((h) => (
                     <th key={h} className="text-left py-3 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wide">{h}</th>
                   ))}
                 </tr>
@@ -85,6 +89,7 @@ export default function PlatformPatientsPage() {
                     <td className="py-3 px-6 text-slate-600 capitalize">{p.gender || '—'}</td>
                     <td className="py-3 px-6 text-slate-600">{p.bloodGroup || '—'}</td>
                     <td className="py-3 px-6 text-slate-600 text-sm">{p.user?.phone || '—'}</td>
+                    <td className="py-3 px-6 font-semibold text-slate-900">{apptCount.get(p.id) ?? 0}</td>
                   </tr>
                 ))}
               </tbody>

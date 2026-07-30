@@ -60,6 +60,9 @@ def register(
                 hospital_id=tenant_id,
                 user_id=user.id,
                 phone=body.phone,
+                gender=body.gender or "",
+                blood_group=body.blood_group or "",
+                date_of_birth=body.date_of_birth or "",
                 documents=[],
             )
         )

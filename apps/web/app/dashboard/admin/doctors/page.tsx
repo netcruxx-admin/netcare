@@ -38,9 +38,10 @@ export default function AdminDoctorsPage() {
       .filter((d) => {
         if (!q) return true;
         return (
+          (d.user?.name ?? '').toLowerCase().includes(q) ||
+          (d.user?.email ?? '').toLowerCase().includes(q) ||
           d.specialization.toLowerCase().includes(q) ||
-          d.qualification.toLowerCase().includes(q) ||
-          d.id.toLowerCase().includes(q)
+          d.qualification.toLowerCase().includes(q)
         );
       });
   }, [doctors, query, specFilter]);
@@ -60,7 +61,7 @@ export default function AdminDoctorsPage() {
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search specialization or qualification…"
+            placeholder="Search name, email, specialization…"
             className="w-full pl-9 pr-3 py-2 bg-white rounded-lg shadow text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
           />
         </div>
@@ -74,9 +75,10 @@ export default function AdminDoctorsPage() {
         </select>
         <ExportButton
           filename="doctors"
-          headers={['ID', 'Specialization', 'Qualification', 'Experience (yrs)', 'Fee', 'Status']}
+          headers={['Name', 'Email', 'Specialization', 'Qualification', 'Experience (yrs)', 'Fee', 'Status']}
           rows={filtered.map((d) => [
-            d.id,
+            d.user?.name ?? '—',
+            d.user?.email ?? '—',
             d.specialization,
             d.qualification,
             d.experienceYears,
@@ -101,6 +103,8 @@ export default function AdminDoctorsPage() {
             <table className="w-full">
               <thead>
                 <tr className="border-b bg-slate-50">
+                  <th className="text-left py-3 px-6 font-semibold text-slate-900">Name</th>
+                  <th className="text-left py-3 px-6 font-semibold text-slate-900">Email</th>
                   <th className="text-left py-3 px-6 font-semibold text-slate-900">Specialization</th>
                   <th className="text-left py-3 px-6 font-semibold text-slate-900">Qualification</th>
                   <th className="text-left py-3 px-6 font-semibold text-slate-900">Experience</th>
@@ -111,6 +115,8 @@ export default function AdminDoctorsPage() {
               <tbody>
                 {filtered.map((doctor) => (
                   <tr key={doctor.id} className="border-b hover:bg-slate-50">
+                    <td className="py-3 px-6 font-medium text-slate-900">{doctor.user?.name ?? '—'}</td>
+                    <td className="py-3 px-6 text-slate-600 text-sm">{doctor.user?.email ?? '—'}</td>
                     <td className="py-3 px-6 font-medium">{doctor.specialization || '—'}</td>
                     <td className="py-3 px-6 text-slate-600">{doctor.qualification || '—'}</td>
                     <td className="py-3 px-6 text-slate-600">{doctor.experienceYears} yrs</td>

@@ -9,6 +9,14 @@ from ..tenancy import get_tenant_id, scoped
 router = APIRouter(prefix="/patients", tags=["patients"])
 
 
+def _with_user(db: Session, patient: models.Patient) -> schemas.PatientOut:
+    out = schemas.PatientOut.model_validate(patient)
+    user = db.get(models.User, patient.user_id)
+    if user:
+        out.user = schemas.UserOut.model_validate(user)
+    return out
+
+
 def _get_or_404(db: Session, patient_id: str, tenant_id: str) -> models.Patient:
     patient = (
         scoped(db, models.Patient, tenant_id)
@@ -28,7 +36,7 @@ def list_patients(
     _: models.User = Depends(get_current_user),
     tenant_id: str = Depends(get_tenant_id),
 ):
-    return scoped(db, models.Patient, tenant_id).all()
+    return [_with_user(db, p) for p in scoped(db, models.Patient, tenant_id).all()]
 
 
 @router.get("/by-user/{user_id}", response_model=schemas.PatientOut)
@@ -47,7 +55,7 @@ def get_patient_by_user(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Patient not found"
         )
-    return patient
+    return _with_user(db, patient)
 
 
 @router.get("/{patient_id}", response_model=schemas.PatientOut)
@@ -57,7 +65,7 @@ def get_patient(
     _: models.User = Depends(get_current_user),
     tenant_id: str = Depends(get_tenant_id),
 ):
-    return _get_or_404(db, patient_id, tenant_id)
+    return _with_user(db, _get_or_404(db, patient_id, tenant_id))
 
 
 @router.put("/{patient_id}", response_model=schemas.PatientOut)

@@ -115,6 +115,10 @@ class RegisterRequest(CamelModel):
     specialization: Optional[str] = None
     qualification: Optional[str] = None
     experience_years: Optional[int] = None
+    # Patient-specific (ignored for other roles)
+    gender: Optional[str] = None
+    blood_group: Optional[str] = None
+    date_of_birth: Optional[str] = None
 
 
 class LoginRequest(CamelModel):

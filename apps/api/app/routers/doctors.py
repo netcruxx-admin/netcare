@@ -9,13 +9,21 @@ from ..tenancy import get_tenant_id, scoped
 router = APIRouter(prefix="/doctors", tags=["doctors"])
 
 
+def _with_user(db: Session, doctor: models.Doctor) -> schemas.DoctorOut:
+    out = schemas.DoctorOut.model_validate(doctor)
+    user = db.get(models.User, doctor.user_id)
+    if user:
+        out.user = schemas.UserOut.model_validate(user)
+    return out
+
+
 @router.get("", response_model=list[schemas.DoctorOut])
 def list_doctors(
     db: Session = Depends(get_db),
     _: models.User = Depends(get_current_user),
     tenant_id: str = Depends(get_tenant_id),
 ):
-    return scoped(db, models.Doctor, tenant_id).all()
+    return [_with_user(db, d) for d in scoped(db, models.Doctor, tenant_id).all()]
 
 
 @router.get("/by-user/{user_id}", response_model=schemas.DoctorOut)
@@ -34,7 +42,7 @@ def get_doctor_by_user(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Doctor not found"
         )
-    return doctor
+    return _with_user(db, doctor)
 
 
 @router.get("/{doctor_id}", response_model=schemas.DoctorOut)
@@ -53,7 +61,7 @@ def get_doctor(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Doctor not found"
         )
-    return doctor
+    return _with_user(db, doctor)
 
 
 @router.get("/{doctor_id}/appointments", response_model=list[schemas.AppointmentOut])
