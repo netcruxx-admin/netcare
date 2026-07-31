@@ -1,20 +1,17 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Search, FlaskConical } from 'lucide-react';
-import { dbOperations, LabTest } from '@/lib/db';
+import type { LabTest } from '@/lib/types';
 import { DashboardShell } from '@/components/DashboardShell';
+import { useListLabTestsQuery } from '@/store/api';
 import type { RoleViewProps } from '@/components/RoleView';
 
 export function LabCatalog({ session }: RoleViewProps) {
   const router = useRouter();
-  const [tests, setTests] = useState<LabTest[]>([]);
+  const { data: tests = [], isLoading } = useListLabTestsQuery();
   const [query, setQuery] = useState('');
-
-  useEffect(() => {
-    setTests(dbOperations.getAllLabTests());
-  }, [session]);
 
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase();

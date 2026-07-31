@@ -1,51 +1,30 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { Search, Pill } from 'lucide-react';
-import { dbOperations, Prescription, Patient, User } from '@/lib/db';
+import { useListPatientsQuery, useListPrescriptionsQuery } from '@/store/api';
 import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
 import { ExportButton } from '@/components/ExportButton';
 
-interface RawData {
-  prescriptions: Prescription[];
-  patients: Patient[];
-  users: User[];
-}
-
 export function DoctorPrescriptions({ session }: RoleViewProps) {
-  const router = useRouter();
-  const [raw, setRaw] = useState<RawData | null>(null);
   const [query, setQuery] = useState('');
 
-  useEffect(() => {
-    const s = session;
-    const doctor = dbOperations.getAllDoctors().find((d) => d.userId === s.user.id) ?? null;
-    setRaw({
-      prescriptions: doctor ? dbOperations.getPrescriptionsByDoctorId(doctor.id) : [],
-      patients: dbOperations.getAllPatients(),
-      users: dbOperations.getAllUsers(),
-    });
-  }, [session]);
+  // Both are already narrowed to this doctor's own records by the API.
+  const { data: prescriptions = [] } = useListPrescriptionsQuery();
+  const { data: patients = [] } = useListPatientsQuery();
 
   const rows = useMemo(() => {
-    if (!raw) return [];
-    const userById = new Map(raw.users.map((u) => [u.id, u]));
-    const patientById = new Map(raw.patients.map((p) => [p.id, p]));
-    const patientName = (id: string) => {
-      const p = patientById.get(id);
-      const u = p ? userById.get(p.userId) : null;
-      return u?.name ?? 'Patient';
-    };
+    const patientName = (id: string) =>
+      patients.find((p) => p.id === id)?.user?.name ?? 'Patient';
 
     const q = query.trim().toLowerCase();
-    return raw.prescriptions
+    return prescriptions
       .map((rx) => ({ ...rx, patient: patientName(rx.patientId), date: rx.createdAt.split('T')[0] }))
       .filter((r) => !q || r.patient.toLowerCase().includes(q) || r.medicineName.toLowerCase().includes(q))
       .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
-  }, [raw, query]);
+  }, [prescriptions, patients, query]);
 
   return (
     <DashboardShell role={session.user.role} userName={session.user.name} title="Prescriptions" subtitle="Medicines you have prescribed">

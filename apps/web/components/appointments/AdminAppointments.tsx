@@ -31,6 +31,7 @@ import { FollowUpModal } from '@/components/FollowUpModal';
 import { ActionIcon } from '@/components/ActionIcon';
 import { ExportButton } from '@/components/ExportButton';
 import { blockedSlotSet } from '@/lib/schedule';
+import { useListScheduleBlocksQuery } from '@/store/api';
 import { Calendar } from '@/components/ui/calendar';
 import {
   Pagination,
@@ -156,6 +157,8 @@ function fetchRaw(): RawData {
 }
 
 export function AdminAppointments({ session }: RoleViewProps) {
+  // Blocks come from the API; blockedSlotSet is a pure calculation over them.
+  const { data: scheduleBlocks = [] } = useListScheduleBlocksQuery();
   const router = useRouter();
   const [raw, setRaw] = useState<RawData | null>(null);
 
@@ -278,7 +281,9 @@ export function AdminAppointments({ session }: RoleViewProps) {
   };
 
   const reBooked = rescheduling ? bookedSlotsForDoctor(rescheduling.doctorId, reDate, rescheduling.id) : new Set<string>();
-  const reBlocked = rescheduling ? blockedSlotSet(rescheduling.doctorId, reDate, SLOTS) : new Set<string>();
+  const reBlocked = rescheduling
+    ? blockedSlotSet(scheduleBlocks, rescheduling.doctorId, reDate, SLOTS)
+    : new Set<string>();
 
   return (
     <DashboardShell

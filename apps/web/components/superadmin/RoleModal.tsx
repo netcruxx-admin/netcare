@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from 'react';
 import { X } from 'lucide-react';
-import { useCreateRoleMutation, useUpdateRoleMutation } from '@/store/api';
-import type { RoleInfo } from '@/store/api';
+import { useCreateRoleMutation, useListPermissionsQuery, useUpdateRoleMutation } from '@/store/api';
+import type { PermissionGrant, RoleInfo } from '@/store/api';
+import { PermissionMatrix } from '@/components/roles/PermissionMatrix';
 
 interface Props {
   open: boolean;
@@ -21,7 +22,12 @@ export function RoleModal({ open, onClose, onSuccess, role }: Props) {
   const [isPlatform, setIsPlatform] = useState(false);
   const [sortOrder, setSortOrder] = useState('0');
   const [homePath, setHomePath] = useState('');
+  const [permissions, setPermissions] = useState<PermissionGrant[]>([]);
   const [error, setError] = useState('');
+
+  // The grantable catalog is backend-owned, so the matrix always reflects what
+  // the platform actually supports.
+  const { data: catalog = [] } = useListPermissionsQuery();
 
   const [createRole, { isLoading: creating }] = useCreateRoleMutation();
   const [updateRole, { isLoading: updating }] = useUpdateRoleMutation();
@@ -35,6 +41,7 @@ export function RoleModal({ open, onClose, onSuccess, role }: Props) {
     setIsPlatform(role?.isPlatform ?? false);
     setSortOrder(String(role?.sortOrder ?? 0));
     setHomePath(role?.homePath ?? '');
+    setPermissions(role?.permissions ?? []);
     setError('');
   }, [role, open]);
 
@@ -51,6 +58,9 @@ export function RoleModal({ open, onClose, onSuccess, role }: Props) {
       isPlatform,
       sortOrder: Number(sortOrder) || 0,
       homePath: homePath.trim(),
+      // Sent with the role itself: creating a role and deciding what it can do
+      // is one decision, so it is one request.
+      permissions,
     };
     try {
       if (isEdit) {
@@ -67,7 +77,7 @@ export function RoleModal({ open, onClose, onSuccess, role }: Props) {
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-md">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg">
         <div className="flex justify-between items-center px-6 py-4 border-b border-slate-100">
           <h3 className="text-lg font-bold text-slate-900">{isEdit ? 'Edit Role' : 'Add Role'}</h3>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-900 p-1"><X className="w-5 h-5" /></button>
@@ -112,6 +122,23 @@ export function RoleModal({ open, onClose, onSuccess, role }: Props) {
               <input type="checkbox" checked={isPlatform} onChange={(e) => setIsPlatform(e.target.checked)} className="w-4 h-4" />
               Platform-level role
             </label>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">
+              Permissions <span className="text-slate-400 font-normal">({permissions.length} selected)</span>
+            </label>
+            <p className="text-xs text-slate-400 mb-2">
+              Everything this role may do. Nothing is implied by the role name — a
+              role with no permissions can sign in and see nothing.
+            </p>
+            <div className="border border-slate-200 rounded-lg p-3">
+              <PermissionMatrix
+                permissions={catalog}
+                granted={permissions}
+                onChange={setPermissions}
+                disabled={loading}
+              />
+            </div>
           </div>
           {error && <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</p>}
           <div className="flex gap-3 pt-1">

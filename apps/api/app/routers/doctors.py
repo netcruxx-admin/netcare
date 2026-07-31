@@ -3,6 +3,13 @@ from sqlalchemy.orm import Session
 
 from .. import models, schemas
 from ..auth import get_current_user
+from ..authz import (
+    SCOPE_OWN,
+    caller_doctor_id,
+    own_record_filter,
+    require_any_permission,
+    require_permission,
+)
 from ..database import get_db
 from ..tenancy import get_tenant_id, scoped
 
@@ -20,19 +27,28 @@ def _with_user(db: Session, doctor: models.Doctor) -> schemas.DoctorOut:
 @router.get("", response_model=list[schemas.DoctorOut])
 def list_doctors(
     db: Session = Depends(get_db),
-    _: models.User = Depends(get_current_user),
+    user: models.User = Depends(get_current_user),
+    scope: str = Depends(require_permission("doctors.read")),
     tenant_id: str = Depends(get_tenant_id),
 ):
-    return [_with_user(db, d) for d in scoped(db, models.Doctor, tenant_id).all()]
+    query = scoped(db, models.Doctor, tenant_id)
+    if scope == SCOPE_OWN:
+        query = query.filter(models.Doctor.user_id == user.id)
+    return [_with_user(db, d) for d in query.all()]
 
 
 @router.get("/by-user/{user_id}", response_model=schemas.DoctorOut)
 def get_doctor_by_user(
     user_id: str,
     db: Session = Depends(get_db),
-    _: models.User = Depends(get_current_user),
+    user: models.User = Depends(get_current_user),
+    scope: str = Depends(require_permission("doctors.read")),
     tenant_id: str = Depends(get_tenant_id),
 ):
+    if scope == SCOPE_OWN and user_id != user.id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Doctor not found"
+        )
     doctor = (
         scoped(db, models.Doctor, tenant_id)
         .filter(models.Doctor.user_id == user_id)
@@ -49,9 +65,14 @@ def get_doctor_by_user(
 def get_doctor(
     doctor_id: str,
     db: Session = Depends(get_db),
-    _: models.User = Depends(get_current_user),
+    user: models.User = Depends(get_current_user),
+    scope: str = Depends(require_permission("doctors.read")),
     tenant_id: str = Depends(get_tenant_id),
 ):
+    if scope == SCOPE_OWN and doctor_id != caller_doctor_id(db, user):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Doctor not found"
+        )
     doctor = (
         scoped(db, models.Doctor, tenant_id)
         .filter(models.Doctor.id == doctor_id)
@@ -68,11 +89,46 @@ def get_doctor(
 def doctor_appointments(
     doctor_id: str,
     db: Session = Depends(get_db),
-    _: models.User = Depends(get_current_user),
+    user: models.User = Depends(get_current_user),
+    scope: str = Depends(require_permission("appointments.read")),
     tenant_id: str = Depends(get_tenant_id),
 ):
-    return (
-        scoped(db, models.Appointment, tenant_id)
-        .filter(models.Appointment.doctor_id == doctor_id)
-        .all()
+    query = scoped(db, models.Appointment, tenant_id).filter(
+        models.Appointment.doctor_id == doctor_id
     )
+    if scope == SCOPE_OWN:
+        query = query.filter(own_record_filter(db, user, models.Appointment))
+    return query.all()
+
+
+@router.put("/{doctor_id}", response_model=schemas.DoctorOut)
+def update_doctor(
+    doctor_id: str,
+    body: schemas.DoctorUpdate,
+    db: Session = Depends(get_db),
+    user: models.User = Depends(get_current_user),
+    held: dict = Depends(require_any_permission("doctors.manage", "profile.manage")),
+    tenant_id: str = Depends(get_tenant_id),
+):
+    doctor = (
+        scoped(db, models.Doctor, tenant_id)
+        .filter(models.Doctor.id == doctor_id)
+        .first()
+    )
+    if doctor is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Doctor not found")
+    # Staff may edit any doctor; a doctor may edit only their own record.
+    if "doctors.manage" not in held and doctor.user_id != user.id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Doctor not found")
+
+    fields = body.model_dump(exclude_unset=True)
+    # Name/email/phone live on the user row, the rest on the doctor row.
+    account = db.get(models.User, doctor.user_id)
+    for field in ("name", "email", "phone"):
+        if field in fields and account is not None:
+            setattr(account, field, fields.pop(field))
+    for field, value in fields.items():
+        setattr(doctor, field, value)
+    db.commit()
+    db.refresh(doctor)
+    return _with_user(db, doctor)

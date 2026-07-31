@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 
 from .. import models, schemas
 from ..auth import create_token, get_current_user, hash_password, verify_password
+from ..authz import effective_permissions
 from ..database import get_db
 from ..tenancy import resolve_public_tenant
 from ..utils import new_id, now_iso
@@ -17,10 +18,17 @@ def _build_response(db: Session, user: models.User) -> schemas.AuthResponse:
             db.query(models.Patient).filter(models.Patient.user_id == user.id).first()
         )
     role = db.get(models.Role, user.role)
+    # Resolved per request rather than stored in the token, so a superadmin
+    # changing a role's grants takes effect on the very next call.
+    granted = effective_permissions(db, user)
     return schemas.AuthResponse(
         user=schemas.UserOut.model_validate(user),
         patient=schemas.PatientOut.model_validate(patient) if patient else None,
         role=schemas.RoleOptionOut.model_validate(role) if role else None,
+        permissions=[
+            schemas.PermissionGrant(code=code, scope=scope)
+            for code, scope in sorted(granted.items())
+        ],
         token=create_token(user.id, user.hospital_id, user.role),
         is_authenticated=True,
     )
@@ -55,32 +63,20 @@ def register(
     )
     db.add(user)
 
-    if body.role == "patient":
-        db.add(
-            models.Patient(
-                id=new_id("pat"),
-                hospital_id=tenant_id,
-                user_id=user.id,
-                phone=body.phone,
-                gender=body.gender or "",
-                blood_group=body.blood_group or "",
-                date_of_birth=body.date_of_birth or "",
-                documents=[],
-            )
+    # RegisterRole is patient-only: a public endpoint must not be able to mint an
+    # account that can read other people's records. Staff go through POST /users.
+    db.add(
+        models.Patient(
+            id=new_id("pat"),
+            hospital_id=tenant_id,
+            user_id=user.id,
+            phone=body.phone,
+            gender=body.gender or "",
+            blood_group=body.blood_group or "",
+            date_of_birth=body.date_of_birth or "",
+            documents=[],
         )
-    elif body.role == "doctor":
-        db.add(
-            models.Doctor(
-                id=new_id("doc"),
-                hospital_id=tenant_id,
-                user_id=user.id,
-                specialization=body.specialization or "",
-                qualification=body.qualification or "",
-                experience_years=body.experience_years or 0,
-                available_slots=[],
-                verification_status="verified",
-            )
-        )
+    )
 
     db.commit()
     db.refresh(user)

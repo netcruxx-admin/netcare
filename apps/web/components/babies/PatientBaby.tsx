@@ -1,12 +1,17 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useMemo } from 'react';
 import {
   ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
 } from 'recharts';
 import { Baby as BabyIcon, Syringe, AlertTriangle, CheckCircle2, Clock, CalendarDays } from 'lucide-react';
-import { dbOperations, type Baby, type Immunization } from '@/lib/db';
+import type { Baby, Immunization } from '@/lib/types';
+import {
+  useGetPatientByUserQuery,
+  useListBabiesQuery,
+  useListGrowthQuery,
+  useListImmunizationsQuery,
+} from '@/store/api';
 import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
 import { ageDisplay, ageInMonths, immStatus, whoWeightForAge, type ImmStatus } from '@/lib/baby';
@@ -20,28 +25,27 @@ const STATUS_STYLE: Record<ImmStatus, string> = {
 const STATUS_LABEL: Record<ImmStatus, string> = { given: 'Given', overdue: 'Overdue', due: 'Due now', upcoming: 'Upcoming' };
 
 export function PatientBaby({ session }: RoleViewProps) {
-  const router = useRouter();
-  const [baby, setBaby] = useState<Baby | null>(null);
-  const [imms, setImms] = useState<Immunization[]>([]);
-  const [growth, setGrowth] = useState<{ month: number; weight: number }[]>([]);
+  const { data: patient } = useGetPatientByUserQuery(session.user.id);
+  const { data: babies = [] } = useListBabiesQuery(
+    { motherPatientId: patient?.id },
+    { skip: !patient },
+  );
+  const baby: Baby | null = babies[0] ?? null;
 
-  useEffect(() => {
-    const s = session;
-    const patientId = dbOperations.getPatientByUserId(s.user.id)?.id;
-    if (patientId) {
-      const b = dbOperations.getBabiesByMother(patientId)[0] ?? null;
-      setBaby(b);
-      if (b) {
-        setImms([...dbOperations.getImmunizationsByBabyId(b.id)]);
-        setGrowth(
-          dbOperations.getGrowthByBabyId(b.id).map((m) => ({
-            month: Math.round(ageInMonths(b.dateOfBirth, new Date(m.date + 'T00:00:00')) * 10) / 10,
+  const { data: imms = [] } = useListImmunizationsQuery(baby?.id ?? '', { skip: !baby });
+  const { data: measurements = [] } = useListGrowthQuery(baby?.id ?? '', { skip: !baby });
+
+  // Growth is charted against the baby's age at each measurement.
+  const growth = useMemo(
+    () =>
+      baby
+        ? measurements.map((m) => ({
+            month: Math.round(ageInMonths(baby.dateOfBirth, new Date(m.date + 'T00:00:00')) * 10) / 10,
             weight: m.weight,
-          })),
-        );
-      }
-    }
-  }, [session]);
+          }))
+        : [],
+    [baby, measurements],
+  );
 
   if (!baby) {
     return (

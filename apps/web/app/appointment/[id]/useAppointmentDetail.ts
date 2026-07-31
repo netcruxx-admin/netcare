@@ -1,32 +1,30 @@
 'use client';
 
-// Data loading, access control and mutations for the appointment detail page.
-// Loads the appointment + related clinical records, enforces role-based view
-// permissions, derives which actions the current user may take, and exposes the
-// confirm/complete/cancel/delete handlers. The page renders from this.
-import { useEffect, useState } from 'react';
+// Data loading and mutations for the appointment detail page. The page renders
+// from this.
+//
+// Access is no longer decided here. The API returns 404 for an appointment the
+// caller isn't a party to (scope "own" is enforced server-side), so the checks
+// this hook used to do against the mock store are gone — they compared the
+// wrong data and could only ever hide the UI, not the records.
+import { useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { authStorage } from '@/lib/auth';
-import { dbOperations, Appointment, Doctor, Patient, Medicine } from '@/lib/db';
+import { apiError } from '@/lib/apiError';
+import {
+  useDeleteAppointmentMutation,
+  useGetAppointmentQuery,
+  useGetDoctorQuery,
+  useGetPatientQuery,
+  useListMedicalRecordsQuery,
+  useListMedicinesQuery,
+  useListPrescriptionsQuery,
+  useListTestOrdersQuery,
+  useListTestResultsQuery,
+  useListVitalsQuery,
+  useUpdateAppointmentMutation,
+} from '@/store/api';
 import { today } from './appointmentSchemas';
-
-interface AppointmentDetails {
-  appointment: Appointment | null;
-  doctor: Doctor | null;
-  patient: Patient | null;
-  prescriptions: any[];
-  medicalRecords: any[];
-  vitals: any[];
-  testOrders: any[];
-}
-
-// A test order plus any published results for it, for the detail view.
-function loadTestOrders(appointmentId: string) {
-  return dbOperations.getTestOrdersByAppointment(appointmentId).map((order) => ({
-    ...order,
-    results: dbOperations.getTestResultsByOrderId(order.id),
-  }));
-}
 
 export type ConfirmAction = null | 'complete' | 'cancel' | 'delete';
 
@@ -35,134 +33,83 @@ export function useAppointmentDetail() {
   const params = useParams();
   const appointmentId = params.id as string;
 
-  const [session, setSession] = useState<ReturnType<typeof authStorage.getSession>>(null);
-  const [loading, setLoading] = useState(true);
-  const [details, setDetails] = useState<AppointmentDetails>({
-    appointment: null,
-    doctor: null,
-    patient: null,
-    prescriptions: [],
-    medicalRecords: [],
-    vitals: [],
-    testOrders: [],
-  });
-  const [error, setError] = useState('');
+  const [session] = useState(() => authStorage.getSession());
   const [confirmAction, setConfirmAction] = useState<ConfirmAction>(null);
   const [toast, setToast] = useState('');
+  const [error, setError] = useState('');
 
   const flash = (msg: string) => {
     setToast(msg);
     setTimeout(() => setToast(''), 2500);
   };
 
-  useEffect(() => {
-    const session = authStorage.getSession();
-    if (!session) {
-      router.push('/login');
-    } else {
-      setSession(session);
-    }
-  }, [router]);
+  const {
+    data: appointment,
+    isLoading: loadingAppointment,
+    error: appointmentError,
+  } = useGetAppointmentQuery(appointmentId, { skip: !appointmentId });
 
-  useEffect(() => {
-    if (!appointmentId) return;
+  // Everything else hangs off the appointment, so it waits for it.
+  const ready = Boolean(appointment);
+  const { data: doctor } = useGetDoctorQuery(appointment?.doctorId ?? '', { skip: !ready });
+  const { data: patient } = useGetPatientQuery(appointment?.patientId ?? '', { skip: !ready });
+  const { data: prescriptions = [] } = useListPrescriptionsQuery({ appointmentId }, { skip: !ready });
+  const { data: medicalRecords = [] } = useListMedicalRecordsQuery({ appointmentId }, { skip: !ready });
+  const { data: vitals = [] } = useListVitalsQuery({ appointmentId }, { skip: !ready });
+  const { data: orders = [] } = useListTestOrdersQuery({ appointmentId }, { skip: !ready });
+  const { data: allResults = [] } = useListTestResultsQuery(undefined, { skip: !ready });
 
+  const [updateAppointment] = useUpdateAppointmentMutation();
+  const [deleteAppointment] = useDeleteAppointmentMutation();
+
+  // Results are fetched once and attached to their order, rather than one
+  // request per order.
+  const testOrders = orders.map((order) => ({
+    ...order,
+    results: allResults.filter((result) => result.orderId === order.id),
+  }));
+
+  const details = {
+    appointment: appointment ?? null,
+    doctor: doctor ?? null,
+    patient: patient ?? null,
+    prescriptions,
+    medicalRecords,
+    vitals,
+    testOrders,
+  };
+
+  const runConfirm = async () => {
+    setError('');
     try {
-      const appointment = dbOperations.getAppointment(appointmentId);
-      if (!appointment) {
-        setError('Appointment not found');
-        setLoading(false);
+      if (confirmAction === 'complete') {
+        await updateAppointment({ id: appointmentId, body: { status: 'completed' } }).unwrap();
+        flash('Appointment marked complete');
+      } else if (confirmAction === 'cancel') {
+        await updateAppointment({ id: appointmentId, body: { status: 'cancelled' } }).unwrap();
+        flash('Appointment cancelled');
+      } else if (confirmAction === 'delete') {
+        await deleteAppointment(appointmentId).unwrap();
+        setConfirmAction(null);
+        router.back();
         return;
       }
-
-      // Verify access - patient can only see their own, doctor can see their own, admin can see all
-      if (session?.user.role === 'patient' && appointment.patientId !== dbOperations.getPatientByUserId(session.user.id)?.id) {
-        setError('You do not have permission to view this appointment');
-        setLoading(false);
-        return;
-      }
-
-      if (session?.user.role === 'doctor' && appointment.doctorId !== dbOperations.getDoctorByUserId(session.user.id)?.id) {
-        setError('You do not have permission to view this appointment');
-        setLoading(false);
-        return;
-      }
-
-      const doctor = dbOperations.getDoctor(appointment.doctorId);
-      const patient = dbOperations.getPatient(appointment.patientId);
-      const prescriptions = dbOperations.getPrescriptionsByAppointment(appointmentId);
-      const medicalRecords = dbOperations.getMedicalRecordsByAppointment(appointmentId);
-      const vitals = dbOperations.getVitalsByAppointment(appointmentId);
-      const testOrders = loadTestOrders(appointmentId);
-
-      setDetails({
-        appointment,
-        doctor: doctor ?? null,
-        patient: patient ?? null,
-        prescriptions,
-        medicalRecords,
-        vitals,
-        testOrders,
-      });
     } catch (err) {
-      setError('Error loading appointment details');
-      console.error('[v0] Error:', err);
-    } finally {
-      setLoading(false);
-    }
-  }, [appointmentId, session]);
-
-  const refreshAppointment = () => {
-    const updated = dbOperations.getAppointment(appointmentId);
-    if (updated) setDetails((prev) => ({ ...prev, appointment: updated }));
-  };
-
-  const reloadDetails = () => {
-    const a = dbOperations.getAppointment(appointmentId);
-    if (!a) return;
-    setDetails({
-      appointment: a,
-      doctor: dbOperations.getDoctor(a.doctorId) ?? null,
-      patient: dbOperations.getPatient(a.patientId) ?? null,
-      prescriptions: dbOperations.getPrescriptionsByAppointment(appointmentId),
-      medicalRecords: dbOperations.getMedicalRecordsByAppointment(appointmentId),
-      vitals: dbOperations.getVitalsByAppointment(appointmentId),
-      testOrders: loadTestOrders(appointmentId),
-    });
-  };
-
-  const runConfirm = () => {
-    if (confirmAction === 'complete') {
-      dbOperations.updateAppointment(appointmentId, { status: 'completed' });
-      reloadDetails();
-      flash('Appointment marked complete');
-    } else if (confirmAction === 'cancel') {
-      dbOperations.updateAppointment(appointmentId, { status: 'cancelled' });
-      reloadDetails();
-      flash('Appointment cancelled');
-    } else if (confirmAction === 'delete') {
-      dbOperations.deleteAppointment(appointmentId);
-      setConfirmAction(null);
-      router.back();
-      return;
+      setError(apiError(err, 'Could not update the appointment'));
     }
     setConfirmAction(null);
   };
 
-  // Derived view data + permissions. Safe to compute while still loading — the
-  // appointment-dependent flags fall back to false until it's present.
-  const { appointment, doctor, patient } = details;
-  const doctorUser = doctor ? dbOperations.getUserById(doctor.userId) : null;
-  const patientUser = patient ? dbOperations.getUserById(patient.userId) : null;
-  const doctorName = doctorUser ? `Dr. ${doctorUser.name}` : 'Doctor';
-  const patientName = patientUser?.name ?? 'Patient';
+  // Names come from the records themselves — DoctorOut/PatientOut embed the user.
+  const doctorName = doctor?.user?.name ? `Dr. ${doctor.user.name}` : 'Doctor';
+  const patientName = patient?.user?.name ?? 'Patient';
 
   const role = session?.user.role;
   const isPatient = role === 'patient';
   const isAdmin = role === 'admin';
-  const myDoctorId = role === 'doctor' && session ? dbOperations.getDoctorByUserId(session.user.id)?.id : null;
-  const isOwningDoctor = role === 'doctor' && appointment?.doctorId === myDoctorId;
-  // Doctors (their own) and admins can clinically manage the visit.
+  // A doctor reaching this page at all means the API accepted them as a party to
+  // it, so "can manage" is about the UI's affordances rather than authorization.
+  const isOwningDoctor = role === 'doctor';
   const canManage = isAdmin || isOwningDoctor;
 
   const isPast = !!appointment && appointment.date < today;
@@ -173,28 +120,31 @@ export function useAppointmentDetail() {
   const canCancel =
     !!appointment && notCancelled && appointment.status !== 'completed' && (canManage || (isPatient && !isPast));
 
-  const medicineOptions = dbOperations.getAllMedicines().map((m: Medicine) => ({
+  // Only prescribers need the medicine catalog, and only they can read it.
+  const { data: medicines = [] } = useListMedicinesQuery(undefined, { skip: !canManage });
+  const medicineOptions = medicines.map((m) => ({
     value: m.name,
     label: `${m.name}${m.strength ? ` — ${m.strength}` : ''}`,
   }));
 
   return {
-    // ids / raw
     appointmentId,
     session,
-    loading,
-    error,
+    loading: loadingAppointment,
+    error:
+      error ||
+      (appointmentError
+        ? 'This appointment is not available to you.'
+        : ''),
     details,
-    // confirm + toast
     confirmAction,
     setConfirmAction,
     runConfirm,
     toast,
     flash,
-    // mutations
-    refreshAppointment,
-    reloadDetails,
-    // derived
+    // Mutations invalidate their cache tags, so the page refreshes itself.
+    refreshAppointment: () => {},
+    reloadDetails: () => {},
     doctorName,
     patientName,
     role,

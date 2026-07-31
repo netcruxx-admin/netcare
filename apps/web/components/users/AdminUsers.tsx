@@ -1,16 +1,22 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { Formik, Form } from 'formik';
 import * as Yup from 'yup';
 import { Plus, X, AlertTriangle, Search } from 'lucide-react';
-import { dbOperations, User } from '@/lib/db';
+import type { User } from '@/lib/types';
 import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
 import { FormField } from '@/components/form/FormField';
 import { ExportButton } from '@/components/ExportButton';
-import { useListAssignableRolesQuery } from '@/store/api';
+import { apiError } from '@/lib/apiError';
+import {
+  useCreateUserMutation,
+  useDeleteUserMutation,
+  useListAssignableRolesQuery,
+  useListUsersQuery,
+  useUpdateUserMutation,
+} from '@/store/api';
 import type { RoleOption } from '@/store/api';
 
 // Badge colours for the roles that ship with the product. Roles added to the
@@ -29,9 +35,6 @@ const FALLBACK_ROLE_STYLE = 'bg-slate-100 text-slate-700';
 const EMPTY_ROLES: RoleOption[] = [];
 
 export function AdminUsers({ session }: RoleViewProps) {
-  const router = useRouter();
-  const [users, setUsers] = useState<User[]>([]);
-
   const [editing, setEditing] = useState<User | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [deleting, setDeleting] = useState<User | null>(null);
@@ -46,7 +49,12 @@ export function AdminUsers({ session }: RoleViewProps) {
     [assignableRoles],
   );
 
-  const refresh = () => setUsers([...dbOperations.getAllUsers()]);
+  // Server-side: the list is tenant-scoped and gated by users.read.
+  const { data: users = [], isLoading, error } = useListUsersQuery();
+  const [createUser] = useCreateUserMutation();
+  const [updateUser] = useUpdateUserMutation();
+  const [deleteUser] = useDeleteUserMutation();
+  const [saveError, setSaveError] = useState('');
 
   const filtered = users
     .filter((u) => roleFilter === 'all' || u.role === roleFilter)
@@ -55,10 +63,6 @@ export function AdminUsers({ session }: RoleViewProps) {
       return !q || u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q) || (u.phone ?? '').toLowerCase().includes(q);
     });
 
-  useEffect(() => {
-    refresh();
-  }, [session]);
-
   const userSchema = useMemo(
     () =>
       Yup.object({
@@ -66,12 +70,7 @@ export function AdminUsers({ session }: RoleViewProps) {
         email: Yup.string()
           .trim()
           .email('Enter a valid email')
-          .required('Email is required')
-          .test('unique-email', 'Email already in use', (value) => {
-            if (!value) return true;
-            const existing = dbOperations.getUserByEmail(value.trim());
-            return !existing || existing.id === editing?.id;
-          }),
+          .required('Email is required'),
         phone: Yup.string()
           .trim()
           .required('Phone is required')
@@ -103,11 +102,15 @@ export function AdminUsers({ session }: RoleViewProps) {
     setEditing(null);
   };
 
-  const confirmDelete = () => {
+  const confirmDelete = async () => {
     if (!deleting) return;
-    dbOperations.deleteUser(deleting.id);
-    refresh();
-    setDeleting(null);
+    setSaveError('');
+    try {
+      await deleteUser(deleting.id).unwrap();
+      setDeleting(null);
+    } catch (err) {
+      setSaveError(apiError(err, 'Failed to delete user'));
+    }
   };
 
 
@@ -118,6 +121,15 @@ export function AdminUsers({ session }: RoleViewProps) {
       title="System Users"
       subtitle="Monitor users and their roles"
     >
+      {saveError && (
+        <p className="mb-4 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{saveError}</p>
+      )}
+      {error && (
+        <p className="mb-4 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+          Could not load users.
+        </p>
+      )}
+
       <div className="mb-6 flex flex-wrap items-center gap-3">
         <div className="relative flex-1 min-w-[220px] max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
@@ -168,6 +180,16 @@ export function AdminUsers({ session }: RoleViewProps) {
               </tr>
             </thead>
             <tbody>
+              {isLoading && (
+                <tr>
+                  <td colSpan={5} className="py-10 text-center text-slate-400 text-sm">Loading…</td>
+                </tr>
+              )}
+              {!isLoading && filtered.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="py-10 text-center text-slate-500 text-sm">No users found.</td>
+                </tr>
+              )}
               {filtered.map((user) => {
                 const isSelf = user.id === session.user.id;
                 return (
@@ -230,27 +252,28 @@ export function AdminUsers({ session }: RoleViewProps) {
                 password: '',
               }}
               validationSchema={userSchema}
-              onSubmit={(values) => {
-                if (editing) {
-                  dbOperations.updateUser(editing.id, {
-                    name: values.name.trim(),
-                    email: values.email.trim(),
-                    phone: values.phone.trim(),
-                    role: values.role as User['role'],
-                  });
-                } else {
-                  dbOperations.createUser({
-                    id: `user-${Date.now()}`,
-                    name: values.name.trim(),
-                    email: values.email.trim(),
-                    phone: values.phone.trim(),
-                    role: values.role as User['role'],
-                    password: values.password,
-                    createdAt: new Date().toISOString(),
-                  });
+              onSubmit={async (values, { setSubmitting }) => {
+                setSaveError('');
+                const common = {
+                  name: values.name.trim(),
+                  email: values.email.trim(),
+                  phone: values.phone.trim(),
+                  role: values.role,
+                };
+                try {
+                  if (editing) {
+                    await updateUser({ id: editing.id, body: common }).unwrap();
+                  } else {
+                    await createUser({ ...common, password: values.password }).unwrap();
+                  }
+                  closeModal();
+                } catch (err) {
+                  // The server owns uniqueness and role validity, so its message
+                  // is the accurate one to show.
+                  setSaveError(apiError(err, 'Failed to save user'));
+                } finally {
+                  setSubmitting(false);
                 }
-                refresh();
-                closeModal();
               }}
             >
               <Form className="space-y-4">

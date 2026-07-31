@@ -397,6 +397,9 @@ export interface AuthSession {
   /** The user's role record from the backend catalog, including the dashboard
    *  it lands on. Optional so pre-existing stored sessions stay valid. */
   role?: { code: string; label: string; homePath: string };
+  /** What this user may do, as resolved by the server (role grants ∩ the
+   *  hospital's modules). Never computed on the client. */
+  permissions?: { code: string; scope?: 'own' | 'all' | null }[];
   token: string;
   isAuthenticated: boolean;
 }

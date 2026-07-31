@@ -1,10 +1,11 @@
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 
 from .. import models, schemas
 from ..auth import get_current_user
+from ..authz import require_permission
 from ..database import get_db
 from ..tenancy import get_tenant_id, scoped
 from ..utils import new_id, now_iso
@@ -14,9 +15,9 @@ router = APIRouter(prefix="/schedule-blocks", tags=["schedule"])
 
 @router.get("", response_model=list[schemas.ScheduleBlockOut])
 def list_schedule_blocks(
-    doctor_id: Optional[str] = None,
+    doctor_id: Optional[str] = Query(default=None, alias="doctorId"),
     db: Session = Depends(get_db),
-    _: models.User = Depends(get_current_user),
+    scope: str = Depends(require_permission("schedule.read")),
     tenant_id: str = Depends(get_tenant_id),
 ):
     query = scoped(db, models.ScheduleBlock, tenant_id)
@@ -31,7 +32,7 @@ def list_schedule_blocks(
 def create_schedule_block(
     body: schemas.ScheduleBlockCreate,
     db: Session = Depends(get_db),
-    _: models.User = Depends(get_current_user),
+    _: str = Depends(require_permission("schedule.manage")),
     tenant_id: str = Depends(get_tenant_id),
 ):
     block = models.ScheduleBlock(
@@ -50,7 +51,7 @@ def create_schedule_block(
 def delete_schedule_block(
     block_id: str,
     db: Session = Depends(get_db),
-    _: models.User = Depends(get_current_user),
+    _: str = Depends(require_permission("schedule.manage")),
     tenant_id: str = Depends(get_tenant_id),
 ):
     block = (

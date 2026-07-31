@@ -1,54 +1,38 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { Search, FileBarChart, AlertTriangle } from 'lucide-react';
-import { dbOperations, TestOrder, TestResult, Patient, User } from '@/lib/db';
+import type { TestResult } from '@/lib/types';
+import {
+  useListPatientsQuery,
+  useListTestOrdersQuery,
+  useListTestResultsQuery,
+} from '@/store/api';
 import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
 import { ExportButton } from '@/components/ExportButton';
 import { ORDER_STATUS_LABEL, ORDER_STATUS_STYLE, isAbnormal } from '@/lib/lab';
 
-interface RawData {
-  orders: TestOrder[];
-  results: TestResult[];
-  patients: Patient[];
-  users: User[];
-}
-
 export function LabReports({ session }: RoleViewProps) {
-  const router = useRouter();
-  const [raw, setRaw] = useState<RawData | null>(null);
   const [query, setQuery] = useState('');
 
-  useEffect(() => {
-    setRaw({
-      orders: dbOperations.getAllTestOrders(),
-      results: dbOperations.getAllTestResults(),
-      patients: dbOperations.getAllPatients(),
-      users: dbOperations.getAllUsers(),
-    });
-  }, [session]);
+  const { data: orders = [] } = useListTestOrdersQuery();
+  const { data: results = [] } = useListTestResultsQuery();
+  const { data: patients = [] } = useListPatientsQuery();
 
   const rows = useMemo(() => {
-    if (!raw) return [];
-    const userById = new Map(raw.users.map((u) => [u.id, u]));
-    const patientById = new Map(raw.patients.map((p) => [p.id, p]));
-    const patientName = (id: string) => {
-      const p = patientById.get(id);
-      const u = p ? userById.get(p.userId) : null;
-      return u?.name ?? 'Patient';
-    };
+    const patientName = (id: string) =>
+      patients.find((p) => p.id === id)?.user?.name ?? 'Patient';
     const resultsByOrder = new Map<string, TestResult[]>();
-    raw.results.forEach((r) => {
+    results.forEach((r) => {
       const list = resultsByOrder.get(r.orderId) ?? [];
       list.push(r);
       resultsByOrder.set(r.orderId, list);
     });
 
     const q = query.trim().toLowerCase();
-    return raw.orders
+    return orders
       .filter((o) => o.status === 'completed' || o.status === 'reviewed')
       .map((o) => {
         const res = resultsByOrder.get(o.id) ?? [];
@@ -63,7 +47,7 @@ export function LabReports({ session }: RoleViewProps) {
       })
       .filter((r) => !q || r.patient.toLowerCase().includes(q) || r.tests.toLowerCase().includes(q))
       .sort((a, b) => (a.reportedAt < b.reportedAt ? 1 : -1));
-  }, [raw, query]);
+  }, [orders, results, patients, query]);
 
   return (
     <DashboardShell role={session.user.role} userName={session.user.name} title="Reports" subtitle="Published lab reports">

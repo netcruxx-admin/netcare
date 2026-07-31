@@ -1,17 +1,23 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Formik, Form } from 'formik';
 import * as Yup from 'yup';
 import { Plus, X, FlaskConical, AlertTriangle, Search } from 'lucide-react';
-import { dbOperations, LabTest } from '@/lib/db';
+import type { LabTest } from '@/lib/types';
 import { DashboardShell } from '@/components/DashboardShell';
+import { apiError } from '@/lib/apiError';
+import {
+  useCreateLabTestMutation,
+  useDeleteLabTestMutation,
+  useListLabTestsQuery,
+  useUpdateLabTestMutation,
+} from '@/store/api';
 import type { RoleViewProps } from '@/components/RoleView';
 import { FormField } from '@/components/form/FormField';
 import { ExportButton } from '@/components/ExportButton';
 
-const generateId = () => `test-${Math.random().toString(36).slice(2, 9)}`;
 
 const CATEGORIES = ['Blood Test', 'Imaging', 'Urine Test', 'Cardiac', 'Prenatal Screening', 'Other'];
 const SAMPLE_TYPES = ['Blood', 'Urine', 'Swab', 'Imaging', 'None'];
@@ -33,7 +39,6 @@ const sampleOptions = SAMPLE_TYPES.map((s) => ({ value: s, label: s }));
 
 export function AdminTests({ session }: RoleViewProps) {
   const router = useRouter();
-  const [tests, setTests] = useState<LabTest[]>([]);
 
   const [editing, setEditing] = useState<LabTest | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
@@ -41,7 +46,11 @@ export function AdminTests({ session }: RoleViewProps) {
   const [query, setQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
 
-  const refresh = () => setTests([...dbOperations.getAllLabTests()]);
+  const { data: tests = [], isLoading } = useListLabTestsQuery();
+  const [createLabTest] = useCreateLabTestMutation();
+  const [updateLabTest] = useUpdateLabTestMutation();
+  const [deleteLabTest] = useDeleteLabTestMutation();
+  const [saveError, setSaveError] = useState('');
 
   const filtered = tests
     .filter((t) => categoryFilter === 'all' || t.category === categoryFilter)
@@ -49,10 +58,6 @@ export function AdminTests({ session }: RoleViewProps) {
       const q = query.trim().toLowerCase();
       return !q || t.name.toLowerCase().includes(q) || t.category.toLowerCase().includes(q);
     });
-
-  useEffect(() => {
-    refresh();
-  }, [session]);
 
   const openAdd = () => {
     setEditing(null);
@@ -66,11 +71,15 @@ export function AdminTests({ session }: RoleViewProps) {
     setModalOpen(false);
     setEditing(null);
   };
-  const confirmDelete = () => {
+  const confirmDelete = async () => {
     if (!deleting) return;
-    dbOperations.deleteLabTest(deleting.id);
-    refresh();
-    setDeleting(null);
+    setSaveError('');
+    try {
+      await deleteLabTest(deleting.id).unwrap();
+      setDeleting(null);
+    } catch (err) {
+      setSaveError(apiError(err, 'Failed to delete test'));
+    }
   };
 
 
@@ -181,7 +190,7 @@ export function AdminTests({ session }: RoleViewProps) {
                 turnaroundTime: editing?.turnaroundTime ?? '',
               }}
               validationSchema={testSchema}
-              onSubmit={(values) => {
+              onSubmit={async (values, { setSubmitting }) => {
                 const payload = {
                   name: values.name.trim(),
                   category: values.category,
@@ -189,13 +198,19 @@ export function AdminTests({ session }: RoleViewProps) {
                   price: Number(values.price),
                   turnaroundTime: values.turnaroundTime.trim(),
                 };
-                if (editing) {
-                  dbOperations.updateLabTest(editing.id, payload);
-                } else {
-                  dbOperations.createLabTest({ id: generateId(), ...payload });
+                setSaveError('');
+                try {
+                  if (editing) {
+                    await updateLabTest({ id: editing.id, body: payload }).unwrap();
+                  } else {
+                    await createLabTest(payload).unwrap();
+                  }
+                  closeModal();
+                } catch (err) {
+                  setSaveError(apiError(err, 'Failed to save test'));
+                } finally {
+                  setSubmitting(false);
                 }
-                refresh();
-                closeModal();
               }}
             >
               <Form className="grid sm:grid-cols-2 gap-4">

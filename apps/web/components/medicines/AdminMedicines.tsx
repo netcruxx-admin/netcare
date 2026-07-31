@@ -1,17 +1,23 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Formik, Form } from 'formik';
 import * as Yup from 'yup';
 import { Plus, X, Pill, AlertTriangle, Search } from 'lucide-react';
-import { dbOperations, Medicine } from '@/lib/db';
+import type { Medicine } from '@/lib/types';
 import { DashboardShell } from '@/components/DashboardShell';
+import { apiError } from '@/lib/apiError';
+import {
+  useCreateMedicineMutation,
+  useDeleteMedicineMutation,
+  useListMedicinesQuery,
+  useUpdateMedicineMutation,
+} from '@/store/api';
 import type { RoleViewProps } from '@/components/RoleView';
 import { FormField } from '@/components/form/FormField';
 import { ExportButton } from '@/components/ExportButton';
 
-const generateId = () => `med-${Math.random().toString(36).slice(2, 9)}`;
 
 const CATEGORIES = ['Prenatal', 'Supplement', 'Vitamin', 'Antibiotic', 'Analgesic', 'Antacid', 'Antiemetic', 'Other'];
 const FORMS = ['Tablet', 'Capsule', 'Syrup', 'Injection', 'Ointment', 'Drops'];
@@ -39,7 +45,6 @@ const formOptions = FORMS.map((f) => ({ value: f, label: f }));
 
 export function AdminMedicines({ session }: RoleViewProps) {
   const router = useRouter();
-  const [medicines, setMedicines] = useState<Medicine[]>([]);
 
   const [editing, setEditing] = useState<Medicine | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
@@ -47,7 +52,11 @@ export function AdminMedicines({ session }: RoleViewProps) {
   const [query, setQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
 
-  const refresh = () => setMedicines([...dbOperations.getAllMedicines()]);
+  const { data: medicines = [], isLoading } = useListMedicinesQuery();
+  const [createMedicine] = useCreateMedicineMutation();
+  const [updateMedicine] = useUpdateMedicineMutation();
+  const [deleteMedicine] = useDeleteMedicineMutation();
+  const [saveError, setSaveError] = useState('');
 
   const filtered = medicines
     .filter((m) => categoryFilter === 'all' || m.category === categoryFilter)
@@ -55,10 +64,6 @@ export function AdminMedicines({ session }: RoleViewProps) {
       const q = query.trim().toLowerCase();
       return !q || m.name.toLowerCase().includes(q) || m.category.toLowerCase().includes(q);
     });
-
-  useEffect(() => {
-    refresh();
-  }, [session]);
 
   const openAdd = () => {
     setEditing(null);
@@ -72,10 +77,14 @@ export function AdminMedicines({ session }: RoleViewProps) {
     setModalOpen(false);
     setEditing(null);
   };
-  const confirmDelete = () => {
+  const confirmDelete = async () => {
     if (!deleting) return;
-    dbOperations.deleteMedicine(deleting.id);
-    refresh();
+    setSaveError('');
+    try {
+      await deleteMedicine(deleting.id).unwrap();
+    } catch (err) {
+      setSaveError(apiError(err, 'Failed to delete medicine'));
+    }
     setDeleting(null);
   };
 
@@ -201,7 +210,7 @@ export function AdminMedicines({ session }: RoleViewProps) {
                 stock: editing ? String(editing.stock) : '',
               }}
               validationSchema={medicineSchema}
-              onSubmit={(values) => {
+              onSubmit={async (values, { setSubmitting }) => {
                 const payload = {
                   name: values.name.trim(),
                   category: values.category,
@@ -210,13 +219,19 @@ export function AdminMedicines({ session }: RoleViewProps) {
                   price: Number(values.price),
                   stock: Number(values.stock),
                 };
-                if (editing) {
-                  dbOperations.updateMedicine(editing.id, payload);
-                } else {
-                  dbOperations.createMedicine({ id: generateId(), ...payload });
+                setSaveError('');
+                try {
+                  if (editing) {
+                    await updateMedicine({ id: editing.id, body: payload }).unwrap();
+                  } else {
+                  await createMedicine(payload).unwrap();
+                  }
+                  closeModal();
+                } catch (err) {
+                  setSaveError(apiError(err, 'Failed to save medicine'));
+                } finally {
+                  setSubmitting(false);
                 }
-                refresh();
-                closeModal();
               }}
             >
               <Form className="grid sm:grid-cols-2 gap-4">

@@ -1,10 +1,10 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { CalendarPlus, Clock, ArrowRight } from 'lucide-react';
-import { dbOperations, Appointment } from '@/lib/db';
+import type { Appointment } from '@/lib/types';
+import { useListAppointmentsQuery, useListDoctorsQuery } from '@/store/api';
 import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
 import { Calendar } from '@/components/ui/calendar';
@@ -34,25 +34,19 @@ const statusStyle = (status: Appointment['status']) =>
     : 'bg-blue-100 text-blue-700';
 
 export function PatientSchedule({ session }: RoleViewProps) {
-  const router = useRouter();
-  const [appts, setAppts] = useState<Appointment[]>([]);
   const [selected, setSelected] = useState<Date>(new Date());
 
-  useEffect(() => {
-    const s = session;
-    const patient = dbOperations.getPatientByUserId(s.user.id);
-    setAppts(patient ? dbOperations.getAppointmentsByPatientId(patient.id) : []);
-  }, [session]);
+  // "own" scope means these are already just this patient's appointments.
+  const { data: appts = [] } = useListAppointmentsQuery();
+  const { data: doctors = [] } = useListDoctorsQuery();
 
   const doctorName = useMemo(() => {
-    const userById = new Map(dbOperations.getAllUsers().map((u) => [u.id, u]));
-    const doctorById = new Map(dbOperations.getAllDoctors().map((d) => [d.id, d]));
+    const doctorById = new Map(doctors.map((d) => [d.id, d]));
     return (id: string) => {
-      const d = doctorById.get(id);
-      const u = d ? userById.get(d.userId) : null;
-      return u ? `Dr. ${u.name}` : 'Doctor';
+      const name = doctorById.get(id)?.user?.name;
+      return name ? `Dr. ${name}` : 'Doctor';
     };
-  }, []);
+  }, [doctors]);
 
   const active = appts.filter((a) => a.status !== 'cancelled');
   const bookedDays = useMemo(() => active.map((a) => new Date(`${a.date}T00:00:00`)), [appts]);

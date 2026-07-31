@@ -4,12 +4,11 @@ import Link from 'next/link';
 import type { Role } from '../registrationSchemas';
 import { useActiveHospital } from '@/hooks/useActiveHospital';
 
+// Public sign-up creates patients only. A staff account carries access to other
+// people's records, so it is provisioned by the hospital (POST /users) rather
+// than self-served — the backend rejects anything else here.
 const ROLE_OPTIONS: { type: Role; title: string; description: string; icon: string }[] = [
   { type: 'patient', title: 'Patient', description: 'Book appointments and manage health records', icon: '👤' },
-  { type: 'doctor', title: 'Doctor', description: 'Manage appointments and patient care', icon: '👨‍⚕️' },
-  { type: 'admin', title: 'Administrator', description: 'Manage hospital departments and staff', icon: '⚙️' },
-  { type: 'lab', title: 'Lab Technician', description: 'Process test orders and publish reports', icon: '🧪' },
-  { type: 'nurse', title: 'Nurse', description: 'Record vitals and support patient care', icon: '🩺' },
 ];
 
 export function RoleStep({ onSelect }: { onSelect: (role: Role) => void }) {
@@ -20,6 +19,11 @@ export function RoleStep({ onSelect }: { onSelect: (role: Role) => void }) {
         <h2 className="text-3xl font-bold text-slate-900">Create Account</h2>
         <p className="text-slate-600 mt-2">Join {hospital.name} as</p>
       </div>
+
+      <p className="text-center text-sm text-slate-500">
+        Staff member? Your hospital administrator creates clinical and
+        administrative accounts — ask them to set yours up.
+      </p>
 
       <div className="space-y-3">
         {ROLE_OPTIONS.map((option) => (

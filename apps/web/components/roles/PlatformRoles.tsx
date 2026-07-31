@@ -70,7 +70,7 @@ export function PlatformRoles({ session }: RoleViewProps) {
             <table className="w-full">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-100">
-                  {['Code', 'Display Name', 'Dashboard', 'Scope', 'Users', ''].map((h) => (
+                  {['Code', 'Display Name', 'Permissions', 'Scope', 'Users', ''].map((h) => (
                     <th key={h} className="text-left py-3 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wide">{h}</th>
                   ))}
                 </tr>
@@ -89,9 +89,16 @@ export function PlatformRoles({ session }: RoleViewProps) {
                         {r.description && <span className="block text-xs text-slate-500">{r.description}</span>}
                       </td>
                       <td className="py-3 px-6 text-sm">
-                        {r.homePath
-                          ? <code className="text-xs text-slate-600">{r.homePath}</code>
-                          : <span className="text-slate-400">generic</span>}
+                        {r.permissions.length > 0 ? (
+                          <span
+                            className="text-slate-700"
+                            title={r.permissions.map((p) => p.scope ? `${p.code} (${p.scope})` : p.code).join('\n')}
+                          >
+                            {r.permissions.length} granted
+                          </span>
+                        ) : (
+                          <span className="text-amber-600" title="This role can sign in but see nothing">none</span>
+                        )}
                       </td>
                       <td className="py-3 px-6 text-sm">
                         <span className={`px-2 py-1 rounded-full text-xs font-medium ${r.isPlatform ? 'bg-violet-50 text-violet-700' : 'bg-slate-100 text-slate-600'}`}>

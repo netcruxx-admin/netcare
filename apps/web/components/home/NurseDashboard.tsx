@@ -1,11 +1,16 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { CalendarDays, Users, HeartPulse, ClipboardCheck, ArrowRight } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import { dbOperations, Appointment, Doctor, Patient, User, Vitals } from '@/lib/db';
+import type { Appointment, Doctor, Patient, User, Vitals } from '@/lib/types';
+import {
+  useListAppointmentsQuery,
+  useListDoctorsQuery,
+  useListPatientsQuery,
+  useListVitalsQuery,
+} from '@/store/api';
 import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
 
@@ -17,47 +22,26 @@ function toDateStr(d: Date) {
 }
 const todayStr = toDateStr(new Date());
 
-interface RawData {
-  appointments: Appointment[];
-  patients: Patient[];
-  doctors: Doctor[];
-  users: User[];
-  vitals: Vitals[];
-}
-
 export function NurseDashboard({ session }: RoleViewProps) {
-  const router = useRouter();
-  const [raw, setRaw] = useState<RawData | null>(null);
 
-  useEffect(() => {
-    setRaw({
-      appointments: dbOperations.getAllAppointments(),
-      patients: dbOperations.getAllPatients(),
-      doctors: dbOperations.getAllDoctors(),
-      users: dbOperations.getAllUsers(),
-      vitals: dbOperations.getAllVitals(),
-    });
-  }, [session]);
+  const { data: appointments = [], isLoading } = useListAppointmentsQuery();
+  const { data: patients = [] } = useListPatientsQuery();
+  const { data: doctors = [] } = useListDoctorsQuery();
+  const { data: vitals = [] } = useListVitalsQuery();
 
   const model = useMemo(() => {
-    if (!raw) return null;
-    const userById = new Map(raw.users.map((u) => [u.id, u]));
-    const patientById = new Map(raw.patients.map((p) => [p.id, p]));
-    const doctorById = new Map(raw.doctors.map((d) => [d.id, d]));
+    const patientById = new Map(patients.map((p) => [p.id, p]));
+    const doctorById = new Map(doctors.map((d) => [d.id, d]));
 
-    const patientName = (id: string) => {
-      const p = patientById.get(id);
-      return (p ? userById.get(p.userId)?.name : null) ?? 'Patient';
-    };
+    const patientName = (id: string) => patientById.get(id)?.user?.name ?? 'Patient';
     const doctorName = (id: string) => {
-      const d = doctorById.get(id);
-      const name = d ? userById.get(d.userId)?.name : null;
+      const name = doctorById.get(id)?.user?.name;
       return name ? `Dr. ${name}` : '—';
     };
 
-    const withVitals = new Set(raw.vitals.map((v) => v.appointmentId));
+    const withVitals = new Set(vitals.map((v) => v.appointmentId));
 
-    const todaysAppts = raw.appointments
+    const todaysAppts = appointments
       .filter((a) => a.date === todayStr && a.status !== 'cancelled')
       .map((a) => ({
         ...a,
@@ -69,15 +53,15 @@ export function NurseDashboard({ session }: RoleViewProps) {
 
     const kpis = {
       todaysAppts: todaysAppts.length,
-      patients: raw.patients.length,
-      vitalsToday: raw.vitals.filter((v) => v.createdAt.slice(0, 10) === todayStr).length,
+      patients: patients.length,
+      vitalsToday: vitals.filter((v) => v.createdAt.slice(0, 10) === todayStr).length,
       pendingVitals: todaysAppts.filter((a) => a.status === 'scheduled' && !a.hasVitals).length,
     };
 
     return { kpis, todaysAppts };
-  }, [raw]);
+  }, [appointments, patients, doctors, vitals]);
 
-  if (!model) return null;
+  if (isLoading) return null;
 
   const cards: { label: string; value: number; icon: LucideIcon; tint: string }[] = [
     { label: "Today's Appointments", value: model.kpis.todaysAppts, icon: CalendarDays, tint: 'text-cyan-600 bg-cyan-50' },

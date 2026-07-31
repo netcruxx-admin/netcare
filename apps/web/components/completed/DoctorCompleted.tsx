@@ -1,30 +1,18 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { CheckCircle } from 'lucide-react';
-import { dbOperations, Appointment } from '@/lib/db';
+import { useListAppointmentsQuery, useListPatientsQuery } from '@/store/api';
 import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
 
 export function DoctorCompleted({ session }: RoleViewProps) {
-  const router = useRouter();
-  const [appointments, setAppointments] = useState<Appointment[]>([]);
+  // Scope "own" means the API already limits these to this doctor's own work.
+  const { data: appointments = [] } = useListAppointmentsQuery();
+  const { data: patients = [] } = useListPatientsQuery();
 
-  useEffect(() => {
-    const sess = session;
-    const doc = dbOperations.getAllDoctors().find((d) => d.userId === sess.user.id);
-    if (doc) {
-      setAppointments(dbOperations.getAppointmentsByDoctorId(doc.id));
-    }
-  }, [session]);
-
-  const patientName = (patientId: string) => {
-    const patient = dbOperations.getPatient(patientId);
-    const user = patient ? dbOperations.getUserById(patient.userId) : null;
-    return user?.name ?? 'Patient';
-  };
+  const patientName = (patientId: string) =>
+    patients.find((p) => p.id === patientId)?.user?.name ?? 'Patient';
 
   const completed = appointments
     .filter((a) => a.status === 'completed')

@@ -20,10 +20,10 @@ export function AddUserModal({ open, onClose, onSuccess, preselectedHospitalId, 
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  // This modal creates users through /auth/register, so it can only offer roles
-  // that endpoint accepts — the backend reports which those are.
+  // Staff provisioning goes through POST /users (guarded by users.manage), so
+  // every assignable role is offerable — including ones added at runtime.
   const { data: assignableRoles } = useListAssignableRolesQuery();
-  const roles = (assignableRoles ?? []).filter((r) => r.selfRegisterable);
+  const roles = assignableRoles ?? [];
 
   // Default to the first available role once the catalog arrives.
   useEffect(() => {
@@ -48,7 +48,7 @@ export function AddUserModal({ open, onClose, onSuccess, preselectedHospitalId, 
     if (!form.name.trim() || !form.email.trim() || !form.password) { setError('Name, email and password are required'); return; }
     setLoading(true); setError('');
     try {
-      await superadminPost('/auth/register', hospitalId, {
+      await superadminPost('/users', hospitalId, {
         name: form.name.trim(), email: form.email.trim(),
         password: form.password, role: form.role, phone: form.phone.trim() || undefined,
       });

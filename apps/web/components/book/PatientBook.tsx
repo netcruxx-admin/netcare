@@ -6,7 +6,9 @@ import { Formik, Form } from 'formik';
 import * as Yup from 'yup';
 import { CheckCircle, AlertCircle } from 'lucide-react';
 import { dbOperations, Appointment } from '@/lib/db';
+import type { ScheduleBlock } from '@/lib/types';
 import { blockedSlotSet } from '@/lib/schedule';
+import { useListScheduleBlocksQuery } from '@/store/api';
 import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
 import { FormField } from '@/components/form/FormField';
@@ -66,9 +68,9 @@ function bookedSlots(departmentId: string, date: string) {
 }
 
 // Slots blocked by the assigned doctor (break / OT / unavailable).
-function blockedSlots(departmentId: string, date: string) {
+function blockedSlots(blocks: ScheduleBlock[], departmentId: string, date: string) {
   if (!departmentId || !date) return new Set<string>();
-  return blockedSlotSet(assignedDoctorId(departmentId), date, SLOTS);
+  return blockedSlotSet(blocks, assignedDoctorId(departmentId), date, SLOTS);
 }
 
 type SlotStatus = 'available' | 'booked' | 'blocked';
@@ -92,6 +94,7 @@ const bookingSchema = Yup.object({
 const initialValues = { department: '', date: '', time: '', reason: '' };
 
 export function PatientBook({ session }: RoleViewProps) {
+  const { data: scheduleBlocks = [] } = useListScheduleBlocksQuery();
   const router = useRouter();
   const [step, setStep] = useState(1);
   const [submitError, setSubmitError] = useState('');
@@ -155,7 +158,7 @@ export function PatientBook({ session }: RoleViewProps) {
 
                 const assignedDoctor = assignedDoctorId(values.department);
 
-                if (slotStatus(values.time, values.date, bookedSlots(values.department, values.date), blockedSlots(values.department, values.date)) !== 'available') {
+                if (slotStatus(values.time, values.date, bookedSlots(values.department, values.date), blockedSlots(scheduleBlocks, values.department, values.date)) !== 'available') {
                   setSubmitError('That time slot is no longer available. Please pick another.');
                   return;
                 }
@@ -183,7 +186,7 @@ export function PatientBook({ session }: RoleViewProps) {
           >
             {({ values, errors, touched, setFieldValue, setFieldTouched, validateForm, isSubmitting }) => {
               const booked = bookedSlots(values.department, values.date);
-              const blocked = blockedSlots(values.department, values.date);
+              const blocked = blockedSlots(scheduleBlocks, values.department, values.date);
               const assignedDoc = (() => {
                 if (!values.department) return null;
                 const doc = dbOperations.getDoctorById(assignedDoctorId(values.department));

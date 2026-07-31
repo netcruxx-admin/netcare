@@ -3,7 +3,13 @@
 import { useState } from 'react';
 import { X, CalendarPlus, AlertCircle } from 'lucide-react';
 import { Calendar } from '@/components/ui/calendar';
-import { dbOperations, Appointment } from '@/lib/db';
+import type { Appointment } from '@/lib/types';
+import { apiError } from '@/lib/apiError';
+import {
+  useCreateAppointmentMutation,
+  useListAppointmentsQuery,
+  useListScheduleBlocksQuery,
+} from '@/store/api';
 import { blockedSlotSet } from '@/lib/schedule';
 
 function toDateStr(d: Date) {
@@ -38,12 +44,11 @@ function slotStatus(slot: string, date: string, booked: Set<string>, blocked: Se
   if (booked.has(slot)) return 'booked';
   return 'available';
 }
-function bookedSlotsForDoctor(doctorId: string, date: string) {
+function bookedSlotsFrom(appointments: Appointment[], doctorId: string, date: string) {
   if (!doctorId || !date) return new Set<string>();
   return new Set(
-    dbOperations
-      .getAppointmentsByDoctorId(doctorId)
-      .filter((a) => a.date === date && a.status === 'scheduled')
+    appointments
+      .filter((a) => a.doctorId === doctorId && a.date === date && a.status === 'scheduled')
       .map((a) => a.time),
   );
 }
@@ -67,29 +72,35 @@ export function FollowUpModal({
   const [reason, setReason] = useState(`Follow-up: ${appointment.reason || 'Consultation'}`);
   const [error, setError] = useState('');
 
-  const booked = bookedSlotsForDoctor(appointment.doctorId, date);
-  const blocked = blockedSlotSet(appointment.doctorId, date, SLOTS);
+  const [createAppointment] = useCreateAppointmentMutation();
+  const { data: appointments = [] } = useListAppointmentsQuery({ doctorId: appointment.doctorId });
+  const { data: blocks = [] } = useListScheduleBlocksQuery({ doctorId: appointment.doctorId });
 
-  const save = () => {
+  const booked = bookedSlotsFrom(appointments, appointment.doctorId, date);
+  const blocked = blockedSlotSet(blocks, appointment.doctorId, date, SLOTS);
+
+  const save = async () => {
     setError('');
     if (!date) return setError('Pick a date');
     if (!time) return setError('Select a time slot');
     if (slotStatus(time, date, booked, blocked) !== 'available') return setError('That slot is not available for this doctor');
 
-    dbOperations.createAppointment({
-      id: `apt-${Date.now()}`,
-      patientId: appointment.patientId,
-      doctorId: appointment.doctorId,
-      departmentId: appointment.departmentId,
-      date,
-      time,
-      status: 'scheduled',
-      reason: reason.trim() || 'Follow-up',
-      notes: '',
-      followUpOf: appointment.id,
-      createdAt: new Date().toISOString(),
-    });
-    onCreated('Follow-up scheduled');
+    try {
+      await createAppointment({
+        patientId: appointment.patientId,
+        doctorId: appointment.doctorId,
+        departmentId: appointment.departmentId,
+        date,
+        time,
+        status: 'scheduled',
+        reason: reason.trim() || 'Follow-up',
+        notes: '',
+        followUpOf: appointment.id,
+      }).unwrap();
+      onCreated('Follow-up scheduled');
+    } catch (err) {
+      setError(apiError(err, 'Could not schedule the follow-up'));
+    }
   };
 
   return (

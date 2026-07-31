@@ -1,7 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useMemo } from 'react';
 import Link from 'next/link';
 import {
   CalendarClock,
@@ -13,7 +12,12 @@ import {
   Stethoscope,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import { dbOperations, Appointment, Doctor, Patient, User } from '@/lib/db';
+import type { Appointment, Doctor, Patient, User } from '@/lib/types';
+import {
+  useGetDoctorByUserQuery,
+  useListAppointmentsQuery,
+  useListPatientsQuery,
+} from '@/store/api';
 import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
 
@@ -41,39 +45,19 @@ const statusStyle = (status: Appointment['status']) =>
     ? 'bg-red-100 text-red-700'
     : 'bg-blue-100 text-blue-700';
 
-interface RawData {
-  doctor: Doctor | null;
-  appointments: Appointment[];
-  patients: Patient[];
-  users: User[];
-}
-
 export function DoctorDashboard({ session }: RoleViewProps) {
-  const router = useRouter();
-  const [raw, setRaw] = useState<RawData | null>(null);
-
-  useEffect(() => {
-    const s = session;
-    const doctor = dbOperations.getAllDoctors().find((d) => d.userId === s.user.id) ?? null;
-    setRaw({
-      doctor,
-      appointments: doctor ? dbOperations.getAppointmentsByDoctorId(doctor.id) : [],
-      patients: dbOperations.getAllPatients(),
-      users: dbOperations.getAllUsers(),
-    });
-  }, [session]);
+  // The doctor record supplies the specialization; appointments and patients
+  // arrive already narrowed to this doctor by the API's "own" scope.
+  const { data: doctor } = useGetDoctorByUserQuery(session.user.id);
+  const { data: appts = [], isLoading } = useListAppointmentsQuery();
+  const { data: patients = [] } = useListPatientsQuery();
 
   const model = useMemo(() => {
-    if (!raw) return null;
-    const userById = new Map(raw.users.map((u) => [u.id, u]));
-    const patientById = new Map(raw.patients.map((p) => [p.id, p]));
+    const patientById = new Map(patients.map((p) => [p.id, p]));
     const patientOf = (id: string) => {
       const p = patientById.get(id);
-      const u = p ? userById.get(p.userId) : null;
-      return { name: u?.name ?? 'Patient', phone: p?.phone || '' };
+      return { name: p?.user?.name ?? 'Patient', phone: p?.phone || '' };
     };
-
-    const appts = raw.appointments;
     const decorate = (a: Appointment) => ({ ...a, ...patientOf(a.patientId) });
 
     const today = appts
@@ -99,10 +83,10 @@ export function DoctorDashboard({ session }: RoleViewProps) {
       patients: new Set(appts.map((a) => a.patientId)).size,
     };
 
-    return { today, upcoming, recent, kpis, specialization: raw.doctor?.specialization ?? '' };
-  }, [raw]);
+    return { today, upcoming, recent, kpis, specialization: doctor?.specialization ?? '' };
+  }, [appts, patients, doctor]);
 
-  if (!model) return null;
+  if (isLoading) return null;
 
   const cards: { label: string; value: number; icon: LucideIcon; tint: string }[] = [
     { label: "Today's Appointments", value: model.kpis.today, icon: CalendarClock, tint: 'text-cyan-600 bg-cyan-50' },

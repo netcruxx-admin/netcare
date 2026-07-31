@@ -55,6 +55,7 @@ export default function LoginPage() {
           patient: result.patient,
           hospitalId: result.user.hospitalId ?? '',
           role: result.role,
+          permissions: result.permissions,
           token: result.token,
           isAuthenticated: true,
         });

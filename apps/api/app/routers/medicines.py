@@ -2,7 +2,8 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from .. import models, schemas
-from ..auth import get_current_user, require_role
+from ..auth import get_current_user
+from ..authz import require_permission
 from ..database import get_db
 from ..tenancy import get_tenant_id, scoped
 from ..utils import new_id
@@ -13,7 +14,7 @@ router = APIRouter(prefix="/medicines", tags=["medicines"])
 @router.get("", response_model=list[schemas.MedicineOut])
 def list_medicines(
     db: Session = Depends(get_db),
-    _: models.User = Depends(get_current_user),
+    scope: str = Depends(require_permission("medicines.read")),
     tenant_id: str = Depends(get_tenant_id),
 ):
     return scoped(db, models.Medicine, tenant_id).all()
@@ -23,7 +24,7 @@ def list_medicines(
 def create_medicine(
     body: schemas.MedicineCreate,
     db: Session = Depends(get_db),
-    _: models.User = Depends(require_role("admin")),
+    _: str = Depends(require_permission("medicines.manage")),
     tenant_id: str = Depends(get_tenant_id),
 ):
     medicine = models.Medicine(id=new_id("med"), hospital_id=tenant_id, **body.model_dump())
@@ -38,7 +39,7 @@ def update_medicine(
     medicine_id: str,
     body: schemas.MedicineUpdate,
     db: Session = Depends(get_db),
-    _: models.User = Depends(require_role("admin")),
+    _: str = Depends(require_permission("medicines.manage")),
     tenant_id: str = Depends(get_tenant_id),
 ):
     medicine = (
@@ -59,7 +60,7 @@ def update_medicine(
 def delete_medicine(
     medicine_id: str,
     db: Session = Depends(get_db),
-    _: models.User = Depends(require_role("admin")),
+    _: str = Depends(require_permission("medicines.manage")),
     tenant_id: str = Depends(get_tenant_id),
 ):
     medicine = (

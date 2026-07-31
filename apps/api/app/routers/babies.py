@@ -3,11 +3,12 @@ Tenant-scoped; growth/immunizations are nested under a baby."""
 
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 
 from .. import models, schemas
 from ..auth import get_current_user
+from ..authz import require_permission
 from ..database import get_db
 from ..tenancy import get_tenant_id, scoped
 from ..utils import new_id, now_iso
@@ -26,9 +27,9 @@ def _get_baby(db: Session, baby_id: str, tenant_id: str) -> models.Baby:
 
 @router.get("", response_model=list[schemas.BabyOut])
 def list_babies(
-    mother_patient_id: Optional[str] = None,
+    mother_patient_id: Optional[str] = Query(default=None, alias="motherPatientId"),
     db: Session = Depends(get_db),
-    _: models.User = Depends(get_current_user),
+    scope: str = Depends(require_permission("babies.read")),
     tenant_id: str = Depends(get_tenant_id),
 ):
     query = scoped(db, models.Baby, tenant_id)
@@ -41,7 +42,7 @@ def list_babies(
 def create_baby(
     body: schemas.BabyCreate,
     db: Session = Depends(get_db),
-    _: models.User = Depends(get_current_user),
+    _: str = Depends(require_permission("babies.manage")),
     tenant_id: str = Depends(get_tenant_id),
 ):
     baby = models.Baby(
@@ -60,7 +61,7 @@ def create_baby(
 def get_baby(
     baby_id: str,
     db: Session = Depends(get_db),
-    _: models.User = Depends(get_current_user),
+    scope: str = Depends(require_permission("babies.read")),
     tenant_id: str = Depends(get_tenant_id),
 ):
     return _get_baby(db, baby_id, tenant_id)
@@ -71,7 +72,7 @@ def get_baby(
 def list_growth(
     baby_id: str,
     db: Session = Depends(get_db),
-    _: models.User = Depends(get_current_user),
+    scope: str = Depends(require_permission("babies.read")),
     tenant_id: str = Depends(get_tenant_id),
 ):
     _get_baby(db, baby_id, tenant_id)  # 404s if the baby isn't in this tenant
@@ -92,7 +93,7 @@ def add_growth(
     baby_id: str,
     body: schemas.GrowthMeasurementCreate,
     db: Session = Depends(get_db),
-    _: models.User = Depends(get_current_user),
+    _: str = Depends(require_permission("babies.manage")),
     tenant_id: str = Depends(get_tenant_id),
 ):
     _get_baby(db, baby_id, tenant_id)
@@ -114,7 +115,7 @@ def add_growth(
 def list_immunizations(
     baby_id: str,
     db: Session = Depends(get_db),
-    _: models.User = Depends(get_current_user),
+    scope: str = Depends(require_permission("babies.read")),
     tenant_id: str = Depends(get_tenant_id),
 ):
     _get_baby(db, baby_id, tenant_id)
@@ -135,7 +136,7 @@ def create_immunization(
     baby_id: str,
     body: schemas.ImmunizationCreate,
     db: Session = Depends(get_db),
-    _: models.User = Depends(get_current_user),
+    _: str = Depends(require_permission("babies.manage")),
     tenant_id: str = Depends(get_tenant_id),
 ):
     _get_baby(db, baby_id, tenant_id)
@@ -161,7 +162,7 @@ def mark_immunization_given(
     immunization_id: str,
     body: schemas.ImmunizationMarkGiven,
     db: Session = Depends(get_db),
-    _: models.User = Depends(get_current_user),
+    _: str = Depends(require_permission("babies.manage")),
     tenant_id: str = Depends(get_tenant_id),
 ):
     imm = (

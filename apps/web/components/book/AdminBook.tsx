@@ -7,6 +7,7 @@ import * as Yup from 'yup';
 import { CheckCircle, AlertCircle } from 'lucide-react';
 import { dbOperations, Appointment } from '@/lib/db';
 import { blockedSlotSet } from '@/lib/schedule';
+import { useListScheduleBlocksQuery } from '@/store/api';
 import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
 import { FormField } from '@/components/form/FormField';
@@ -73,6 +74,7 @@ const bookingSchema = Yup.object({
 
 function AdminBookForm({ session }: RoleViewProps) {
   const router = useRouter();
+  const { data: scheduleBlocks = [] } = useListScheduleBlocksQuery();
   const searchParams = useSearchParams();
   const [submitError, setSubmitError] = useState('');
   const [success, setSuccess] = useState(false);
@@ -121,7 +123,7 @@ function AdminBookForm({ session }: RoleViewProps) {
             onSubmit={(values, { setFieldError }) => {
               setSubmitError('');
               const booked = bookedSlotsForDoctor(values.doctorId, values.date);
-              const blocked = blockedSlotSet(values.doctorId, values.date, SLOTS);
+              const blocked = blockedSlotSet(scheduleBlocks, values.doctorId, values.date, SLOTS);
               if (slotStatus(values.time, values.date, booked, blocked) !== 'available') {
                 setFieldError('time', 'That slot is not available for the selected doctor');
                 return;
@@ -145,7 +147,7 @@ function AdminBookForm({ session }: RoleViewProps) {
           >
             {({ values, errors, touched, setFieldValue }) => {
               const booked = bookedSlotsForDoctor(values.doctorId, values.date);
-              const blocked = blockedSlotSet(values.doctorId, values.date, SLOTS);
+              const blocked = blockedSlotSet(scheduleBlocks, values.doctorId, values.date, SLOTS);
               return (
                 <Form className="space-y-6">
                   <div className="grid sm:grid-cols-2 gap-4">

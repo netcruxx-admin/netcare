@@ -1,23 +1,15 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { FileText, Download, Calendar } from 'lucide-react';
-import { dbOperations } from '@/lib/db';
+import { useGetPatientByUserQuery, useGetPatientMedicalRecordsQuery } from '@/store/api';
 import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
 
 export function PatientMedicalHistory({ session }: RoleViewProps) {
-  const router = useRouter();
-  const [records, setRecords] = useState<any[]>([]);
-
-  useEffect(() => {
-    const patientId = dbOperations.getPatientByUserId(session.user.id)?.id;
-    if (patientId) {
-      const medicalRecords = dbOperations.getMedicalRecordsByPatientId(patientId);
-      setRecords(medicalRecords);
-    }
-  }, [session]);
+  const { data: patient } = useGetPatientByUserQuery(session.user.id);
+  const { data: records = [] } = useGetPatientMedicalRecordsQuery(patient?.id ?? '', {
+    skip: !patient,
+  });
 
 
   return (

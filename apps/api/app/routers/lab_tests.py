@@ -2,7 +2,8 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from .. import models, schemas
-from ..auth import get_current_user, require_role
+from ..auth import get_current_user
+from ..authz import require_permission
 from ..database import get_db
 from ..tenancy import get_tenant_id, scoped
 from ..utils import new_id
@@ -13,7 +14,7 @@ router = APIRouter(prefix="/lab-tests", tags=["lab-tests"])
 @router.get("", response_model=list[schemas.LabTestOut])
 def list_lab_tests(
     db: Session = Depends(get_db),
-    _: models.User = Depends(get_current_user),
+    scope: str = Depends(require_permission("lab_tests.read")),
     tenant_id: str = Depends(get_tenant_id),
 ):
     return scoped(db, models.LabTest, tenant_id).all()
@@ -23,7 +24,7 @@ def list_lab_tests(
 def create_lab_test(
     body: schemas.LabTestCreate,
     db: Session = Depends(get_db),
-    _: models.User = Depends(require_role("admin")),
+    _: str = Depends(require_permission("lab_tests.manage")),
     tenant_id: str = Depends(get_tenant_id),
 ):
     test = models.LabTest(
@@ -42,7 +43,7 @@ def update_lab_test(
     test_id: str,
     body: schemas.LabTestUpdate,
     db: Session = Depends(get_db),
-    _: models.User = Depends(require_role("admin")),
+    _: str = Depends(require_permission("lab_tests.manage")),
     tenant_id: str = Depends(get_tenant_id),
 ):
     test = (
@@ -63,7 +64,7 @@ def update_lab_test(
 def delete_lab_test(
     test_id: str,
     db: Session = Depends(get_db),
-    _: models.User = Depends(require_role("admin")),
+    _: str = Depends(require_permission("lab_tests.manage")),
     tenant_id: str = Depends(get_tenant_id),
 ):
     test = (

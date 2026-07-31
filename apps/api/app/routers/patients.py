@@ -1,8 +1,24 @@
+"""Patient records.
+
+Every endpoint is guarded by a permission and narrowed by its granted scope.
+Before this, any authenticated user of a hospital could list every patient and
+read any patient's records by putting their id in the URL — tenant scoping alone
+does not stop one patient reading another's chart.
+"""
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from .. import models, schemas
 from ..auth import get_current_user
+from ..authz import (
+    SCOPE_OWN,
+    caller_patient_id,
+    own_patients_filter,
+    own_record_filter,
+    require_any_permission,
+    require_permission,
+)
 from ..database import get_db
 from ..tenancy import get_tenant_id, scoped
 
@@ -30,27 +46,71 @@ def _get_or_404(db: Session, patient_id: str, tenant_id: str) -> models.Patient:
     return patient
 
 
+def _visible_patient_or_404(
+    db: Session,
+    user: models.User,
+    patient_id: str,
+    tenant_id: str,
+    scope: str | None,
+) -> models.Patient:
+    """Fetch a patient the caller is allowed to see, else 404.
+
+    404 rather than 403 on purpose: replying "forbidden" would confirm that a
+    given patient id exists at this hospital.
+    """
+    query = scoped(db, models.Patient, tenant_id).filter(models.Patient.id == patient_id)
+    if scope == SCOPE_OWN:
+        query = query.filter(own_patients_filter(db, user))
+    patient = query.first()
+    if patient is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Patient not found"
+        )
+    return patient
+
+
+def _sub_resource(
+    db: Session, user: models.User, model, patient_id: str, tenant_id: str, scope: str | None
+):
+    """Rows of `model` for one patient, narrowed to what the caller may see.
+
+    With scope "own" the caller must be a party to the row — the patient it
+    belongs to, or the doctor on it — so passing someone else's patient id in
+    the URL returns nothing instead of their records.
+    """
+    query = scoped(db, model, tenant_id).filter(model.patient_id == patient_id)
+    if scope == SCOPE_OWN:
+        query = query.filter(own_record_filter(db, user, model))
+    return query.all()
+
+
 @router.get("", response_model=list[schemas.PatientOut])
 def list_patients(
     db: Session = Depends(get_db),
-    _: models.User = Depends(get_current_user),
+    user: models.User = Depends(get_current_user),
+    scope: str = Depends(require_permission("patients.read")),
     tenant_id: str = Depends(get_tenant_id),
 ):
-    return [_with_user(db, p) for p in scoped(db, models.Patient, tenant_id).all()]
+    query = scoped(db, models.Patient, tenant_id)
+    if scope == SCOPE_OWN:
+        query = query.filter(own_patients_filter(db, user))
+    return [_with_user(db, p) for p in query.all()]
 
 
 @router.get("/by-user/{user_id}", response_model=schemas.PatientOut)
 def get_patient_by_user(
     user_id: str,
     db: Session = Depends(get_db),
-    _: models.User = Depends(get_current_user),
+    user: models.User = Depends(get_current_user),
+    scope: str = Depends(require_permission("patients.read")),
     tenant_id: str = Depends(get_tenant_id),
 ):
-    patient = (
-        scoped(db, models.Patient, tenant_id)
-        .filter(models.Patient.user_id == user_id)
-        .first()
+    query = scoped(db, models.Patient, tenant_id).filter(
+        models.Patient.user_id == user_id
     )
+    if scope == SCOPE_OWN:
+        query = query.filter(own_patients_filter(db, user))
+    patient = query.first()
     if patient is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Patient not found"
@@ -62,10 +122,11 @@ def get_patient_by_user(
 def get_patient(
     patient_id: str,
     db: Session = Depends(get_db),
-    _: models.User = Depends(get_current_user),
+    user: models.User = Depends(get_current_user),
+    scope: str = Depends(require_permission("patients.read")),
     tenant_id: str = Depends(get_tenant_id),
 ):
-    return _with_user(db, _get_or_404(db, patient_id, tenant_id))
+    return _with_user(db, _visible_patient_or_404(db, user, patient_id, tenant_id, scope))
 
 
 @router.put("/{patient_id}", response_model=schemas.PatientOut)
@@ -73,10 +134,16 @@ def update_patient(
     patient_id: str,
     body: schemas.PatientUpdate,
     db: Session = Depends(get_db),
-    _: models.User = Depends(get_current_user),
+    user: models.User = Depends(get_current_user),
+    held: dict = Depends(require_any_permission("patients.manage", "profile.manage")),
     tenant_id: str = Depends(get_tenant_id),
 ):
     patient = _get_or_404(db, patient_id, tenant_id)
+    # Staff may edit anyone's record; everyone else only their own.
+    if "patients.manage" not in held and patient.user_id != user.id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Patient not found"
+        )
     for field, value in body.model_dump(exclude_unset=True).items():
         setattr(patient, field, value)
     db.commit()
@@ -88,14 +155,11 @@ def update_patient(
 def patient_appointments(
     patient_id: str,
     db: Session = Depends(get_db),
-    _: models.User = Depends(get_current_user),
+    user: models.User = Depends(get_current_user),
+    scope: str = Depends(require_permission("appointments.read")),
     tenant_id: str = Depends(get_tenant_id),
 ):
-    return (
-        scoped(db, models.Appointment, tenant_id)
-        .filter(models.Appointment.patient_id == patient_id)
-        .all()
-    )
+    return _sub_resource(db, user, models.Appointment, patient_id, tenant_id, scope)
 
 
 @router.get(
@@ -104,28 +168,28 @@ def patient_appointments(
 def patient_medical_records(
     patient_id: str,
     db: Session = Depends(get_db),
-    _: models.User = Depends(get_current_user),
+    user: models.User = Depends(get_current_user),
+    scope: str = Depends(require_permission("medical_records.read")),
     tenant_id: str = Depends(get_tenant_id),
 ):
-    return (
-        scoped(db, models.MedicalRecord, tenant_id)
-        .filter(models.MedicalRecord.patient_id == patient_id)
-        .all()
-    )
+    return _sub_resource(db, user, models.MedicalRecord, patient_id, tenant_id, scope)
 
 
 @router.get("/{patient_id}/payments", response_model=list[schemas.PaymentOut])
 def patient_payments(
     patient_id: str,
     db: Session = Depends(get_db),
-    _: models.User = Depends(get_current_user),
+    user: models.User = Depends(get_current_user),
+    scope: str = Depends(require_permission("payments.read")),
     tenant_id: str = Depends(get_tenant_id),
 ):
-    return (
-        scoped(db, models.Payment, tenant_id)
-        .filter(models.Payment.patient_id == patient_id)
-        .all()
+    # Payments carry no doctor_id, so "own" means the patient themselves.
+    query = scoped(db, models.Payment, tenant_id).filter(
+        models.Payment.patient_id == patient_id
     )
+    if scope == SCOPE_OWN and caller_patient_id(db, user) != patient_id:
+        return []
+    return query.all()
 
 
 @router.get(
@@ -134,25 +198,19 @@ def patient_payments(
 def patient_prescriptions(
     patient_id: str,
     db: Session = Depends(get_db),
-    _: models.User = Depends(get_current_user),
+    user: models.User = Depends(get_current_user),
+    scope: str = Depends(require_permission("prescriptions.read")),
     tenant_id: str = Depends(get_tenant_id),
 ):
-    return (
-        scoped(db, models.Prescription, tenant_id)
-        .filter(models.Prescription.patient_id == patient_id)
-        .all()
-    )
+    return _sub_resource(db, user, models.Prescription, patient_id, tenant_id, scope)
 
 
 @router.get("/{patient_id}/vitals", response_model=list[schemas.VitalsOut])
 def patient_vitals(
     patient_id: str,
     db: Session = Depends(get_db),
-    _: models.User = Depends(get_current_user),
+    user: models.User = Depends(get_current_user),
+    scope: str = Depends(require_permission("vitals.read")),
     tenant_id: str = Depends(get_tenant_id),
 ):
-    return (
-        scoped(db, models.Vitals, tenant_id)
-        .filter(models.Vitals.patient_id == patient_id)
-        .all()
-    )
+    return _sub_resource(db, user, models.Vitals, patient_id, tenant_id, scope)

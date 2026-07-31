@@ -4,11 +4,12 @@ reviewed. All rows are tenant-scoped."""
 
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 
 from .. import models, schemas
 from ..auth import get_current_user
+from ..authz import require_permission
 from ..database import get_db
 from ..tenancy import get_tenant_id, scoped
 from ..utils import new_id, now_iso
@@ -19,11 +20,11 @@ router = APIRouter(tags=["lab"])
 # ---------- Test orders ----------
 @router.get("/test-orders", response_model=list[schemas.TestOrderOut])
 def list_test_orders(
-    patient_id: Optional[str] = None,
-    doctor_id: Optional[str] = None,
-    appointment_id: Optional[str] = None,
+    patient_id: Optional[str] = Query(default=None, alias="patientId"),
+    doctor_id: Optional[str] = Query(default=None, alias="doctorId"),
+    appointment_id: Optional[str] = Query(default=None, alias="appointmentId"),
     db: Session = Depends(get_db),
-    _: models.User = Depends(get_current_user),
+    scope: str = Depends(require_permission("lab_orders.read")),
     tenant_id: str = Depends(get_tenant_id),
 ):
     query = scoped(db, models.TestOrder, tenant_id)
@@ -42,7 +43,7 @@ def list_test_orders(
 def create_test_order(
     body: schemas.TestOrderCreate,
     db: Session = Depends(get_db),
-    _: models.User = Depends(get_current_user),
+    _: str = Depends(require_permission("lab_orders.create")),
     tenant_id: str = Depends(get_tenant_id),
 ):
     now = now_iso()
@@ -77,7 +78,7 @@ def _get_order(db: Session, order_id: str, tenant_id: str) -> models.TestOrder:
 def get_test_order(
     order_id: str,
     db: Session = Depends(get_db),
-    _: models.User = Depends(get_current_user),
+    scope: str = Depends(require_permission("lab_orders.read")),
     tenant_id: str = Depends(get_tenant_id),
 ):
     return _get_order(db, order_id, tenant_id)
@@ -88,7 +89,7 @@ def update_test_order(
     order_id: str,
     body: schemas.TestOrderUpdate,
     db: Session = Depends(get_db),
-    _: models.User = Depends(get_current_user),
+    _: str = Depends(require_permission("lab_orders.process")),
     tenant_id: str = Depends(get_tenant_id),
 ):
     order = _get_order(db, order_id, tenant_id)
@@ -104,7 +105,7 @@ def update_test_order(
 def delete_test_order(
     order_id: str,
     db: Session = Depends(get_db),
-    _: models.User = Depends(get_current_user),
+    _: str = Depends(require_permission("lab_orders.process")),
     tenant_id: str = Depends(get_tenant_id),
 ):
     order = _get_order(db, order_id, tenant_id)
@@ -122,9 +123,9 @@ def delete_test_order(
 # ---------- Test results ----------
 @router.get("/test-results", response_model=list[schemas.TestResultOut])
 def list_test_results(
-    order_id: Optional[str] = None,
+    order_id: Optional[str] = Query(default=None, alias="orderId"),
     db: Session = Depends(get_db),
-    _: models.User = Depends(get_current_user),
+    scope: str = Depends(require_permission("lab_reports.read")),
     tenant_id: str = Depends(get_tenant_id),
 ):
     query = scoped(db, models.TestResult, tenant_id)
@@ -137,7 +138,7 @@ def list_test_results(
 def upsert_test_result(
     body: schemas.TestResultUpsert,
     db: Session = Depends(get_db),
-    _: models.User = Depends(get_current_user),
+    _: str = Depends(require_permission("lab_orders.process")),
     tenant_id: str = Depends(get_tenant_id),
 ):
     # One result per (order, test): update in place if it already exists.

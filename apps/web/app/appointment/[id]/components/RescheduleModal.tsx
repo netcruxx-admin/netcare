@@ -3,8 +3,9 @@
 import { useState } from 'react';
 import { Formik, Form } from 'formik';
 import { AlertCircle } from 'lucide-react';
-import type { Appointment } from '@/lib/db';
-import { dbOperations } from '@/lib/db';
+import type { Appointment } from '@/lib/types';
+import { apiError } from '@/lib/apiError';
+import { useUpdateAppointmentMutation } from '@/store/api';
 import { FormField } from '@/components/form/FormField';
 import { Modal } from './Modal';
 import { rescheduleSchema, timeSlots, today } from '../appointmentSchemas';
@@ -17,6 +18,7 @@ interface RescheduleModalProps {
 }
 
 export function RescheduleModal({ appointment, appointmentId, onClose, onSaved }: RescheduleModalProps) {
+  const [updateAppointment] = useUpdateAppointmentMutation();
   const [error, setError] = useState('');
 
   return (
@@ -34,12 +36,15 @@ export function RescheduleModal({ appointment, appointmentId, onClose, onSaved }
         <Formik
           initialValues={{ date: appointment.date, time: appointment.time }}
           validationSchema={rescheduleSchema}
-          onSubmit={(values, { setSubmitting }) => {
+          onSubmit={async (values, { setSubmitting }) => {
             try {
-              dbOperations.updateAppointment(appointmentId, { date: values.date, time: values.time });
+              await updateAppointment({
+                id: appointmentId,
+                body: { date: values.date, time: values.time },
+              }).unwrap();
               onSaved();
-            } catch {
-              setError('Failed to reschedule. Please try again.');
+            } catch (err) {
+              setError(apiError(err, 'Failed to reschedule. Please try again.'));
             } finally {
               setSubmitting(false);
             }

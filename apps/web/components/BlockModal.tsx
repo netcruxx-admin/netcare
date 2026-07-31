@@ -2,7 +2,9 @@
 
 import { useState } from 'react';
 import { X, Ban, AlertCircle } from 'lucide-react';
-import { dbOperations, BlockType } from '@/lib/db';
+import type { BlockType } from '@/lib/types';
+import { apiError } from '@/lib/apiError';
+import { useCreateScheduleBlockMutation } from '@/store/api';
 import { BLOCK_TYPE_OPTIONS, GRID_SLOTS, slotMin } from '@/lib/schedule';
 
 // Start options exclude the last slot; end options exclude the first (end is exclusive).
@@ -29,24 +31,27 @@ export function BlockModal({
   const [end, setEnd] = useState('09:30 AM');
   const [note, setNote] = useState('');
   const [error, setError] = useState('');
+  const [createScheduleBlock, { isLoading: saving }] = useCreateScheduleBlockMutation();
 
-  const save = () => {
+  const save = async () => {
     setError('');
     if (!doctor) return setError('Select a doctor');
     if (!date) return setError('Pick a date');
     if (slotMin(end) <= slotMin(start)) return setError('End time must be after start time');
 
-    dbOperations.createScheduleBlock({
-      id: `blk-${Date.now()}`,
-      doctorId: doctor,
-      date,
-      startTime: start,
-      endTime: end,
-      type,
-      note: note.trim(),
-      createdAt: new Date().toISOString(),
-    });
-    onCreated('Block added to schedule');
+    try {
+      await createScheduleBlock({
+        doctorId: doctor,
+        date,
+        startTime: start,
+        endTime: end,
+        type,
+        note: note.trim(),
+      }).unwrap();
+      onCreated('Block added to schedule');
+    } catch (err) {
+      setError(apiError(err, 'Could not add the block'));
+    }
   };
 
   return (

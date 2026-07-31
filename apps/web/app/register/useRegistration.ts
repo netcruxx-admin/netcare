@@ -10,7 +10,7 @@ import { useFormik } from 'formik';
 import { authStorage } from '@/lib/auth';
 import { resolveHomePath } from '@/lib/roles';
 import type { PatientDetails, DoctorDetails } from '@/lib/auth';
-import type { Department } from '@/lib/db';
+import type { Department } from '@/lib/types';
 import { useRegisterMutation, useListDepartmentsQuery } from '@/store/api';
 import { lookupDoctorRegistration } from '@/lib/doctorRegistry';
 import { lookupNurseRegistration } from '@/lib/nurseRegistry';
@@ -72,6 +72,7 @@ export function useRegistration() {
         patient: result.patient,
         hospitalId: result.user.hospitalId ?? '',
         role: result.role,
+        permissions: result.permissions,
         token: result.token,
         isAuthenticated: true,
       });

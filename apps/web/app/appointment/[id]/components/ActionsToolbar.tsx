@@ -13,7 +13,7 @@ import {
   Video,
   XCircle,
 } from 'lucide-react';
-import type { Appointment } from '@/lib/db';
+import type { Appointment } from '@/lib/types';
 import { getEnabledModules } from '@/lib/hospitalCategories';
 import type { ConfirmAction } from '../useAppointmentDetail';
 

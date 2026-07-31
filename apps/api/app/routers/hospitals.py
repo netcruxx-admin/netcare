@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from .. import models, schemas
-from ..auth import require_platform_role
+from ..authz import require_permission
 from ..database import get_db
 from ..provisioning import provision_hospital
 from ..tenancy import resolve_public_tenant
@@ -30,7 +30,7 @@ def current_hospital(
 @router.get("", response_model=list[schemas.HospitalOut])
 def list_hospitals(
     db: Session = Depends(get_db),
-    _: models.User = Depends(require_platform_role),
+    _: str = Depends(require_permission("hospitals.manage")),
 ):
     return db.query(models.Hospital).all()
 
@@ -39,7 +39,7 @@ def list_hospitals(
 def onboard_hospital(
     body: schemas.HospitalCreate,
     db: Session = Depends(get_db),
-    _: models.User = Depends(require_platform_role),
+    _: str = Depends(require_permission("hospitals.manage")),
 ):
     if db.query(models.Hospital).filter(models.Hospital.subdomain == body.subdomain).first():
         raise HTTPException(status.HTTP_409_CONFLICT, "Subdomain already in use")
@@ -63,7 +63,7 @@ def onboard_hospital(
 def get_hospital(
     hospital_id: str,
     db: Session = Depends(get_db),
-    _: models.User = Depends(require_platform_role),
+    _: str = Depends(require_permission("hospitals.manage")),
 ):
     hospital = db.get(models.Hospital, hospital_id)
     if hospital is None:
@@ -76,7 +76,7 @@ def update_hospital(
     hospital_id: str,
     body: schemas.HospitalUpdate,
     db: Session = Depends(get_db),
-    _: models.User = Depends(require_platform_role),
+    _: str = Depends(require_permission("hospitals.manage")),
 ):
     hospital = db.get(models.Hospital, hospital_id)
     if hospital is None:

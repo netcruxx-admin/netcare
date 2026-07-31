@@ -1,14 +1,25 @@
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
 import type {
+  ANCVisit,
   Appointment,
+  Baby,
   Department,
   Doctor,
+  GrowthMeasurement,
+  Immunization,
+  LabTest,
   MedicalRecord,
+  Medicine,
   Patient,
   Payment,
+  PregnancyRecord,
   Prescription,
+  ScheduleBlock,
+  TestOrder,
+  TestResult,
   User,
   Vitals,
+  VideoSlot,
 } from '@/lib/types';
 import { AUTH_SESSION_KEY } from '@/lib/constants';
 import { getCurrentHospitalId } from '@/lib/tenant';
@@ -22,6 +33,9 @@ export interface ApiAuthResponse {
   /** The signer's role record, including the dashboard it lands on. Optional
    *  because the field is only present on a backend that has the roles table. */
   role?: RoleOption;
+  /** What this user may actually do: their role's grants intersected with the
+   *  hospital's enabled modules, resolved server-side on every auth response. */
+  permissions?: PermissionGrant[];
   token: string;
   isAuthenticated: boolean;
 }
@@ -130,6 +144,26 @@ export interface VitalsCreateBody {
   height?: number;
   notes?: string;
 }
+/** A permission the superadmin can hand to a role. Catalog is backend-owned. */
+export interface PermissionInfo {
+  code: string;
+  label: string;
+  description: string;
+  resource: string;
+  action: string;
+  /** Hospital module this depends on; null when always available. */
+  module: string | null;
+  /** Whether this permission takes an 'own' / 'all' breadth. */
+  supportsScope: boolean;
+  sortOrder: number;
+}
+
+/** A permission granted to a role, at a breadth. */
+export interface PermissionGrant {
+  code: string;
+  scope?: 'own' | 'all' | null;
+}
+
 // Role catalog (platform-wide, superadmin only)
 export interface RoleInfo {
   code: string;
@@ -139,6 +173,8 @@ export interface RoleInfo {
   sortOrder: number;
   /** Dashboard this role lands on after login ('' = no dedicated dashboard). */
   homePath: string;
+  /** Everything this role may do — decided by the superadmin. */
+  permissions: PermissionGrant[];
   userCount: number;
 }
 /** Slim projection any signed-in user may read — for role pickers. */
@@ -156,6 +192,8 @@ export interface RoleCreateBody {
   isPlatform?: boolean;
   sortOrder?: number;
   homePath?: string;
+  /** Granted in the same request that creates the role. */
+  permissions?: PermissionGrant[];
 }
 export interface RoleUpdateBody {
   label?: string;
@@ -163,6 +201,44 @@ export interface RoleUpdateBody {
   isPlatform?: boolean;
   sortOrder?: number;
   homePath?: string;
+  /** Replaces the role's grants wholesale; omit to leave them untouched. */
+  permissions?: PermissionGrant[];
+}
+
+/** Staff account created through POST /users. */
+export interface UserCreateBody {
+  email: string;
+  password: string;
+  name: string;
+  role: string;
+  phone?: string;
+  specialization?: string;
+  qualification?: string;
+  experienceYears?: number;
+  gender?: string;
+  bloodGroup?: string;
+  dateOfBirth?: string;
+}
+export interface UserUpdateBody {
+  name?: string;
+  email?: string;
+  phone?: string;
+  role?: string;
+  password?: string;
+}
+/** Doctor profile edit — account fields plus professional details. */
+export interface DoctorUpdateBody {
+  name?: string;
+  email?: string;
+  phone?: string;
+  qualification?: string;
+  specialization?: string;
+  experienceYears?: number;
+  consultationFee?: number;
+  licenseNumber?: string;
+  medicalCouncil?: string;
+  registrationYear?: string;
+  verificationStatus?: string;
 }
 
 export interface DepartmentCreateBody { name: string; description?: string }
@@ -208,6 +284,18 @@ export const api = createApi({
     'Payment',
     'Vitals',
     'Role',
+    'User',
+    'Medicine',
+    'LabTest',
+    'TestOrder',
+    'TestResult',
+    'ScheduleBlock',
+    'VideoSlot',
+    'Pregnancy',
+    'ANCVisit',
+    'Baby',
+    'Growth',
+    'Immunization',
   ],
 
   endpoints: (build) => ({
@@ -234,6 +322,10 @@ export const api = createApi({
               { type: 'Role', id: 'LIST' },
             ]
           : [{ type: 'Role', id: 'LIST' }],
+    }),
+    // The grantable permission catalog, for the role permission matrix.
+    listPermissions: build.query<PermissionInfo[], void>({
+      query: () => '/permissions',
     }),
     // Assignable options for tenant-side role pickers (any signed-in user).
     listAssignableRoles: build.query<RoleOption[], void>({
@@ -447,6 +539,190 @@ export const api = createApi({
       invalidatesTags: [{ type: 'Payment', id: 'LIST' }],
     }),
 
+    // ── Users (staff provisioning; guarded by users.manage) ──────────────────
+    listUsers: build.query<User[], void>({
+      query: () => '/users',
+      providesTags: [{ type: 'User', id: 'LIST' }],
+    }),
+    createUser: build.mutation<User, UserCreateBody>({
+      query: (body) => ({ url: '/users', method: 'POST', body }),
+      invalidatesTags: [{ type: 'User', id: 'LIST' }],
+    }),
+    updateUser: build.mutation<User, { id: string; body: UserUpdateBody }>({
+      query: ({ id, body }) => ({ url: `/users/${id}`, method: 'PUT', body }),
+      invalidatesTags: [{ type: 'User', id: 'LIST' }],
+    }),
+    deleteUser: build.mutation<void, string>({
+      query: (id) => ({ url: `/users/${id}`, method: 'DELETE' }),
+      invalidatesTags: [{ type: 'User', id: 'LIST' }],
+    }),
+
+    // ── Doctors (write side) ─────────────────────────────────────────────────
+    updateDoctor: build.mutation<Doctor, { id: string; body: DoctorUpdateBody }>({
+      query: ({ id, body }) => ({ url: `/doctors/${id}`, method: 'PUT', body }),
+      invalidatesTags: [{ type: 'Doctor', id: 'LIST' }],
+    }),
+
+    // ── Appointments (delete) ────────────────────────────────────────────────
+    deleteAppointment: build.mutation<void, string>({
+      query: (id) => ({ url: `/appointments/${id}`, method: 'DELETE' }),
+      invalidatesTags: [{ type: 'Appointment', id: 'LIST' }],
+    }),
+
+    // ── Medicines ────────────────────────────────────────────────────────────
+    listMedicines: build.query<Medicine[], void>({
+      query: () => '/medicines',
+      providesTags: [{ type: 'Medicine', id: 'LIST' }],
+    }),
+    createMedicine: build.mutation<Medicine, Partial<Medicine>>({
+      query: (body) => ({ url: '/medicines', method: 'POST', body }),
+      invalidatesTags: [{ type: 'Medicine', id: 'LIST' }],
+    }),
+    updateMedicine: build.mutation<Medicine, { id: string; body: Partial<Medicine> }>({
+      query: ({ id, body }) => ({ url: `/medicines/${id}`, method: 'PUT', body }),
+      invalidatesTags: [{ type: 'Medicine', id: 'LIST' }],
+    }),
+    deleteMedicine: build.mutation<void, string>({
+      query: (id) => ({ url: `/medicines/${id}`, method: 'DELETE' }),
+      invalidatesTags: [{ type: 'Medicine', id: 'LIST' }],
+    }),
+
+    // ── Lab test catalog ─────────────────────────────────────────────────────
+    listLabTests: build.query<LabTest[], void>({
+      query: () => '/lab-tests',
+      providesTags: [{ type: 'LabTest', id: 'LIST' }],
+    }),
+    createLabTest: build.mutation<LabTest, Partial<LabTest>>({
+      query: (body) => ({ url: '/lab-tests', method: 'POST', body }),
+      invalidatesTags: [{ type: 'LabTest', id: 'LIST' }],
+    }),
+    updateLabTest: build.mutation<LabTest, { id: string; body: Partial<LabTest> }>({
+      query: ({ id, body }) => ({ url: `/lab-tests/${id}`, method: 'PUT', body }),
+      invalidatesTags: [{ type: 'LabTest', id: 'LIST' }],
+    }),
+    deleteLabTest: build.mutation<void, string>({
+      query: (id) => ({ url: `/lab-tests/${id}`, method: 'DELETE' }),
+      invalidatesTags: [{ type: 'LabTest', id: 'LIST' }],
+    }),
+
+    // ── Lab orders and results ───────────────────────────────────────────────
+    listTestOrders: build.query<TestOrder[], { patientId?: string; doctorId?: string; appointmentId?: string } | void>({
+      query: (params) => ({ url: '/test-orders', params: params ?? undefined }),
+      providesTags: [{ type: 'TestOrder', id: 'LIST' }],
+    }),
+    getTestOrder: build.query<TestOrder, string>({
+      query: (id) => `/test-orders/${id}`,
+      providesTags: (_r, _e, id) => [{ type: 'TestOrder', id }],
+    }),
+    createTestOrder: build.mutation<TestOrder, Partial<TestOrder>>({
+      query: (body) => ({ url: '/test-orders', method: 'POST', body }),
+      invalidatesTags: [{ type: 'TestOrder', id: 'LIST' }],
+    }),
+    updateTestOrder: build.mutation<TestOrder, { id: string; body: Partial<TestOrder> }>({
+      query: ({ id, body }) => ({ url: `/test-orders/${id}`, method: 'PUT', body }),
+      invalidatesTags: [{ type: 'TestOrder', id: 'LIST' }],
+    }),
+    deleteTestOrder: build.mutation<void, string>({
+      query: (id) => ({ url: `/test-orders/${id}`, method: 'DELETE' }),
+      invalidatesTags: [{ type: 'TestOrder', id: 'LIST' }],
+    }),
+    listTestResults: build.query<TestResult[], { orderId?: string } | void>({
+      query: (params) => ({ url: '/test-results', params: params ?? undefined }),
+      providesTags: [{ type: 'TestResult', id: 'LIST' }],
+    }),
+    upsertTestResult: build.mutation<TestResult, Partial<TestResult>>({
+      query: (body) => ({ url: '/test-results', method: 'POST', body }),
+      invalidatesTags: [{ type: 'TestResult', id: 'LIST' }, { type: 'TestOrder', id: 'LIST' }],
+    }),
+
+    // ── Schedule blocks ──────────────────────────────────────────────────────
+    listScheduleBlocks: build.query<ScheduleBlock[], { doctorId?: string } | void>({
+      query: (params) => ({ url: '/schedule-blocks', params: params ?? undefined }),
+      providesTags: [{ type: 'ScheduleBlock', id: 'LIST' }],
+    }),
+    createScheduleBlock: build.mutation<ScheduleBlock, Partial<ScheduleBlock>>({
+      query: (body) => ({ url: '/schedule-blocks', method: 'POST', body }),
+      invalidatesTags: [{ type: 'ScheduleBlock', id: 'LIST' }],
+    }),
+    deleteScheduleBlock: build.mutation<void, string>({
+      query: (id) => ({ url: `/schedule-blocks/${id}`, method: 'DELETE' }),
+      invalidatesTags: [{ type: 'ScheduleBlock', id: 'LIST' }],
+    }),
+
+    // ── Video slots ──────────────────────────────────────────────────────────
+    listVideoSlots: build.query<VideoSlot[], { doctorId?: string; status?: string } | void>({
+      query: (params) => ({ url: '/video-slots', params: params ?? undefined }),
+      providesTags: [{ type: 'VideoSlot', id: 'LIST' }],
+    }),
+    createVideoSlot: build.mutation<VideoSlot, Partial<VideoSlot>>({
+      query: (body) => ({ url: '/video-slots', method: 'POST', body }),
+      invalidatesTags: [{ type: 'VideoSlot', id: 'LIST' }],
+    }),
+    bookVideoSlot: build.mutation<VideoSlot, { id: string; body: { patientId: string; appointmentId?: string } }>({
+      query: ({ id, body }) => ({ url: `/video-slots/${id}/book`, method: 'POST', body }),
+      invalidatesTags: [{ type: 'VideoSlot', id: 'LIST' }],
+    }),
+    deleteVideoSlot: build.mutation<void, string>({
+      query: (id) => ({ url: `/video-slots/${id}`, method: 'DELETE' }),
+      invalidatesTags: [{ type: 'VideoSlot', id: 'LIST' }],
+    }),
+
+    // ── Maternity ────────────────────────────────────────────────────────────
+    listPregnancies: build.query<PregnancyRecord[], { patientId?: string; status?: string } | void>({
+      query: (params) => ({ url: '/pregnancies', params: params ?? undefined }),
+      providesTags: [{ type: 'Pregnancy', id: 'LIST' }],
+    }),
+    createPregnancy: build.mutation<PregnancyRecord, Partial<PregnancyRecord>>({
+      query: (body) => ({ url: '/pregnancies', method: 'POST', body }),
+      invalidatesTags: [{ type: 'Pregnancy', id: 'LIST' }],
+    }),
+    updatePregnancy: build.mutation<PregnancyRecord, { id: string; body: Partial<PregnancyRecord> }>({
+      query: ({ id, body }) => ({ url: `/pregnancies/${id}`, method: 'PUT', body }),
+      invalidatesTags: [{ type: 'Pregnancy', id: 'LIST' }],
+    }),
+    listAncVisits: build.query<ANCVisit[], { pregnancyId?: string } | void>({
+      query: (params) => ({ url: '/anc-visits', params: params ?? undefined }),
+      providesTags: [{ type: 'ANCVisit', id: 'LIST' }],
+    }),
+    createAncVisit: build.mutation<ANCVisit, Partial<ANCVisit>>({
+      query: (body) => ({ url: '/anc-visits', method: 'POST', body }),
+      invalidatesTags: [{ type: 'ANCVisit', id: 'LIST' }],
+    }),
+
+    // ── Babies ───────────────────────────────────────────────────────────────
+    listBabies: build.query<Baby[], { motherPatientId?: string } | void>({
+      query: (params) => ({ url: '/babies', params: params ?? undefined }),
+      providesTags: [{ type: 'Baby', id: 'LIST' }],
+    }),
+    createBaby: build.mutation<Baby, Partial<Baby>>({
+      query: (body) => ({ url: '/babies', method: 'POST', body }),
+      invalidatesTags: [{ type: 'Baby', id: 'LIST' }],
+    }),
+    listGrowth: build.query<GrowthMeasurement[], string>({
+      query: (babyId) => `/babies/${babyId}/growth`,
+      providesTags: [{ type: 'Growth', id: 'LIST' }],
+    }),
+    addGrowth: build.mutation<GrowthMeasurement, { babyId: string; body: Partial<GrowthMeasurement> }>({
+      query: ({ babyId, body }) => ({ url: `/babies/${babyId}/growth`, method: 'POST', body }),
+      invalidatesTags: [{ type: 'Growth', id: 'LIST' }],
+    }),
+    listImmunizations: build.query<Immunization[], string>({
+      query: (babyId) => `/babies/${babyId}/immunizations`,
+      providesTags: [{ type: 'Immunization', id: 'LIST' }],
+    }),
+    createImmunization: build.mutation<Immunization, { babyId: string; body: Partial<Immunization> }>({
+      query: ({ babyId, body }) => ({ url: `/babies/${babyId}/immunizations`, method: 'POST', body }),
+      invalidatesTags: [{ type: 'Immunization', id: 'LIST' }],
+    }),
+    markImmunizationGiven: build.mutation<Immunization, { babyId: string; immunizationId: string; givenDate?: string }>({
+      query: ({ babyId, immunizationId, givenDate }) => ({
+        url: `/babies/${babyId}/immunizations/${immunizationId}/given`,
+        method: 'PUT',
+        body: { givenDate },
+      }),
+      invalidatesTags: [{ type: 'Immunization', id: 'LIST' }],
+    }),
+
     // ── Vitals ────────────────────────────────────────────────────────────────
     listVitals: build.query<
       Vitals[],
@@ -472,6 +748,7 @@ export const {
   useGetSuperadminUsersQuery,
   useListRolesQuery,
   useListAssignableRolesQuery,
+  useListPermissionsQuery,
   useCreateRoleMutation,
   useUpdateRoleMutation,
   useDeleteRoleMutation,
@@ -510,4 +787,44 @@ export const {
   useCreatePaymentMutation,
   useListVitalsQuery,
   useCreateVitalsMutation,
+  useListUsersQuery,
+  useCreateUserMutation,
+  useUpdateUserMutation,
+  useDeleteUserMutation,
+  useUpdateDoctorMutation,
+  useDeleteAppointmentMutation,
+  useListMedicinesQuery,
+  useCreateMedicineMutation,
+  useUpdateMedicineMutation,
+  useDeleteMedicineMutation,
+  useListLabTestsQuery,
+  useCreateLabTestMutation,
+  useUpdateLabTestMutation,
+  useDeleteLabTestMutation,
+  useListTestOrdersQuery,
+  useGetTestOrderQuery,
+  useCreateTestOrderMutation,
+  useUpdateTestOrderMutation,
+  useDeleteTestOrderMutation,
+  useListTestResultsQuery,
+  useUpsertTestResultMutation,
+  useListScheduleBlocksQuery,
+  useCreateScheduleBlockMutation,
+  useDeleteScheduleBlockMutation,
+  useListVideoSlotsQuery,
+  useCreateVideoSlotMutation,
+  useBookVideoSlotMutation,
+  useDeleteVideoSlotMutation,
+  useListPregnanciesQuery,
+  useCreatePregnancyMutation,
+  useUpdatePregnancyMutation,
+  useListAncVisitsQuery,
+  useCreateAncVisitMutation,
+  useListBabiesQuery,
+  useCreateBabyMutation,
+  useListGrowthQuery,
+  useAddGrowthMutation,
+  useListImmunizationsQuery,
+  useCreateImmunizationMutation,
+  useMarkImmunizationGivenMutation,
 } = api;

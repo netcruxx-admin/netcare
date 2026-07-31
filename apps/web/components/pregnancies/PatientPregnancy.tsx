@@ -1,7 +1,5 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import {
   ResponsiveContainer,
   LineChart,
@@ -12,7 +10,12 @@ import {
   Tooltip,
 } from 'recharts';
 import { Baby, CalendarClock, Activity, AlertTriangle, CheckCircle2, Circle } from 'lucide-react';
-import { dbOperations, type ANCVisit, type PregnancyRecord } from '@/lib/db';
+import type { PregnancyRecord } from '@/lib/types';
+import {
+  useGetPatientByUserQuery,
+  useListAncVisitsQuery,
+  useListPregnanciesQuery,
+} from '@/store/api';
 import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
 import {
@@ -26,19 +29,17 @@ import {
 } from '@/lib/anc';
 
 export function PatientPregnancy({ session }: RoleViewProps) {
-  const router = useRouter();
-  const [record, setRecord] = useState<PregnancyRecord | null>(null);
-  const [visits, setVisits] = useState<ANCVisit[]>([]);
+  const { data: patient } = useGetPatientByUserQuery(session.user.id);
+  const { data: pregnancies = [] } = useListPregnanciesQuery(
+    { patientId: patient?.id, status: 'active' },
+    { skip: !patient },
+  );
+  const record: PregnancyRecord | null = pregnancies[0] ?? null;
 
-  useEffect(() => {
-    const s = session;
-    const patientId = dbOperations.getPatientByUserId(s.user.id)?.id;
-    if (patientId) {
-      const preg = dbOperations.getActivePregnancyByPatientId(patientId) ?? null;
-      setRecord(preg);
-      if (preg) setVisits([...dbOperations.getANCVisitsByPregnancyId(preg.id)]);
-    }
-  }, [session]);
+  const { data: visits = [] } = useListAncVisitsQuery(
+    { pregnancyId: record?.id },
+    { skip: !record },
+  );
 
   if (!record) {
     return (

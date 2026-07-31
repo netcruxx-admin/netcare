@@ -1,10 +1,11 @@
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 
 from .. import models, schemas
 from ..auth import get_current_user
+from ..authz import SCOPE_OWN, own_record_filter, require_permission
 from ..database import get_db
 from ..tenancy import get_tenant_id, scoped
 from ..utils import new_id, now_iso
@@ -14,10 +15,11 @@ router = APIRouter(prefix="/payments", tags=["payments"])
 
 @router.get("", response_model=list[schemas.PaymentOut])
 def list_payments(
-    patient_id: Optional[str] = None,
-    appointment_id: Optional[str] = None,
+    patient_id: Optional[str] = Query(default=None, alias="patientId"),
+    appointment_id: Optional[str] = Query(default=None, alias="appointmentId"),
     db: Session = Depends(get_db),
-    _: models.User = Depends(get_current_user),
+    user: models.User = Depends(get_current_user),
+    scope: str = Depends(require_permission("payments.read")),
     tenant_id: str = Depends(get_tenant_id),
 ):
     query = scoped(db, models.Payment, tenant_id)
@@ -25,6 +27,11 @@ def list_payments(
         query = query.filter(models.Payment.patient_id == patient_id)
     if appointment_id:
         query = query.filter(models.Payment.appointment_id == appointment_id)
+    # The filters above are caller-supplied conveniences, not access control:
+    # with scope "own" the caller must be a party to the row, so passing someone
+    # else's id narrows the result to nothing rather than exposing their records.
+    if scope == SCOPE_OWN:
+        query = query.filter(own_record_filter(db, user, models.Payment))
     return query.all()
 
 
@@ -32,7 +39,7 @@ def list_payments(
 def create_payment(
     body: schemas.PaymentCreate,
     db: Session = Depends(get_db),
-    _: models.User = Depends(get_current_user),
+    _: str = Depends(require_permission("payments.manage")),
     tenant_id: str = Depends(get_tenant_id),
 ):
     payment = models.Payment(
@@ -52,7 +59,7 @@ def update_payment(
     payment_id: str,
     body: schemas.PaymentUpdate,
     db: Session = Depends(get_db),
-    _: models.User = Depends(get_current_user),
+    _: str = Depends(require_permission("payments.manage")),
     tenant_id: str = Depends(get_tenant_id),
 ):
     payment = (

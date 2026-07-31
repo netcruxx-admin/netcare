@@ -1,9 +1,14 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useMemo, useState } from 'react';
 import { Search, CalendarDays, Eye, HeartPulse } from 'lucide-react';
-import { dbOperations, Appointment, Doctor, Patient, User, Vitals } from '@/lib/db';
+import type { Appointment, Doctor, Patient, User, Vitals } from '@/lib/types';
+import {
+  useListAppointmentsQuery,
+  useListDoctorsQuery,
+  useListPatientsQuery,
+  useListVitalsQuery,
+} from '@/store/api';
 import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
 import { ExportButton } from '@/components/ExportButton';
@@ -23,50 +28,29 @@ const STATUS_STYLE: Record<Appointment['status'], string> = {
   cancelled: 'bg-red-100 text-red-700',
 };
 
-interface RawData {
-  appointments: Appointment[];
-  patients: Patient[];
-  doctors: Doctor[];
-  users: User[];
-  vitals: Vitals[];
-}
-
 export function NurseAppointments({ session }: RoleViewProps) {
-  const router = useRouter();
-  const [raw, setRaw] = useState<RawData | null>(null);
   const [query, setQuery] = useState('');
   const [status, setStatus] = useState<'all' | Appointment['status']>('all');
   const [date, setDate] = useState<string>(todayStr);
 
-  useEffect(() => {
-    setRaw({
-      appointments: dbOperations.getAllAppointments(),
-      patients: dbOperations.getAllPatients(),
-      doctors: dbOperations.getAllDoctors(),
-      users: dbOperations.getAllUsers(),
-      vitals: dbOperations.getAllVitals(),
-    });
-  }, [session]);
+  const { data: appointments = [], isLoading } = useListAppointmentsQuery();
+  const { data: patients = [] } = useListPatientsQuery();
+  const { data: doctors = [] } = useListDoctorsQuery();
+  const { data: vitals = [] } = useListVitalsQuery();
 
   const rows = useMemo(() => {
-    if (!raw) return [];
-    const userById = new Map(raw.users.map((u) => [u.id, u]));
-    const patientById = new Map(raw.patients.map((p) => [p.id, p]));
-    const doctorById = new Map(raw.doctors.map((d) => [d.id, d]));
-    const withVitals = new Set(raw.vitals.map((v) => v.appointmentId));
+    const patientById = new Map(patients.map((p) => [p.id, p]));
+    const doctorById = new Map(doctors.map((d) => [d.id, d]));
+    const withVitals = new Set(vitals.map((v) => v.appointmentId));
 
-    const patientName = (id: string) => {
-      const p = patientById.get(id);
-      return (p ? userById.get(p.userId)?.name : null) ?? 'Patient';
-    };
+    const patientName = (id: string) => patientById.get(id)?.user?.name ?? 'Patient';
     const doctorName = (id: string) => {
-      const d = doctorById.get(id);
-      const name = d ? userById.get(d.userId)?.name : null;
+      const name = doctorById.get(id)?.user?.name;
       return name ? `Dr. ${name}` : '—';
     };
 
     const q = query.trim().toLowerCase();
-    return raw.appointments
+    return appointments
       .map((a) => ({
         ...a,
         patient: patientName(a.patientId),
@@ -77,7 +61,7 @@ export function NurseAppointments({ session }: RoleViewProps) {
       .filter((a) => (date ? a.date === date : true))
       .filter((a) => !q || a.patient.toLowerCase().includes(q) || a.doctor.toLowerCase().includes(q))
       .sort((a, b) => (a.date === b.date ? a.time.localeCompare(b.time) : a.date.localeCompare(b.date)));
-  }, [raw, query, status, date]);
+  }, [appointments, patients, doctors, vitals, query, status, date]);
 
   return (
     <DashboardShell role={session.user.role} userName={session.user.name} title="Appointments" subtitle="Support and vitals">

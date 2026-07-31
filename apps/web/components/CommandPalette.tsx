@@ -11,7 +11,7 @@ import {
   CommandGroup,
   CommandItem,
 } from '@/components/ui/command';
-import { dbOperations } from '@/lib/db';
+import { useListDoctorsQuery, useListPatientsQuery } from '@/store/api';
 import { adminRole, labRole, staffRoles } from '@/lib/roles';
 
 // A role code from the backend catalog (roles are runtime data, see
@@ -38,22 +38,30 @@ export function CommandPalette({
   const router = useRouter();
   const staff = staffRoles.includes(role) || role === labRole;
 
-  // Build searchable entity lists once per open.
-  const { patients, doctors } = useMemo(() => {
-    if (!open || !staff) return { patients: [], doctors: [] };
-    const users = new Map(dbOperations.getAllUsers().map((u) => [u.id, u]));
-    const patients = dbOperations.getAllPatients().map((p) => ({
-      id: p.id,
-      name: users.get(p.userId)?.name ?? p.id,
-      sub: users.get(p.userId)?.email ?? '',
-    }));
-    const doctors = dbOperations.getAllDoctors().map((d) => ({
-      id: d.id,
-      name: users.get(d.userId)?.name ?? d.id,
-      sub: d.specialization,
-    }));
-    return { patients, doctors };
-  }, [open, staff]);
+  // Only fetched while the palette is open to a staff user; the API returns
+  // whatever that role may see, so the search can't surface hidden records.
+  const skip = !open || !staff;
+  const { data: patientRecords = [] } = useListPatientsQuery(undefined, { skip });
+  const { data: doctorRecords = [] } = useListDoctorsQuery(undefined, { skip });
+
+  const patients = useMemo(
+    () =>
+      patientRecords.map((p) => ({
+        id: p.id,
+        name: p.user?.name ?? p.id,
+        sub: p.user?.email ?? '',
+      })),
+    [patientRecords],
+  );
+  const doctors = useMemo(
+    () =>
+      doctorRecords.map((d) => ({
+        id: d.id,
+        name: d.user?.name ?? d.id,
+        sub: d.specialization,
+      })),
+    [doctorRecords],
+  );
 
   const go = (href: string) => {
     onOpenChange(false);

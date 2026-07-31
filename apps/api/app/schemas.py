@@ -8,11 +8,10 @@ from pydantic.alias_generators import to_camel
 # make every user holding a custom role fail response validation. Referential
 # integrity is enforced by the users.role -> roles.code FK instead.
 Role = str
-# Roles a self-service /auth/register call may create. This one stays closed on
-# purpose — it is a security boundary, not a display concern. Nobody should be
-# able to sign themselves up as admin/superadmin, and a superadmin adding a role
-# to the catalog must not silently make it self-registerable.
-RegisterRole = Literal["patient", "doctor", "nurse", "lab"]
+# The only role a public, unauthenticated /auth/register call may create.
+# Staff accounts carry access to other people's records, so they are provisioned
+# through POST /users by someone holding `users.manage` — never self-served.
+RegisterRole = Literal["patient"]
 AppointmentStatus = Literal["scheduled", "completed", "cancelled"]
 AppointmentMode = Literal["in-person", "video"]
 PaymentStatus = Literal["pending", "completed", "failed"]
@@ -80,6 +79,29 @@ class HospitalUpdate(CamelModel):
     status: Optional[HospitalStatus] = None
 
 
+# ---------- Permissions ----------
+class PermissionOut(CamelModel):
+    """One entry of the grantable catalog, for the superadmin's permission matrix."""
+
+    code: str
+    label: str
+    description: str = ""
+    resource: str
+    action: str
+    # Hospital module this depends on; blank when always available.
+    module: Optional[str] = None
+    supports_scope: bool = False
+    sort_order: int = 0
+
+
+class PermissionGrant(CamelModel):
+    """A permission handed to a role, at a breadth. `scope` is "own" or "all"
+    where the permission supports it, otherwise null."""
+
+    code: str
+    scope: Optional[str] = None
+
+
 # ---------- Role (platform-wide catalog, superadmin-managed) ----------
 class RoleOut(CamelModel):
     code: str
@@ -89,6 +111,9 @@ class RoleOut(CamelModel):
     sort_order: int = 0
     # Dashboard this role lands on after login ("" = no dedicated dashboard).
     home_path: str = ""
+    # Everything this role may do. Set when the role is created and editable
+    # afterwards — the superadmin's decision, never inferred from the code.
+    permissions: List[PermissionGrant] = []
     # How many users currently hold this role (superadmin needs it to know
     # whether a role is safe to delete).
     user_count: int = 0
@@ -114,6 +139,9 @@ class RoleCreate(CamelModel):
     is_platform: bool = False
     sort_order: int = 0
     home_path: str = ""
+    # Granted with the role in one call: creating a role and deciding what it can
+    # do is a single decision, so it is a single request.
+    permissions: List[PermissionGrant] = []
 
 
 class RoleUpdate(CamelModel):
@@ -124,6 +152,8 @@ class RoleUpdate(CamelModel):
     is_platform: Optional[bool] = None
     sort_order: Optional[int] = None
     home_path: Optional[str] = None
+    # When present, replaces the role's grants wholesale (omit to leave alone).
+    permissions: Optional[List[PermissionGrant]] = None
 
 
 # ---------- Auth ----------
@@ -141,6 +171,37 @@ class RegisterRequest(CamelModel):
     gender: Optional[str] = None
     blood_group: Optional[str] = None
     date_of_birth: Optional[str] = None
+
+
+class UserCreate(CamelModel):
+    """Staff (or patient) account created by someone with `users.manage`.
+    Unlike RegisterRequest, any non-platform role in the catalog is allowed —
+    including roles a superadmin added at runtime."""
+
+    email: str
+    password: str
+    name: str
+    role: str
+    phone: str = ""
+    # Doctor-specific (ignored for other roles)
+    specialization: Optional[str] = None
+    qualification: Optional[str] = None
+    experience_years: Optional[int] = None
+    # Patient-specific (ignored for other roles)
+    gender: Optional[str] = None
+    blood_group: Optional[str] = None
+    date_of_birth: Optional[str] = None
+
+
+class UserUpdate(CamelModel):
+    """Edit an existing account. Password is re-hashed when supplied; role is
+    validated against the catalog and may never be a platform role."""
+
+    name: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    role: Optional[str] = None
+    password: Optional[str] = None
 
 
 class LoginRequest(CamelModel):
@@ -214,6 +275,24 @@ class DoctorOut(CamelModel):
     registration_year: str = ""
     verification_status: str = "verified"
     user: Optional["UserOut"] = None
+
+
+class DoctorUpdate(CamelModel):
+    """Professional details, plus the account fields that live on the user row
+    (name/email/phone) so a doctor can maintain one profile form."""
+
+    name: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    qualification: Optional[str] = None
+    specialization: Optional[str] = None
+    experience_years: Optional[int] = None
+    consultation_fee: Optional[float] = None
+    available_slots: Optional[List[TimeSlot]] = None
+    license_number: Optional[str] = None
+    medical_council: Optional[str] = None
+    registration_year: Optional[str] = None
+    verification_status: Optional[str] = None
 
 
 # ---------- Department ----------
@@ -708,5 +787,9 @@ class AuthResponse(CamelModel):
     # hardcoding a role -> route map. Included here because the login page has no
     # token yet and so cannot read the role catalog.
     role: Optional[RoleOptionOut] = None
+    # What this user may actually do here: their role's grants intersected with
+    # the hospital's enabled modules. Sent on every auth response rather than
+    # baked into the JWT, so a superadmin's change takes effect immediately.
+    permissions: List[PermissionGrant] = []
     token: str
     is_authenticated: bool = True

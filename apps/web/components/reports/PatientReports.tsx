@@ -1,51 +1,37 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useMemo } from 'react';
 import Link from 'next/link';
 import { FileBarChart, FlaskConical, AlertTriangle } from 'lucide-react';
-import { dbOperations, TestOrder, TestResult, User } from '@/lib/db';
+import type { TestResult } from '@/lib/types';
+import {
+  useListDoctorsQuery,
+  useListTestOrdersQuery,
+  useListTestResultsQuery,
+} from '@/store/api';
 import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
 import { ORDER_STATUS_LABEL, ORDER_STATUS_STYLE, isAbnormal } from '@/lib/lab';
 
-interface RawData {
-  orders: TestOrder[];
-  results: TestResult[];
-  users: User[];
-}
-
 export function PatientReports({ session }: RoleViewProps) {
-  const router = useRouter();
-  const [raw, setRaw] = useState<RawData | null>(null);
-
-  useEffect(() => {
-    const s = session;
-    const patient = dbOperations.getPatientByUserId(s.user.id);
-    setRaw({
-      orders: patient ? dbOperations.getTestOrdersByPatientId(patient.id) : [],
-      results: dbOperations.getAllTestResults(),
-      users: dbOperations.getAllUsers(),
-    });
-  }, [session]);
+  // All three are already narrowed to this patient by the API's "own" scope.
+  const { data: orders = [] } = useListTestOrdersQuery();
+  const { data: results = [] } = useListTestResultsQuery();
+  const { data: doctors = [] } = useListDoctorsQuery();
 
   const rows = useMemo(() => {
-    if (!raw) return [];
-    const userById = new Map(raw.users.map((u) => [u.id, u]));
-    const doctorById = new Map(dbOperations.getAllDoctors().map((d) => [d.id, d]));
     const doctorName = (id: string) => {
-      const d = doctorById.get(id);
-      const u = d ? userById.get(d.userId) : null;
-      return u ? `Dr. ${u.name}` : '—';
+      const name = doctors.find((d) => d.id === id)?.user?.name;
+      return name ? `Dr. ${name}` : '—';
     };
     const resultsByOrder = new Map<string, TestResult[]>();
-    raw.results.forEach((r) => {
+    results.forEach((r) => {
       const list = resultsByOrder.get(r.orderId) ?? [];
       list.push(r);
       resultsByOrder.set(r.orderId, list);
     });
 
-    return raw.orders
+    return orders
       .map((o) => {
         const res = resultsByOrder.get(o.id) ?? [];
         return {
@@ -58,7 +44,7 @@ export function PatientReports({ session }: RoleViewProps) {
         };
       })
       .sort((a, b) => (a.order.orderedAt < b.order.orderedAt ? 1 : -1));
-  }, [raw]);
+  }, [orders, results, doctors]);
 
   return (
     <DashboardShell role={session.user.role} userName={session.user.name} title="Test Reports" subtitle="Your lab tests and results">

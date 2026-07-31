@@ -1,10 +1,11 @@
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 
 from .. import models, schemas
 from ..auth import get_current_user
+from ..authz import require_permission
 from ..database import get_db
 from ..tenancy import get_tenant_id, scoped
 from ..utils import new_id, now_iso
@@ -14,10 +15,10 @@ router = APIRouter(prefix="/video-slots", tags=["video-slots"])
 
 @router.get("", response_model=list[schemas.VideoSlotOut])
 def list_video_slots(
-    doctor_id: Optional[str] = None,
+    doctor_id: Optional[str] = Query(default=None, alias="doctorId"),
     slot_status: Optional[schemas.VideoSlotStatus] = None,
     db: Session = Depends(get_db),
-    _: models.User = Depends(get_current_user),
+    scope: str = Depends(require_permission("video_consults.join")),
     tenant_id: str = Depends(get_tenant_id),
 ):
     query = scoped(db, models.VideoSlot, tenant_id)
@@ -32,7 +33,7 @@ def list_video_slots(
 def create_video_slot(
     body: schemas.VideoSlotCreate,
     db: Session = Depends(get_db),
-    _: models.User = Depends(get_current_user),
+    _: str = Depends(require_permission("schedule.manage")),
     tenant_id: str = Depends(get_tenant_id),
 ):
     slot = models.VideoSlot(
@@ -64,7 +65,7 @@ def book_video_slot(
     slot_id: str,
     body: schemas.VideoSlotBook,
     db: Session = Depends(get_db),
-    _: models.User = Depends(get_current_user),
+    scope: str = Depends(require_permission("video_consults.join")),
     tenant_id: str = Depends(get_tenant_id),
 ):
     slot = _get_slot(db, slot_id, tenant_id)
@@ -81,7 +82,7 @@ def book_video_slot(
 def delete_video_slot(
     slot_id: str,
     db: Session = Depends(get_db),
-    _: models.User = Depends(get_current_user),
+    _: str = Depends(require_permission("schedule.manage")),
     tenant_id: str = Depends(get_tenant_id),
 ):
     slot = _get_slot(db, slot_id, tenant_id)

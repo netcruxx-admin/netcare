@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from .. import models, schemas
-from ..auth import require_platform_role
+from ..authz import require_permission
 from ..database import get_db
 
 router = APIRouter(prefix="/superadmin", tags=["superadmin"])
@@ -13,7 +13,7 @@ router = APIRouter(prefix="/superadmin", tags=["superadmin"])
 @router.get("/overview")
 def overview(
     db: Session = Depends(get_db),
-    _: models.User = Depends(require_platform_role),
+    _: str = Depends(require_permission("platform.read")),
 ):
     return {
         "hospitals": db.query(models.Hospital).count(),
@@ -28,7 +28,7 @@ def overview(
 @router.get("/patients")
 def all_patients(
     db: Session = Depends(get_db),
-    _: models.User = Depends(require_platform_role),
+    _: str = Depends(require_permission("platform.read")),
 ):
     rows = db.query(models.Patient).all()
     result = []
@@ -44,7 +44,7 @@ def all_patients(
 @router.get("/doctors")
 def all_doctors(
     db: Session = Depends(get_db),
-    _: models.User = Depends(require_platform_role),
+    _: str = Depends(require_permission("platform.read")),
 ):
     rows = db.query(models.Doctor).all()
     result = []
@@ -60,7 +60,7 @@ def all_doctors(
 @router.get("/appointments")
 def all_appointments(
     db: Session = Depends(get_db),
-    _: models.User = Depends(require_platform_role),
+    _: str = Depends(require_permission("platform.read")),
 ):
     rows = db.query(models.Appointment).all()
     return [schemas.AppointmentOut.model_validate(r) for r in rows]
@@ -69,7 +69,7 @@ def all_appointments(
 @router.get("/departments")
 def all_departments(
     db: Session = Depends(get_db),
-    _: models.User = Depends(require_platform_role),
+    _: str = Depends(require_permission("platform.read")),
 ):
     rows = db.query(models.Department).all()
     return [schemas.DepartmentOut.model_validate(r) for r in rows]
@@ -78,7 +78,7 @@ def all_departments(
 @router.get("/users")
 def all_users(
     db: Session = Depends(get_db),
-    _: models.User = Depends(require_platform_role),
+    _: str = Depends(require_permission("platform.read")),
 ):
     rows = db.query(models.User).filter(models.User.hospital_id.isnot(None)).all()
     return [schemas.UserOut.model_validate(r) for r in rows]

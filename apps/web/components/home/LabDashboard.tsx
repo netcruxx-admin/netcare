@@ -1,52 +1,31 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useMemo } from 'react';
 import Link from 'next/link';
 import { Inbox, FlaskConical, CheckCircle2, AlertTriangle, ArrowRight } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import { dbOperations, TestOrder, Patient, User } from '@/lib/db';
+import { useListPatientsQuery, useListTestOrdersQuery } from '@/store/api';
 import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
 import { ORDER_STATUS_LABEL, ORDER_STATUS_STYLE } from '@/lib/lab';
 
-interface RawData {
-  orders: TestOrder[];
-  patients: Patient[];
-  users: User[];
-}
-
 export function LabDashboard({ session }: RoleViewProps) {
-  const router = useRouter();
-  const [raw, setRaw] = useState<RawData | null>(null);
-
-  useEffect(() => {
-    setRaw({
-      orders: dbOperations.getAllTestOrders(),
-      patients: dbOperations.getAllPatients(),
-      users: dbOperations.getAllUsers(),
-    });
-  }, [session]);
+  const { data: orders = [], isLoading } = useListTestOrdersQuery();
+  const { data: patients = [] } = useListPatientsQuery();
 
   const model = useMemo(() => {
-    if (!raw) return null;
-    const userById = new Map(raw.users.map((u) => [u.id, u]));
-    const patientById = new Map(raw.patients.map((p) => [p.id, p]));
-    const patientName = (id: string) => {
-      const p = patientById.get(id);
-      const u = p ? userById.get(p.userId) : null;
-      return u?.name ?? 'Patient';
-    };
+    const patientName = (id: string) =>
+      patients.find((p) => p.id === id)?.user?.name ?? 'Patient';
 
     const kpis = {
-      newOrders: raw.orders.filter((o) => o.status === 'ordered').length,
-      inLab: raw.orders.filter((o) => o.status === 'sample_collected' || o.status === 'in_progress').length,
-      completed: raw.orders.filter((o) => o.status === 'completed' || o.status === 'reviewed').length,
-      urgent: raw.orders.filter((o) => o.priority === 'urgent' && o.status !== 'reviewed').length,
+      newOrders: orders.filter((o) => o.status === 'ordered').length,
+      inLab: orders.filter((o) => o.status === 'sample_collected' || o.status === 'in_progress').length,
+      completed: orders.filter((o) => o.status === 'completed' || o.status === 'reviewed').length,
+      urgent: orders.filter((o) => o.priority === 'urgent' && o.status !== 'reviewed').length,
     };
 
     // Work queue = anything the lab still needs to act on.
-    const queue = raw.orders
+    const queue = orders
       .filter((o) => o.status !== 'reviewed' && o.status !== 'completed')
       .map((o) => ({ ...o, patient: patientName(o.patientId), tests: o.items.length }))
       .sort((a, b) => {
@@ -55,9 +34,9 @@ export function LabDashboard({ session }: RoleViewProps) {
       });
 
     return { kpis, queue };
-  }, [raw]);
+  }, [orders, patients]);
 
-  if (!model) return null;
+  if (isLoading) return null;
 
   const cards: { label: string; value: number; icon: LucideIcon; tint: string }[] = [
     { label: 'New Orders', value: model.kpis.newOrders, icon: Inbox, tint: 'text-slate-600 bg-slate-100' },

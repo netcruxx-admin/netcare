@@ -76,6 +76,54 @@ class Role(Base):
     home_path = Column(String, nullable=False, default="")
 
 
+class Permission(Base):
+    """One thing a user can be allowed to do.
+
+    The catalog is code-owned and finite: a permission exists because a feature
+    was built for it, so it arrives by migration. Who *holds* a permission is
+    pure data (see RolePermission) and is entirely the superadmin's call.
+
+    `module` ties a permission to a purchased feature. A hospital whose `modules`
+    has that flag off cannot grant it to anyone, whatever their role says — which
+    is what keeps the UI and the API from ever disagreeing about a tenant's plan.
+    """
+
+    __tablename__ = "permissions"
+
+    # "resource.action", e.g. "patients.read". Deliberately no scope in the code:
+    # scope varies per grant (a doctor reads their own patients, an admin reads
+    # all of them) and so belongs on RolePermission, not here.
+    code = Column(String, primary_key=True)
+    label = Column(String, nullable=False)
+    description = Column(String, default="")
+    # Split out so the UI can group the permission matrix by resource.
+    resource = Column(String, nullable=False, index=True)
+    action = Column(String, nullable=False)
+    # Hospital module this depends on (None = always available).
+    module = Column(String, nullable=True)
+    # Whether "own vs all" is meaningful for this permission.
+    supports_scope = Column(Boolean, nullable=False, default=False)
+    sort_order = Column(Integer, nullable=False, default=0)
+
+
+class RolePermission(Base):
+    """A grant: this role holds this permission, at this breadth.
+
+    The whole role/permission decision surface lives in this table, so changing
+    what a role can do is a data write by a superadmin — never a deploy.
+    """
+
+    __tablename__ = "role_permissions"
+
+    role_code = Column(String, ForeignKey("roles.code", ondelete="CASCADE"), primary_key=True)
+    permission_code = Column(
+        String, ForeignKey("permissions.code", ondelete="CASCADE"), primary_key=True
+    )
+    # "own" | "all" | None (when the permission has no scope dimension). This is
+    # what distinguishes a doctor from an admin without either being named here.
+    scope = Column(String, nullable=True)
+
+
 class User(Base):
     __tablename__ = "users"
 

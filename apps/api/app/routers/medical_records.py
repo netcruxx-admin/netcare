@@ -1,10 +1,11 @@
 from typing import Optional
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, status, Query
 from sqlalchemy.orm import Session
 
 from .. import models, schemas
 from ..auth import get_current_user
+from ..authz import SCOPE_OWN, own_record_filter, require_permission
 from ..database import get_db
 from ..tenancy import get_tenant_id, scoped
 from ..utils import new_id, now_iso
@@ -14,10 +15,11 @@ router = APIRouter(prefix="/medical-records", tags=["medical-records"])
 
 @router.get("", response_model=list[schemas.MedicalRecordOut])
 def list_medical_records(
-    patient_id: Optional[str] = None,
-    appointment_id: Optional[str] = None,
+    patient_id: Optional[str] = Query(default=None, alias="patientId"),
+    appointment_id: Optional[str] = Query(default=None, alias="appointmentId"),
     db: Session = Depends(get_db),
-    _: models.User = Depends(get_current_user),
+    user: models.User = Depends(get_current_user),
+    scope: str = Depends(require_permission("medical_records.read")),
     tenant_id: str = Depends(get_tenant_id),
 ):
     query = scoped(db, models.MedicalRecord, tenant_id)
@@ -25,16 +27,19 @@ def list_medical_records(
         query = query.filter(models.MedicalRecord.patient_id == patient_id)
     if appointment_id:
         query = query.filter(models.MedicalRecord.appointment_id == appointment_id)
+    # The filters above are caller-supplied conveniences, not access control:
+    # with scope "own" the caller must be a party to the row, so passing someone
+    # else's id narrows the result to nothing rather than exposing their records.
+    if scope == SCOPE_OWN:
+        query = query.filter(own_record_filter(db, user, models.MedicalRecord))
     return query.all()
 
 
-@router.post(
-    "", response_model=schemas.MedicalRecordOut, status_code=status.HTTP_201_CREATED
-)
-def create_medical_record(
+@router.post("", response_model=schemas.MedicalRecordOut, status_code=status.HTTP_201_CREATED)
+def create_record(
     body: schemas.MedicalRecordCreate,
     db: Session = Depends(get_db),
-    _: models.User = Depends(get_current_user),
+    _: str = Depends(require_permission("medical_records.manage")),
     tenant_id: str = Depends(get_tenant_id),
 ):
     record = models.MedicalRecord(

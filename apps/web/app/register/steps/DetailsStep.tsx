@@ -3,7 +3,7 @@
 import type { FormikProps } from 'formik';
 import { BadgeCheck, Calendar, Droplet, Info, ShieldCheck, Stethoscope } from 'lucide-react';
 import { FormField } from '@/components/form/FormField';
-import type { Department } from '@/lib/db';
+import type { Department } from '@/lib/types';
 import { BLOOD_GROUPS, CURRENT_YEAR, FormValues, GENDERS, MEDICAL_COUNCILS, Role } from '../registrationSchemas';
 
 interface DetailsStepProps {
