@@ -2,7 +2,8 @@
 
 import Link from 'next/link';
 import { FormikProvider } from 'formik';
-import { AlertCircle, CheckCircle, Heart } from 'lucide-react';
+import { AlertCircle, CheckCircle } from 'lucide-react';
+import Image from 'next/image';
 import { useActiveHospital } from '@/hooks/useActiveHospital';
 import { useRegistration } from './useRegistration';
 import { RoleStep } from './steps/RoleStep';
@@ -36,15 +37,9 @@ export default function RegisterPage() {
     <div className="min-h-screen bg-gradient-to-br from-cyan-50 via-white to-teal-50 flex flex-col">
       {/* Header */}
       <div className="bg-white shadow-md border-b-2 border-cyan-100">
-        <div className="max-w-6xl mx-auto px-6 py-4 flex items-center gap-3">
-          <div className="w-10 h-10 bg-gradient-to-br from-cyan-500 to-teal-600 rounded-lg flex items-center justify-center">
-            <Heart className="w-6 h-6 text-white" />
-          </div>
-          <Link
-            href="/"
-            className="text-2xl font-bold bg-gradient-to-r from-cyan-600 to-teal-600 bg-clip-text text-transparent hover:opacity-80"
-          >
-            {hospital.name}
+        <div className="max-w-6xl mx-auto px-6 py-2 flex items-center gap-3">
+          <Link href="/" className="hover:opacity-80 transition">
+            <Image src="/logo/logo-full.png" alt={hospital.name} width={80} height={80} className="w-20 h-20 object-contain" />
           </Link>
         </div>
       </div>

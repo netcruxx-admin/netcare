@@ -17,7 +17,7 @@ export function RoleStep({ onSelect }: { onSelect: (role: Role) => void }) {
     <>
       <div className="text-center">
         <h2 className="text-3xl font-bold text-slate-900">Create Account</h2>
-        <p className="text-slate-600 mt-2">Join {hospital.name} as</p>
+        <p className="text-slate-600 mt-2">Join NetCare as</p>
       </div>
 
       <p className="text-center text-sm text-slate-500">

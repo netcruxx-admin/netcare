@@ -5,7 +5,8 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useFormik, FormikProvider } from 'formik';
 import * as Yup from 'yup';
-import { Heart, Mail, Lock, AlertCircle } from 'lucide-react';
+import { Mail, Lock, AlertCircle } from 'lucide-react';
+import Image from 'next/image';
 import { authStorage } from '@/lib/auth';
 import { loginRoleTabs, resolveHomePath } from '@/lib/roles';
 import { FormField } from '@/components/form/FormField';
@@ -82,12 +83,9 @@ export default function LoginPage() {
     <div className="min-h-screen bg-gradient-to-br from-cyan-50 via-white to-teal-50 flex flex-col">
       {/* Header */}
       <div className="bg-white shadow-md border-b-2 border-cyan-100">
-        <div className="max-w-6xl mx-auto px-6 py-4 flex items-center gap-3">
-          <div className="w-10 h-10 bg-gradient-to-br from-cyan-500 to-teal-600 rounded-lg flex items-center justify-center">
-            <Heart className="w-6 h-6 text-white" />
-          </div>
-          <Link href="/" className="text-2xl font-bold bg-gradient-to-r from-cyan-600 to-teal-600 bg-clip-text text-transparent hover:opacity-80">
-            {hospitalName}
+        <div className="max-w-6xl mx-auto px-6 py-2 flex items-center gap-3">
+          <Link href="/" className="hover:opacity-80 transition">
+            <Image src="/logo/logo-full.png" alt={hospitalName} width={80} height={80} className="w-20 h-20 object-contain" />
           </Link>
         </div>
       </div>
@@ -97,7 +95,7 @@ export default function LoginPage() {
         <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl p-8 space-y-8 border border-cyan-100">
           <div className="text-center">
             <h2 className="text-3xl font-bold bg-gradient-to-r from-cyan-600 to-teal-600 bg-clip-text text-transparent">Sign In</h2>
-            <p className="text-slate-600 mt-2">Access your {hospitalName} account</p>
+            <p className="text-slate-600 mt-2">Access your NetCare account</p>
           </div>
 
           {/* Login Type Selector */}

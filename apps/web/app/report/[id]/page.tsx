@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import { Heart, ArrowLeft, Printer, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, Printer, AlertTriangle } from 'lucide-react';
+import Image from 'next/image';
 import { authStorage } from '@/lib/auth';
 import { dbOperations, TestOrder, TestResult, Patient, User, Doctor } from '@/lib/db';
 import { ORDER_STATUS_LABEL, FLAG_STYLE, FLAG_LABEL, isAbnormal } from '@/lib/lab';
@@ -80,13 +81,7 @@ export default function LabReportPage() {
         {/* Header */}
         <div className="flex items-center justify-between px-8 py-6 border-b-2 border-cyan-600">
           <div className="flex items-center gap-3">
-            <div className="w-11 h-11 bg-gradient-to-br from-cyan-500 to-teal-600 rounded-lg flex items-center justify-center">
-              <Heart className="w-6 h-6 text-white" />
-            </div>
-            <div>
-              <p className="text-xl font-bold bg-gradient-to-r from-cyan-600 to-teal-600 bg-clip-text text-transparent">{hospital.name}</p>
-              <p className="text-xs text-slate-500">Maternity Hospital · Laboratory</p>
-            </div>
+            <Image src="/logo/logo-full.png" alt={hospital.name} width={80} height={80} className="w-20 h-20 object-contain" />
           </div>
           <div className="text-right">
             <p className="text-sm font-semibold text-slate-900">LAB REPORT</p>

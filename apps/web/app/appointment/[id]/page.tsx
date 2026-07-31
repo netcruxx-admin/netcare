@@ -3,7 +3,8 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, CalendarPlus, Heart, Video } from 'lucide-react';
+import { ArrowLeft, CalendarPlus, Video } from 'lucide-react';
+import Image from 'next/image';
 import { FollowUpModal } from '@/components/FollowUpModal';
 import { useAppointmentDetail } from './useAppointmentDetail';
 import { ActionsToolbar } from './components/ActionsToolbar';
@@ -26,12 +27,7 @@ function Chrome({ children }: { children: React.ReactNode }) {
     <div className="min-h-screen bg-gradient-to-br from-cyan-50 via-white to-teal-50 flex flex-col">
       <div className="bg-white shadow-md border-b-2 border-cyan-100">
         <div className="max-w-6xl mx-auto px-6 py-4 flex items-center gap-3">
-          <div className="w-10 h-10 bg-gradient-to-br from-cyan-500 to-teal-600 rounded-lg flex items-center justify-center">
-            <Heart className="w-6 h-6 text-white" />
-          </div>
-          <h1 className="text-2xl font-bold bg-gradient-to-r from-cyan-600 to-teal-600 bg-clip-text text-transparent">
-            {hospital.name}
-          </h1>
+          <Image src="/logo/logo-full.png" alt={hospital.name} width={80} height={80} className="w-20 h-20 object-contain" />
         </div>
       </div>
       {children}
@@ -110,9 +106,7 @@ export default function AppointmentDetailPage() {
       <div className="bg-white shadow-md border-b-2 border-cyan-100">
         <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-gradient-to-br from-cyan-500 to-teal-600 rounded-lg flex items-center justify-center">
-              <Heart className="w-6 h-6 text-white" />
-            </div>
+            <Image src="/logo/logo-icon.png" alt="Logo" width={40} height={40} className="w-10 h-10 object-contain" />
             <h1 className="text-2xl font-bold bg-gradient-to-r from-cyan-600 to-teal-600 bg-clip-text text-transparent">
               Appointment Details
             </h1>

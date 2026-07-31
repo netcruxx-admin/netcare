@@ -3,7 +3,8 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { Heart, LogOut, Menu, X, Search } from 'lucide-react';
+import { LogOut, Menu, X, Search } from 'lucide-react';
+import Image from 'next/image';
 import { authStorage } from '@/lib/auth';
 import type { HospitalModules } from '@/lib/hospitalConfig';
 import {
@@ -126,9 +127,7 @@ export function DashboardShell({
   const SidebarContent = (
     <>
       <div className="flex items-center gap-3 px-6 h-16 border-b border-slate-100">
-        <div style={brandGradient} className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0">
-          <Heart className="w-5 h-5 text-white" />
-        </div>
+        <Image src="/logo/logo-icon.png" alt="Logo" width={50} height={50} className="w-12 h-12 object-contain shrink-0" />
         <div className="min-w-0">
           <p style={brandText} className="font-bold leading-tight">
             {hospital.name}
@@ -211,9 +210,7 @@ export function DashboardShell({
           <Menu className="w-6 h-6" />
         </button>
         <div className="flex items-center gap-2">
-          <div style={brandGradient} className="w-7 h-7 rounded-md flex items-center justify-center">
-            <Heart className="w-4 h-4 text-white" />
-          </div>
+          <Image src="/logo/logo-icon.png" alt="Logo" width={30} height={30} className="w-8 h-8 object-contain" />
           <span style={brandText} className="font-bold">
             {hospital.name}
           </span>
