@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+import { platformOnlyPaths } from '@/lib/roles';
 
 export function middleware(request: NextRequest) {
   const host = request.headers.get('host') ?? '';
@@ -13,8 +14,11 @@ export function middleware(request: NextRequest) {
 
   const { pathname } = request.nextUrl;
 
-  // Superadmin platform is only accessible from bare localhost (no subdomain)
-  if (pathname.startsWith('/dashboard/platform') && subdomain) {
+  // The platform console is only reachable from the bare host (no subdomain).
+  // Since the dashboard routes are no longer prefixed by role, this can only
+  // match the screens that belong exclusively to the platform owner; who may
+  // open any given route is decided by lib/roles.ts and the page guard.
+  if (platformOnlyPaths.some((p) => pathname === p || pathname.startsWith(`${p}/`)) && subdomain) {
     const url = request.nextUrl.clone();
     url.hostname = 'localhost';
     return NextResponse.redirect(url);

@@ -15,7 +15,9 @@ export type { AppNotification, NotificationTone } from './types';
 interface SessionUser {
   id: string;
   name: string;
-  role: 'patient' | 'doctor' | 'admin' | 'lab' | 'nurse';
+  // Open-ended: roles are runtime data. The branches below match known codes
+  // and a role with no branch just gets no notifications.
+  role: string;
 }
 const todayStr = () => new Date().toISOString().split('T')[0];
 
@@ -70,7 +72,7 @@ export function getNotifications(user: SessionUser): AppNotification[] {
             title: 'Upcoming appointment',
             description: `${a.date} at ${a.time} with ${doctorName(a.doctorId)}`,
             time: a.createdAt,
-            href: `/dashboard/patient/appointments`,
+            href: `/dashboard/appointments`,
             tone: 'info',
           });
         }
@@ -82,7 +84,7 @@ export function getNotifications(user: SessionUser): AppNotification[] {
             title: 'Payment pending',
             description: `₹${p.amount} due for your consultation`,
             time: p.createdAt,
-            href: `/dashboard/patient/payments`,
+            href: `/dashboard/payments`,
             tone: 'warning',
           });
         }
@@ -94,7 +96,7 @@ export function getNotifications(user: SessionUser): AppNotification[] {
             title: 'Lab report ready',
             description: o.items.map((i) => i.name).join(', '),
             time: o.updatedAt,
-            href: `/dashboard/patient/reports`,
+            href: `/dashboard/reports`,
             tone: 'success',
           });
         }
@@ -111,7 +113,7 @@ export function getNotifications(user: SessionUser): AppNotification[] {
           title: `${todays.length} appointment${todays.length === 1 ? '' : 's'} today`,
           description: todays.map((a) => `${a.time} · ${patientName(a.patientId)}`).slice(0, 3).join('  |  '),
           time: new Date().toISOString(),
-          href: `/dashboard/doctor/appointments`,
+          href: `/dashboard/appointments`,
           tone: 'info',
         });
       }
@@ -122,7 +124,7 @@ export function getNotifications(user: SessionUser): AppNotification[] {
             title: 'Lab results in',
             description: `${patientName(o.patientId)} · ${o.items.map((i) => i.name).join(', ')}`,
             time: o.updatedAt,
-            href: `/dashboard/doctor/lab-orders`,
+            href: `/dashboard/lab-orders`,
             tone: 'success',
           });
         }
@@ -136,7 +138,7 @@ export function getNotifications(user: SessionUser): AppNotification[] {
         title: 'Doctor verifications pending',
         description: `${pendingDocs.length} doctor${pendingDocs.length === 1 ? '' : 's'} awaiting approval`,
         time: new Date().toISOString(),
-        href: `/dashboard/admin/doctors`,
+        href: `/dashboard/doctors`,
         tone: 'warning',
       });
     }
@@ -147,7 +149,7 @@ export function getNotifications(user: SessionUser): AppNotification[] {
         title: `${todays.length} appointment${todays.length === 1 ? '' : 's'} today`,
         description: 'Across all departments',
         time: new Date().toISOString(),
-        href: `/dashboard/admin/appointments`,
+        href: `/dashboard/appointments`,
         tone: 'info',
       });
     }
@@ -161,7 +163,7 @@ export function getNotifications(user: SessionUser): AppNotification[] {
         title: `${pending.length} test order${pending.length === 1 ? '' : 's'} in queue`,
         description: 'Awaiting processing or results',
         time: new Date().toISOString(),
-        href: `/dashboard/lab/orders`,
+        href: `/dashboard/lab-orders`,
         tone: 'info',
       });
     }
@@ -173,7 +175,7 @@ export function getNotifications(user: SessionUser): AppNotification[] {
         title: `${todays.length} patient${todays.length === 1 ? '' : 's'} for vitals today`,
         description: 'Record vitals before consultation',
         time: new Date().toISOString(),
-        href: `/dashboard/nurse/vitals`,
+        href: `/dashboard/vitals`,
         tone: 'info',
       });
     }

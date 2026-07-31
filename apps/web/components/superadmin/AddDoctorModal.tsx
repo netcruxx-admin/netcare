@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { X } from 'lucide-react';
 import { superadminPost } from '@/lib/superadminFetch';
+import { doctorRole } from '@/lib/roles';
 import type { HospitalInfo } from '@/store/api';
 
 interface Props {
@@ -41,7 +42,7 @@ export function AddDoctorModal({ open, onClose, onSuccess, preselectedHospitalId
       // Register creates user + doctor profile in one call
       await superadminPost('/auth/register', hospitalId, {
         name: form.name.trim(), email: form.email.trim(),
-        password: form.password, role: 'doctor',
+        password: form.password, role: doctorRole,
         phone: form.phone.trim() || undefined,
         specialization: form.specialization.trim() || undefined,
         qualification: form.qualification.trim() || undefined,

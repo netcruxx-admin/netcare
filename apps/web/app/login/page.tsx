@@ -7,10 +7,11 @@ import { useFormik, FormikProvider } from 'formik';
 import * as Yup from 'yup';
 import { Heart, Mail, Lock, AlertCircle } from 'lucide-react';
 import { authStorage } from '@/lib/auth';
+import { loginRoleTabs, resolveHomePath } from '@/lib/roles';
 import { FormField } from '@/components/form/FormField';
 import { useGetCurrentHospitalQuery, useLoginMutation } from '@/store/api';
 
-type LoginType = 'patient' | 'doctor' | 'admin' | 'lab' | 'nurse';
+type LoginType = (typeof loginRoleTabs)[number];
 
 
 const loginSchema = Yup.object({
@@ -38,7 +39,13 @@ export default function LoginPage() {
           password: values.password,
         }).unwrap();
 
-        if (result.user.role !== 'superadmin' && result.user.role !== loginType) {
+        const role = result.user.role;
+        // The tabs only cover roles that have their own login surface. A
+        // superadmin, or anyone holding a role added to the catalog at runtime,
+        // must not be rejected for "not matching" a tab that can't represent
+        // them — only enforce the match when the tab could have been picked.
+        const isTabRole = (loginRoleTabs).includes(role);
+        if (isTabRole && role !== loginType) {
           setError(`This account is not a ${loginType} account`);
           return;
         }
@@ -47,17 +54,14 @@ export default function LoginPage() {
           user: result.user,
           patient: result.patient,
           hospitalId: result.user.hospitalId ?? '',
+          role: result.role,
           token: result.token,
           isAuthenticated: true,
         });
 
-        const role = result.user.role;
-        if (role === 'superadmin') router.push('/dashboard/platform');
-        else if (role === 'patient') router.push('/dashboard/patient');
-        else if (role === 'doctor') router.push('/dashboard/doctor');
-        else if (role === 'admin') router.push('/dashboard/admin');
-        else if (role === 'lab') router.push('/dashboard/lab');
-        else if (role === 'nurse') router.push('/dashboard/nurse');
+        // The role itself declares where it lands, so a new role needs no code
+        // change here (see lib/roles.ts).
+        router.push(resolveHomePath(role, result.role?.homePath));
       } catch (err: unknown) {
         const detail = (err as { data?: { detail?: string } })?.data?.detail;
         setError(detail ?? 'Invalid email or password');
@@ -99,7 +103,7 @@ export default function LoginPage() {
           <div className="space-y-3">
             <label className="block text-sm font-medium text-slate-700">Login As</label>
             <div className="grid grid-cols-3 gap-2">
-              {(['patient', 'doctor', 'admin', 'lab', 'nurse'] as const).map((type) => (
+              {loginRoleTabs.map((type) => (
                 <button
                   key={type}
                   type="button"

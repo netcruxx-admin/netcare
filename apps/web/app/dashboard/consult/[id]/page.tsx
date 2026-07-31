@@ -6,7 +6,8 @@ import {
   Mic, MicOff, Video as VideoIcon, VideoOff, PhoneOff, MessageSquare,
   FileText, Send, CheckCircle2, Signal, CameraOff, ArrowLeft,
 } from 'lucide-react';
-import { authStorage } from '@/lib/auth';
+import { useDashboardGuard } from '@/hooks/useDashboardGuard';
+import { adminRole, doctorRole } from '@/lib/roles';
 import { dbOperations } from '@/lib/db';
 
 interface ChatMsg { from: 'me' | 'them'; text: string; }
@@ -32,7 +33,7 @@ export default function ConsultRoomPage() {
   const params = useParams();
   const appointmentId = params.id as string;
 
-  const [session, setSession] = useState<ReturnType<typeof authStorage.getSession>>(null);
+  const session = useDashboardGuard();
   const [ready, setReady] = useState(false);
   const [otherName, setOtherName] = useState('Participant');
   const [selfName, setSelfName] = useState('You');
@@ -57,22 +58,21 @@ export default function ConsultRoomPage() {
 
   // Load appointment context.
   useEffect(() => {
-    const s = authStorage.getSession();
-    if (!s) { router.push('/login'); return; }
+    const s = session;
+    if (!s) return;
     const appt = dbOperations.getAppointment(appointmentId);
     if (!appt) { router.push('/login'); return; }
     const doctor = dbOperations.getDoctor(appt.doctorId);
     const patient = dbOperations.getPatient(appt.patientId);
     const doctorUser = doctor ? dbOperations.getUserById(doctor.userId) : undefined;
     const patientUser = patient ? dbOperations.getUserById(patient.userId) : undefined;
-    const isDoctor = s.user.role === 'doctor' || s.user.role === 'admin';
-    setSession(s);
-    setAmDoctor(isDoctor);
+    const isDoctor = s.user.role === doctorRole || s.user.role === adminRole;
+        setAmDoctor(isDoctor);
     setSelfName(s.user.name);
     setOtherName(isDoctor ? (patientUser?.name ?? 'Patient') : (doctorUser ? `Dr. ${doctorUser.name}` : 'Doctor'));
     setScheduled(`${appt.date} · ${appt.time}`);
     setReady(true);
-  }, [appointmentId, router]);
+  }, [appointmentId, router, session]);
 
   // Acquire the camera/mic once, on mount.
   useEffect(() => {

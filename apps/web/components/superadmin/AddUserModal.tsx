@@ -1,15 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { X } from 'lucide-react';
 import { superadminPost } from '@/lib/superadminFetch';
+import { useListAssignableRolesQuery } from '@/store/api';
 import type { HospitalInfo } from '@/store/api';
-
-const ROLES = [
-  { value: 'admin', label: 'Admin' },
-  { value: 'nurse', label: 'Nurse' },
-  { value: 'lab', label: 'Lab Technician' },
-];
 
 interface Props {
   open: boolean;
@@ -21,9 +16,21 @@ interface Props {
 
 export function AddUserModal({ open, onClose, onSuccess, preselectedHospitalId, hospitals }: Props) {
   const [hospitalId, setHospitalId] = useState(preselectedHospitalId);
-  const [form, setForm] = useState({ name: '', email: '', password: 'password123', role: 'admin', phone: '' });
+  const [form, setForm] = useState({ name: '', email: '', password: 'password123', role: '', phone: '' });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  // This modal creates users through /auth/register, so it can only offer roles
+  // that endpoint accepts — the backend reports which those are.
+  const { data: assignableRoles } = useListAssignableRolesQuery();
+  const roles = (assignableRoles ?? []).filter((r) => r.selfRegisterable);
+
+  // Default to the first available role once the catalog arrives.
+  useEffect(() => {
+    if (!form.role && roles.length > 0) {
+      setForm((f) => ({ ...f, role: roles[0].code }));
+    }
+  }, [roles, form.role]);
 
   if (!open) return null;
 
@@ -31,7 +38,7 @@ export function AddUserModal({ open, onClose, onSuccess, preselectedHospitalId, 
     setForm((f) => ({ ...f, [k]: e.target.value }));
 
   const handleClose = () => {
-    setForm({ name: '', email: '', password: 'password123', role: 'admin', phone: '' });
+    setForm({ name: '', email: '', password: 'password123', role: roles[0]?.code ?? '', phone: '' });
     setError(''); setHospitalId(preselectedHospitalId); onClose();
   };
 
@@ -83,7 +90,7 @@ export function AddUserModal({ open, onClose, onSuccess, preselectedHospitalId, 
             <div className="col-span-2 sm:col-span-1">
               <label className="block text-sm font-medium text-slate-700 mb-1">Role <span className="text-red-500">*</span></label>
               <select value={form.role} onChange={set('role')} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-cyan-500">
-                {ROLES.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
+                {roles.map((r) => <option key={r.code} value={r.code}>{r.label}</option>)}
               </select>
             </div>
             <div className="col-span-2 sm:col-span-1">

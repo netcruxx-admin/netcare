@@ -19,6 +19,9 @@ import { getCurrentHospitalId } from '@/lib/tenant';
 export interface ApiAuthResponse {
   user: User;
   patient?: Patient;
+  /** The signer's role record, including the dashboard it lands on. Optional
+   *  because the field is only present on a backend that has the roles table. */
+  role?: RoleOption;
   token: string;
   isAuthenticated: boolean;
 }
@@ -134,7 +137,17 @@ export interface RoleInfo {
   description: string;
   isPlatform: boolean;
   sortOrder: number;
+  /** Dashboard this role lands on after login ('' = no dedicated dashboard). */
+  homePath: string;
   userCount: number;
+}
+/** Slim projection any signed-in user may read — for role pickers. */
+export interface RoleOption {
+  code: string;
+  label: string;
+  homePath: string;
+  /** Whether POST /auth/register accepts this role (a backend-owned boundary). */
+  selfRegisterable: boolean;
 }
 export interface RoleCreateBody {
   code: string;
@@ -142,12 +155,14 @@ export interface RoleCreateBody {
   description?: string;
   isPlatform?: boolean;
   sortOrder?: number;
+  homePath?: string;
 }
 export interface RoleUpdateBody {
   label?: string;
   description?: string;
   isPlatform?: boolean;
   sortOrder?: number;
+  homePath?: string;
 }
 
 export interface DepartmentCreateBody { name: string; description?: string }
@@ -219,6 +234,11 @@ export const api = createApi({
               { type: 'Role', id: 'LIST' },
             ]
           : [{ type: 'Role', id: 'LIST' }],
+    }),
+    // Assignable options for tenant-side role pickers (any signed-in user).
+    listAssignableRoles: build.query<RoleOption[], void>({
+      query: () => '/roles/assignable',
+      providesTags: [{ type: 'Role', id: 'LIST' }],
     }),
     createRole: build.mutation<RoleInfo, RoleCreateBody>({
       query: (body) => ({ url: '/roles', method: 'POST', body }),
@@ -451,6 +471,7 @@ export const {
   useGetSuperadminDepartmentsQuery,
   useGetSuperadminUsersQuery,
   useListRolesQuery,
+  useListAssignableRolesQuery,
   useCreateRoleMutation,
   useUpdateRoleMutation,
   useDeleteRoleMutation,

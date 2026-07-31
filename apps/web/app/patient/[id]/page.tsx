@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { authStorage } from '@/lib/auth';
+import { adminRole, staffRoles } from '@/lib/roles';
 import { dbOperations, Appointment, Patient, User, Vitals, Prescription, TestOrder, TestResult } from '@/lib/db';
 import { DashboardShell } from '@/components/DashboardShell';
 import { ORDER_STATUS_LABEL, ORDER_STATUS_STYLE, isAbnormal } from '@/lib/lab';
@@ -55,7 +56,7 @@ export default function PatientDetailPage() {
 
   useEffect(() => {
     const s = authStorage.getSession();
-    if (!s || (s.user.role !== 'admin' && s.user.role !== 'doctor' && s.user.role !== 'nurse')) {
+    if (!s || !staffRoles.includes(s.user.role)) {
       router.push('/login');
       return;
     }
@@ -126,7 +127,7 @@ export default function PatientDetailPage() {
     });
   }, [patientId, router]);
 
-  const role = (session?.user.role ?? 'admin') as 'admin' | 'doctor' | 'nurse';
+  const role = session?.user.role ?? adminRole;
 
   if (notFound) {
     return (

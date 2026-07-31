@@ -12,8 +12,12 @@ import {
   CommandItem,
 } from '@/components/ui/command';
 import { dbOperations } from '@/lib/db';
+import { adminRole, labRole, staffRoles } from '@/lib/roles';
 
-type Role = 'patient' | 'doctor' | 'admin' | 'lab' | 'nurse' | 'superadmin';
+// A role code from the backend catalog (roles are runtime data, see
+// lib/roles.ts). Only compared against known codes below, so an unrecognised
+// role simply gets the non-staff view.
+type Role = string;
 
 interface NavLink {
   label: string;
@@ -32,7 +36,7 @@ export function CommandPalette({
   navItems: NavLink[];
 }) {
   const router = useRouter();
-  const staff = role === 'admin' || role === 'doctor' || role === 'nurse' || role === 'lab';
+  const staff = staffRoles.includes(role) || role === labRole;
 
   // Build searchable entity lists once per open.
   const { patients, doctors } = useMemo(() => {
@@ -83,10 +87,10 @@ export function CommandPalette({
           </CommandGroup>
         )}
 
-        {role === 'admin' && doctors.length > 0 && (
+        {role === adminRole && doctors.length > 0 && (
           <CommandGroup heading="Doctors">
             {doctors.map((d) => (
-              <CommandItem key={d.id} value={`doctor ${d.name} ${d.sub}`} onSelect={() => go('/dashboard/admin/doctors')}>
+              <CommandItem key={d.id} value={`doctor ${d.name} ${d.sub}`} onSelect={() => go('/dashboard/doctors')}>
                 <Stethoscope className="w-4 h-4 text-slate-400" />
                 <span>Dr. {d.name}</span>
                 {d.sub && <span className="text-xs text-slate-400 ml-auto">{d.sub}</span>}

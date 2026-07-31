@@ -16,9 +16,11 @@ def _build_response(db: Session, user: models.User) -> schemas.AuthResponse:
         patient = (
             db.query(models.Patient).filter(models.Patient.user_id == user.id).first()
         )
+    role = db.get(models.Role, user.role)
     return schemas.AuthResponse(
         user=schemas.UserOut.model_validate(user),
         patient=schemas.PatientOut.model_validate(patient) if patient else None,
+        role=schemas.RoleOptionOut.model_validate(role) if role else None,
         token=create_token(user.id, user.hospital_id, user.role),
         is_authenticated=True,
     )

@@ -3,152 +3,20 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import type { LucideIcon } from 'lucide-react';
-import {
-  Heart,
-  LogOut,
-  Menu,
-  X,
-  LayoutDashboard,
-  CalendarPlus,
-  Clock,
-  FileText,
-  HeartPulse,
-  CreditCard,
-  User,
-  CheckCircle,
-  Building2,
-  Stethoscope,
-  Users,
-  CalendarDays,
-  UserRound,
-  CalendarRange,
-  Pill,
-  FlaskConical,
-  ClipboardList,
-  FileBarChart,
-  Settings,
-  Baby,
-  Search,
-  Video,
-  Globe,
-  ShieldCheck,
-} from 'lucide-react';
+import { Heart, LogOut, Menu, X, Search } from 'lucide-react';
 import { authStorage } from '@/lib/auth';
 import type { HospitalModules } from '@/lib/hospitalConfig';
+import {
+  doctorRole,
+  navRoutesForRole,
+  portalTitleForRole,
+  routeLabel,
+  superadminRole,
+  type PatientContext,
+} from '@/lib/roles';
 import { useGetCurrentHospitalQuery, useListHospitalsQuery } from '@/store/api';
 import { NotificationBell } from '@/components/NotificationBell';
 import { CommandPalette } from '@/components/CommandPalette';
-
-type Role = 'patient' | 'doctor' | 'admin' | 'lab' | 'nurse' | 'superadmin';
-
-// A patient's care context, derived from their own data — used to show only the
-// sidebar items relevant to the care they're actually receiving.
-interface PatientContext {
-  specializations: string[]; // specializations of doctors they have appointments with
-  hasPregnancy: boolean;
-  hasBaby: boolean;
-}
-
-interface NavItem {
-  label: string;
-  href: string;
-  icon: LucideIcon;
-  /** If set, this item only shows when the module is enabled in hospitalConfig. */
-  module?: keyof HospitalModules;
-  /** For doctors: keywords matched (case-insensitive substring) against the
-   *  doctor's specialization. If set, the item only shows for matching
-   *  departments (e.g. "Newborns" → neonatology / paediatrics). Items without
-   *  this tag show for every doctor. */
-  specialties?: string[];
-  /** For patients: shown only when this returns true for the patient's care
-   *  context (e.g. "Pregnancy" only if they see a gynaecologist / have a
-   *  pregnancy record). Items without this show for every patient. */
-  patientVisible?: (ctx: PatientContext) => boolean;
-}
-
-const MENUS: Record<Role, { title: string; items: NavItem[] }> = {
-  superadmin: {
-    title: 'NetCare Platform',
-    items: [
-      { label: 'Overview', href: '/dashboard/platform', icon: LayoutDashboard },
-      { label: 'Hospitals', href: '/dashboard/platform/hospitals', icon: Building2 },
-      { label: 'Patients', href: '/dashboard/platform/patients', icon: UserRound },
-      { label: 'Doctors', href: '/dashboard/platform/doctors', icon: Stethoscope },
-      { label: 'Appointments', href: '/dashboard/platform/appointments', icon: CalendarDays },
-      { label: 'Departments', href: '/dashboard/platform/departments', icon: Globe },
-      { label: 'Users', href: '/dashboard/platform/users', icon: Users },
-      { label: 'Roles', href: '/dashboard/platform/roles', icon: ShieldCheck },
-    ],
-  },
-  patient: {
-    title: 'Patient Portal',
-    items: [
-      { label: 'Dashboard', href: '/dashboard/patient', icon: LayoutDashboard },
-      { label: 'Book Appointment', href: '/dashboard/patient/book', icon: CalendarPlus },
-      { label: 'Pregnancy', href: '/dashboard/patient/pregnancy', icon: Baby, module: 'anc', patientVisible: (c) => c.hasPregnancy || c.specializations.some((s) => /obstetric|gynec|gynaec|maternal/.test(s)) },
-      { label: 'My Baby', href: '/dashboard/patient/baby', icon: Baby, module: 'anc', patientVisible: (c) => c.hasBaby || c.specializations.some((s) => /neonat|pediatric|paediatric|child/.test(s)) },
-      { label: 'Video Consult', href: '/dashboard/patient/video-consult', icon: Video, module: 'telemedicine' },
-      { label: 'Schedule', href: '/dashboard/patient/schedule', icon: CalendarRange },
-      { label: 'Appointment History', href: '/dashboard/patient/appointments', icon: Clock },
-      { label: 'Medical Records', href: '/dashboard/patient/records', icon: FileText, module: 'medicalRecords' },
-      { label: 'Test Reports', href: '/dashboard/patient/reports', icon: FileBarChart, module: 'lab' },
-      { label: 'Medical History', href: '/dashboard/patient/medical-history', icon: HeartPulse, module: 'medicalRecords' },
-      { label: 'Payments', href: '/dashboard/patient/payments', icon: CreditCard, module: 'payments' },
-      { label: 'Profile', href: '/dashboard/patient/profile', icon: User },
-    ],
-  },
-  doctor: {
-    title: 'Doctor Portal',
-    items: [
-      { label: 'Dashboard', href: '/dashboard/doctor', icon: LayoutDashboard },
-      { label: 'Appointments', href: '/dashboard/doctor/appointments', icon: CalendarDays },
-      { label: 'Schedule', href: '/dashboard/doctor/schedule', icon: CalendarRange },
-      { label: 'My Patients', href: '/dashboard/doctor/patients', icon: UserRound },
-      { label: 'Pregnancies', href: '/dashboard/doctor/pregnancies', icon: Baby, module: 'anc', specialties: ['obstetric', 'gynec', 'gynaec', 'maternal'] },
-      { label: 'Newborns', href: '/dashboard/doctor/newborns', icon: Baby, module: 'anc', specialties: ['neonat', 'pediatric', 'paediatric', 'child'] },
-      { label: 'Video Consults', href: '/dashboard/doctor/video-consults', icon: Video, module: 'telemedicine' },
-      { label: 'Lab Orders', href: '/dashboard/doctor/lab-orders', icon: ClipboardList, module: 'lab' },
-      { label: 'Prescriptions', href: '/dashboard/doctor/prescriptions', icon: Pill, module: 'pharmacy' },
-      { label: 'Completed Visits', href: '/dashboard/doctor/completed', icon: CheckCircle },
-      { label: 'Profile', href: '/dashboard/doctor/profile', icon: User },
-    ],
-  },
-  admin: {
-    title: 'Admin Panel',
-    items: [
-      { label: 'Overview', href: '/dashboard/admin', icon: LayoutDashboard },
-      { label: 'Appointments', href: '/dashboard/admin/appointments', icon: CalendarDays },
-      { label: 'Schedule', href: '/dashboard/admin/schedule', icon: CalendarRange },
-      { label: 'Patients', href: '/dashboard/admin/patients', icon: UserRound },
-      { label: 'Departments', href: '/dashboard/admin/departments', icon: Building2 },
-      { label: 'Doctors', href: '/dashboard/admin/doctors', icon: Stethoscope },
-      { label: 'Medicines', href: '/dashboard/admin/medicines', icon: Pill, module: 'pharmacy' },
-      { label: 'Tests', href: '/dashboard/admin/tests', icon: FlaskConical, module: 'lab' },
-      { label: 'Users', href: '/dashboard/admin/users', icon: Users },
-      { label: 'Hospital Setup', href: '/dashboard/admin/setup', icon: Settings },
-    ],
-  },
-  lab: {
-    title: 'Laboratory',
-    items: [
-      { label: 'Dashboard', href: '/dashboard/lab', icon: LayoutDashboard },
-      { label: 'Test Orders', href: '/dashboard/lab/orders', icon: ClipboardList },
-      { label: 'Reports', href: '/dashboard/lab/reports', icon: FileBarChart },
-      { label: 'Test Catalog', href: '/dashboard/lab/catalog', icon: FlaskConical },
-    ],
-  },
-  nurse: {
-    title: 'Nursing Station',
-    items: [
-      { label: 'Dashboard', href: '/dashboard/nurse', icon: LayoutDashboard },
-      { label: 'Appointments', href: '/dashboard/nurse/appointments', icon: CalendarDays },
-      { label: 'Patients', href: '/dashboard/nurse/patients', icon: UserRound },
-      { label: 'Record Vitals', href: '/dashboard/nurse/vitals', icon: HeartPulse, module: 'nursing' },
-      { label: 'Profile', href: '/dashboard/nurse/profile', icon: User },
-    ],
-  },
-};
 
 export function DashboardShell({
   role,
@@ -157,7 +25,8 @@ export function DashboardShell({
   subtitle,
   children,
 }: {
-  role: Role;
+  /** Role code of the signed-in user; drives the sidebar via the route table. */
+  role: string;
   userName: string;
   title: string;
   subtitle?: string;
@@ -173,7 +42,7 @@ export function DashboardShell({
   const patientCtx: PatientContext = { specializations: [], hasPregnancy: false, hasBaby: false };
 
   // Hospital selector for superadmin — preserves ?h= across nav clicks.
-  const { data: allHospitals = [] } = useListHospitalsQuery(undefined, { skip: role !== 'superadmin' });
+  const { data: allHospitals = [] } = useListHospitalsQuery(undefined, { skip: role !== superadminRole });
   const selectedHospitalId = searchParams.get('h') ?? '';
 
   const handleHospitalChange = (id: string) => {
@@ -184,8 +53,8 @@ export function DashboardShell({
   };
 
   // Active tenant branding from the real backend (skipped for superadmin).
-  const { data: hospitalData } = useGetCurrentHospitalQuery(undefined, { skip: role === 'superadmin' });
-  const hospital = role === 'superadmin'
+  const { data: hospitalData } = useGetCurrentHospitalQuery(undefined, { skip: role === superadminRole });
+  const hospital = role === superadminRole
     ? { id: '', name: 'NetCare Platform', theme: { primary: '#0f172a', primaryDark: '#1e293b' }, modules: {} as HospitalModules }
     : {
         id: hospitalData?.id ?? '',
@@ -227,24 +96,20 @@ export function DashboardShell({
     return () => document.removeEventListener('keydown', onKey);
   }, []);
 
-  const menu = MENUS[role];
-
   // Enabled modules come from the real hospital config fetched from the backend.
   const modules = hospital.modules;
 
-  // Show a nav item when (a) its module is enabled, and (b) for doctors, its
-  // specialty tag matches the doctor's department (untagged items always show).
-  const spec = specialization.toLowerCase();
-  const navItems = menu.items.filter((item) => {
-    if (item.module && !modules[item.module]) return false;
-    if (item.specialties && role === 'doctor') {
-      return item.specialties.some((k) => spec.includes(k));
-    }
-    if (item.patientVisible && role === 'patient') {
-      return item.patientVisible(patientCtx);
-    }
-    return true;
-  });
+  // The sidebar is the route table filtered to this role — no menu is defined
+  // here, so adding a screen means adding one route in lib/roles.ts.
+  const navItems = navRoutesForRole(role, {
+    modules,
+    specialization,
+    patientContext: patientCtx,
+  }).map((route) => ({
+    label: routeLabel(route, role),
+    href: route.path,
+    icon: route.icon,
+  }));
 
   const isActive = (href: string) => pathname === href;
 
@@ -268,13 +133,13 @@ export function DashboardShell({
           <p style={brandText} className="font-bold leading-tight">
             {hospital.name}
           </p>
-          <p className="text-xs text-slate-500 truncate">{role === 'doctor' && specialization ? specialization : menu.title}</p>
+          <p className="text-xs text-slate-500 truncate">{role === doctorRole && specialization ? specialization : portalTitleForRole(role)}</p>
         </div>
       </div>
 
       <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-1">
         {/* Hospital filter — superadmin only */}
-        {role === 'superadmin' && allHospitals.length > 0 && (
+        {role === superadminRole && allHospitals.length > 0 && (
           <div className="mb-3 px-1">
             <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-1.5 px-2">
               Filter by Hospital

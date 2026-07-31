@@ -49,9 +49,13 @@ class Role(Base):
 
     A lookup table rather than a free-text column so `users.role` gains
     referential integrity and the UI has one source for display names. This is
-    deliberately NOT tenant-scoped: every hospital uses the same fixed set of
-    roles, which is what lets `schemas.Role` stay a Literal and the frontend
-    keep its role-keyed dashboard routes. Adding a role is a migration.
+    deliberately NOT tenant-scoped: every hospital uses the same catalog, and
+    roles are managed at runtime by a superadmin (see routers/roles.py) rather
+    than by migration.
+
+    Because the catalog is dynamic, `home_path` is what keeps the frontend
+    honest: the role itself declares which dashboard its users land on, so
+    adding a role no longer requires editing a redirect chain in the UI.
     """
 
     __tablename__ = "roles"
@@ -66,6 +70,10 @@ class Role(Base):
     is_platform = Column(Boolean, nullable=False, default=False)
     # Ascending display order for role pickers.
     sort_order = Column(Integer, nullable=False, default=0)
+    # Where users of this role land after login. Note this is NOT derivable from
+    # `code` — superadmin lands on /dashboard/platform. Empty means "no dedicated
+    # dashboard", and the frontend falls back to a generic landing page.
+    home_path = Column(String, nullable=False, default="")
 
 
 class User(Base):

@@ -92,7 +92,7 @@ export default function AppointmentDetailPage() {
         <div className="flex-1 flex items-center justify-center px-6">
           <div className="text-center">
             <p className="text-red-600 text-lg mb-4">{error || 'Appointment not found'}</p>
-            <Link href="/dashboard/patient" className="text-cyan-600 hover:text-cyan-700 flex items-center justify-center gap-2">
+            <Link href="/dashboard" className="text-cyan-600 hover:text-cyan-700 flex items-center justify-center gap-2">
               <ArrowLeft className="w-4 h-4" />
               Back to Dashboard
             </Link>

@@ -8,6 +8,7 @@ import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useFormik } from 'formik';
 import { authStorage } from '@/lib/auth';
+import { resolveHomePath } from '@/lib/roles';
 import type { PatientDetails, DoctorDetails } from '@/lib/auth';
 import type { Department } from '@/lib/db';
 import { useRegisterMutation, useListDepartmentsQuery } from '@/store/api';
@@ -70,18 +71,21 @@ export function useRegistration() {
         user: result.user,
         patient: result.patient,
         hospitalId: result.user.hospitalId ?? '',
+        role: result.role,
         token: result.token,
         isAuthenticated: true,
       });
       setSuccess(true);
 
       setTimeout(() => {
+        // New patients go straight to their profile to finish filling it in;
+        // everyone else lands on whatever dashboard their role declares.
         const role = result.user.role;
-        if (role === 'patient') router.push('/dashboard/patient/profile');
-        else if (role === 'doctor') router.push('/dashboard/doctor');
-        else if (role === 'lab') router.push('/dashboard/lab');
-        else if (role === 'nurse') router.push('/dashboard/nurse');
-        else router.push('/dashboard/admin');
+        router.push(
+          role === 'patient'
+            ? '/dashboard/profile'
+            : resolveHomePath(role, result.role?.homePath),
+        );
       }, 2000);
     } catch (err: unknown) {
       const detail = (err as { data?: { detail?: string } })?.data?.detail;

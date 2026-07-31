@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { X } from 'lucide-react';
 import { superadminPost } from '@/lib/superadminFetch';
+import { patientRole } from '@/lib/roles';
 import type { HospitalInfo } from '@/store/api';
 
 const GENDERS = ['Male', 'Female', 'Other'];
@@ -43,7 +44,7 @@ export function AddPatientModal({ open, onClose, onSuccess, preselectedHospitalI
     try {
       await superadminPost('/auth/register', hospitalId, {
         name: form.name.trim(), email: form.email.trim(),
-        password: form.password, role: 'patient',
+        password: form.password, role: patientRole,
         phone: form.phone.trim() || undefined,
         gender: form.gender || undefined,
         bloodGroup: form.bloodGroup || undefined,

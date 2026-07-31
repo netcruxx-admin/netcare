@@ -3,9 +3,15 @@ from typing import List, Literal, Optional
 from pydantic import BaseModel, ConfigDict
 from pydantic.alias_generators import to_camel
 
-Role = Literal["superadmin", "admin", "doctor", "nurse", "lab", "patient"]
-# Roles a self-service /auth/register call may create (superadmin/admin are
-# provisioned, not self-registered).
+# Any code present in the `roles` table. Not a Literal: the catalog is
+# superadmin-managed at runtime (routers/roles.py), so a closed union here would
+# make every user holding a custom role fail response validation. Referential
+# integrity is enforced by the users.role -> roles.code FK instead.
+Role = str
+# Roles a self-service /auth/register call may create. This one stays closed on
+# purpose — it is a security boundary, not a display concern. Nobody should be
+# able to sign themselves up as admin/superadmin, and a superadmin adding a role
+# to the catalog must not silently make it self-registerable.
 RegisterRole = Literal["patient", "doctor", "nurse", "lab"]
 AppointmentStatus = Literal["scheduled", "completed", "cancelled"]
 AppointmentMode = Literal["in-person", "video"]
@@ -81,9 +87,23 @@ class RoleOut(CamelModel):
     description: str = ""
     is_platform: bool = False
     sort_order: int = 0
+    # Dashboard this role lands on after login ("" = no dedicated dashboard).
+    home_path: str = ""
     # How many users currently hold this role (superadmin needs it to know
     # whether a role is safe to delete).
     user_count: int = 0
+
+
+class RoleOptionOut(CamelModel):
+    """Slim projection for role pickers. Readable by any signed-in user, unlike
+    the full catalog — it carries no user counts or platform-internal detail."""
+
+    code: str
+    label: str
+    home_path: str = ""
+    # Whether /auth/register accepts this role. Derived from RegisterRole, not
+    # stored, so the UI never has to duplicate that security boundary.
+    self_registerable: bool = False
 
 
 class RoleCreate(CamelModel):
@@ -93,6 +113,7 @@ class RoleCreate(CamelModel):
     description: str = ""
     is_platform: bool = False
     sort_order: int = 0
+    home_path: str = ""
 
 
 class RoleUpdate(CamelModel):
@@ -102,6 +123,7 @@ class RoleUpdate(CamelModel):
     description: Optional[str] = None
     is_platform: Optional[bool] = None
     sort_order: Optional[int] = None
+    home_path: Optional[str] = None
 
 
 # ---------- Auth ----------
@@ -682,5 +704,9 @@ class ImmunizationOut(CamelModel):
 class AuthResponse(CamelModel):
     user: UserOut
     patient: Optional[PatientOut] = None
+    # The signer's role record, so the client knows where to send them without
+    # hardcoding a role -> route map. Included here because the login page has no
+    # token yet and so cannot read the role catalog.
+    role: Optional[RoleOptionOut] = None
     token: str
     is_authenticated: bool = True

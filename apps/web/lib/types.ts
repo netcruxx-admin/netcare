@@ -20,7 +20,10 @@ export interface User {
   password: string;
   name: string;
   phone?: string;
-  role: 'patient' | 'doctor' | 'admin' | 'lab' | 'nurse';
+  // Any code in the backend `roles` table. Not a closed union: the catalog is
+  // superadmin-managed at runtime, so custom roles are valid here. Match against
+  // the fetched catalog rather than writing exhaustive switches on this.
+  role: string;
   createdAt: string;
 }
 
@@ -391,6 +394,9 @@ export interface AuthSession {
   patient?: Patient;
   /** Tenant the authenticated user belongs to (mirror of user.hospitalId). */
   hospitalId: string;
+  /** The user's role record from the backend catalog, including the dashboard
+   *  it lands on. Optional so pre-existing stored sessions stay valid. */
+  role?: { code: string; label: string; homePath: string };
   token: string;
   isAuthenticated: boolean;
 }

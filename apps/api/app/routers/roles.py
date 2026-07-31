@@ -7,12 +7,13 @@ role for a new user gets the list from their own user-management endpoints.
 """
 
 import re
+from typing import get_args
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from .. import models, schemas
-from ..auth import require_platform_role
+from ..auth import get_current_user, require_platform_role
 from ..database import get_db
 
 router = APIRouter(prefix="/roles", tags=["roles"])
@@ -23,6 +24,10 @@ router = APIRouter(prefix="/roles", tags=["roles"])
 BUILTIN_CODES = {"superadmin", "admin", "doctor", "nurse", "lab", "patient"}
 
 CODE_PATTERN = re.compile(r"^[a-z][a-z0-9_-]{1,31}$")
+
+# Read off RegisterRole so the two can't drift: whatever /auth/register accepts
+# is exactly what the UI is told is self-registerable.
+REGISTERABLE_CODES = frozenset(get_args(schemas.RegisterRole))
 
 
 def _user_count(db: Session, code: str) -> int:
@@ -55,6 +60,35 @@ def list_roles(
     return [_to_out(db, r) for r in roles]
 
 
+# Declared before /{code} so the literal path wins the route match.
+@router.get("/assignable", response_model=list[schemas.RoleOptionOut])
+def list_assignable_roles(
+    db: Session = Depends(get_db),
+    _: models.User = Depends(get_current_user),
+):
+    """Role options a hospital admin can assign, for pickers in tenant UIs.
+
+    Managing the catalog stays superadmin-only; this is read-only, omits
+    platform roles (no tenant may mint a superadmin) and exposes only what a
+    dropdown needs.
+    """
+    roles = (
+        db.query(models.Role)
+        .filter(models.Role.is_platform.is_(False))
+        .order_by(models.Role.sort_order, models.Role.code)
+        .all()
+    )
+    return [
+        schemas.RoleOptionOut(
+            code=r.code,
+            label=r.label,
+            home_path=r.home_path,
+            self_registerable=r.code in REGISTERABLE_CODES,
+        )
+        for r in roles
+    ]
+
+
 @router.get("/{code}", response_model=schemas.RoleOut)
 def get_role(
     code: str,
@@ -85,6 +119,7 @@ def create_role(
         description=body.description.strip(),
         is_platform=body.is_platform,
         sort_order=body.sort_order,
+        home_path=body.home_path.strip(),
     )
     db.add(role)
     db.commit()
