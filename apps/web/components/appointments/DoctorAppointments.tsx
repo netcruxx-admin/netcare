@@ -6,7 +6,19 @@ import Link from 'next/link';
 import { Formik, Form } from 'formik';
 import * as Yup from 'yup';
 import { Search, CalendarDays, Eye, Activity, Pill, X, CheckCircle2, FlaskConical, CalendarPlus } from 'lucide-react';
-import { dbOperations, Appointment, Doctor, Patient, User, Medicine, LabTest } from '@/lib/db';
+import type { Appointment } from '@/lib/types';
+import { apiError } from '@/lib/apiError';
+import {
+  useCreatePrescriptionMutation,
+  useCreateTestOrderMutation,
+  useCreateVitalsMutation,
+  useGetDoctorByUserQuery,
+  useListAppointmentsQuery,
+  useListLabTestsQuery,
+  useListMedicinesQuery,
+  useListPatientsQuery,
+  useUpdateAppointmentMutation,
+} from '@/store/api';
 import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
 import { FormField } from '@/components/form/FormField';
@@ -46,30 +58,8 @@ const statusStyle = (status: Appointment['status']) =>
     ? 'bg-red-100 text-red-700'
     : 'bg-blue-100 text-blue-700';
 
-interface RawData {
-  appointments: Appointment[];
-  doctor: Doctor | null;
-  patients: Patient[];
-  users: User[];
-  medicines: Medicine[];
-  tests: LabTest[];
-}
-
-function fetchRaw(userId: string): RawData {
-  const doctor = dbOperations.getAllDoctors().find((d) => d.userId === userId) ?? null;
-  return {
-    appointments: doctor ? dbOperations.getAppointmentsByDoctorId(doctor.id) : [],
-    doctor,
-    patients: dbOperations.getAllPatients(),
-    users: dbOperations.getAllUsers(),
-    medicines: dbOperations.getAllMedicines(),
-    tests: dbOperations.getAllLabTests(),
-  };
-}
-
 export function DoctorAppointments({ session }: RoleViewProps) {
   const router = useRouter();
-  const [raw, setRaw] = useState<RawData | null>(null);
 
   const [status, setStatus] = useState<'all' | Appointment['status']>('all');
   const [query, setQuery] = useState('');
@@ -86,6 +76,19 @@ export function DoctorAppointments({ session }: RoleViewProps) {
   const [orderNote, setOrderNote] = useState('');
   const [testQuery, setTestQuery] = useState('');
   const [toast, setToast] = useState('');
+  const [error, setError] = useState('');
+
+  // Appointments come back already narrowed to this doctor by the `own` scope
+  // on appointments.read; the doctor record is still needed to raise orders.
+  const { data: doctor } = useGetDoctorByUserQuery(session.user.id);
+  const { data: appointments = [] } = useListAppointmentsQuery();
+  const { data: patients = [] } = useListPatientsQuery();
+  const { data: medicines = [] } = useListMedicinesQuery();
+  const { data: tests = [] } = useListLabTestsQuery();
+  const [updateAppointment] = useUpdateAppointmentMutation();
+  const [createTestOrder] = useCreateTestOrderMutation();
+  const [createVitals] = useCreateVitalsMutation();
+  const [createPrescription] = useCreatePrescriptionMutation();
 
   const flash = (msg: string) => {
     setToast(msg);
@@ -93,30 +96,18 @@ export function DoctorAppointments({ session }: RoleViewProps) {
   };
 
   useEffect(() => {
-    const s = session;
-    setRaw(fetchRaw(s.user.id));
-  }, [session]);
-
-  const reload = () => {
-    if (session) setRaw(fetchRaw(session.user.id));
-  };
-
-  useEffect(() => {
     setPage(1);
   }, [query, status, date]);
 
   const rows = useMemo(() => {
-    if (!raw) return [];
-    const userById = new Map(raw.users.map((u) => [u.id, u]));
-    const patientById = new Map(raw.patients.map((p) => [p.id, p]));
+    const patientById = new Map(patients.map((p) => [p.id, p]));
     const patientOf = (id: string) => {
       const p = patientById.get(id);
-      const u = p ? userById.get(p.userId) : null;
-      return { name: u?.name ?? '—', phone: p?.phone || '—' };
+      return { name: p?.user?.name ?? '—', phone: p?.phone || '—' };
     };
 
     const q = query.trim().toLowerCase();
-    return raw.appointments
+    return appointments
       .map((a) => {
         const p = patientOf(a.patientId);
         return { appt: a, id: a.id, date: a.date, time: a.time, status: a.status, reason: a.reason || 'Consultation', patient: p.name, phone: p.phone };
@@ -125,22 +116,26 @@ export function DoctorAppointments({ session }: RoleViewProps) {
       .filter((r) => !date || r.date === date)
       .filter((r) => !q || r.patient.toLowerCase().includes(q) || r.phone.toLowerCase().includes(q) || r.reason.toLowerCase().includes(q))
       .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
-  }, [raw, status, date, query]);
+  }, [appointments, patients, status, date, query]);
 
   const totalPages = Math.ceil(rows.length / PAGE_SIZE);
   const pageRows = rows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
-  const medicineOptions = (raw?.medicines ?? []).map((m) => ({
+  const medicineOptions = medicines.map((m) => ({
     value: m.name,
     label: `${m.name}${m.strength ? ` — ${m.strength}` : ''}`,
   }));
 
-  const confirmComplete = () => {
+  const confirmComplete = async () => {
     if (!completing) return;
-    dbOperations.updateAppointment(completing.id, { status: 'completed' });
-    reload();
+    setError('');
+    try {
+      await updateAppointment({ id: completing.id, body: { status: 'completed' } }).unwrap();
+      flash('Appointment marked complete');
+    } catch (err) {
+      setError(apiError(err, 'Could not complete the appointment'));
+    }
     setCompleting(null);
-    flash('Appointment marked complete');
   };
 
   const openOrder = (a: Appointment) => {
@@ -156,32 +151,38 @@ export function DoctorAppointments({ session }: RoleViewProps) {
       next.has(id) ? next.delete(id) : next.add(id);
       return next;
     });
-  const saveOrder = () => {
-    if (!orderingTests || !raw?.doctor || orderSel.size === 0) return;
-    const items = (raw.tests ?? [])
+  const saveOrder = async () => {
+    if (!orderingTests || !doctor || orderSel.size === 0) return;
+    const items = tests
       .filter((t) => orderSel.has(t.id))
       .map((t) => ({ testId: t.id, name: t.name, price: t.price }));
-    const now = new Date().toISOString();
-    dbOperations.createTestOrder({
-      id: `order-${Date.now()}`,
-      patientId: orderingTests.patientId,
-      doctorId: raw.doctor.id,
-      appointmentId: orderingTests.id,
-      items,
-      status: 'ordered',
-      priority: orderPriority,
-      clinicalNote: orderNote.trim(),
-      orderedAt: now,
-      updatedAt: now,
-    });
-    setOrderingTests(null);
-    flash(`Ordered ${items.length} test(s)`);
+    setError('');
+    try {
+      // Status and timestamps are the server's to set; an order always starts
+      // life as "ordered".
+      await createTestOrder({
+        patientId: orderingTests.patientId,
+        doctorId: doctor.id,
+        appointmentId: orderingTests.id,
+        items,
+        priority: orderPriority,
+        clinicalNote: orderNote.trim(),
+      }).unwrap();
+      setOrderingTests(null);
+      flash(`Ordered ${items.length} test(s)`);
+    } catch (err) {
+      setError(apiError(err, 'Could not place the order'));
+    }
   };
-  const orderTotal = (raw?.tests ?? []).filter((t) => orderSel.has(t.id)).reduce((s, t) => s + t.price, 0);
+  const orderTotal = tests.filter((t) => orderSel.has(t.id)).reduce((s, t) => s + t.price, 0);
 
   return (
     <DashboardShell role={session.user.role} userName={session.user.name} title="Appointments" subtitle="Your patient appointments">
       <div className="space-y-6">
+        {error && (
+          <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm text-red-700">{error}</div>
+        )}
+
         {/* Filters */}
         <div className="flex flex-wrap items-center gap-3">
           <div className="relative flex-1 min-w-[200px]">
@@ -325,23 +326,26 @@ export function DoctorAppointments({ session }: RoleViewProps) {
             <Formik
               initialValues={{ temperature: '', bloodPressure: '', heartRate: '', respiratoryRate: '', weight: '', height: '', notes: '' }}
               validationSchema={vitalsSchema}
-              onSubmit={(values) => {
-                dbOperations.createVitals({
-                  id: `v-${Date.now()}`,
-                  appointmentId: addingVitals.id,
-                  patientId: addingVitals.patientId,
-                  doctorId: addingVitals.doctorId,
-                  temperature: Number(values.temperature) || 0,
-                  bloodPressure: values.bloodPressure,
-                  heartRate: Number(values.heartRate) || 0,
-                  respiratoryRate: Number(values.respiratoryRate) || 0,
-                  weight: Number(values.weight) || 0,
-                  height: Number(values.height) || 0,
-                  notes: values.notes,
-                  createdAt: new Date().toISOString(),
-                });
-                setAddingVitals(null);
-                flash('Vitals recorded');
+              onSubmit={async (values) => {
+                setError('');
+                try {
+                  await createVitals({
+                    appointmentId: addingVitals.id,
+                    patientId: addingVitals.patientId,
+                    doctorId: addingVitals.doctorId,
+                    temperature: Number(values.temperature) || 0,
+                    bloodPressure: values.bloodPressure,
+                    heartRate: Number(values.heartRate) || 0,
+                    respiratoryRate: Number(values.respiratoryRate) || 0,
+                    weight: Number(values.weight) || 0,
+                    height: Number(values.height) || 0,
+                    notes: values.notes,
+                  }).unwrap();
+                  setAddingVitals(null);
+                  flash('Vitals recorded');
+                } catch (err) {
+                  setError(apiError(err, 'Could not record the vitals'));
+                }
               }}
             >
               <Form className="grid grid-cols-2 gap-4">
@@ -381,21 +385,24 @@ export function DoctorAppointments({ session }: RoleViewProps) {
             <Formik
               initialValues={{ medicineName: '', dosage: '', frequency: '', duration: '', instructions: '' }}
               validationSchema={rxSchema}
-              onSubmit={(values) => {
-                dbOperations.createPrescription({
-                  id: `rx-${Date.now()}`,
-                  appointmentId: prescribing.id,
-                  patientId: prescribing.patientId,
-                  doctorId: prescribing.doctorId,
-                  medicineName: values.medicineName,
-                  dosage: values.dosage.trim(),
-                  frequency: values.frequency.trim(),
-                  duration: values.duration.trim(),
-                  instructions: values.instructions.trim(),
-                  createdAt: new Date().toISOString(),
-                });
-                setPrescribing(null);
-                flash('Prescription added');
+              onSubmit={async (values) => {
+                setError('');
+                try {
+                  await createPrescription({
+                    appointmentId: prescribing.id,
+                    patientId: prescribing.patientId,
+                    doctorId: prescribing.doctorId,
+                    medicineName: values.medicineName,
+                    dosage: values.dosage.trim(),
+                    frequency: values.frequency.trim(),
+                    duration: values.duration.trim(),
+                    instructions: values.instructions.trim(),
+                  }).unwrap();
+                  setPrescribing(null);
+                  flash('Prescription added');
+                } catch (err) {
+                  setError(apiError(err, 'Could not save the prescription'));
+                }
               }}
             >
               <Form className="grid sm:grid-cols-2 gap-4">
@@ -450,7 +457,7 @@ export function DoctorAppointments({ session }: RoleViewProps) {
             </div>
 
             <div className="flex-1 overflow-y-auto px-6 py-3 space-y-1 min-h-[180px]">
-              {(raw?.tests ?? [])
+              {tests
                 .filter((t) => !testQuery || t.name.toLowerCase().includes(testQuery.toLowerCase()) || t.category.toLowerCase().includes(testQuery.toLowerCase()))
                 .map((t) => {
                   const checked = orderSel.has(t.id);
@@ -535,7 +542,7 @@ export function DoctorAppointments({ session }: RoleViewProps) {
         <FollowUpModal
           appointment={followUp}
           onClose={() => setFollowUp(null)}
-          onCreated={(msg) => { reload(); setFollowUp(null); flash(msg); }}
+          onCreated={(msg) => { setFollowUp(null); flash(msg); }}
         />
       )}
 

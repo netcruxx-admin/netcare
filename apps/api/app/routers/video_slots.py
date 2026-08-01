@@ -73,6 +73,43 @@ def book_video_slot(
         raise HTTPException(status.HTTP_409_CONFLICT, "Slot already booked")
     slot.status = "booked"
     slot.appointment_id = body.appointment_id
+
+    # The consultation fee is invoiced here rather than by the client: a patient
+    # books their own video consult but holds no permission to write payments,
+    # and an invoice they could author themselves would be worth nothing anyway.
+    appointment = (
+        scoped(db, models.Appointment, tenant_id)
+        .filter(models.Appointment.id == body.appointment_id)
+        .first()
+    )
+    if appointment is not None:
+        existing = (
+            scoped(db, models.Payment, tenant_id)
+            .filter(models.Payment.appointment_id == appointment.id)
+            .first()
+        )
+        if existing is None:
+            # The patient comes from the appointment, not the request: the
+            # appointment already knows whose it is, so the invoice cannot be
+            # addressed to someone else.
+            doctor = (
+                scoped(db, models.Doctor, tenant_id)
+                .filter(models.Doctor.id == slot.doctor_id)
+                .first()
+            )
+            db.add(
+                models.Payment(
+                    id=new_id("pay"),
+                    hospital_id=tenant_id,
+                    appointment_id=appointment.id,
+                    patient_id=appointment.patient_id,
+                    amount=doctor.consultation_fee if doctor else 0,
+                    status="pending",
+                    payment_method="Online",
+                    created_at=now_iso(),
+                )
+            )
+
     db.commit()
     db.refresh(slot)
     return slot

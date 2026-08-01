@@ -1,11 +1,17 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Formik, Form } from 'formik';
 import * as Yup from 'yup';
 import { Award, CheckCircle2, HeartPulse, Mail, Phone, Stethoscope } from 'lucide-react';
 import { authStorage } from '@/lib/auth';
-import { dbOperations } from '@/lib/db';
+import { apiError } from '@/lib/apiError';
+import {
+  useGetDoctorByUserQuery,
+  useListDepartmentsQuery,
+  useUpdateDoctorMutation,
+  useUpdateOwnAccountMutation,
+} from '@/store/api';
 import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
 import { FormField } from '@/components/form/FormField';
@@ -20,18 +26,13 @@ import type { AuthSession } from '@/lib/types';
 
 // Fields every staff member edits. Email uniqueness needs the current user's id,
 // so the schema is built per session rather than declared once.
-const baseFields = (userId: string) =>
+const baseFields = () =>
   Yup.object({
     name: Yup.string().trim().required('Name is required').max(100, 'Too long'),
     email: Yup.string()
       .trim()
       .email('Enter a valid email')
-      .required('Email is required')
-      .test('unique-email', 'Email already in use', (value) => {
-        if (!value) return true;
-        const existing = dbOperations.getUserByEmail(value.trim());
-        return !existing || existing.id === userId;
-      }),
+      .required('Email is required'),
     phone: Yup.string()
       .trim()
       .required('Phone is required')
@@ -58,17 +59,13 @@ export function StaffProfile({ session }: RoleViewProps) {
   const isDoctor = session.user.role === doctorRole;
 
   const [currentSession, setCurrentSession] = useState<AuthSession>(session);
-  const [doctor, setDoctor] = useState(() =>
-    isDoctor ? dbOperations.getAllDoctors().find((d) => d.userId === session.user.id) ?? null : null,
-  );
-  const [departments, setDepartments] = useState(() => (isDoctor ? dbOperations.getAllDepartments() : []));
   const [toast, setToast] = useState('');
+  const [error, setError] = useState('');
 
-  useEffect(() => {
-    if (!isDoctor) return;
-    setDoctor(dbOperations.getAllDoctors().find((d) => d.userId === session.user.id) ?? null);
-    setDepartments(dbOperations.getAllDepartments());
-  }, [isDoctor, session.user.id]);
+  const { data: doctor } = useGetDoctorByUserQuery(session.user.id, { skip: !isDoctor });
+  const { data: departments = [] } = useListDepartmentsQuery(undefined, { skip: !isDoctor });
+  const [updateDoctor] = useUpdateDoctorMutation();
+  const [updateOwnAccount] = useUpdateOwnAccountMutation();
 
   const specializationOptions = useMemo(() => {
     const names = departments.map((d) => d.name);
@@ -79,14 +76,14 @@ export function StaffProfile({ session }: RoleViewProps) {
   }, [departments, doctor]);
 
   const schema = useMemo(() => {
-    const base = baseFields(currentSession.user.id);
+    const base = baseFields();
     return isDoctor ? base.concat(doctorFields) : base;
-  }, [isDoctor, currentSession]);
+  }, [isDoctor]);
 
-  const currentUser = dbOperations.getUserById(currentSession.user.id);
+  // Their own account details; the doctor record adds the professional ones.
+  const currentUser = currentSession.user;
 
-  // A doctor's professional details load from the mock store; without them there
-  // is nothing to edit yet.
+  // Wait for the doctor record before offering fields that belong to it.
   if (isDoctor && !doctor) return null;
 
   const heading = isDoctor ? `Dr. ${currentSession.user.name}` : currentSession.user.name;
@@ -144,24 +141,36 @@ export function StaffProfile({ session }: RoleViewProps) {
             }}
             enableReinitialize
             validationSchema={schema}
-            onSubmit={(values) => {
+            onSubmit={async (values, { setSubmitting }) => {
               const name = values.name.trim();
               const email = values.email.trim();
               const phone = values.phone.trim();
+              setError('');
 
-              if (isDoctor && doctor) {
-                dbOperations.updateDoctor(doctor.id, {
-                  name,
-                  email,
-                  phone,
-                  specialization: values.specialization,
-                  qualification: values.qualification.trim(),
-                  experienceYears: Number(values.experienceYears),
-                  consultationFee: Number(values.consultationFee),
-                });
-                setDoctor(dbOperations.getDoctorById(doctor.id) ?? doctor);
-              } else {
-                dbOperations.updateUser(currentSession.user.id, { name, email, phone });
+              try {
+                if (isDoctor && doctor) {
+                  // PUT /doctors/{id} writes both the account fields and the
+                  // professional ones, so a doctor saves this form in one call.
+                  await updateDoctor({
+                    id: doctor.id,
+                    body: {
+                      name,
+                      email,
+                      phone,
+                      specialization: values.specialization,
+                      qualification: values.qualification.trim(),
+                      experienceYears: Number(values.experienceYears),
+                      consultationFee: Number(values.consultationFee),
+                    },
+                  }).unwrap();
+                } else {
+                  // Everyone else edits only their own account.
+                  await updateOwnAccount({ name, email, phone }).unwrap();
+                }
+              } catch (err) {
+                setError(apiError(err, 'Could not save your profile'));
+                setSubmitting(false);
+                return;
               }
 
               // Keep the stored session in sync so the shell/header update immediately.
@@ -173,9 +182,13 @@ export function StaffProfile({ session }: RoleViewProps) {
               }
               setToast('Profile updated');
               setTimeout(() => setToast(''), 2500);
+              setSubmitting(false);
             }}
           >
             <Form className="grid sm:grid-cols-2 gap-4">
+              {error && (
+                <p className="sm:col-span-2 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</p>
+              )}
               <div className="sm:col-span-2">
                 <FormField name="name" label="Full Name" placeholder="e.g. Sarah Smith" required />
               </div>

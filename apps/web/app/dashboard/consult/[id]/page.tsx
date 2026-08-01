@@ -7,8 +7,14 @@ import {
   FileText, Send, CheckCircle2, Signal, CameraOff, ArrowLeft,
 } from 'lucide-react';
 import { useDashboardGuard } from '@/hooks/useDashboardGuard';
+import {
+  useCreateMedicalRecordMutation,
+  useGetAppointmentQuery,
+  useGetDoctorQuery,
+  useGetPatientQuery,
+  useUpdateAppointmentMutation,
+} from '@/store/api';
 import { adminRole, doctorRole } from '@/lib/roles';
-import { dbOperations } from '@/lib/db';
 
 interface ChatMsg { from: 'me' | 'them'; text: string; }
 type Phase = 'lobby' | 'call' | 'ended';
@@ -56,23 +62,36 @@ export default function ConsultRoomPage() {
   const chatEndRef = useRef<HTMLDivElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
 
-  // Load appointment context.
+  // The API 404s an appointment the caller isn't part of, so reaching this page
+  // with data is itself the access check.
+  const { data: appointment, isError } = useGetAppointmentQuery(appointmentId, {
+    skip: !appointmentId || !session,
+  });
+  const { data: doctor } = useGetDoctorQuery(appointment?.doctorId ?? '', { skip: !appointment });
+  const { data: patient } = useGetPatientQuery(appointment?.patientId ?? '', { skip: !appointment });
+  const [createMedicalRecord] = useCreateMedicalRecordMutation();
+  const [updateAppointment] = useUpdateAppointmentMutation();
+
   useEffect(() => {
-    const s = session;
-    if (!s) return;
-    const appt = dbOperations.getAppointment(appointmentId);
-    if (!appt) { router.push('/login'); return; }
-    const doctor = dbOperations.getDoctor(appt.doctorId);
-    const patient = dbOperations.getPatient(appt.patientId);
-    const doctorUser = doctor ? dbOperations.getUserById(doctor.userId) : undefined;
-    const patientUser = patient ? dbOperations.getUserById(patient.userId) : undefined;
-    const isDoctor = s.user.role === doctorRole || s.user.role === adminRole;
-        setAmDoctor(isDoctor);
-    setSelfName(s.user.name);
-    setOtherName(isDoctor ? (patientUser?.name ?? 'Patient') : (doctorUser ? `Dr. ${doctorUser.name}` : 'Doctor'));
-    setScheduled(`${appt.date} · ${appt.time}`);
+    if (isError) router.push('/login');
+  }, [isError, router]);
+
+  // Who is on the call, from the records themselves.
+  useEffect(() => {
+    if (!session || !appointment) return;
+    const isDoctor = session.user.role === doctorRole || session.user.role === adminRole;
+    setAmDoctor(isDoctor);
+    setSelfName(session.user.name);
+    setOtherName(
+      isDoctor
+        ? patient?.user?.name ?? 'Patient'
+        : doctor?.user?.name
+          ? `Dr. ${doctor.user.name}`
+          : 'Doctor',
+    );
+    setScheduled(`${appointment.date} · ${appointment.time}`);
     setReady(true);
-  }, [appointmentId, router, session]);
+  }, [session, appointment, doctor, patient]);
 
   // Acquire the camera/mic once, on mount.
   useEffect(() => {
@@ -116,22 +135,29 @@ export default function ConsultRoomPage() {
     setDraft('');
   };
 
-  const saveNote = () => {
-    if (!note.trim()) return;
-    const appt = dbOperations.getAppointment(appointmentId);
-    if (appt) {
-      dbOperations.createMedicalRecord({
-        id: `med-${Date.now()}`, patientId: appt.patientId, appointmentId, doctorId: appt.doctorId,
-        diagnosis: `[Teleconsult note] ${note.trim()}`, prescription: '', labReports: [], createdAt: new Date().toISOString(),
-      });
+  const saveNote = async () => {
+    if (!note.trim() || !appointment) return;
+    try {
+      await createMedicalRecord({
+        patientId: appointment.patientId,
+        appointmentId,
+        doctorId: appointment.doctorId,
+        diagnosis: `[Teleconsult note] ${note.trim()}`,
+        prescription: '',
+        labReports: [],
+      }).unwrap();
+      setNoteSaved(true);
+      setTimeout(() => setNoteSaved(false), 2000);
+    } catch {
+      // Notes are written by clinicians; a patient's client never shows this.
     }
-    setNoteSaved(true);
-    setTimeout(() => setNoteSaved(false), 2000);
   };
 
   const endCall = (markComplete: boolean) => {
     streamRef.current?.getTracks().forEach((t) => t.stop());
-    if (markComplete && amDoctor) dbOperations.updateAppointment(appointmentId, { status: 'completed' });
+    if (markComplete && amDoctor) {
+      updateAppointment({ id: appointmentId, body: { status: 'completed' } });
+    }
     setPhase('ended');
   };
 

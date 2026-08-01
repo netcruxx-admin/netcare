@@ -5,7 +5,15 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Formik, Form } from 'formik';
 import * as Yup from 'yup';
 import { Search, HeartPulse, X, CheckCircle } from 'lucide-react';
-import { dbOperations, Appointment, Doctor, Patient, User, Vitals } from '@/lib/db';
+import type { Appointment, Doctor, Patient, User, Vitals } from '@/lib/types';
+import { apiError } from '@/lib/apiError';
+import {
+  useCreateVitalsMutation,
+  useListAppointmentsQuery,
+  useListDoctorsQuery,
+  useListPatientsQuery,
+  useListVitalsQuery,
+} from '@/store/api';
 import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
 import { FormField } from '@/components/form/FormField';
@@ -33,14 +41,6 @@ const vitalsSchema = Yup.object({
   bloodPressure: Yup.string().max(15, 'Too long'),
 });
 
-interface RawData {
-  appointments: Appointment[];
-  patients: Patient[];
-  doctors: Doctor[];
-  users: User[];
-  vitals: Vitals[];
-}
-
 interface ApptRow extends Appointment {
   patient: string;
   doctor: string;
@@ -51,25 +51,17 @@ function NurseVitalsInner({ session }: RoleViewProps) {
   const searchParams = useSearchParams();
   const apptParam = searchParams.get('appt');
 
-  const [raw, setRaw] = useState<RawData | null>(null);
   const [query, setQuery] = useState('');
   const [date, setDate] = useState<string>(todayStr);
   const [recording, setRecording] = useState<ApptRow | null>(null);
   const [toast, setToast] = useState('');
 
-  const load = () => {
-    setRaw({
-      appointments: dbOperations.getAllAppointments(),
-      patients: dbOperations.getAllPatients(),
-      doctors: dbOperations.getAllDoctors(),
-      users: dbOperations.getAllUsers(),
-      vitals: dbOperations.getAllVitals(),
-    });
-  };
-
-  useEffect(() => {
-    load();
-  }, [session]);
+  const { data: appointments = [] } = useListAppointmentsQuery();
+  const { data: patients = [] } = useListPatientsQuery();
+  const { data: doctors = [] } = useListDoctorsQuery();
+  const { data: vitals = [] } = useListVitalsQuery();
+  const [createVitals] = useCreateVitalsMutation();
+  const [error, setError] = useState('');
 
   const flash = (msg: string) => {
     setToast(msg);
@@ -77,26 +69,20 @@ function NurseVitalsInner({ session }: RoleViewProps) {
   };
 
   const allRows = useMemo<ApptRow[]>(() => {
-    if (!raw) return [];
-    const userById = new Map(raw.users.map((u) => [u.id, u]));
-    const patientById = new Map(raw.patients.map((p) => [p.id, p]));
-    const doctorById = new Map(raw.doctors.map((d) => [d.id, d]));
-    const withVitals = new Set(raw.vitals.map((v) => v.appointmentId));
+    const patientById = new Map(patients.map((p) => [p.id, p]));
+    const doctorById = new Map(doctors.map((d) => [d.id, d]));
+    const withVitals = new Set(vitals.map((v) => v.appointmentId));
 
-    const patientName = (id: string) => {
-      const p = patientById.get(id);
-      return (p ? userById.get(p.userId)?.name : null) ?? 'Patient';
-    };
+    const patientName = (id: string) => patientById.get(id)?.user?.name ?? 'Patient';
     const doctorName = (id: string) => {
-      const d = doctorById.get(id);
-      const name = d ? userById.get(d.userId)?.name : null;
+      const name = doctorById.get(id)?.user?.name;
       return name ? `Dr. ${name}` : '—';
     };
 
-    return raw.appointments
+    return appointments
       .filter((a) => a.status !== 'cancelled')
       .map((a) => ({ ...a, patient: patientName(a.patientId), doctor: doctorName(a.doctorId), hasVitals: withVitals.has(a.id) }));
-  }, [raw]);
+  }, [appointments, patients, doctors, vitals]);
 
   // Deep-link: open the recording modal for ?appt=<id> once data is loaded.
   useEffect(() => {
@@ -211,23 +197,28 @@ function NurseVitalsInner({ session }: RoleViewProps) {
             <Formik
               initialValues={{ temperature: '', bloodPressure: '', heartRate: '', respiratoryRate: '', weight: '', height: '', notes: '' }}
               validationSchema={vitalsSchema}
-              onSubmit={(values) => {
-                dbOperations.createVitals({
-                  id: `v-${Date.now()}`,
-                  appointmentId: recording.id,
-                  patientId: recording.patientId,
-                  doctorId: recording.doctorId,
-                  temperature: Number(values.temperature) || 0,
-                  bloodPressure: values.bloodPressure,
-                  heartRate: Number(values.heartRate) || 0,
-                  respiratoryRate: Number(values.respiratoryRate) || 0,
-                  weight: Number(values.weight) || 0,
-                  height: Number(values.height) || 0,
-                  notes: values.notes,
-                  createdAt: new Date().toISOString(),
-                });
+              onSubmit={async (values, { setSubmitting }) => {
+                setError('');
+                try {
+                  await createVitals({
+                    appointmentId: recording.id,
+                    patientId: recording.patientId,
+                    doctorId: recording.doctorId,
+                    temperature: Number(values.temperature) || 0,
+                    bloodPressure: values.bloodPressure,
+                    heartRate: Number(values.heartRate) || 0,
+                    respiratoryRate: Number(values.respiratoryRate) || 0,
+                    weight: Number(values.weight) || 0,
+                    height: Number(values.height) || 0,
+                    notes: values.notes,
+                  }).unwrap();
+                } catch (err) {
+                  setError(apiError(err, 'Could not record vitals'));
+                  setSubmitting(false);
+                  return;
+                }
                 setRecording(null);
-                load();
+                setSubmitting(false);
                 flash('Vitals recorded');
               }}
             >

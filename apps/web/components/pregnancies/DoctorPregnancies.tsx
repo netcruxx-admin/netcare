@@ -3,7 +3,16 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Baby, Plus, X, AlertTriangle } from 'lucide-react';
-import { dbOperations, type PregnancyRecord } from '@/lib/db';
+import type { PregnancyRecord } from '@/lib/types';
+import { apiError } from '@/lib/apiError';
+import {
+  useCreateAncVisitMutation,
+  useGetDoctorByUserQuery,
+  useCreatePregnancyMutation,
+  useListAncVisitsQuery,
+  useListPatientsQuery,
+  useListPregnanciesQuery,
+} from '@/store/api';
 import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
 import { eddFromLmp, evaluateRisks, formatGA, gestationalAge, trimester } from '@/lib/anc';
@@ -12,26 +21,20 @@ const today = () => new Date().toISOString().split('T')[0];
 
 export function DoctorPregnancies({ session }: RoleViewProps) {
   const router = useRouter();
-  const [doctorId, setDoctorId] = useState('');
-  const [records, setRecords] = useState<PregnancyRecord[]>([]);
   const [showNew, setShowNew] = useState(false);
   const [visitFor, setVisitFor] = useState<PregnancyRecord | null>(null);
 
-  const refresh = () => setRecords([...dbOperations.getAllPregnancies()]);
+  const { data: records = [] } = useListPregnanciesQuery();
+  const { data: patients = [] } = useListPatientsQuery();
+  // Fetched once for the whole list rather than per card.
+  const { data: allVisits = [] } = useListAncVisitsQuery();
+  const { data: doctor } = useGetDoctorByUserQuery(session.user.id);
+  const doctorId = doctor?.id ?? '';
 
-  useEffect(() => {
-    const s = session;
-    setDoctorId(dbOperations.getDoctorByUserId(s.user.id)?.id ?? '');
-    refresh();
-  }, [session]);
-
-  // Patient id -> display name, for labelling records.
-  const patientName = useMemo(() => {
-    const users = new Map(dbOperations.getAllUsers().map((u) => [u.id, u.name]));
-    const map = new Map<string, string>();
-    dbOperations.getAllPatients().forEach((p) => map.set(p.id, users.get(p.userId) ?? p.id));
-    return map;
-  }, [records]);
+  const patientName = useMemo(
+    () => new Map(patients.map((p) => [p.id, p.user?.name ?? p.id])),
+    [patients],
+  );
 
   return (
     <DashboardShell
@@ -59,7 +62,7 @@ export function DoctorPregnancies({ session }: RoleViewProps) {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {records.map((r) => {
               const ga = gestationalAge(r.lmp);
-              const visits = dbOperations.getANCVisitsByPregnancyId(r.id);
+              const visits = allVisits.filter((v) => v.pregnancyId === r.id);
               const risks = evaluateRisks(r, visits[visits.length - 1]);
               return (
                 <div key={r.id} className="rounded-xl border border-slate-200 bg-white p-4">
@@ -100,10 +103,7 @@ export function DoctorPregnancies({ session }: RoleViewProps) {
       {showNew && (
         <NewPregnancyModal
           onClose={() => setShowNew(false)}
-          onSaved={() => {
-            setShowNew(false);
-            refresh();
-          }}
+          onSaved={() => setShowNew(false)}
         />
       )}
 
@@ -112,10 +112,7 @@ export function DoctorPregnancies({ session }: RoleViewProps) {
           record={visitFor}
           doctorId={doctorId}
           onClose={() => setVisitFor(null)}
-          onSaved={() => {
-            setVisitFor(null);
-            refresh();
-          }}
+          onSaved={() => setVisitFor(null)}
         />
       )}
     </DashboardShell>
@@ -124,14 +121,17 @@ export function DoctorPregnancies({ session }: RoleViewProps) {
 
 // --- New pregnancy record modal ---------------------------------------------
 function NewPregnancyModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
-  const patients = useMemo(() => {
-    const users = new Map(dbOperations.getAllUsers().map((u) => [u.id, u.name]));
-    return dbOperations.getAllPatients().map((p) => ({
-      id: p.id,
-      name: users.get(p.userId) ?? p.id,
-      bloodGroup: p.bloodGroup,
-    }));
-  }, []);
+  const { data: patientRecords = [] } = useListPatientsQuery();
+  const [createPregnancy] = useCreatePregnancyMutation();
+  const patients = useMemo(
+    () =>
+      patientRecords.map((p) => ({
+        id: p.id,
+        name: p.user?.name ?? p.id,
+        bloodGroup: p.bloodGroup,
+      })),
+    [patientRecords],
+  );
 
   const [patientId, setPatientId] = useState('');
   const [lmp, setLmp] = useState('');
@@ -144,25 +144,28 @@ function NewPregnancyModal({ onClose, onSaved }: { onClose: () => void; onSaved:
   const [notes, setNotes] = useState('');
   const [error, setError] = useState('');
 
-  const save = () => {
+  const save = async () => {
     if (!patientId) return setError('Select a patient');
     if (!lmp) return setError('Last menstrual period (LMP) is required');
-    dbOperations.createPregnancyRecord({
-      id: `preg-${Date.now()}`,
-      patientId,
-      lmp,
-      edd: eddFromLmp(lmp),
-      gravida,
-      para,
-      height,
-      prePregnancyWeight: weight,
-      bloodGroup,
-      riskFactors: riskFactors.split(',').map((s) => s.trim()).filter(Boolean),
-      status: 'active',
-      notes,
-      createdAt: new Date().toISOString(),
-    });
-    onSaved();
+    setError('');
+    try {
+      await createPregnancy({
+        patientId,
+        lmp,
+        edd: eddFromLmp(lmp),
+        gravida,
+        para,
+        height,
+        prePregnancyWeight: weight,
+        bloodGroup,
+        riskFactors: riskFactors.split(',').map((s) => s.trim()).filter(Boolean),
+        status: 'active',
+        notes,
+      }).unwrap();
+      onSaved();
+    } catch (err) {
+      setError(apiError(err, 'Could not save the pregnancy record'));
+    }
   };
 
   return (
@@ -230,26 +233,32 @@ function NewVisitModal({
   const [fhr, setFhr] = useState(0);
   const [notes, setNotes] = useState('');
 
+  const [error, setError] = useState('');
+  const [createAncVisit] = useCreateAncVisitMutation();
+
   const weeks = gestationalAge(record.lmp, new Date(date + 'T00:00:00')).weeks;
 
-  const save = () => {
-    dbOperations.createANCVisit({
-      id: `anc-${Date.now()}`,
-      pregnancyId: record.id,
-      patientId: record.patientId,
-      doctorId,
-      date,
-      weeks,
-      weight,
-      systolic,
-      diastolic,
-      fundalHeight,
-      hemoglobin,
-      fetalHeartRate: fhr,
-      notes,
-      createdAt: new Date().toISOString(),
-    });
-    onSaved();
+  const save = async () => {
+    setError('');
+    try {
+      await createAncVisit({
+        pregnancyId: record.id,
+        patientId: record.patientId,
+        doctorId,
+        date,
+        weeks,
+        weight,
+        systolic,
+        diastolic,
+        fundalHeight,
+        hemoglobin,
+        fetalHeartRate: fhr,
+        notes,
+      }).unwrap();
+      onSaved();
+    } catch (err) {
+      setError(apiError(err, 'Could not save the visit'));
+    }
   };
 
   return (

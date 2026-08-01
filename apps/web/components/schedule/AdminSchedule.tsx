@@ -4,7 +4,15 @@ import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ChevronLeft, ChevronRight, RefreshCw, Ban, X } from 'lucide-react';
-import { dbOperations, ScheduleBlock } from '@/lib/db';
+import type { ScheduleBlock } from '@/lib/types';
+import { apiError } from '@/lib/apiError';
+import {
+  useDeleteScheduleBlockMutation,
+  useListAppointmentsQuery,
+  useListDoctorsQuery,
+  useListPatientsQuery,
+  useListScheduleBlocksQuery,
+} from '@/store/api';
 import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
 import { BlockModal } from '@/components/BlockModal';
@@ -60,25 +68,28 @@ const BOOKABLE = new Set([
 const BREAK = new Set(['12:00 PM', '12:30 PM', '01:00 PM', '01:30 PM']);
 
 export function AdminSchedule({ session }: RoleViewProps) {
-  const router = useRouter();
   const [date, setDate] = useState(toDateStr(new Date()));
-  const [refreshKey, setRefreshKey] = useState(0);
   const [blockOpen, setBlockOpen] = useState(false);
+  const [error, setError] = useState('');
+
+  const { data: allDoctors = [] } = useListDoctorsQuery();
+  const { data: allPatients = [] } = useListPatientsQuery();
+  const { data: allAppointments = [], refetch: refetchAppointments } = useListAppointmentsQuery();
+  const { data: allBlocks = [], refetch: refetchBlocks } = useListScheduleBlocksQuery();
+  const [deleteScheduleBlock] = useDeleteScheduleBlockMutation();
 
   const { doctors, rowMins, cellMap, blocksByDoctor } = useMemo(() => {
-    const allDoctors = dbOperations.getAllDoctors();
-    const userById = new Map(dbOperations.getAllUsers().map((u) => [u.id, u]));
-    const patientById = new Map(dbOperations.getAllPatients().map((p) => [p.id, p]));
+    const patientById = new Map(allPatients.map((p) => [p.id, p]));
 
     const doctors = allDoctors.map((d) => ({
       id: d.id,
-      name: userById.get(d.userId) ? `Dr. ${userById.get(d.userId)!.name}` : 'Doctor',
+      name: d.user?.name ? `Dr. ${d.user.name}` : 'Doctor',
       specialization: d.specialization,
     }));
 
-    const dayAppts = dbOperations
-      .getAllAppointments()
-      .filter((a) => a.date === date && a.status !== 'cancelled');
+    const dayAppts = allAppointments.filter(
+      (a) => a.date === date && a.status !== 'cancelled',
+    );
 
     // Rows = base grid ∪ any appointment times that fall off-grid
     const mins = new Set(GRID_MINS);
@@ -87,14 +98,12 @@ export function AdminSchedule({ session }: RoleViewProps) {
       const min = timeToMin(a.time);
       if (min === null) return;
       mins.add(min);
-      const patient = patientById.get(a.patientId)
-        ? userById.get(patientById.get(a.patientId)!.userId)?.name ?? 'Patient'
-        : 'Patient';
+      const patient = patientById.get(a.patientId)?.user?.name ?? 'Patient';
       cellMap.set(`${a.doctorId}|${min}`, { patient, reason: a.reason || 'Consultation' });
     });
 
     // Schedule blocks (break / OT / unavailable) for the day, grouped by doctor.
-    const dayBlocks = dbOperations.getAllScheduleBlocks().filter((b) => b.date === date);
+    const dayBlocks = allBlocks.filter((b) => b.date === date);
     const blocksByDoctor = new Map<string, ScheduleBlock[]>();
     dayBlocks.forEach((b) => {
       const list = blocksByDoctor.get(b.doctorId) ?? [];
@@ -103,18 +112,20 @@ export function AdminSchedule({ session }: RoleViewProps) {
     });
 
     return { doctors, rowMins: [...mins].sort((x, y) => x - y), cellMap, blocksByDoctor };
-    // refreshKey forces a re-read after Refresh
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [date, refreshKey]);
+  }, [date, allDoctors, allPatients, allAppointments, allBlocks]);
 
 
   const shiftDay = (delta: number) =>
     setDate(toDateStr(new Date(new Date(`${date}T00:00:00`).getTime() + delta * 86400000)));
 
   const doctorOptions = doctors.map((d) => ({ value: d.id, label: `${d.name} — ${d.specialization}` }));
-  const removeBlock = (id: string) => {
-    dbOperations.deleteScheduleBlock(id);
-    setRefreshKey((k) => k + 1);
+  const removeBlock = async (id: string) => {
+    setError('');
+    try {
+      await deleteScheduleBlock(id).unwrap();
+    } catch (err) {
+      setError(apiError(err, 'Could not remove the block'));
+    }
   };
 
   return (
@@ -154,7 +165,10 @@ export function AdminSchedule({ session }: RoleViewProps) {
               <Ban className="w-4 h-4" /> Add Block
             </button>
             <button
-              onClick={() => setRefreshKey((k) => k + 1)}
+              onClick={() => {
+                refetchAppointments();
+                refetchBlocks();
+              }}
               className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-cyan-500 to-teal-600 text-white rounded-lg text-sm font-semibold hover:shadow-lg transition"
             >
               <RefreshCw className="w-4 h-4" /> Refresh
@@ -262,7 +276,7 @@ export function AdminSchedule({ session }: RoleViewProps) {
           doctorOptions={doctorOptions}
           defaultDate={date}
           onClose={() => setBlockOpen(false)}
-          onCreated={() => { setBlockOpen(false); setRefreshKey((k) => k + 1); }}
+          onCreated={() => { setBlockOpen(false); }}
         />
       )}
     </DashboardShell>

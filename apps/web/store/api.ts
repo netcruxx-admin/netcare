@@ -93,6 +93,11 @@ export interface AppointmentUpdateBody {
   mode?: 'in-person' | 'video';
   reason?: string;
   notes?: string;
+  // Reassignment; rejected for a caller scoped to their own appointments.
+  doctorId?: string;
+  departmentId?: string;
+  // `rescheduled` is intentionally not here — the server raises it when the
+  // date or time moves.
 }
 export interface PatientUpdateBody {
   dateOfBirth?: string;
@@ -468,6 +473,15 @@ export const api = createApi({
       providesTags: (result) =>
         result ? [{ type: 'Doctor', id: result.id }] : [],
     }),
+    // Slot availability without the underlying appointments — safe for a
+    // patient, who may not read other people's bookings.
+    getDoctorAvailability: build.query<
+      { doctorId: string; date: string; taken: string[]; blocks: ScheduleBlock[] },
+      { doctorId: string; date: string }
+    >({
+      query: ({ doctorId, date }) => ({ url: `/doctors/${doctorId}/availability`, params: { date } }),
+      providesTags: [{ type: 'Appointment', id: 'LIST' }, { type: 'ScheduleBlock', id: 'LIST' }],
+    }),
     getDoctorAppointments: build.query<Appointment[], string>({
       query: (doctorId) => `/doctors/${doctorId}/appointments`,
       providesTags: [{ type: 'Appointment', id: 'LIST' }],
@@ -548,6 +562,11 @@ export const api = createApi({
       query: (body) => ({ url: '/users', method: 'POST', body }),
       invalidatesTags: [{ type: 'User', id: 'LIST' }],
     }),
+    // Self-service: name/email/phone only, no role or password.
+    updateOwnAccount: build.mutation<User, { name?: string; email?: string; phone?: string }>({
+      query: (body) => ({ url: '/users/me', method: 'PUT', body }),
+      invalidatesTags: [{ type: 'User', id: 'LIST' }],
+    }),
     updateUser: build.mutation<User, { id: string; body: UserUpdateBody }>({
       query: ({ id, body }) => ({ url: `/users/${id}`, method: 'PUT', body }),
       invalidatesTags: [{ type: 'User', id: 'LIST' }],
@@ -622,6 +641,12 @@ export const api = createApi({
       query: ({ id, body }) => ({ url: `/test-orders/${id}`, method: 'PUT', body }),
       invalidatesTags: [{ type: 'TestOrder', id: 'LIST' }],
     }),
+    // The ordering clinician's sign-off — a narrower act than the lab's own
+    // processing, and a different permission.
+    reviewTestOrder: build.mutation<TestOrder, string>({
+      query: (id) => ({ url: `/test-orders/${id}/review`, method: 'PUT' }),
+      invalidatesTags: [{ type: 'TestOrder', id: 'LIST' }],
+    }),
     deleteTestOrder: build.mutation<void, string>({
       query: (id) => ({ url: `/test-orders/${id}`, method: 'DELETE' }),
       invalidatesTags: [{ type: 'TestOrder', id: 'LIST' }],
@@ -658,9 +683,10 @@ export const api = createApi({
       query: (body) => ({ url: '/video-slots', method: 'POST', body }),
       invalidatesTags: [{ type: 'VideoSlot', id: 'LIST' }],
     }),
-    bookVideoSlot: build.mutation<VideoSlot, { id: string; body: { patientId: string; appointmentId?: string } }>({
+    bookVideoSlot: build.mutation<VideoSlot, { id: string; body: { appointmentId: string } }>({
       query: ({ id, body }) => ({ url: `/video-slots/${id}/book`, method: 'POST', body }),
-      invalidatesTags: [{ type: 'VideoSlot', id: 'LIST' }],
+      // Booking raises the invoice server-side, so payments refresh too.
+      invalidatesTags: [{ type: 'VideoSlot', id: 'LIST' }, { type: 'Payment', id: 'LIST' }],
     }),
     deleteVideoSlot: build.mutation<void, string>({
       query: (id) => ({ url: `/video-slots/${id}`, method: 'DELETE' }),
@@ -775,6 +801,7 @@ export const {
   useGetDoctorQuery,
   useGetDoctorByUserQuery,
   useGetDoctorAppointmentsQuery,
+  useGetDoctorAvailabilityQuery,
   useListDepartmentsQuery,
   useCreateDepartmentMutation,
   useUpdateDepartmentMutation,
@@ -789,6 +816,7 @@ export const {
   useCreateVitalsMutation,
   useListUsersQuery,
   useCreateUserMutation,
+  useUpdateOwnAccountMutation,
   useUpdateUserMutation,
   useDeleteUserMutation,
   useUpdateDoctorMutation,
@@ -806,6 +834,7 @@ export const {
   useCreateTestOrderMutation,
   useUpdateTestOrderMutation,
   useDeleteTestOrderMutation,
+  useReviewTestOrderMutation,
   useListTestResultsQuery,
   useUpsertTestResultMutation,
   useListScheduleBlocksQuery,

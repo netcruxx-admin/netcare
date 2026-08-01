@@ -1,4 +1,4 @@
-import type { TestOrderStatus } from '@/lib/db';
+import type { TestOrderStatus } from '@/lib/types';
 import type { ResultFlag } from '@/lib/types';
 
 // Re-export the lab flag type (definition lives in ./types).

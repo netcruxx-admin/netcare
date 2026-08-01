@@ -204,6 +204,15 @@ class UserUpdate(CamelModel):
     password: Optional[str] = None
 
 
+class OwnAccountUpdate(CamelModel):
+    """What a user may change about themselves. Deliberately excludes role and
+    password — self-service must not be a path to changing your own access."""
+
+    name: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+
+
 class LoginRequest(CamelModel):
     email: str
     password: str
@@ -295,6 +304,17 @@ class DoctorUpdate(CamelModel):
     verification_status: Optional[str] = None
 
 
+class DoctorAvailabilityOut(CamelModel):
+    """What a booker needs to pick a slot, and nothing more: the times already
+    taken and the doctor's blocks. Deliberately carries no appointment detail,
+    so it is safe for a patient who cannot read other people's bookings."""
+
+    doctor_id: str
+    date: str
+    taken: List[str] = []
+    blocks: List["ScheduleBlockOut"] = []
+
+
 # ---------- Department ----------
 class DepartmentOut(CamelModel):
     id: str
@@ -334,6 +354,11 @@ class AppointmentUpdate(CamelModel):
     mode: Optional[AppointmentMode] = None
     reason: Optional[str] = None
     notes: Optional[str] = None
+    # Reassignment. Accepted only from a caller who manages every appointment —
+    # see update_appointment. `rescheduled` is deliberately absent: the server
+    # decides that from whether the date or time actually moved.
+    doctor_id: Optional[str] = None
+    department_id: Optional[str] = None
 
 
 class AppointmentOut(CamelModel):
@@ -349,6 +374,7 @@ class AppointmentOut(CamelModel):
     reason: str = ""
     notes: str = ""
     follow_up_of: Optional[str] = None
+    rescheduled: bool = False
     created_at: str
 
 

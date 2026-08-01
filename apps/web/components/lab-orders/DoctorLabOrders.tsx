@@ -1,69 +1,56 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { Search, ClipboardList, AlertTriangle } from 'lucide-react';
-import { dbOperations, TestOrder, TestResult, Patient, User } from '@/lib/db';
+import type { TestOrder, TestResult, Patient, User } from '@/lib/types';
+import { apiError } from '@/lib/apiError';
+import {
+  useListPatientsQuery,
+  useListTestOrdersQuery,
+  useListTestResultsQuery,
+  useReviewTestOrderMutation,
+} from '@/store/api';
 import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
 import { ExportButton } from '@/components/ExportButton';
 import { ORDER_STATUS_LABEL, ORDER_STATUS_STYLE, isAbnormal } from '@/lib/lab';
 
-interface RawData {
-  orders: TestOrder[];
-  results: TestResult[];
-  patients: Patient[];
-  users: User[];
-}
-
 export function DoctorLabOrders({ session }: RoleViewProps) {
-  const router = useRouter();
-  const [raw, setRaw] = useState<RawData | null>(null);
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [toast, setToast] = useState('');
+  const [error, setError] = useState('');
 
-  const load = (userId: string) => {
-    const doctor = dbOperations.getAllDoctors().find((d) => d.userId === userId) ?? null;
-    setRaw({
-      orders: doctor ? dbOperations.getTestOrdersByDoctorId(doctor.id) : [],
-      results: dbOperations.getAllTestResults(),
-      patients: dbOperations.getAllPatients(),
-      users: dbOperations.getAllUsers(),
-    });
-  };
+  // Orders and results arrive already narrowed to this doctor's own work.
+  const { data: orders = [] } = useListTestOrdersQuery();
+  const { data: results = [] } = useListTestResultsQuery();
+  const { data: patients = [] } = useListPatientsQuery();
+  const [reviewTestOrder] = useReviewTestOrderMutation();
 
-  useEffect(() => {
-    const s = session;
-    load(s.user.id);
-  }, [session]);
-
-  const markReviewed = (id: string) => {
-    dbOperations.updateTestOrder(id, { status: 'reviewed' });
-    if (session) load(session.user.id);
-    setToast('Report reviewed');
-    setTimeout(() => setToast(''), 2500);
+  const markReviewed = async (id: string) => {
+    setError('');
+    try {
+      await reviewTestOrder(id).unwrap();
+      setToast('Report reviewed');
+      setTimeout(() => setToast(''), 2500);
+    } catch (err) {
+      setError(apiError(err, 'Could not mark the report reviewed'));
+    }
   };
 
   const rows = useMemo(() => {
-    if (!raw) return [];
-    const userById = new Map(raw.users.map((u) => [u.id, u]));
-    const patientById = new Map(raw.patients.map((p) => [p.id, p]));
-    const patientName = (id: string) => {
-      const p = patientById.get(id);
-      const u = p ? userById.get(p.userId) : null;
-      return u?.name ?? 'Patient';
-    };
+    const patientById = new Map(patients.map((p) => [p.id, p]));
+    const patientName = (id: string) => patientById.get(id)?.user?.name ?? 'Patient';
     const resultsByOrder = new Map<string, TestResult[]>();
-    raw.results.forEach((r) => {
+    results.forEach((r) => {
       const list = resultsByOrder.get(r.orderId) ?? [];
       list.push(r);
       resultsByOrder.set(r.orderId, list);
     });
 
     const q = query.trim().toLowerCase();
-    return raw.orders
+    return orders
       .map((o) => {
         const res = resultsByOrder.get(o.id) ?? [];
         const abnormal = res.some((r) => r.parameters.some((p) => isAbnormal(p.flag)));
@@ -78,7 +65,7 @@ export function DoctorLabOrders({ session }: RoleViewProps) {
       .filter((r) => statusFilter === 'all' || r.order.status === statusFilter)
       .filter((r) => !q || r.patient.toLowerCase().includes(q) || r.tests.toLowerCase().includes(q))
       .sort((a, b) => (a.order.orderedAt < b.order.orderedAt ? 1 : -1));
-  }, [raw, query, statusFilter]);
+  }, [orders, results, patients, query, statusFilter]);
 
   return (
     <DashboardShell role={session.user.role} userName={session.user.name} title="Lab Orders" subtitle="Tests you have ordered and their reports">

@@ -42,6 +42,37 @@ def list_users(
     return query.all()
 
 
+@router.put("/me", response_model=schemas.UserOut)
+def update_own_account(
+    body: schemas.OwnAccountUpdate,
+    db: Session = Depends(get_db),
+    user: models.User = Depends(get_current_user),
+    _: str = Depends(require_permission("profile.manage")),
+    tenant_id: str = Depends(get_tenant_id),
+):
+    """Edit your own name, email and phone.
+
+    Separate from PUT /users/{id} because that one is staff administration and
+    requires `users.manage`; everyone needs to be able to correct their own
+    contact details. Role and password are deliberately not editable here — a
+    self-service endpoint must never be a route to changing your own access.
+    """
+    if body.email and body.email != user.email:
+        clash = (
+            scoped(db, models.User, tenant_id)
+            .filter(models.User.email == body.email, models.User.id != user.id)
+            .first()
+        )
+        if clash:
+            raise HTTPException(status.HTTP_409_CONFLICT, "Email already registered")
+
+    for field, value in body.model_dump(exclude_unset=True).items():
+        setattr(user, field, value)
+    db.commit()
+    db.refresh(user)
+    return schemas.UserOut.model_validate(user)
+
+
 @router.post("", response_model=schemas.UserOut, status_code=status.HTTP_201_CREATED)
 def create_user(
     body: schemas.UserCreate,

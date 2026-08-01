@@ -1,9 +1,20 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Baby as BabyIcon, Plus, X, Syringe, LineChart as LineChartIcon, CheckCircle2, AlertTriangle } from 'lucide-react';
-import { dbOperations, type Baby, type Immunization } from '@/lib/db';
+import type { Baby, Immunization } from '@/lib/types';
+import { apiError } from '@/lib/apiError';
+import {
+  useAddGrowthMutation,
+  useCreateBabyMutation,
+  useCreateImmunizationMutation,
+  useListBabiesQuery,
+  useListGrowthQuery,
+  useListImmunizationsQuery,
+  useListPatientsQuery,
+  useMarkImmunizationGivenMutation,
+} from '@/store/api';
 import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
 import { ageDisplay, scheduleForDob, immStatus } from '@/lib/baby';
@@ -12,24 +23,18 @@ const today = () => new Date().toISOString().split('T')[0];
 const inputCls = 'w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/30 focus:border-cyan-500';
 
 export function DoctorNewborns({ session }: RoleViewProps) {
-  const router = useRouter();
-  const [babies, setBabies] = useState<Baby[]>([]);
   const [showRegister, setShowRegister] = useState(false);
   const [growthFor, setGrowthFor] = useState<Baby | null>(null);
   const [immFor, setImmFor] = useState<Baby | null>(null);
 
-  const refresh = () => setBabies([...dbOperations.getAllBabies()]);
+  const { data: babies = [] } = useListBabiesQuery();
+  const { data: patients = [] } = useListPatientsQuery();
+  // Fetched once for the whole list rather than per baby card.
 
-  useEffect(() => {
-    refresh();
-  }, [session]);
-
-  const motherName = useMemo(() => {
-    const users = new Map(dbOperations.getAllUsers().map((u) => [u.id, u.name]));
-    const map = new Map<string, string>();
-    dbOperations.getAllPatients().forEach((p) => map.set(p.id, users.get(p.userId) ?? p.id));
-    return map;
-  }, [babies]);
+  const motherName = useMemo(
+    () => new Map(patients.map((p) => [p.id, p.user?.name ?? p.id])),
+    [patients],
+  );
 
   return (
     <DashboardShell role={session.user.role} userName={session.user.name} title="Newborns" subtitle="Growth tracking & immunisations">
@@ -47,48 +52,76 @@ export function DoctorNewborns({ session }: RoleViewProps) {
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {babies.map((b) => {
-              const imms = dbOperations.getImmunizationsByBabyId(b.id);
-              const overdue = imms.filter((i) => immStatus(i) === 'overdue').length;
-              return (
-                <div key={b.id} className="rounded-xl border border-slate-200 bg-white p-4">
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <p className="font-semibold text-slate-900">{b.name || 'Baby'}</p>
-                      <p className="text-xs text-slate-500 mt-0.5">
-                        {ageDisplay(b.dateOfBirth)} · {b.sex === 'male' ? 'Boy' : 'Girl'} · Mother: {motherName.get(b.motherPatientId) ?? '—'}
-                      </p>
-                    </div>
-                    {overdue > 0 && (
-                      <span className="inline-flex items-center gap-1 text-xs text-amber-700"><AlertTriangle className="w-3.5 h-3.5" /> {overdue} overdue</span>
-                    )}
-                  </div>
-                  <div className="mt-3 flex gap-2">
-                    <button onClick={() => setGrowthFor(b)} className="flex-1 inline-flex items-center justify-center gap-1.5 text-sm font-medium text-cyan-700 border border-cyan-200 rounded-lg py-2 hover:bg-cyan-50">
-                      <LineChartIcon className="w-4 h-4" /> Growth
-                    </button>
-                    <button onClick={() => setImmFor(b)} className="flex-1 inline-flex items-center justify-center gap-1.5 text-sm font-medium text-cyan-700 border border-cyan-200 rounded-lg py-2 hover:bg-cyan-50">
-                      <Syringe className="w-4 h-4" /> Immunisations
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
+            {babies.map((b) => (
+              <BabyCard
+                key={b.id}
+                baby={b}
+                motherName={motherName.get(b.motherPatientId) ?? '—'}
+                onGrowth={() => setGrowthFor(b)}
+                onImmunisations={() => setImmFor(b)}
+              />
+            ))}
           </div>
         )}
       </div>
 
-      {showRegister && <RegisterBabyModal onClose={() => setShowRegister(false)} onSaved={() => { setShowRegister(false); refresh(); }} />}
+      {showRegister && <RegisterBabyModal onClose={() => setShowRegister(false)} onSaved={() => setShowRegister(false)} />}
       {growthFor && <GrowthModal baby={growthFor} onClose={() => setGrowthFor(null)} />}
       {immFor && <ImmunizationModal baby={immFor} onClose={() => setImmFor(null)} />}
     </DashboardShell>
   );
 }
 
+/** One baby in the list. Fetches its own immunisations so the overdue badge is
+ *  accurate without loading every baby's schedule up front. */
+function BabyCard({
+  baby,
+  motherName,
+  onGrowth,
+  onImmunisations,
+}: {
+  baby: Baby;
+  motherName: string;
+  onGrowth: () => void;
+  onImmunisations: () => void;
+}) {
+  const { data: imms = [] } = useListImmunizationsQuery(baby.id);
+  const overdue = imms.filter((i) => immStatus(i) === 'overdue').length;
+
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-4">
+      <div className="flex items-start justify-between">
+        <div>
+          <p className="font-semibold text-slate-900">{baby.name || 'Baby'}</p>
+          <p className="text-xs text-slate-500 mt-0.5">
+            {ageDisplay(baby.dateOfBirth)} · {baby.sex === 'male' ? 'Boy' : 'Girl'} · Mother: {motherName}
+          </p>
+        </div>
+        {overdue > 0 && (
+          <span className="inline-flex items-center gap-1 text-xs text-amber-700">
+            <AlertTriangle className="w-3.5 h-3.5" /> {overdue} overdue
+          </span>
+        )}
+      </div>
+      <div className="mt-3 flex gap-2">
+        <button onClick={onGrowth} className="flex-1 inline-flex items-center justify-center gap-1.5 text-sm font-medium text-cyan-700 border border-cyan-200 rounded-lg py-2 hover:bg-cyan-50">
+          <LineChartIcon className="w-4 h-4" /> Growth
+        </button>
+        <button onClick={onImmunisations} className="flex-1 inline-flex items-center justify-center gap-1.5 text-sm font-medium text-cyan-700 border border-cyan-200 rounded-lg py-2 hover:bg-cyan-50">
+          <Syringe className="w-4 h-4" /> Immunisations
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function RegisterBabyModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
+  const { data: patientRecords = [] } = useListPatientsQuery();
+  const [createBaby] = useCreateBabyMutation();
+  const [createImmunization] = useCreateImmunizationMutation();
+  const [addGrowth] = useAddGrowthMutation();
   const mothers = useMemo(() => {
-    const users = new Map(dbOperations.getAllUsers().map((u) => [u.id, u.name]));
-    return dbOperations.getAllPatients().map((p) => ({ id: p.id, name: users.get(p.userId) ?? p.id }));
+    return patientRecords.map((p) => ({ id: p.id, name: p.user?.name ?? p.id }));
   }, []);
 
   const [motherPatientId, setMother] = useState('');
@@ -102,30 +135,34 @@ function RegisterBabyModal({ onClose, onSaved }: { onClose: () => void; onSaved:
   const [gestationalWeeks, setGA] = useState(39);
   const [error, setError] = useState('');
 
-  const save = () => {
+  const save = async () => {
     if (!motherPatientId) return setError('Select the mother');
     if (!dob) return setError('Date of birth is required');
-    const babyId = `baby-${Date.now()}`;
-    dbOperations.createBaby({
-      id: babyId, motherPatientId, name: name || 'Baby', dateOfBirth: dob, sex,
-      birthWeight, birthLength, headCircumference, deliveryType, gestationalWeeks,
-      createdAt: new Date().toISOString(),
-    });
-    // Seed the immunisation schedule from the DOB.
-    scheduleForDob(dob).forEach((s, i) => {
-      dbOperations.createImmunization({
-        id: `imm-${Date.now()}-${i}`, babyId, vaccine: s.vaccine, ageLabel: s.ageLabel,
-        dueDate: s.dueDate, status: 'pending', createdAt: new Date().toISOString(),
-      });
-    });
-    // Record the birth measurement as the first growth point.
-    if (birthWeight) {
-      dbOperations.addGrowthMeasurement({
-        id: `gm-${Date.now()}`, babyId, date: dob, weight: birthWeight, height: birthLength,
-        headCircumference, createdAt: new Date().toISOString(),
-      });
+    setError('');
+    try {
+      const baby = await createBaby({
+        motherPatientId, name: name || 'Baby', dateOfBirth: dob, sex,
+        birthWeight, birthLength, headCircumference, deliveryType, gestationalWeeks,
+      }).unwrap();
+
+      // Seed the immunisation schedule from the DOB.
+      for (const s of scheduleForDob(dob)) {
+        await createImmunization({
+          babyId: baby.id,
+          body: { vaccine: s.vaccine, ageLabel: s.ageLabel, dueDate: s.dueDate, status: 'pending' },
+        }).unwrap();
+      }
+      // Record the birth measurement as the first growth point.
+      if (birthWeight) {
+        await addGrowth({
+          babyId: baby.id,
+          body: { date: dob, weight: birthWeight, height: birthLength, headCircumference },
+        }).unwrap();
+      }
+      onSaved();
+    } catch (err) {
+      setError(apiError(err, 'Could not register the newborn'));
     }
-    onSaved();
   };
 
   return (
@@ -173,22 +210,27 @@ function RegisterBabyModal({ onClose, onSaved }: { onClose: () => void; onSaved:
 }
 
 function GrowthModal({ baby, onClose }: { baby: Baby; onClose: () => void }) {
-  const [, tick] = useState(0);
   const [date, setDate] = useState(today());
   const [weight, setWeight] = useState(0);
   const [height, setHeight] = useState(0);
   const [head, setHead] = useState(0);
 
-  const measurements = dbOperations.getGrowthByBabyId(baby.id);
+  const { data: measurements = [] } = useListGrowthQuery(baby.id);
+  const [addGrowth] = useAddGrowthMutation();
+  const [error, setError] = useState('');
 
-  const add = () => {
+  const add = async () => {
     if (!weight) return;
-    dbOperations.addGrowthMeasurement({
-      id: `gm-${Date.now()}`, babyId: baby.id, date, weight, height, headCircumference: head,
-      createdAt: new Date().toISOString(),
-    });
-    setWeight(0); setHeight(0); setHead(0);
-    tick((t) => t + 1);
+    setError('');
+    try {
+      await addGrowth({
+        babyId: baby.id,
+        body: { date, weight, height, headCircumference: head },
+      }).unwrap();
+      setWeight(0); setHeight(0); setHead(0);
+    } catch (err) {
+      setError(apiError(err, 'Could not add the measurement'));
+    }
   };
 
   return (
@@ -225,12 +267,17 @@ function GrowthModal({ baby, onClose }: { baby: Baby; onClose: () => void }) {
 }
 
 function ImmunizationModal({ baby, onClose }: { baby: Baby; onClose: () => void }) {
-  const [, tick] = useState(0);
-  const imms = dbOperations.getImmunizationsByBabyId(baby.id);
+  const { data: imms = [] } = useListImmunizationsQuery(baby.id);
+  const [markGiven] = useMarkImmunizationGivenMutation();
+  const [error, setError] = useState('');
 
-  const give = (id: string) => {
-    dbOperations.markImmunizationGiven(id, today());
-    tick((t) => t + 1);
+  const give = async (id: string) => {
+    setError('');
+    try {
+      await markGiven({ babyId: baby.id, immunizationId: id, givenDate: today() }).unwrap();
+    } catch (err) {
+      setError(apiError(err, 'Could not record the vaccination'));
+    }
   };
 
   // Group by age label.

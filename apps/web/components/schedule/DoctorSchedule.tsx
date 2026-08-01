@@ -4,7 +4,15 @@ import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ChevronLeft, ChevronRight, CalendarRange, Ban, X } from 'lucide-react';
-import { dbOperations, ScheduleBlock } from '@/lib/db';
+import type { ScheduleBlock } from '@/lib/types';
+import { apiError } from '@/lib/apiError';
+import {
+  useDeleteScheduleBlockMutation,
+  useGetDoctorByUserQuery,
+  useListAppointmentsQuery,
+  useListPatientsQuery,
+  useListScheduleBlocksQuery,
+} from '@/store/api';
 import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
 import { BlockModal } from '@/components/BlockModal';
@@ -53,13 +61,18 @@ const statusRing: Record<string, string> = {
 };
 
 export function DoctorSchedule({ session }: RoleViewProps) {
-  const router = useRouter();
   const [weekOffset, setWeekOffset] = useState(0);
   const [blockOpen, setBlockOpen] = useState(false);
-  const [refreshKey, setRefreshKey] = useState(0);
+  const [error, setError] = useState('');
+
+  const { data: doctor } = useGetDoctorByUserQuery(session.user.id);
+  // Both are already limited to this doctor by the API's "own" scope.
+  const { data: appointments = [] } = useListAppointmentsQuery();
+  const { data: patients = [] } = useListPatientsQuery();
+  const { data: blocks = [] } = useListScheduleBlocksQuery();
+  const [deleteScheduleBlock] = useDeleteScheduleBlockMutation();
 
   const model = useMemo(() => {
-    const doctor = dbOperations.getAllDoctors().find((d) => d.userId === session.user.id);
     const start = weekStart(new Date());
     start.setDate(start.getDate() + weekOffset * 7);
 
@@ -70,17 +83,12 @@ export function DoctorSchedule({ session }: RoleViewProps) {
     });
     const daySet = new Set(days.map((d) => d.dateStr));
 
-    const userById = new Map(dbOperations.getAllUsers().map((u) => [u.id, u]));
-    const patientById = new Map(dbOperations.getAllPatients().map((p) => [p.id, p]));
-    const patientName = (id: string) => {
-      const p = patientById.get(id);
-      const u = p ? userById.get(p.userId) : null;
-      return u?.name ?? 'Patient';
-    };
+    const patientById = new Map(patients.map((p) => [p.id, p]));
+    const patientName = (id: string) => patientById.get(id)?.user?.name ?? 'Patient';
 
-    const appts = doctor
-      ? dbOperations.getAppointmentsByDoctorId(doctor.id).filter((a) => daySet.has(a.date) && a.status !== 'cancelled')
-      : [];
+    const appts = appointments.filter(
+      (a) => daySet.has(a.date) && a.status !== 'cancelled',
+    );
 
     const mins = new Set(GRID_MINS);
     const cellMap = new Map<string, { id: string; patient: string; reason: string; status: string }>();
@@ -93,18 +101,18 @@ export function DoctorSchedule({ session }: RoleViewProps) {
 
     // The doctor's own schedule blocks for the week, grouped by day.
     const blocksByDay = new Map<string, ScheduleBlock[]>();
-    if (doctor) {
-      dbOperations.getScheduleBlocksByDoctorId(doctor.id).filter((b) => daySet.has(b.date)).forEach((b) => {
+    blocks
+      .filter((b) => daySet.has(b.date) && (!doctor || b.doctorId === doctor.id))
+      .forEach((b) => {
         const list = blocksByDay.get(b.date) ?? [];
         list.push(b);
         blocksByDay.set(b.date, list);
       });
-    }
 
     const label = `${days[0].month} ${days[0].day} – ${days[6].month} ${days[6].day}`;
     return { doctorId: doctor?.id ?? '', days, rowMins: [...mins].sort((x, y) => x - y), cellMap, blocksByDay, count: appts.length, label };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session, weekOffset, refreshKey]);
+  }, [session, weekOffset, appointments, patients, blocks, doctor]);
 
   if (!model) return null;
 
@@ -166,7 +174,14 @@ export function DoctorSchedule({ session }: RoleViewProps) {
                             <p className="font-semibold text-xs">{BLOCK_LABEL[block.type]}</p>
                             {block.note && <p className="text-[11px] opacity-80 truncate">{block.note}</p>}
                             <button
-                              onClick={() => { dbOperations.deleteScheduleBlock(block.id); setRefreshKey((k) => k + 1); }}
+                              onClick={async () => {
+                                setError('');
+                                try {
+                                  await deleteScheduleBlock(block.id).unwrap();
+                                } catch (err) {
+                                  setError(apiError(err, 'Could not remove the block'));
+                                }
+                              }}
                               className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 p-0.5 rounded hover:bg-white/60 transition"
                               title="Remove block"
                               aria-label="Remove block"
@@ -204,7 +219,7 @@ export function DoctorSchedule({ session }: RoleViewProps) {
           doctorId={model.doctorId}
           defaultDate={model.days[0].dateStr}
           onClose={() => setBlockOpen(false)}
-          onCreated={() => { setBlockOpen(false); setRefreshKey((k) => k + 1); }}
+          onCreated={() => setBlockOpen(false)}
         />
       )}
     </DashboardShell>

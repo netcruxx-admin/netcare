@@ -1,10 +1,20 @@
 'use client';
 
 import { useEffect, useMemo, useState, Suspense } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Search, ClipboardList, ClipboardEdit, FileText, Trash2, X, AlertTriangle } from 'lucide-react';
-import { dbOperations, TestOrder, TestOrderStatus, TestResult, TestResultParameter, LabTest, Patient, User } from '@/lib/db';
+import type { TestOrder, TestOrderStatus, TestResult, TestResultParameter } from '@/lib/types';
+import { apiError } from '@/lib/apiError';
+import {
+  useDeleteTestOrderMutation,
+  useListLabTestsQuery,
+  useListPatientsQuery,
+  useListTestOrdersQuery,
+  useListTestResultsQuery,
+  useUpdateTestOrderMutation,
+  useUpsertTestResultMutation,
+} from '@/store/api';
 import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
 import { ExportButton } from '@/components/ExportButton';
@@ -18,14 +28,6 @@ import {
   type ResultFlag,
 } from '@/lib/lab';
 
-interface RawData {
-  orders: TestOrder[];
-  results: TestResult[];
-  tests: LabTest[];
-  patients: Patient[];
-  users: User[];
-}
-
 interface DraftRow extends TestResultParameter {
   low?: number;
   high?: number;
@@ -37,63 +39,50 @@ interface DraftTest {
   remarks: string;
 }
 
-function fetchRaw(): RawData {
-  return {
-    orders: dbOperations.getAllTestOrders(),
-    results: dbOperations.getAllTestResults(),
-    tests: dbOperations.getAllLabTests(),
-    patients: dbOperations.getAllPatients(),
-    users: dbOperations.getAllUsers(),
-  };
-}
-
 function LabOrdersInner({ session }: RoleViewProps) {
   const searchParams = useSearchParams();
   const openParam = searchParams.get('open');
 
-  const [raw, setRaw] = useState<RawData | null>(null);
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | TestOrderStatus>('all');
   const [toast, setToast] = useState('');
+  const [error, setError] = useState('');
 
   const [resultsOrder, setResultsOrder] = useState<TestOrder | null>(null);
   const [draft, setDraft] = useState<DraftTest[]>([]);
   const [deleting, setDeleting] = useState<TestOrder | null>(null);
 
+  const { data: orders = [] } = useListTestOrdersQuery();
+  const { data: results = [] } = useListTestResultsQuery();
+  const { data: tests = [] } = useListLabTestsQuery();
+  const { data: patients = [] } = useListPatientsQuery();
+  const [updateTestOrder] = useUpdateTestOrderMutation();
+  const [upsertTestResult] = useUpsertTestResultMutation();
+  const [deleteTestOrder] = useDeleteTestOrderMutation();
+
   const flash = (msg: string) => {
     setToast(msg);
     setTimeout(() => setToast(''), 2500);
   };
-  const reload = () => setRaw(fetchRaw());
-
-  useEffect(() => {
-    setRaw(fetchRaw());
-  }, [session]);
 
   const lookups = useMemo(() => {
-    if (!raw) return null;
-    const userById = new Map(raw.users.map((u) => [u.id, u]));
-    const patientById = new Map(raw.patients.map((p) => [p.id, p]));
-    const testById = new Map(raw.tests.map((t) => [t.id, t]));
-    const patientName = (id: string) => {
-      const p = patientById.get(id);
-      const u = p ? userById.get(p.userId) : null;
-      return u?.name ?? 'Patient';
-    };
+    const patientById = new Map(patients.map((p) => [p.id, p]));
+    const testById = new Map(tests.map((t) => [t.id, t]));
+    const patientName = (id: string) => patientById.get(id)?.user?.name ?? 'Patient';
     const resultsByOrder = new Map<string, TestResult[]>();
-    raw.results.forEach((r) => {
+    results.forEach((r) => {
       const list = resultsByOrder.get(r.orderId) ?? [];
       list.push(r);
       resultsByOrder.set(r.orderId, list);
     });
     return { patientName, testById, resultsByOrder };
-  }, [raw]);
+  }, [patients, tests, results]);
 
   const buildDraft = (order: TestOrder): DraftTest[] => {
-    const results = lookups?.resultsByOrder.get(order.id) ?? [];
+    const existingResults = lookups.resultsByOrder.get(order.id) ?? [];
     return order.items.map((item) => {
-      const existing = results.find((r) => r.testId === item.testId);
-      const template = lookups?.testById.get(item.testId)?.parameters;
+      const existing = existingResults.find((r) => r.testId === item.testId);
+      const template = lookups.testById.get(item.testId)?.parameters;
       if (existing) {
         return {
           testId: item.testId,
@@ -129,19 +118,23 @@ function LabOrdersInner({ session }: RoleViewProps) {
 
   // Deep-link: /dashboard/lab-orders?open=<id>
   useEffect(() => {
-    if (openParam && raw && lookups && !resultsOrder) {
-      const order = raw.orders.find((o) => o.id === openParam);
+    if (openParam && orders.length && !resultsOrder) {
+      const order = orders.find((o) => o.id === openParam);
       if (order) openResults(order);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [openParam, raw, lookups]);
+  }, [openParam, orders, lookups]);
 
-  const advance = (order: TestOrder) => {
+  const advance = async (order: TestOrder) => {
     const next = nextLabStatus(order.status);
     if (!next) return;
-    dbOperations.updateTestOrder(order.id, { status: next });
-    reload();
-    flash(`Moved to ${ORDER_STATUS_LABEL[next]}`);
+    setError('');
+    try {
+      await updateTestOrder({ id: order.id, body: { status: next } }).unwrap();
+      flash(`Moved to ${ORDER_STATUS_LABEL[next]}`);
+    } catch (err) {
+      setError(apiError(err, 'Could not update the order'));
+    }
   };
 
   const setRowValue = (ti: number, ri: number, value: string) => {
@@ -160,43 +153,53 @@ function LabOrdersInner({ session }: RoleViewProps) {
     setDraft((prev) => prev.map((t, i) => (i !== ti ? t : { ...t, remarks })));
   };
 
-  const saveResults = (complete: boolean) => {
-    if (!resultsOrder || !session) return;
-    draft.forEach((t) => {
-      dbOperations.upsertTestResult({
-        id: `res-${resultsOrder.id}-${t.testId}`,
-        orderId: resultsOrder.id,
-        testId: t.testId,
-        testName: t.testName,
-        parameters: t.rows.map(({ name, value, unit, referenceRange, flag }) => ({ name, value, unit, referenceRange, flag })),
-        remarks: t.remarks,
-        reportedBy: session.user.name,
-        reportedAt: new Date().toISOString(),
-      });
-    });
-    const newStatus: TestOrderStatus = complete
-      ? 'completed'
-      : resultsOrder.status === 'ordered' || resultsOrder.status === 'sample_collected'
-      ? 'in_progress'
-      : resultsOrder.status;
-    dbOperations.updateTestOrder(resultsOrder.id, { status: newStatus });
-    reload();
-    setResultsOrder(null);
-    flash(complete ? 'Results published' : 'Results saved');
+  const saveResults = async (complete: boolean) => {
+    if (!resultsOrder) return;
+    setError('');
+    try {
+      // The server keys results on (order, test) and stamps the id and time, so
+      // saving the same draft twice edits one row rather than piling up copies.
+      for (const t of draft) {
+        await upsertTestResult({
+          orderId: resultsOrder.id,
+          testId: t.testId,
+          testName: t.testName,
+          parameters: t.rows.map(({ name, value, unit, referenceRange, flag }) => ({ name, value, unit, referenceRange, flag })),
+          remarks: t.remarks,
+          reportedBy: session.user.name,
+        }).unwrap();
+      }
+      const newStatus: TestOrderStatus = complete
+        ? 'completed'
+        : resultsOrder.status === 'ordered' || resultsOrder.status === 'sample_collected'
+        ? 'in_progress'
+        : resultsOrder.status;
+      if (newStatus !== resultsOrder.status) {
+        await updateTestOrder({ id: resultsOrder.id, body: { status: newStatus } }).unwrap();
+      }
+      setResultsOrder(null);
+      flash(complete ? 'Results published' : 'Results saved');
+    } catch (err) {
+      setError(apiError(err, 'Could not save the results'));
+    }
   };
 
-  const confirmDelete = () => {
+  const confirmDelete = async () => {
     if (!deleting) return;
-    dbOperations.deleteTestOrder(deleting.id);
-    reload();
-    setDeleting(null);
-    flash('Order deleted');
+    setError('');
+    try {
+      await deleteTestOrder(deleting.id).unwrap();
+      setDeleting(null);
+      flash('Order deleted');
+    } catch (err) {
+      setDeleting(null);
+      setError(apiError(err, 'Could not delete the order'));
+    }
   };
 
   const rows = useMemo(() => {
-    if (!raw || !lookups) return [];
     const q = query.trim().toLowerCase();
-    return raw.orders
+    return orders
       .map((o) => ({
         order: o,
         patient: lookups.patientName(o.patientId),
@@ -209,11 +212,15 @@ function LabOrdersInner({ session }: RoleViewProps) {
         if (a.order.priority !== b.order.priority) return a.order.priority === 'urgent' ? -1 : 1;
         return a.order.orderedAt < b.order.orderedAt ? 1 : -1;
       });
-  }, [raw, lookups, query, statusFilter]);
+  }, [orders, lookups, query, statusFilter]);
 
   return (
     <DashboardShell role={session.user.role} userName={session.user.name} title="Test Orders" subtitle="Process orders and publish results">
       <div className="space-y-6">
+        {error && (
+          <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm text-red-700">{error}</div>
+        )}
+
         {/* Filters */}
         <div className="flex flex-wrap items-center gap-3">
           <div className="relative flex-1 min-w-[200px]">
@@ -348,7 +355,7 @@ function LabOrdersInner({ session }: RoleViewProps) {
               <div>
                 <h3 className="text-lg font-bold text-slate-900">Enter Results</h3>
                 <p className="text-sm text-slate-500">
-                  {lookups?.patientName(resultsOrder.patientId)} · <span className="font-mono">{resultsOrder.id}</span>
+                  {lookups.patientName(resultsOrder.patientId)} · <span className="font-mono">{resultsOrder.id}</span>
                 </p>
               </div>
               <button onClick={() => setResultsOrder(null)} className="text-slate-500 hover:text-slate-900">

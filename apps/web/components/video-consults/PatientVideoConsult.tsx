@@ -1,9 +1,18 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Video, Clock, CheckCircle2, Stethoscope, X, CalendarX } from 'lucide-react';
-import { dbOperations, type VideoSlot } from '@/lib/db';
+import type { VideoSlot } from '@/lib/types';
+import { apiError } from '@/lib/apiError';
+import {
+  useBookVideoSlotMutation,
+  useCreateAppointmentMutation,
+  useGetPatientByUserQuery,
+  useListDepartmentsQuery,
+  useListDoctorsQuery,
+  useListVideoSlotsQuery,
+} from '@/store/api';
 import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
 
@@ -16,95 +25,76 @@ interface DoctorOption {
 
 export function PatientVideoConsult({ session }: RoleViewProps) {
   const router = useRouter();
-  const [patientId, setPatientId] = useState('');
-  const [doctors, setDoctors] = useState<DoctorOption[]>([]);
   const [selectedDoctor, setSelectedDoctor] = useState<string>('');
-  const [slots, setSlots] = useState<VideoSlot[]>([]);
   const [confirm, setConfirm] = useState<VideoSlot | null>(null);
   const [bookedApptId, setBookedApptId] = useState('');
   const [error, setError] = useState('');
 
-  useEffect(() => {
-    const s = session;
-    setPatientId(dbOperations.getPatientByUserId(s.user.id)?.id ?? '');
-    const users = new Map(dbOperations.getAllUsers().map((u) => [u.id, u.name]));
-    const docs = dbOperations
-      .getAllDoctors()
-      .filter((d) => d.verificationStatus !== 'rejected')
-      .map((d) => ({
-        id: d.id,
-        name: users.get(d.userId) ?? 'Doctor',
-        specialization: d.specialization,
-        fee: d.consultationFee,
-      }));
-    setDoctors(docs);
-  }, [session]);
+  const { data: patient } = useGetPatientByUserQuery(session.user.id);
+  const patientId = patient?.id ?? '';
 
-  const loadSlots = (docId: string) => {
-    setSelectedDoctor(docId);
-    setSlots([...dbOperations.getOpenVideoSlotsByDoctorId(docId)]);
-  };
+  const { data: allDoctors = [] } = useListDoctorsQuery();
+  const { data: departments = [] } = useListDepartmentsQuery();
+  const doctors = allDoctors
+    .filter((d) => d.verificationStatus !== 'rejected')
+    .map((d) => ({
+      id: d.id,
+      name: d.user?.name ?? 'Doctor',
+      specialization: d.specialization,
+      fee: d.consultationFee,
+    }));
+
+  const { data: openSlots = [] } = useListVideoSlotsQuery(
+    { doctorId: selectedDoctor, status: 'open' },
+    { skip: !selectedDoctor },
+  );
+  const slots = openSlots;
+
+  const [createAppointment] = useCreateAppointmentMutation();
+  const [bookVideoSlot] = useBookVideoSlotMutation();
+
+  const loadSlots = (docId: string) => setSelectedDoctor(docId);
 
   const doctorById = useMemo(() => new Map(doctors.map((d) => [d.id, d])), [doctors]);
 
-  const deptForDoctor = (spec: string) => {
-    const depts = dbOperations.getAllDepartments();
-    return (
-      depts.find((d) => d.name === spec || spec.includes(d.name.split(' ')[0]))?.id ??
-      depts[0]?.id ??
-      'dept-1'
-    );
-  };
+  const deptForDoctor = (spec: string) =>
+    departments.find((d) => d.name === spec || spec.includes(d.name.split(' ')[0]))?.id ??
+    departments[0]?.id ??
+    'dept-1';
 
-  const book = (slot: VideoSlot) => {
+  const book = async (slot: VideoSlot) => {
     setError('');
     const doc = doctorById.get(slot.doctorId);
     if (!doc) {
       setError('This doctor is no longer available. Please pick another.');
       return;
     }
-
-    // Resolve the patient profile — the demo login may not have one yet, so
-    // create a minimal profile on the fly rather than failing silently.
-    let pid = patientId || dbOperations.getPatientByUserId(session.user.id)?.id || '';
-    if (!pid) {
-      const created = dbOperations.createPatient({
-        id: `pat-${Date.now()}`, userId: session.user.id, phone: '', dateOfBirth: '',
-        gender: '', bloodGroup: '', allergies: '', chronicDiseases: '', emergencyContact: '',
-        emergencyPhone: '', medicalHistory: '', insuranceProvider: '', insuranceNumber: '', documents: [],
-      });
-      pid = created.id;
-      setPatientId(pid);
+    if (!patientId) {
+      setError('Your patient profile is not set up yet. Complete your profile first.');
+      return;
     }
 
-    const apptId = `apt-vc-${Date.now()}`;
-    dbOperations.createAppointment({
-      id: apptId,
-      patientId: pid,
-      doctorId: slot.doctorId,
-      departmentId: deptForDoctor(doc.specialization),
-      date: slot.date,
-      time: slot.time,
-      status: 'scheduled',
-      mode: 'video',
-      reason: 'Video consultation',
-      notes: '',
-      createdAt: new Date().toISOString(),
-    });
-    dbOperations.createPayment({
-      id: `pay-${apptId}`,
-      appointmentId: apptId,
-      patientId: pid,
-      amount: doc.fee,
-      status: 'pending',
-      paymentMethod: 'Online',
-      createdAt: new Date().toISOString(),
-    });
-    dbOperations.bookVideoSlot(slot.id, apptId);
-    setConfirm(null);
-    setBookedApptId(apptId);
-    // Refresh open slots (the booked one disappears).
-    setSlots([...dbOperations.getOpenVideoSlotsByDoctorId(slot.doctorId)]);
+    try {
+      const appointment = await createAppointment({
+        patientId,
+        doctorId: slot.doctorId,
+        departmentId: deptForDoctor(doc.specialization),
+        date: slot.date,
+        time: slot.time,
+        status: 'scheduled',
+        mode: 'video',
+        reason: 'Video consultation',
+        notes: '',
+      }).unwrap();
+
+      // Booking the slot also raises the pending invoice, server-side.
+      await bookVideoSlot({ id: slot.id, body: { appointmentId: appointment.id } }).unwrap();
+
+      setConfirm(null);
+      setBookedApptId(appointment.id);
+    } catch (err) {
+      setError(apiError(err, 'Could not book that slot'));
+    }
   };
 
   // Success screen.

@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from .. import models, schemas
 from ..auth import get_current_user
-from ..authz import require_permission
+from ..authz import SCOPE_OWN, caller_doctor_id, require_permission
 from ..database import get_db
 from ..tenancy import get_tenant_id, scoped
 from ..utils import new_id, now_iso
@@ -101,6 +101,37 @@ def update_test_order(
     return order
 
 
+@router.put("/test-orders/{order_id}/review", response_model=schemas.TestOrderOut)
+def review_test_order(
+    order_id: str,
+    db: Session = Depends(get_db),
+    user: models.User = Depends(get_current_user),
+    scope: str = Depends(require_permission("lab_orders.review")),
+    tenant_id: str = Depends(get_tenant_id),
+):
+    """The ordering clinician signs off on a published result.
+
+    Separate from the generic update because it is a different act from the
+    lab's own work: processing a sample and reviewing the finding are held by
+    different people, so they are different permissions.
+    """
+    order = _get_order(db, order_id, tenant_id)
+    if scope == SCOPE_OWN and order.doctor_id != caller_doctor_id(db, user):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Test order not found"
+        )
+    if order.status != "completed":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Only a completed order can be reviewed",
+        )
+    order.status = "reviewed"
+    order.updated_at = now_iso()
+    db.commit()
+    db.refresh(order)
+    return order
+
+
 @router.delete("/test-orders/{order_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_test_order(
     order_id: str,
@@ -141,6 +172,29 @@ def upsert_test_result(
     _: str = Depends(require_permission("lab_orders.process")),
     tenant_id: str = Depends(get_tenant_id),
 ):
+    # A result is meaningless without the order it belongs to, and the order has
+    # to be one of ours. Without this an unknown or foreign order id silently
+    # produces an orphan report that no chart will ever show.
+    order = (
+        scoped(db, models.TestOrder, tenant_id)
+        .filter(models.TestOrder.id == body.order_id)
+        .first()
+    )
+    if order is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Test order not found"
+        )
+    # Items are stored as raw JSON, so the key is snake_case for rows written
+    # through the API and camelCase for anything seeded from the frontend shape.
+    ordered_tests = {
+        item.get("test_id") or item.get("testId") for item in (order.items or [])
+    }
+    if body.test_id not in ordered_tests:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="That test is not part of this order",
+        )
+
     # One result per (order, test): update in place if it already exists.
     existing = (
         scoped(db, models.TestResult, tenant_id)

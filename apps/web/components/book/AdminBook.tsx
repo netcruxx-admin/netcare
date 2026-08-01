@@ -5,9 +5,16 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Formik, Form } from 'formik';
 import * as Yup from 'yup';
 import { CheckCircle, AlertCircle } from 'lucide-react';
-import { dbOperations, Appointment } from '@/lib/db';
+import type { Department, Doctor } from '@/lib/types';
+import { apiError } from '@/lib/apiError';
 import { blockedSlotSet } from '@/lib/schedule';
-import { useListScheduleBlocksQuery } from '@/store/api';
+import {
+  useCreateAppointmentMutation,
+  useGetDoctorAvailabilityQuery,
+  useListDepartmentsQuery,
+  useListDoctorsQuery,
+  useListPatientsQuery,
+} from '@/store/api';
 import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
 import { FormField } from '@/components/form/FormField';
@@ -37,16 +44,6 @@ const SLOTS = [
 ];
 const BREAK_SLOTS = new Set(['12:00 PM', '01:00 PM']);
 
-function bookedSlotsForDoctor(doctorId: string, date: string) {
-  if (!doctorId || !date) return new Set<string>();
-  return new Set(
-    dbOperations
-      .getAppointmentsByDoctorId(doctorId)
-      .filter((a) => a.date === date && a.status === 'scheduled')
-      .map((a) => a.time),
-  );
-}
-
 type SlotStatus = 'available' | 'booked' | 'blocked';
 function slotStatus(slot: string, date: string, booked: Set<string>, blocked: Set<string>): SlotStatus {
   if (BREAK_SLOTS.has(slot) || blocked.has(slot)) return 'blocked';
@@ -58,10 +55,11 @@ function slotStatus(slot: string, date: string, booked: Set<string>, blocked: Se
   return 'available';
 }
 
-function departmentForDoctor(doctorId: string) {
-  const doc = dbOperations.getDoctorById(doctorId);
-  const depts = dbOperations.getAllDepartments();
-  return depts.find((d) => d.name === doc?.specialization)?.id ?? depts[0]?.id ?? 'dept-1';
+// The appointment needs a department; derive it from who the doctor is rather
+// than asking the booker to restate it.
+function departmentForDoctor(departments: Department[], doctors: Doctor[], doctorId: string) {
+  const doc = doctors.find((d) => d.id === doctorId);
+  return departments.find((d) => d.name === doc?.specialization)?.id ?? departments[0]?.id ?? '';
 }
 
 const bookingSchema = Yup.object({
@@ -74,21 +72,14 @@ const bookingSchema = Yup.object({
 
 function AdminBookForm({ session }: RoleViewProps) {
   const router = useRouter();
-  const { data: scheduleBlocks = [] } = useListScheduleBlocksQuery();
   const searchParams = useSearchParams();
   const [submitError, setSubmitError] = useState('');
   const [success, setSuccess] = useState(false);
 
-
-  const userById = new Map(dbOperations.getAllUsers().map((u) => [u.id, u]));
-  const patientOptions = dbOperations.getAllPatients().map((p) => {
-    const u = userById.get(p.userId);
-    return { value: p.id, label: u ? `${u.name} (${u.email})` : p.id };
-  });
-  const doctorOptions = dbOperations.getAllDoctors().map((d) => {
-    const u = userById.get(d.userId);
-    return { value: d.id, label: `Dr. ${u?.name ?? 'Doctor'} — ${d.specialization}` };
-  });
+  const { data: patients = [] } = useListPatientsQuery();
+  const { data: doctors = [] } = useListDoctorsQuery();
+  const { data: departments = [] } = useListDepartmentsQuery();
+  const [createAppointment] = useCreateAppointmentMutation();
 
   // Prefill from query params (e.g. when arriving from a Schedule board slot)
   const prefill = {
@@ -98,6 +89,28 @@ function AdminBookForm({ session }: RoleViewProps) {
     time: searchParams.get('time') ?? '',
     reason: '',
   };
+
+  // Mirrors the form's doctor/date so the availability query — which is a hook,
+  // and so cannot live inside Formik's render prop — can react to them.
+  const [selection, setSelection] = useState({
+    doctorId: prefill.doctorId,
+    date: prefill.date,
+  });
+  const { data: availability } = useGetDoctorAvailabilityQuery(
+    { doctorId: selection.doctorId, date: selection.date },
+    { skip: !selection.doctorId || !selection.date },
+  );
+  const booked = new Set(availability?.taken ?? []);
+  const blocked = blockedSlotSet(availability?.blocks ?? [], selection.doctorId, selection.date, SLOTS);
+
+  const patientOptions = patients.map((p) => ({
+    value: p.id,
+    label: p.user ? `${p.user.name} (${p.user.email})` : p.id,
+  }));
+  const doctorOptions = doctors.map((d) => ({
+    value: d.id,
+    label: `Dr. ${d.user?.name ?? 'Doctor'} — ${d.specialization}`,
+  }));
 
   return (
     <DashboardShell role={session.user.role} userName={session.user.name} title="Book Appointment" subtitle="Schedule an appointment for a patient">
@@ -120,39 +133,47 @@ function AdminBookForm({ session }: RoleViewProps) {
             initialValues={prefill}
             enableReinitialize
             validationSchema={bookingSchema}
-            onSubmit={(values, { setFieldError }) => {
+            onSubmit={async (values, { setFieldError }) => {
               setSubmitError('');
-              const booked = bookedSlotsForDoctor(values.doctorId, values.date);
-              const blocked = blockedSlotSet(scheduleBlocks, values.doctorId, values.date, SLOTS);
               if (slotStatus(values.time, values.date, booked, blocked) !== 'available') {
                 setFieldError('time', 'That slot is not available for the selected doctor');
                 return;
               }
-              const appointment: Appointment = {
-                id: `apt-${Date.now()}`,
-                patientId: values.patientId,
-                doctorId: values.doctorId,
-                departmentId: departmentForDoctor(values.doctorId),
-                date: values.date,
-                time: values.time,
-                status: 'scheduled',
-                reason: values.reason,
-                notes: '',
-                createdAt: new Date().toISOString(),
-              };
-              dbOperations.createAppointment(appointment);
-              setSuccess(true);
-              setTimeout(() => router.push('/dashboard/appointments'), 1500);
+              try {
+                await createAppointment({
+                  patientId: values.patientId,
+                  doctorId: values.doctorId,
+                  departmentId: departmentForDoctor(departments, doctors, values.doctorId),
+                  date: values.date,
+                  time: values.time,
+                  status: 'scheduled',
+                  reason: values.reason,
+                  notes: '',
+                }).unwrap();
+                setSuccess(true);
+                setTimeout(() => router.push('/dashboard/appointments'), 1500);
+              } catch (err) {
+                setSubmitError(apiError(err, 'Could not book the appointment'));
+              }
             }}
           >
             {({ values, errors, touched, setFieldValue }) => {
-              const booked = bookedSlotsForDoctor(values.doctorId, values.date);
-              const blocked = blockedSlotSet(scheduleBlocks, values.doctorId, values.date, SLOTS);
               return (
                 <Form className="space-y-6">
                   <div className="grid sm:grid-cols-2 gap-4">
                     <FormField name="patientId" label="Patient" as="select" placeholder="Select a patient" options={patientOptions} required />
-                    <FormField name="doctorId" label="Doctor" as="select" placeholder="Select a doctor" options={doctorOptions} required />
+                    <FormField
+                      name="doctorId"
+                      label="Doctor"
+                      as="select"
+                      placeholder="Select a doctor"
+                      options={doctorOptions}
+                      required
+                      onValueChange={(doctorId) => {
+                        setSelection((s) => ({ ...s, doctorId }));
+                        setFieldValue('time', '');
+                      }}
+                    />
                   </div>
 
                   <div className="grid md:grid-cols-2 gap-6">
@@ -165,8 +186,10 @@ function AdminBookForm({ session }: RoleViewProps) {
                         mode="single"
                         selected={values.date ? new Date(`${values.date}T00:00:00`) : undefined}
                         onSelect={(d) => {
-                          setFieldValue('date', d ? toDateStr(d) : '');
+                          const date = d ? toDateStr(d) : '';
+                          setFieldValue('date', date);
                           setFieldValue('time', '');
+                          setSelection((s) => ({ ...s, date }));
                         }}
                         disabled={{ before: new Date(new Date().setHours(0, 0, 0, 0)) }}
                         className="[--cell-size:2.4rem] rounded-lg border border-slate-200 w-full"

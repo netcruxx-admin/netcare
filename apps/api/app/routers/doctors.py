@@ -132,3 +132,44 @@ def update_doctor(
     db.commit()
     db.refresh(doctor)
     return _with_user(db, doctor)
+
+
+@router.get("/{doctor_id}/availability", response_model=schemas.DoctorAvailabilityOut)
+def doctor_availability(
+    doctor_id: str,
+    date: str,
+    db: Session = Depends(get_db),
+    _: str = Depends(require_permission("appointments.create")),
+    tenant_id: str = Depends(get_tenant_id),
+):
+    """Which times a doctor is unavailable on a date.
+
+    Booking a slot requires knowing what everyone else has taken, but a patient
+    may not read other people's appointments. So the server answers the question
+    — times only, no patient, no reason, no ids — instead of handing over the
+    rows the client would otherwise have to filter itself.
+    """
+    taken = [
+        row.time
+        for row in scoped(db, models.Appointment, tenant_id)
+        .filter(
+            models.Appointment.doctor_id == doctor_id,
+            models.Appointment.date == date,
+            models.Appointment.status == "scheduled",
+        )
+        .all()
+    ]
+    blocks = (
+        scoped(db, models.ScheduleBlock, tenant_id)
+        .filter(
+            models.ScheduleBlock.doctor_id == doctor_id,
+            models.ScheduleBlock.date == date,
+        )
+        .all()
+    )
+    return schemas.DoctorAvailabilityOut(
+        doctor_id=doctor_id,
+        date=date,
+        taken=sorted(set(taken)),
+        blocks=[schemas.ScheduleBlockOut.model_validate(b) for b in blocks],
+    )

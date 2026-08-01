@@ -1,11 +1,16 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { ArrowLeft, Printer, AlertTriangle } from 'lucide-react';
 import Image from 'next/image';
-import { authStorage } from '@/lib/auth';
-import { dbOperations, TestOrder, TestResult, Patient, User, Doctor } from '@/lib/db';
+import { useDashboardGuard } from '@/hooks/useDashboardGuard';
+import {
+  useGetDoctorQuery,
+  useGetPatientQuery,
+  useGetTestOrderQuery,
+  useListTestResultsQuery,
+} from '@/store/api';
 import { ORDER_STATUS_LABEL, FLAG_STYLE, FLAG_LABEL, isAbnormal } from '@/lib/lab';
 import { useActiveHospital } from '@/hooks/useActiveHospital';
 
@@ -15,44 +20,31 @@ export default function LabReportPage() {
   const params = useParams();
   const orderId = params.id as string;
 
-  const [session, setSession] = useState<ReturnType<typeof authStorage.getSession>>(null);
-  const [ready, setReady] = useState(false);
-  const [order, setOrder] = useState<TestOrder | null>(null);
-  const [results, setResults] = useState<TestResult[]>([]);
-  const [patient, setPatient] = useState<Patient | null>(null);
-  const [patientUser, setPatientUser] = useState<User | null>(null);
-  const [doctor, setDoctor] = useState<Doctor | null>(null);
-  const [doctorUser, setDoctorUser] = useState<User | null>(null);
+  // The API returns 404 for an order the caller isn't entitled to, so there is
+  // no separate access check here.
+  const session = useDashboardGuard();
+  const { data: order, isLoading, isError } = useGetTestOrderQuery(orderId, {
+    skip: !orderId || !session,
+  });
+  const { data: allResults = [] } = useListTestResultsQuery(undefined, { skip: !order });
+  const { data: patient } = useGetPatientQuery(order?.patientId ?? '', { skip: !order });
+  const { data: doctor } = useGetDoctorQuery(order?.doctorId ?? '', { skip: !order });
 
-  useEffect(() => {
-    const s = authStorage.getSession();
-    if (!s) {
-      router.push('/login');
-      return;
-    }
-    setSession(s);
-    const o = dbOperations.getTestOrderById(orderId) ?? null;
-    setOrder(o);
-    if (o) {
-      setResults(dbOperations.getTestResultsByOrderId(o.id));
-      const p = dbOperations.getPatient(o.patientId) ?? null;
-      setPatient(p);
-      setPatientUser(p ? dbOperations.getUserById(p.userId) ?? null : null);
-      const d = dbOperations.getDoctorById(o.doctorId) ?? null;
-      setDoctor(d);
-      setDoctorUser(d ? dbOperations.getUserById(d.userId) ?? null : null);
-    }
-    setReady(true);
-  }, [orderId, router]);
+  const results = useMemo(
+    () => allResults.filter((r) => r.orderId === orderId),
+    [allResults, orderId],
+  );
+  const patientUser = patient?.user ?? null;
+  const doctorUser = doctor?.user ?? null;
 
   const anyAbnormal = useMemo(
     () => results.some((r) => r.parameters.some((p) => isAbnormal(p.flag))),
     [results],
   );
 
-  if (!session || !ready) return null;
+  if (!session || isLoading) return null;
 
-  if (!order) {
+  if (!order || isError) {
     return (
       <div className="min-h-screen bg-slate-100 flex flex-col items-center justify-center gap-4">
         <p className="text-slate-600">Report not found.</p>

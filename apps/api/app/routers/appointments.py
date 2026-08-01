@@ -115,8 +115,27 @@ def update_appointment(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Appointment not found"
         )
-    for field, value in body.model_dump(exclude_unset=True).items():
+    changes = body.model_dump(exclude_unset=True)
+
+    # Handing an appointment to a different doctor hands that doctor the
+    # patient's chart, so it takes hospital-wide authority. A caller scoped to
+    # their own appointments may edit them but not move them to someone else.
+    reassignment = {k: v for k, v in changes.items() if k in ("doctor_id", "department_id")}
+    if reassignment and scope == SCOPE_OWN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You cannot reassign an appointment to another doctor",
+        )
+
+    moved = (
+        changes.get("date", appointment.date) != appointment.date
+        or changes.get("time", appointment.time) != appointment.time
+    )
+
+    for field, value in changes.items():
         setattr(appointment, field, value)
+    if moved:
+        appointment.rescheduled = True
     db.commit()
     db.refresh(appointment)
     return appointment

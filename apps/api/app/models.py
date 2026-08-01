@@ -222,6 +222,9 @@ class Appointment(Base):
     notes = Column(Text, default="")
     # Set when booked as a follow-up to an earlier appointment.
     follow_up_of = Column(String, nullable=True)
+    # Raised by the server when a booked date/time is moved — a fact about what
+    # happened, so it is never taken from the request body.
+    rescheduled = Column(Boolean, default=False, nullable=False)
     created_at = Column(String, nullable=False)
 
 

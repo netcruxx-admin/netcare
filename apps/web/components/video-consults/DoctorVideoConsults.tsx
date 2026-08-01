@@ -1,9 +1,18 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Video, Plus, X, CalendarPlus, Clock, UserRound } from 'lucide-react';
-import { dbOperations, type Appointment, type VideoSlot } from '@/lib/db';
+import type { Appointment, VideoSlot } from '@/lib/types';
+import { apiError } from '@/lib/apiError';
+import {
+  useCreateVideoSlotMutation,
+  useDeleteVideoSlotMutation,
+  useGetDoctorByUserQuery,
+  useListAppointmentsQuery,
+  useListPatientsQuery,
+  useListVideoSlotsQuery,
+} from '@/store/api';
 import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
 import { GRID_SLOTS } from '@/lib/schedule';
@@ -11,34 +20,27 @@ import { GRID_SLOTS } from '@/lib/schedule';
 const todayStr = () => new Date().toISOString().split('T')[0];
 
 export function DoctorVideoConsults({ session }: RoleViewProps) {
-  const router = useRouter();
-  const [doctorId, setDoctorId] = useState('');
-  const [slots, setSlots] = useState<VideoSlot[]>([]);
-  const [appts, setAppts] = useState<Appointment[]>([]);
 
   const [date, setDate] = useState(todayStr());
   const [picked, setPicked] = useState<Set<string>>(new Set());
 
-  const refresh = (docId: string) => {
-    setSlots([...dbOperations.getVideoSlotsByDoctorId(docId)]);
-    setAppts(
-      dbOperations.getAppointmentsByDoctorId(docId).filter((a) => a.mode === 'video' && a.status === 'scheduled'),
-    );
-  };
+  const router = useRouter();
+  const { data: doctor } = useGetDoctorByUserQuery(session.user.id);
+  const doctorId = doctor?.id ?? '';
 
-  useEffect(() => {
-    const s = session;
-    const docId = dbOperations.getDoctorByUserId(s.user.id)?.id ?? '';
-    setDoctorId(docId);
-    if (docId) refresh(docId);
-  }, [session]);
+  const { data: slots = [] } = useListVideoSlotsQuery({ doctorId }, { skip: !doctorId });
+  const { data: allAppointments = [] } = useListAppointmentsQuery();
+  const { data: patients = [] } = useListPatientsQuery();
+  const [createVideoSlot] = useCreateVideoSlotMutation();
+  const [deleteVideoSlot] = useDeleteVideoSlotMutation();
+  const [error, setError] = useState('');
 
-  const patientName = useMemo(() => {
-    const users = new Map(dbOperations.getAllUsers().map((u) => [u.id, u.name]));
-    const map = new Map<string, string>();
-    dbOperations.getAllPatients().forEach((p) => map.set(p.id, users.get(p.userId) ?? p.id));
-    return map;
-  }, [slots, appts]);
+  const appts = allAppointments.filter((a) => a.mode === 'video' && a.status === 'scheduled');
+
+  const patientName = useMemo(
+    () => new Map(patients.map((p) => [p.id, p.user?.name ?? p.id])),
+    [patients],
+  );
 
   // Times already published for the selected date (can't double-add).
   const takenForDate = new Set(slots.filter((s) => s.date === date).map((s) => s.time));
@@ -51,25 +53,27 @@ export function DoctorVideoConsults({ session }: RoleViewProps) {
     });
   };
 
-  const publish = () => {
+  const publish = async () => {
     if (!date || picked.size === 0) return;
-    [...picked].forEach((time, i) => {
-      dbOperations.createVideoSlot({
-        id: `vs-${Date.now()}-${i}`,
-        doctorId,
-        date,
-        time,
-        status: 'open',
-        createdAt: new Date().toISOString(),
-      });
-    });
-    setPicked(new Set());
-    refresh(doctorId);
+    setError('');
+    try {
+      // Published one at a time; the list tag invalidates once they all land.
+      for (const time of picked) {
+        await createVideoSlot({ doctorId, date, time, status: 'open' }).unwrap();
+      }
+      setPicked(new Set());
+    } catch (err) {
+      setError(apiError(err, 'Could not publish those slots'));
+    }
   };
 
-  const removeSlot = (id: string) => {
-    dbOperations.deleteVideoSlot(id);
-    refresh(doctorId);
+  const removeSlot = async (id: string) => {
+    setError('');
+    try {
+      await deleteVideoSlot(id).unwrap();
+    } catch (err) {
+      setError(apiError(err, 'Could not remove the slot'));
+    }
   };
 
   // Group slots by date for display.

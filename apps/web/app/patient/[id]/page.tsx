@@ -20,9 +20,19 @@ import {
   AlertTriangle,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import { authStorage } from '@/lib/auth';
+import { useDashboardGuard } from '@/hooks/useDashboardGuard';
 import { adminRole, staffRoles } from '@/lib/roles';
-import { dbOperations, Appointment, Patient, User, Vitals, Prescription, TestOrder, TestResult } from '@/lib/db';
+import type { Appointment, Patient, User, Vitals, Prescription, TestOrder, TestResult } from '@/lib/types';
+import {
+  useGetPatientAppointmentsQuery,
+  useGetPatientPrescriptionsQuery,
+  useGetPatientQuery,
+  useGetPatientVitalsQuery,
+  useListDepartmentsQuery,
+  useListDoctorsQuery,
+  useListTestOrdersQuery,
+  useListTestResultsQuery,
+} from '@/store/api';
 import { DashboardShell } from '@/components/DashboardShell';
 import { ORDER_STATUS_LABEL, ORDER_STATUS_STYLE, isAbnormal } from '@/lib/lab';
 
@@ -50,54 +60,48 @@ export default function PatientDetailPage() {
   const params = useParams();
   const patientId = params.id as string;
 
-  const [session, setSession] = useState<ReturnType<typeof authStorage.getSession>>(null);
-  const [notFound, setNotFound] = useState(false);
-  const [model, setModel] = useState<Model | null>(null);
+  const session = useDashboardGuard();
 
-  useEffect(() => {
-    const s = authStorage.getSession();
-    if (!s || !staffRoles.includes(s.user.role)) {
-      router.push('/login');
-      return;
-    }
-    setSession(s);
+  // The API decides what this caller may see: a patient they don't treat 404s,
+  // and each sub-resource is narrowed by the same "own" scope.
+  const { data: patient, isError: notFound } = useGetPatientQuery(patientId, {
+    skip: !patientId || !session,
+  });
+  const { data: rawAppointments = [] } = useGetPatientAppointmentsQuery(patientId, { skip: !patient });
+  const { data: rawVitals = [] } = useGetPatientVitalsQuery(patientId, { skip: !patient });
+  const { data: rawPrescriptions = [] } = useGetPatientPrescriptionsQuery(patientId, { skip: !patient });
+  const { data: rawOrders = [] } = useListTestOrdersQuery({ patientId }, { skip: !patient });
+  const { data: allResults = [] } = useListTestResultsQuery(undefined, { skip: !patient });
+  const { data: doctors = [] } = useListDoctorsQuery(undefined, { skip: !patient });
+  const { data: departments = [] } = useListDepartmentsQuery(undefined, { skip: !patient });
 
-    const patient = dbOperations.getPatient(patientId);
-    if (!patient) {
-      setNotFound(true);
-      return;
-    }
+  const model: Model | null = useMemo(() => {
+    if (!patient) return null;
 
-    const userById = new Map(dbOperations.getAllUsers().map((u) => [u.id, u]));
-    const doctorById = new Map(dbOperations.getAllDoctors().map((d) => [d.id, d]));
-    const deptById = new Map(dbOperations.getAllDepartments().map((d) => [d.id, d]));
+    const doctorById = new Map(doctors.map((d) => [d.id, d]));
+    const deptById = new Map(departments.map((d) => [d.id, d]));
     const doctorName = (id: string) => {
-      const d = doctorById.get(id);
-      const u = d ? userById.get(d.userId) : null;
-      return u ? `Dr. ${u.name}` : '—';
+      const name = doctorById.get(id)?.user?.name;
+      return name ? `Dr. ${name}` : '—';
     };
 
-    const appointments = dbOperations
-      .getAppointmentsByPatientId(patientId)
+    const appointments = [...rawAppointments]
       .map((a) => ({ ...a, doctor: doctorName(a.doctorId), dept: deptById.get(a.departmentId)?.name ?? '—' }))
       .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
 
-    const vitals = dbOperations.getVitalsByPatientId(patientId).sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+    const vitals = [...rawVitals].sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
 
-    const prescriptions = dbOperations
-      .getPrescriptionsByPatientId(patientId)
+    const prescriptions = [...rawPrescriptions]
       .map((rx) => ({ ...rx, doctor: doctorName(rx.doctorId), date: rx.createdAt.split('T')[0] }))
       .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
 
-    const allResults = dbOperations.getAllTestResults();
     const resultsByOrder = new Map<string, TestResult[]>();
     allResults.forEach((r) => {
       const list = resultsByOrder.get(r.orderId) ?? [];
       list.push(r);
       resultsByOrder.set(r.orderId, list);
     });
-    const orders = dbOperations
-      .getTestOrdersByPatientId(patientId)
+    const orders = [...rawOrders]
       .map((o) => {
         const res = resultsByOrder.get(o.id) ?? [];
         return {
@@ -110,9 +114,9 @@ export default function PatientDetailPage() {
       })
       .sort((a, b) => (a.order.orderedAt < b.order.orderedAt ? 1 : -1));
 
-    setModel({
+    return {
       patient,
-      patientUser: userById.get(patient.userId) ?? null,
+      patientUser: patient.user ?? null,
       appointments,
       vitals,
       prescriptions,
@@ -124,8 +128,8 @@ export default function PatientDetailPage() {
         prescriptions: prescriptions.length,
         tests: orders.length,
       },
-    });
-  }, [patientId, router]);
+    };
+  }, [patient, rawAppointments, rawVitals, rawPrescriptions, rawOrders, allResults, doctors, departments]);
 
   const role = session?.user.role ?? adminRole;
 
@@ -142,7 +146,7 @@ export default function PatientDetailPage() {
 
   if (!session || !model) return null;
 
-  const { patient, patientUser } = model;
+  const { patient: patientRecord, patientUser } = model;
   const name = patientUser?.name ?? 'Patient';
 
   const cards: { label: string; value: number; icon: LucideIcon; tint: string }[] = [
@@ -171,9 +175,9 @@ export default function PatientDetailPage() {
             <h2 className="text-xl font-bold text-slate-900">{name}</h2>
             <div className="flex flex-wrap gap-x-5 gap-y-1 mt-1 text-sm text-slate-600">
               <span className="flex items-center gap-1"><Mail className="w-3.5 h-3.5 text-slate-400" /> {patientUser?.email ?? '—'}</span>
-              <span className="flex items-center gap-1"><Phone className="w-3.5 h-3.5 text-slate-400" /> {patient.phone || '—'}</span>
-              <span className="flex items-center gap-1"><Droplet className="w-3.5 h-3.5 text-slate-400" /> {patient.bloodGroup || '—'}</span>
-              <span>{patient.gender || '—'}{patient.dateOfBirth ? ` · DOB ${patient.dateOfBirth}` : ''}</span>
+              <span className="flex items-center gap-1"><Phone className="w-3.5 h-3.5 text-slate-400" /> {patientRecord.phone || '—'}</span>
+              <span className="flex items-center gap-1"><Droplet className="w-3.5 h-3.5 text-slate-400" /> {patientRecord.bloodGroup || '—'}</span>
+              <span>{patientRecord.gender || '—'}{patientRecord.dateOfBirth ? ` · DOB ${patientRecord.dateOfBirth}` : ''}</span>
             </div>
           </div>
         </div>
@@ -200,12 +204,12 @@ export default function PatientDetailPage() {
         <div className="bg-white rounded-lg shadow p-6">
           <h3 className="font-semibold text-slate-900 mb-4 flex items-center gap-2"><HeartPulse className="w-5 h-5 text-cyan-600" /> Medical Profile</h3>
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-4 text-sm">
-            <Info label="Allergies" value={patient.allergies} icon={ShieldAlert} highlight={!!patient.allergies && patient.allergies.toLowerCase() !== 'none' && !patient.allergies.toLowerCase().includes('no known')} />
-            <Info label="Chronic Diseases" value={patient.chronicDiseases} />
-            <Info label="Medical History" value={patient.medicalHistory} />
-            <Info label="Emergency Contact" value={patient.emergencyContact ? `${patient.emergencyContact}${patient.emergencyPhone ? ` · ${patient.emergencyPhone}` : ''}` : ''} />
-            <Info label="Insurance Provider" value={patient.insuranceProvider} />
-            <Info label="Insurance Number" value={patient.insuranceNumber} />
+            <Info label="Allergies" value={patientRecord.allergies} icon={ShieldAlert} highlight={!!patientRecord.allergies && patientRecord.allergies.toLowerCase() !== 'none' && !patientRecord.allergies.toLowerCase().includes('no known')} />
+            <Info label="Chronic Diseases" value={patientRecord.chronicDiseases} />
+            <Info label="Medical History" value={patientRecord.medicalHistory} />
+            <Info label="Emergency Contact" value={patientRecord.emergencyContact ? `${patientRecord.emergencyContact}${patientRecord.emergencyPhone ? ` · ${patientRecord.emergencyPhone}` : ''}` : ''} />
+            <Info label="Insurance Provider" value={patientRecord.insuranceProvider} />
+            <Info label="Insurance Number" value={patientRecord.insuranceNumber} />
           </div>
         </div>
 

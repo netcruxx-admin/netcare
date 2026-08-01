@@ -23,7 +23,8 @@ import {
   XCircle,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import { dbOperations, Appointment, Department, Doctor, Patient, User } from '@/lib/db';
+import type { Appointment, Department, Doctor } from '@/lib/types';
+import { apiError } from '@/lib/apiError';
 import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
 import { FormField } from '@/components/form/FormField';
@@ -31,7 +32,16 @@ import { FollowUpModal } from '@/components/FollowUpModal';
 import { ActionIcon } from '@/components/ActionIcon';
 import { ExportButton } from '@/components/ExportButton';
 import { blockedSlotSet } from '@/lib/schedule';
-import { useListScheduleBlocksQuery } from '@/store/api';
+import {
+  useCreateVitalsMutation,
+  useDeleteAppointmentMutation,
+  useListAppointmentsQuery,
+  useListDepartmentsQuery,
+  useListDoctorsQuery,
+  useListPatientsQuery,
+  useListScheduleBlocksQuery,
+  useUpdateAppointmentMutation,
+} from '@/store/api';
 import { Calendar } from '@/components/ui/calendar';
 import {
   Pagination,
@@ -76,19 +86,25 @@ function slotStatus(slot: string, date: string, booked: Set<string>, blocked: Se
   if (booked.has(slot)) return 'booked';
   return 'available';
 }
-function bookedSlotsForDoctor(doctorId: string, date: string, excludeId?: string) {
+// An admin already holds every appointment in the hospital, so the taken slots
+// can be read straight off the list rather than asked for separately. The
+// appointment being moved is excluded — its own slot is not a conflict.
+function bookedSlotsForDoctor(
+  appointments: Appointment[],
+  doctorId: string,
+  date: string,
+  excludeId?: string,
+) {
   if (!doctorId || !date) return new Set<string>();
   return new Set(
-    dbOperations
-      .getAppointmentsByDoctorId(doctorId)
-      .filter((a) => a.date === date && a.status === 'scheduled' && a.id !== excludeId)
+    appointments
+      .filter((a) => a.doctorId === doctorId && a.date === date && a.status === 'scheduled' && a.id !== excludeId)
       .map((a) => a.time),
   );
 }
-function departmentForDoctor(doctorId: string) {
-  const doc = dbOperations.getDoctorById(doctorId);
-  const depts = dbOperations.getAllDepartments();
-  return depts.find((d) => d.name === doc?.specialization)?.id ?? depts[0]?.id ?? 'dept-1';
+function departmentForDoctor(departments: Department[], doctors: Doctor[], doctorId: string) {
+  const doc = doctors.find((d) => d.id === doctorId);
+  return departments.find((d) => d.name === doc?.specialization)?.id ?? departments[0]?.id ?? '';
 }
 
 const numOpt = Yup.number()
@@ -124,14 +140,6 @@ const statusOptions = [
   { value: 'cancelled', label: 'Cancelled' },
 ];
 
-interface RawData {
-  appointments: Appointment[];
-  departments: Department[];
-  doctors: Doctor[];
-  patients: Patient[];
-  users: User[];
-}
-
 function buildPageItems(current: number, total: number): (number | 'ellipsis')[] {
   if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
   const set = new Set(
@@ -146,21 +154,18 @@ function buildPageItems(current: number, total: number): (number | 'ellipsis')[]
   return items;
 }
 
-function fetchRaw(): RawData {
-  return {
-    appointments: dbOperations.getAllAppointments(),
-    departments: dbOperations.getAllDepartments(),
-    doctors: dbOperations.getAllDoctors(),
-    patients: dbOperations.getAllPatients(),
-    users: dbOperations.getAllUsers(),
-  };
-}
-
 export function AdminAppointments({ session }: RoleViewProps) {
   // Blocks come from the API; blockedSlotSet is a pure calculation over them.
   const { data: scheduleBlocks = [] } = useListScheduleBlocksQuery();
   const router = useRouter();
-  const [raw, setRaw] = useState<RawData | null>(null);
+
+  const { data: appointments = [] } = useListAppointmentsQuery();
+  const { data: departments = [] } = useListDepartmentsQuery();
+  const { data: doctors = [] } = useListDoctorsQuery();
+  const { data: patients = [] } = useListPatientsQuery();
+  const [updateAppointment] = useUpdateAppointmentMutation();
+  const [deleteAppointment] = useDeleteAppointmentMutation();
+  const [createVitals] = useCreateVitalsMutation();
 
   const [status, setStatus] = useState<'all' | Appointment['status']>('all');
   const [deptId, setDeptId] = useState('all');
@@ -177,40 +182,33 @@ export function AdminAppointments({ session }: RoleViewProps) {
   const [addingVitals, setAddingVitals] = useState<Appointment | null>(null);
   const [deleting, setDeleting] = useState<Appointment | null>(null);
   const [toast, setToast] = useState('');
+  const [error, setError] = useState('');
 
-  const reload = () => setRaw(fetchRaw());
   const flash = (msg: string) => {
     setToast(msg);
     setTimeout(() => setToast(''), 2500);
   };
 
   useEffect(() => {
-    setRaw(fetchRaw());
-  }, [session]);
-
-  useEffect(() => {
     setPage(1);
   }, [query, status, deptId, date]);
 
   const rows = useMemo(() => {
-    if (!raw) return [];
-    const userById = new Map(raw.users.map((u) => [u.id, u]));
-    const doctorById = new Map(raw.doctors.map((d) => [d.id, d]));
-    const patientById = new Map(raw.patients.map((p) => [p.id, p]));
-    const deptById = new Map(raw.departments.map((d) => [d.id, d]));
+    const doctorById = new Map(doctors.map((d) => [d.id, d]));
+    const patientById = new Map(patients.map((p) => [p.id, p]));
+    const deptById = new Map(departments.map((d) => [d.id, d]));
 
     const doctorName = (id: string) => {
-      const u = doctorById.get(id) ? userById.get(doctorById.get(id)!.userId) : null;
-      return u ? `Dr. ${u.name}` : '—';
+      const name = doctorById.get(id)?.user?.name;
+      return name ? `Dr. ${name}` : '—';
     };
     const patientOf = (id: string) => {
       const p = patientById.get(id);
-      const u = p ? userById.get(p.userId) : null;
-      return { name: u?.name ?? '—', phone: p?.phone || '—' };
+      return { name: p?.user?.name ?? '—', phone: p?.phone || '—' };
     };
 
     const q = query.trim().toLowerCase();
-    return raw.appointments
+    return appointments
       .map((a) => {
         const p = patientOf(a.patientId);
         return {
@@ -237,10 +235,10 @@ export function AdminAppointments({ session }: RoleViewProps) {
           r.phone.toLowerCase().includes(q),
       )
       .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
-  }, [raw, status, deptId, date, query]);
+  }, [appointments, doctors, patients, departments, status, deptId, date, query]);
 
   const stats = useMemo(() => {
-    const appts = raw?.appointments ?? [];
+    const appts = appointments;
     return {
       total: appts.length,
       scheduled: appts.filter((a) => a.status === 'scheduled').length,
@@ -248,39 +246,53 @@ export function AdminAppointments({ session }: RoleViewProps) {
       rescheduled: appts.filter((a) => a.rescheduled).length,
       cancelled: appts.filter((a) => a.status === 'cancelled').length,
     };
-  }, [raw]);
+  }, [appointments]);
 
   const totalPages = Math.ceil(rows.length / PAGE_SIZE);
   const pageRows = rows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
   const pageItems = buildPageItems(page, totalPages);
 
 
-  const doctorOptions = (raw?.doctors ?? []).map((d) => {
-    const u = raw?.users.find((x) => x.id === d.userId);
-    return { value: d.id, label: `Dr. ${u?.name ?? 'Doctor'} — ${d.specialization}` };
-  });
+  const doctorOptions = doctors.map((d) => ({
+    value: d.id,
+    label: `Dr. ${d.user?.name ?? 'Doctor'} — ${d.specialization}`,
+  }));
 
   const openReschedule = (a: Appointment) => {
     setReDate(a.date);
     setReTime(a.time);
     setRescheduling(a);
   };
-  const saveReschedule = () => {
+  const saveReschedule = async () => {
     if (!rescheduling || !reDate || !reTime) return;
-    dbOperations.updateAppointment(rescheduling.id, { date: reDate, time: reTime, rescheduled: true });
-    reload();
-    setRescheduling(null);
-    flash('Appointment rescheduled');
+    setError('');
+    try {
+      await updateAppointment({
+        id: rescheduling.id,
+        // The server marks it rescheduled off the date/time change itself.
+        body: { date: reDate, time: reTime },
+      }).unwrap();
+      setRescheduling(null);
+      flash('Appointment rescheduled');
+    } catch (err) {
+      setError(apiError(err, 'Could not reschedule the appointment'));
+    }
   };
-  const confirmDelete = () => {
+  const confirmDelete = async () => {
     if (!deleting) return;
-    dbOperations.deleteAppointment(deleting.id);
-    reload();
+    setError('');
+    try {
+      await deleteAppointment(deleting.id).unwrap();
+      flash('Appointment deleted');
+    } catch (err) {
+      setError(apiError(err, 'Could not delete the appointment'));
+    }
     setDeleting(null);
-    flash('Appointment deleted');
   };
 
-  const reBooked = rescheduling ? bookedSlotsForDoctor(rescheduling.doctorId, reDate, rescheduling.id) : new Set<string>();
+  const reBooked = rescheduling
+    ? bookedSlotsForDoctor(appointments, rescheduling.doctorId, reDate, rescheduling.id)
+    : new Set<string>();
   const reBlocked = rescheduling
     ? blockedSlotSet(scheduleBlocks, rescheduling.doctorId, reDate, SLOTS)
     : new Set<string>();
@@ -293,6 +305,10 @@ export function AdminAppointments({ session }: RoleViewProps) {
       subtitle="All appointments across the hospital"
     >
       <div className="space-y-6">
+        {error && (
+          <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm text-red-700">{error}</div>
+        )}
+
         {/* Stat cards */}
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
           {(
@@ -346,7 +362,7 @@ export function AdminAppointments({ session }: RoleViewProps) {
             className="bg-white rounded-lg shadow px-3 py-2 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-cyan-500"
           >
             <option value="all">All Departments</option>
-            {raw?.departments.map((d) => (
+            {departments.map((d) => (
               <option key={d.id} value={d.id}>
                 {d.name}
               </option>
@@ -496,16 +512,23 @@ export function AdminAppointments({ session }: RoleViewProps) {
             <Formik
               initialValues={{ doctorId: editing.doctorId, status: editing.status, reason: editing.reason }}
               validationSchema={editSchema}
-              onSubmit={(values) => {
-                dbOperations.updateAppointment(editing.id, {
-                  doctorId: values.doctorId,
-                  departmentId: departmentForDoctor(values.doctorId),
-                  status: values.status as Appointment['status'],
-                  reason: values.reason,
-                });
-                reload();
-                setEditing(null);
-                flash('Appointment updated');
+              onSubmit={async (values) => {
+                setError('');
+                try {
+                  await updateAppointment({
+                    id: editing.id,
+                    body: {
+                      doctorId: values.doctorId,
+                      departmentId: departmentForDoctor(departments, doctors, values.doctorId),
+                      status: values.status as Appointment['status'],
+                      reason: values.reason,
+                    },
+                  }).unwrap();
+                  setEditing(null);
+                  flash('Appointment updated');
+                } catch (err) {
+                  setError(apiError(err, 'Could not update the appointment'));
+                }
               }}
             >
               <Form className="space-y-4">
@@ -602,23 +625,26 @@ export function AdminAppointments({ session }: RoleViewProps) {
             <Formik
               initialValues={{ temperature: '', bloodPressure: '', heartRate: '', respiratoryRate: '', weight: '', height: '', notes: '' }}
               validationSchema={vitalsSchema}
-              onSubmit={(values) => {
-                dbOperations.createVitals({
-                  id: `v-${Date.now()}`,
-                  appointmentId: addingVitals.id,
-                  patientId: addingVitals.patientId,
-                  doctorId: addingVitals.doctorId,
-                  temperature: Number(values.temperature) || 0,
-                  bloodPressure: values.bloodPressure,
-                  heartRate: Number(values.heartRate) || 0,
-                  respiratoryRate: Number(values.respiratoryRate) || 0,
-                  weight: Number(values.weight) || 0,
-                  height: Number(values.height) || 0,
-                  notes: values.notes,
-                  createdAt: new Date().toISOString(),
-                });
-                setAddingVitals(null);
-                flash('Vitals recorded');
+              onSubmit={async (values) => {
+                setError('');
+                try {
+                  await createVitals({
+                    appointmentId: addingVitals.id,
+                    patientId: addingVitals.patientId,
+                    doctorId: addingVitals.doctorId,
+                    temperature: Number(values.temperature) || 0,
+                    bloodPressure: values.bloodPressure,
+                    heartRate: Number(values.heartRate) || 0,
+                    respiratoryRate: Number(values.respiratoryRate) || 0,
+                    weight: Number(values.weight) || 0,
+                    height: Number(values.height) || 0,
+                    notes: values.notes,
+                  }).unwrap();
+                  setAddingVitals(null);
+                  flash('Vitals recorded');
+                } catch (err) {
+                  setError(apiError(err, 'Could not record the vitals'));
+                }
               }}
             >
               <Form className="grid grid-cols-2 gap-4">
@@ -677,7 +703,7 @@ export function AdminAppointments({ session }: RoleViewProps) {
         <FollowUpModal
           appointment={followUp}
           onClose={() => setFollowUp(null)}
-          onCreated={(msg) => { reload(); setFollowUp(null); flash(msg); }}
+          onCreated={(msg) => { setFollowUp(null); flash(msg); }}
         />
       )}
 

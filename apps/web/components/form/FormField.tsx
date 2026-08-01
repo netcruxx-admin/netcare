@@ -26,6 +26,11 @@ interface FormFieldProps {
   icon?: LucideIcon;
   /** Native autocomplete hint. Defaults to "off" to suppress manager popups. */
   autoComplete?: string;
+  /**
+   * Notified after Formik records the change. For the cases where something
+   * outside the form — a query hook, say — has to react to a field's value.
+   */
+  onValueChange?: (value: string) => void;
 }
 
 export function FormField({
@@ -42,8 +47,15 @@ export function FormField({
   required,
   icon: Icon,
   autoComplete,
+  onValueChange,
 }: FormFieldProps) {
   const [field, meta] = useField(name);
+  const onChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>,
+  ) => {
+    field.onChange(e);
+    onValueChange?.(e.target.value);
+  };
   const [show, setShow] = useState(false);
   const hasError = meta.touched && !!meta.error;
   const isPassword = type === 'password';
@@ -55,10 +67,10 @@ export function FormField({
 
   let control;
   if (as === 'textarea') {
-    control = <textarea {...field} placeholder={placeholder} rows={rows} className={`${base} resize-none`} />;
+    control = <textarea {...field} onChange={onChange} placeholder={placeholder} rows={rows} className={`${base} resize-none`} />;
   } else if (as === 'select') {
     control = (
-      <select {...field} className={base}>
+      <select {...field} onChange={onChange} className={base}>
         <option value="">{placeholder ?? 'Select…'}</option>
         {options?.map((o) => (
           <option key={o.value} value={o.value}>
@@ -71,6 +83,7 @@ export function FormField({
     control = (
       <input
         {...field}
+        onChange={onChange}
         type={isPassword && show ? 'text' : type}
         placeholder={placeholder}
         autoFocus={autoFocus}

@@ -3,7 +3,15 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Check, X, Sparkles, Building2, Layers, Database, Trash2 } from 'lucide-react';
+// The demo-data helpers below are still backed by the local mock store; the
+// department template is applied through the real API.
 import { dbOperations } from '@/lib/db';
+import { apiError } from '@/lib/apiError';
+import {
+  useCreateDepartmentMutation,
+  useDeleteDepartmentMutation,
+  useListDepartmentsQuery,
+} from '@/store/api';
 import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
 import {
@@ -40,16 +48,31 @@ export function AdminSetup({ session }: RoleViewProps) {
     setSelectedId(current);
   }, [session]);
 
+  const { data: existingDepartments = [] } = useListDepartmentsQuery();
+  const [createDepartment] = useCreateDepartmentMutation();
+  const [deleteDepartment] = useDeleteDepartmentMutation();
+  const [error, setError] = useState('');
+
   const selected = HOSPITAL_CATEGORIES[selectedId];
   const isDirty = selectedId !== activeId;
 
-  const handleApply = () => {
+  const handleApply = async () => {
     setActiveCategory(selectedId);
 
     if (applyDepartments) {
       // Replace the department list with this category's template.
-      dbOperations.getAllDepartments().forEach((d) => dbOperations.deleteDepartment(d.id));
-      selected.departments.forEach((d) => dbOperations.createDepartment({ ...d }));
+      setError('');
+      try {
+        for (const d of existingDepartments) {
+          await deleteDepartment(d.id).unwrap();
+        }
+        for (const d of selected.departments) {
+          await createDepartment({ name: d.name, description: d.description }).unwrap();
+        }
+      } catch (err) {
+        setError(apiError(err, 'Could not apply the department template'));
+        return;
+      }
     }
 
     // Full reload so every screen re-reads the active category / modules.
@@ -207,6 +230,9 @@ export function AdminSetup({ session }: RoleViewProps) {
             different pregnancy stages, antenatal visits, appointments, lab results and payments. The
             app ships empty by default; you can clear this any time.
           </p>
+          {error && (
+            <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</p>
+          )}
           {dataMsg && (
             <div className="mb-3 text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2">
               {dataMsg}
