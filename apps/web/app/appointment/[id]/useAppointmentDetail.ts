@@ -89,7 +89,7 @@ export function useAppointmentDetail() {
         await updateAppointment({ id: appointmentId, body: { status: 'cancelled' } }).unwrap();
         flash('Appointment cancelled');
       } else if (confirmAction === 'delete') {
-        await deleteAppointment(appointmentId).unwrap();
+        await deleteAppointment({ id: appointmentId }).unwrap();
         setConfirmAction(null);
         router.back();
         return;

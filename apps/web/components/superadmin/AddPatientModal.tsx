@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { X } from 'lucide-react';
+import { toast } from 'sonner';
 import { superadminPost } from '@/lib/superadminFetch';
 import { patientRole } from '@/lib/roles';
 import type { HospitalInfo } from '@/store/api';
@@ -42,7 +43,7 @@ export function AddPatientModal({ open, onClose, onSuccess, preselectedHospitalI
     if (!form.name.trim() || !form.email.trim()) { setError('Name and email are required'); return; }
     setLoading(true); setError('');
     try {
-      await superadminPost('/auth/register', hospitalId, {
+      await superadminPost('/users', hospitalId, {
         name: form.name.trim(), email: form.email.trim(),
         password: form.password, role: patientRole,
         phone: form.phone.trim() || undefined,
@@ -50,6 +51,7 @@ export function AddPatientModal({ open, onClose, onSuccess, preselectedHospitalI
         bloodGroup: form.bloodGroup || undefined,
         dateOfBirth: form.dateOfBirth || undefined,
       });
+      toast.success('Patient added successfully');
       onSuccess(); handleClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to add patient');

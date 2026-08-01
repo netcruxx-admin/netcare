@@ -152,6 +152,23 @@ export const authOperations = {
   },
 };
 
+/**
+ * Returns true if the session holds the given permission code.
+ *
+ * - If `session` is null → false (not authenticated).
+ * - If `session.permissions` is undefined → true (old stored session without
+ *   permission data; fall back to allowing so existing sessions aren't broken).
+ * - If `session.permissions` is an empty array → false (no permissions granted).
+ */
+export function hasPermission(
+  session: AuthSession | null,
+  code: string,
+): boolean {
+  if (!session) return false;
+  if (session.permissions === undefined) return true;
+  return session.permissions.some((p) => p.code === code);
+}
+
 // Helper to store auth in localStorage
 export const authStorage = {
   setSession: (session: AuthSession) => {

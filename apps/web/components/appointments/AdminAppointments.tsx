@@ -282,7 +282,7 @@ export function AdminAppointments({ session }: RoleViewProps) {
     if (!deleting) return;
     setError('');
     try {
-      await deleteAppointment(deleting.id).unwrap();
+      await deleteAppointment({ id: deleting.id }).unwrap();
       flash('Appointment deleted');
     } catch (err) {
       setError(apiError(err, 'Could not delete the appointment'));

@@ -1,36 +1,20 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { Formik, Form } from 'formik';
-import * as Yup from 'yup';
-import { Plus, X, Building2, AlertTriangle } from 'lucide-react';
+import { useState } from 'react';
+import { Plus, Building2, AlertTriangle } from 'lucide-react';
+import { toast } from 'sonner';
 import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
-import { FormField } from '@/components/form/FormField';
-import {
-  useListDepartmentsQuery,
-  useCreateDepartmentMutation,
-  useUpdateDepartmentMutation,
-  useDeleteDepartmentMutation,
-} from '@/store/api';
+import { DepartmentModal } from '@/components/departments/DepartmentModal';
+import { useListDepartmentsQuery, useDeleteDepartmentMutation } from '@/store/api';
 import type { Department } from '@/lib/types';
 
-const departmentSchema = Yup.object({
-  name: Yup.string().trim().required('Name is required').max(100, 'Keep it under 100 characters'),
-  description: Yup.string().trim().max(200, 'Keep it under 200 characters'),
-});
-
 export function AdminDepartments({ session }: RoleViewProps) {
-  const router = useRouter();
   const [editing, setEditing] = useState<Department | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [deleting, setDeleting] = useState<Department | null>(null);
 
-
-  const { data: departments = [] } = useListDepartmentsQuery();
-  const [createDepartment] = useCreateDepartmentMutation();
-  const [updateDepartment] = useUpdateDepartmentMutation();
+  const { data: departments = [], refetch } = useListDepartmentsQuery();
   const [deleteDepartment] = useDeleteDepartmentMutation();
 
   const openAdd = () => { setEditing(null); setModalOpen(true); };
@@ -40,7 +24,10 @@ export function AdminDepartments({ session }: RoleViewProps) {
   const confirmDelete = async () => {
     if (!deleting) return;
     try {
-      await deleteDepartment(deleting.id).unwrap();
+      await deleteDepartment({ id: deleting.id }).unwrap();
+      toast.success('Department deleted');
+    } catch {
+      toast.error('Failed to delete department');
     } finally {
       setDeleting(null);
     }
@@ -114,76 +101,14 @@ export function AdminDepartments({ session }: RoleViewProps) {
         )}
       </div>
 
-      {/* Add / Edit modal */}
-      {modalOpen && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg shadow-2xl max-w-md w-full p-6">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-bold text-slate-900">
-                {editing ? 'Edit Department' : 'Add Department'}
-              </h3>
-              <button onClick={closeModal} className="text-slate-500 hover:text-slate-900">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <Formik
-              initialValues={{
-                name: editing?.name ?? '',
-                description: editing?.description ?? '',
-              }}
-              validationSchema={departmentSchema}
-              onSubmit={async (values, { setSubmitting }) => {
-                try {
-                  if (editing) {
-                    await updateDepartment({
-                      id: editing.id,
-                      body: { name: values.name.trim(), description: values.description.trim() },
-                    }).unwrap();
-                  } else {
-                    await createDepartment({
-                      name: values.name.trim(),
-                      description: values.description.trim(),
-                    }).unwrap();
-                  }
-                  closeModal();
-                } finally {
-                  setSubmitting(false);
-                }
-              }}
-            >
-              {({ isSubmitting }) => (
-                <Form className="space-y-4">
-                  <FormField name="name" label="Name" placeholder="e.g. Obstetrics & Gynecology" autoFocus required />
-                  <FormField
-                    name="description"
-                    label="Description"
-                    as="textarea"
-                    placeholder="Short description of the department"
-                  />
-                  <div className="flex gap-3 pt-2">
-                    <button
-                      type="button"
-                      onClick={closeModal}
-                      className="flex-1 px-4 py-2 bg-slate-200 text-slate-700 rounded hover:bg-slate-300 transition"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="submit"
-                      disabled={isSubmitting}
-                      className="flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-teal-600 text-white rounded hover:shadow-lg font-semibold transition disabled:opacity-50"
-                    >
-                      {isSubmitting ? 'Saving…' : editing ? 'Save Changes' : 'Add Department'}
-                    </button>
-                  </div>
-                </Form>
-              )}
-            </Formik>
-          </div>
-        </div>
-      )}
+      <DepartmentModal
+        open={modalOpen}
+        onClose={closeModal}
+        onSuccess={() => { refetch(); closeModal(); }}
+        editing={editing}
+      />
 
-      {/* Delete confirmation modal */}
+      {/* Delete confirmation */}
       {deleting && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-lg shadow-2xl max-w-md w-full p-6">
@@ -201,16 +126,10 @@ export function AdminDepartments({ session }: RoleViewProps) {
               </div>
             </div>
             <div className="flex gap-3 mt-6">
-              <button
-                onClick={() => setDeleting(null)}
-                className="flex-1 px-4 py-2 bg-slate-200 text-slate-700 rounded hover:bg-slate-300 transition"
-              >
+              <button onClick={() => setDeleting(null)} className="flex-1 px-4 py-2 bg-slate-200 text-slate-700 rounded hover:bg-slate-300 transition">
                 Cancel
               </button>
-              <button
-                onClick={confirmDelete}
-                className="flex-1 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 font-semibold transition"
-              >
+              <button onClick={confirmDelete} className="flex-1 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 font-semibold transition">
                 Delete
               </button>
             </div>

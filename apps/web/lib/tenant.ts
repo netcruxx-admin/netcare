@@ -7,8 +7,9 @@
 //
 // Resolution priority:
 //   1. Subdomain           — sunrise.localhost → 'hosp-2'   (URL is authoritative)
-//   2. localStorage switch — set by the in-app hospital switcher / onboarding
-//   3. Default             — the flagship tenant
+//   2. URL search param ?h — used when superadmin navigates to a tenant-scoped page
+//   3. localStorage switch — set by the in-app hospital switcher / onboarding
+//   4. Default             — the flagship tenant
 //
 // On real subdomains the browser gives each origin its own localStorage, so
 // tenants are naturally isolated; on the bare host the localStorage switch lets
@@ -57,6 +58,10 @@ export function getCurrentHospitalId(): string {
   // subdomain label — the backend resolves it to the real hospital ID.
   const label = currentSubdomain();
   if (label) return label;
+  // Superadmin navigates to tenant-scoped pages (e.g. /appointment/123?h=hosp-id).
+  // The ?h param carries the target hospital so all queries on that page scope correctly.
+  const urlH = new URLSearchParams(window.location.search).get('h');
+  if (urlH) return urlH;
   const stored = localStorage.getItem(ACTIVE_HOSPITAL_KEY);
   if (stored) return stored;
   return DEFAULT_HOSPITAL_ID;

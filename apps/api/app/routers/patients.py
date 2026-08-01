@@ -205,6 +205,22 @@ def patient_prescriptions(
     return _sub_resource(db, user, models.Prescription, patient_id, tenant_id, scope)
 
 
+@router.delete("/{patient_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_patient(
+    patient_id: str,
+    db: Session = Depends(get_db),
+    user: models.User = Depends(get_current_user),
+    _: dict = Depends(require_permission("patients.manage")),
+    tenant_id: str = Depends(get_tenant_id),
+):
+    patient = _get_or_404(db, patient_id, tenant_id)
+    linked_user = db.get(models.User, patient.user_id)
+    db.delete(patient)
+    if linked_user:
+        db.delete(linked_user)
+    db.commit()
+
+
 @router.get("/{patient_id}/vitals", response_model=list[schemas.VitalsOut])
 def patient_vitals(
     patient_id: str,

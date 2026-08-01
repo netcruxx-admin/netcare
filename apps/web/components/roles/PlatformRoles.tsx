@@ -3,12 +3,14 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Pencil, Plus, ShieldCheck, Trash2 } from 'lucide-react';
+import { toast } from 'sonner';
 import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
 import { RoleModal } from '@/components/superadmin/RoleModal';
 import { useDeleteRoleMutation, useListRolesQuery } from '@/store/api';
 import type { RoleInfo } from '@/store/api';
 import { builtInRoleCodes } from '@/lib/roles';
+import { hasPermission } from '@/lib/auth';
 
 
 export function PlatformRoles({ session }: RoleViewProps) {
@@ -28,9 +30,12 @@ export function PlatformRoles({ session }: RoleViewProps) {
     setError('');
     try {
       await deleteRole(role.code).unwrap();
+      toast.success(`Role "${role.label}" deleted`);
     } catch (err) {
       const detail = (err as { data?: { detail?: string } }).data?.detail;
-      setError(detail ?? 'Failed to delete role');
+      const msg = detail ?? 'Failed to delete role';
+      setError(msg);
+      toast.error(msg);
     }
   };
 
@@ -46,12 +51,14 @@ export function PlatformRoles({ session }: RoleViewProps) {
           <p className="text-sm text-slate-500">
             {roles.length} role{roles.length !== 1 ? 's' : ''}
           </p>
-          <button
-            onClick={openCreate}
-            className="flex items-center gap-2 px-3 py-1.5 bg-slate-900 text-white rounded-lg text-sm font-medium hover:bg-slate-700 transition"
-          >
-            <Plus className="w-4 h-4" /> Add Role
-          </button>
+          {hasPermission(session, 'roles.manage') && (
+            <button
+              onClick={openCreate}
+              className="flex items-center gap-2 px-3 py-1.5 bg-slate-900 text-white rounded-lg text-sm font-medium hover:bg-slate-700 transition"
+            >
+              <Plus className="w-4 h-4" /> Add Role
+            </button>
+          )}
         </div>
 
         {error && (
@@ -108,27 +115,31 @@ export function PlatformRoles({ session }: RoleViewProps) {
                       <td className="py-3 px-6 text-slate-600 text-sm">{r.userCount}</td>
                       <td className="py-3 px-6">
                         <div className="flex items-center justify-end gap-1">
-                          <button
-                            onClick={() => openEdit(r)}
-                            title="Edit role"
-                            className="p-1.5 text-slate-400 hover:text-slate-900 hover:bg-slate-100 rounded transition"
-                          >
-                            <Pencil className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => handleDelete(r)}
-                            disabled={locked}
-                            title={
-                              builtin
-                                ? 'Built-in roles cannot be deleted'
-                                : r.userCount > 0
-                                  ? 'Role is assigned to users'
-                                  : 'Delete role'
-                            }
-                            className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition disabled:opacity-30 disabled:hover:text-slate-400 disabled:hover:bg-transparent disabled:cursor-not-allowed"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
+                          {hasPermission(session, 'roles.manage') && (
+                            <button
+                              onClick={() => openEdit(r)}
+                              title="Edit role"
+                              className="p-1.5 text-slate-400 hover:text-slate-900 hover:bg-slate-100 rounded transition"
+                            >
+                              <Pencil className="w-4 h-4" />
+                            </button>
+                          )}
+                          {hasPermission(session, 'roles.manage') && (
+                            <button
+                              onClick={() => handleDelete(r)}
+                              disabled={locked}
+                              title={
+                                builtin
+                                  ? 'Built-in roles cannot be deleted'
+                                  : r.userCount > 0
+                                    ? 'Role is assigned to users'
+                                    : 'Delete role'
+                              }
+                              className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition disabled:opacity-30 disabled:hover:text-slate-400 disabled:hover:bg-transparent disabled:cursor-not-allowed"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -143,7 +154,10 @@ export function PlatformRoles({ session }: RoleViewProps) {
       <RoleModal
         open={modalOpen}
         onClose={() => setModalOpen(false)}
-        onSuccess={() => setModalOpen(false)}
+        onSuccess={() => {
+          toast.success(editing ? 'Role updated' : 'Role created');
+          setModalOpen(false);
+        }}
         role={editing}
       />
     </DashboardShell>

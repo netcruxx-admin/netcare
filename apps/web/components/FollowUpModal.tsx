@@ -62,10 +62,12 @@ export function FollowUpModal({
   appointment,
   onClose,
   onCreated,
+  hospitalId,
 }: {
   appointment: Appointment;
   onClose: () => void;
   onCreated: (message: string) => void;
+  hospitalId?: string;
 }) {
   const [date, setDate] = useState(defaultFollowUpDate());
   const [time, setTime] = useState('');
@@ -87,6 +89,7 @@ export function FollowUpModal({
 
     try {
       await createAppointment({
+        hospitalId,
         patientId: appointment.patientId,
         doctorId: appointment.doctorId,
         departmentId: appointment.departmentId,

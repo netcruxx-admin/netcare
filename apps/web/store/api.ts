@@ -63,6 +63,15 @@ export interface HospitalCreateBody {
   adminName?: string;
 }
 
+export interface HospitalUpdateBody {
+  name?: string;
+  tagline?: string;
+  currency?: string;
+  category?: string;
+  theme?: { primary: string; primaryDark: string };
+  status?: string;
+}
+
 // ---------------------------------------------------------------------------
 // Request body types
 // ---------------------------------------------------------------------------
@@ -271,8 +280,12 @@ export const api = createApi({
             // malformed session — skip
           }
         }
-        // Attach tenant id so the backend scopes correctly
-        headers.set('X-Hospital-Id', getCurrentHospitalId());
+        // Attach tenant id so the backend scopes correctly.
+        // Only set if not already provided per-request (e.g. superadmin editing
+        // a record that belongs to a specific hospital).
+        if (!headers.has('X-Hospital-Id')) {
+          headers.set('X-Hospital-Id', getCurrentHospitalId());
+        }
       }
       return headers;
     },
@@ -363,6 +376,14 @@ export const api = createApi({
       query: (body) => ({ url: '/hospitals', method: 'POST', body }),
       invalidatesTags: ['Hospital'],
     }),
+    updateHospital: build.mutation<HospitalInfo, { id: string; body: HospitalUpdateBody }>({
+      query: ({ id, body }) => ({ url: `/hospitals/${id}`, method: 'PATCH', body }),
+      invalidatesTags: ['Hospital'],
+    }),
+    deleteHospital: build.mutation<void, string>({
+      query: (id) => ({ url: `/hospitals/${id}`, method: 'DELETE' }),
+      invalidatesTags: ['Hospital'],
+    }),
 
     // ── Auth ─────────────────────────────────────────────────────────────────
     login: build.mutation<ApiAuthResponse, LoginBody>({
@@ -396,15 +417,25 @@ export const api = createApi({
       query: (id) => `/appointments/${id}`,
       providesTags: (_r, _e, id) => [{ type: 'Appointment', id }],
     }),
-    createAppointment: build.mutation<Appointment, AppointmentCreateBody>({
-      query: (body) => ({ url: '/appointments', method: 'POST', body }),
+    createAppointment: build.mutation<Appointment, AppointmentCreateBody & { hospitalId?: string }>({
+      query: ({ hospitalId, ...body }) => ({
+        url: '/appointments',
+        method: 'POST',
+        body,
+        headers: hospitalId ? { 'X-Hospital-Id': hospitalId } : undefined,
+      }),
       invalidatesTags: [{ type: 'Appointment', id: 'LIST' }],
     }),
     updateAppointment: build.mutation<
       Appointment,
-      { id: string; body: AppointmentUpdateBody }
+      { id: string; body: AppointmentUpdateBody; hospitalId?: string }
     >({
-      query: ({ id, body }) => ({ url: `/appointments/${id}`, method: 'PUT', body }),
+      query: ({ id, body, hospitalId }) => ({
+        url: `/appointments/${id}`,
+        method: 'PUT',
+        body,
+        headers: hospitalId ? { 'X-Hospital-Id': hospitalId } : undefined,
+      }),
       invalidatesTags: (_r, _e, { id }) => [{ type: 'Appointment', id }],
     }),
 
@@ -428,9 +459,22 @@ export const api = createApi({
       providesTags: (result) =>
         result ? [{ type: 'Patient', id: result.id }] : [],
     }),
-    updatePatient: build.mutation<Patient, { id: string; body: PatientUpdateBody }>({
-      query: ({ id, body }) => ({ url: `/patients/${id}`, method: 'PUT', body }),
+    updatePatient: build.mutation<Patient, { id: string; body: PatientUpdateBody; hospitalId?: string }>({
+      query: ({ id, body, hospitalId }) => ({
+        url: `/patients/${id}`,
+        method: 'PUT',
+        body,
+        headers: hospitalId ? { 'X-Hospital-Id': hospitalId } : undefined,
+      }),
       invalidatesTags: (_r, _e, { id }) => [{ type: 'Patient', id }],
+    }),
+    deletePatient: build.mutation<void, { id: string; hospitalId?: string }>({
+      query: ({ id, hospitalId }) => ({
+        url: `/patients/${id}`,
+        method: 'DELETE',
+        headers: hospitalId ? { 'X-Hospital-Id': hospitalId } : undefined,
+      }),
+      invalidatesTags: [{ type: 'Patient', id: 'LIST' }],
     }),
     getPatientAppointments: build.query<Appointment[], string>({
       query: (patientId) => `/patients/${patientId}/appointments`,
@@ -504,13 +548,22 @@ export const api = createApi({
     }),
     updateDepartment: build.mutation<
       Department,
-      { id: string; body: DepartmentUpdateBody }
+      { id: string; body: DepartmentUpdateBody; hospitalId?: string }
     >({
-      query: ({ id, body }) => ({ url: `/departments/${id}`, method: 'PUT', body }),
+      query: ({ id, body, hospitalId }) => ({
+        url: `/departments/${id}`,
+        method: 'PUT',
+        body,
+        headers: hospitalId ? { 'X-Hospital-Id': hospitalId } : undefined,
+      }),
       invalidatesTags: (_r, _e, { id }) => [{ type: 'Department', id }],
     }),
-    deleteDepartment: build.mutation<void, string>({
-      query: (id) => ({ url: `/departments/${id}`, method: 'DELETE' }),
+    deleteDepartment: build.mutation<void, { id: string; hospitalId?: string }>({
+      query: ({ id, hospitalId }) => ({
+        url: `/departments/${id}`,
+        method: 'DELETE',
+        headers: hospitalId ? { 'X-Hospital-Id': hospitalId } : undefined,
+      }),
       invalidatesTags: [{ type: 'Department', id: 'LIST' }],
     }),
 
@@ -567,24 +620,50 @@ export const api = createApi({
       query: (body) => ({ url: '/users/me', method: 'PUT', body }),
       invalidatesTags: [{ type: 'User', id: 'LIST' }],
     }),
-    updateUser: build.mutation<User, { id: string; body: UserUpdateBody }>({
-      query: ({ id, body }) => ({ url: `/users/${id}`, method: 'PUT', body }),
+    updateUser: build.mutation<User, { id: string; body: UserUpdateBody; hospitalId?: string }>({
+      query: ({ id, body, hospitalId }) => ({
+        url: `/users/${id}`,
+        method: 'PUT',
+        body,
+        headers: hospitalId ? { 'X-Hospital-Id': hospitalId } : undefined,
+      }),
       invalidatesTags: [{ type: 'User', id: 'LIST' }],
     }),
-    deleteUser: build.mutation<void, string>({
-      query: (id) => ({ url: `/users/${id}`, method: 'DELETE' }),
+    deleteUser: build.mutation<void, { id: string; hospitalId?: string }>({
+      query: ({ id, hospitalId }) => ({
+        url: `/users/${id}`,
+        method: 'DELETE',
+        headers: hospitalId ? { 'X-Hospital-Id': hospitalId } : undefined,
+      }),
       invalidatesTags: [{ type: 'User', id: 'LIST' }],
     }),
 
     // ── Doctors (write side) ─────────────────────────────────────────────────
-    updateDoctor: build.mutation<Doctor, { id: string; body: DoctorUpdateBody }>({
-      query: ({ id, body }) => ({ url: `/doctors/${id}`, method: 'PUT', body }),
+    updateDoctor: build.mutation<Doctor, { id: string; body: DoctorUpdateBody; hospitalId?: string }>({
+      query: ({ id, body, hospitalId }) => ({
+        url: `/doctors/${id}`,
+        method: 'PUT',
+        body,
+        headers: hospitalId ? { 'X-Hospital-Id': hospitalId } : undefined,
+      }),
+      invalidatesTags: [{ type: 'Doctor', id: 'LIST' }],
+    }),
+    deleteDoctor: build.mutation<void, { id: string; hospitalId?: string }>({
+      query: ({ id, hospitalId }) => ({
+        url: `/doctors/${id}`,
+        method: 'DELETE',
+        headers: hospitalId ? { 'X-Hospital-Id': hospitalId } : undefined,
+      }),
       invalidatesTags: [{ type: 'Doctor', id: 'LIST' }],
     }),
 
     // ── Appointments (delete) ────────────────────────────────────────────────
-    deleteAppointment: build.mutation<void, string>({
-      query: (id) => ({ url: `/appointments/${id}`, method: 'DELETE' }),
+    deleteAppointment: build.mutation<void, { id: string; hospitalId?: string }>({
+      query: ({ id, hospitalId }) => ({
+        url: `/appointments/${id}`,
+        method: 'DELETE',
+        headers: hospitalId ? { 'X-Hospital-Id': hospitalId } : undefined,
+      }),
       invalidatesTags: [{ type: 'Appointment', id: 'LIST' }],
     }),
 
@@ -757,8 +836,13 @@ export const api = createApi({
       query: (params) => ({ url: '/vitals', params: params ?? undefined }),
       providesTags: [{ type: 'Vitals', id: 'LIST' }],
     }),
-    createVitals: build.mutation<Vitals, VitalsCreateBody>({
-      query: (body) => ({ url: '/vitals', method: 'POST', body }),
+    createVitals: build.mutation<Vitals, VitalsCreateBody & { hospitalId?: string }>({
+      query: ({ hospitalId, ...body }) => ({
+        url: '/vitals',
+        method: 'POST',
+        body,
+        headers: hospitalId ? { 'X-Hospital-Id': hospitalId } : undefined,
+      }),
       invalidatesTags: [{ type: 'Vitals', id: 'LIST' }],
     }),
   }),
@@ -781,6 +865,8 @@ export const {
   useGetCurrentHospitalQuery,
   useListHospitalsQuery,
   useOnboardHospitalMutation,
+  useUpdateHospitalMutation,
+  useDeleteHospitalMutation,
   useLoginMutation,
   useRegisterMutation,
   useMeQuery,
@@ -792,6 +878,7 @@ export const {
   useGetPatientQuery,
   useGetPatientByUserQuery,
   useUpdatePatientMutation,
+  useDeletePatientMutation,
   useGetPatientAppointmentsQuery,
   useGetPatientMedicalRecordsQuery,
   useGetPatientPaymentsQuery,
@@ -820,6 +907,7 @@ export const {
   useUpdateUserMutation,
   useDeleteUserMutation,
   useUpdateDoctorMutation,
+  useDeleteDoctorMutation,
   useDeleteAppointmentMutation,
   useListMedicinesQuery,
   useCreateMedicineMutation,

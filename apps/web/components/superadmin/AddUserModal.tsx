@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { X } from 'lucide-react';
+import { toast } from 'sonner';
 import { superadminPost } from '@/lib/superadminFetch';
 import { useListAssignableRolesQuery } from '@/store/api';
 import type { HospitalInfo } from '@/store/api';
@@ -52,6 +53,7 @@ export function AddUserModal({ open, onClose, onSuccess, preselectedHospitalId, 
         name: form.name.trim(), email: form.email.trim(),
         password: form.password, role: form.role, phone: form.phone.trim() || undefined,
       });
+      toast.success('User created successfully');
       onSuccess(); handleClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create user');

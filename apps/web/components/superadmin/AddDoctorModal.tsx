@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { X } from 'lucide-react';
+import { toast } from 'sonner';
 import { superadminPost } from '@/lib/superadminFetch';
 import { doctorRole } from '@/lib/roles';
 import type { HospitalInfo } from '@/store/api';
@@ -39,8 +40,8 @@ export function AddDoctorModal({ open, onClose, onSuccess, preselectedHospitalId
     if (!form.name.trim() || !form.email.trim()) { setError('Name and email are required'); return; }
     setLoading(true); setError('');
     try {
-      // Register creates user + doctor profile in one call
-      await superadminPost('/auth/register', hospitalId, {
+      // POST /users accepts any non-platform role and creates the doctor profile alongside
+      await superadminPost('/users', hospitalId, {
         name: form.name.trim(), email: form.email.trim(),
         password: form.password, role: doctorRole,
         phone: form.phone.trim() || undefined,
@@ -48,6 +49,7 @@ export function AddDoctorModal({ open, onClose, onSuccess, preselectedHospitalId
         qualification: form.qualification.trim() || undefined,
         experienceYears: form.experienceYears ? Number(form.experienceYears) : undefined,
       });
+      toast.success('Doctor added successfully');
       onSuccess(); handleClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to add doctor');

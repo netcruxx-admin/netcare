@@ -45,15 +45,17 @@ def effective_permissions(
         .all()
     )
 
-    # A platform user belongs to no hospital, so no module mask applies.
+    # Platform users (hospital_id is None) are not bound by any hospital's
+    # module subscriptions — they get every permission their role grants.
+    is_platform_user = user.hospital_id is None
     modules: dict = {}
-    if user.hospital_id:
+    if not is_platform_user:
         hospital = db.get(models.Hospital, user.hospital_id)
         modules = (hospital.modules or {}) if hospital else {}
 
     resolved: dict[str, Optional[str]] = {}
     for grant, permission in grants:
-        if permission.module and not modules.get(permission.module, False):
+        if not is_platform_user and permission.module and not modules.get(permission.module, False):
             continue  # the hospital hasn't bought this feature
         resolved[permission.code] = grant.scope
     return resolved

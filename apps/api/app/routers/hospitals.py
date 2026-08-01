@@ -86,3 +86,16 @@ def update_hospital(
     db.commit()
     db.refresh(hospital)
     return hospital
+
+
+@router.delete("/{hospital_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_hospital(
+    hospital_id: str,
+    db: Session = Depends(get_db),
+    _: str = Depends(require_permission("hospitals.manage")),
+):
+    hospital = db.get(models.Hospital, hospital_id)
+    if hospital is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Hospital not found")
+    db.delete(hospital)
+    db.commit()

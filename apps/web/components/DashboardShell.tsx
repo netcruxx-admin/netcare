@@ -15,7 +15,7 @@ import {
   superadminRole,
   type PatientContext,
 } from '@/lib/roles';
-import { useGetCurrentHospitalQuery, useListHospitalsQuery } from '@/store/api';
+import { useGetCurrentHospitalQuery, useListHospitalsQuery, useMeQuery } from '@/store/api';
 import { NotificationBell } from '@/components/NotificationBell';
 import { CommandPalette } from '@/components/CommandPalette';
 
@@ -39,6 +39,10 @@ export function DashboardShell({
   const [open, setOpen] = useState(false);
   const [cmdOpen, setCmdOpen] = useState(false);
   const [sessionUser, setSessionUser] = useState<{ id: string; name: string; role: string } | null>(null);
+
+  // Live permissions from the server — refetches whenever the component mounts or
+  // the window refocuses, so nav updates immediately after a permission change.
+  const { data: meData } = useMeQuery(undefined, { refetchOnMountOrArgChange: true, refetchOnFocus: true });
   const specialization = '';
   const patientCtx: PatientContext = { specializations: [], hasPregnancy: false, hasBaby: false };
 
@@ -106,6 +110,7 @@ export function DashboardShell({
     modules,
     specialization,
     patientContext: patientCtx,
+    permissions: meData?.permissions,
   }).map((route) => ({
     label: routeLabel(route, role),
     href: route.path,

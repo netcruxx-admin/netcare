@@ -112,6 +112,16 @@ def login(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid email or password",
         )
+
+    # Block login for users whose hospital has been suspended.
+    if user.hospital_id:
+        hospital = db.get(models.Hospital, user.hospital_id)
+        if hospital and hospital.status == "suspended":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="This hospital account has been suspended. Please contact the platform administrator.",
+            )
+
     return _build_response(db, user)
 
 

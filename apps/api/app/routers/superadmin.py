@@ -1,6 +1,6 @@
 """Superadmin-only endpoints — cross-tenant visibility across all hospitals."""
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from .. import models, schemas
@@ -82,3 +82,24 @@ def all_users(
 ):
     rows = db.query(models.User).filter(models.User.hospital_id.isnot(None)).all()
     return [schemas.UserOut.model_validate(r) for r in rows]
+
+
+@router.put("/patients/{patient_id}", response_model=schemas.PatientOut)
+def update_patient(
+    patient_id: str,
+    body: schemas.PatientUpdate,
+    db: Session = Depends(get_db),
+    _: str = Depends(require_permission("patients.manage")),
+):
+    patient = db.get(models.Patient, patient_id)
+    if not patient:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Patient not found")
+    for field, value in body.model_dump(exclude_unset=True).items():
+        setattr(patient, field, value)
+    db.commit()
+    db.refresh(patient)
+    out = schemas.PatientOut.model_validate(patient)
+    user = db.get(models.User, patient.user_id)
+    if user:
+        out.user = schemas.UserOut.model_validate(user)
+    return out

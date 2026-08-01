@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { authStorage } from '@/lib/auth';
 import { canRoleAccessPath, homePathForSession } from '@/lib/roles';
+import { useMeQuery } from '@/store/api';
 import type { AuthSession } from '@/lib/types';
 
 /**
@@ -16,28 +17,57 @@ import type { AuthSession } from '@/lib/types';
  *
  * Returns null until the session is known (pages render nothing meanwhile),
  * since the session lives in localStorage and is unreadable during SSR.
+ *
+ * Permissions are always taken from the live /auth/me response so that changes
+ * made in the Roles UI take effect immediately — no logout/login required.
  */
 export function useDashboardGuard(path?: string): AuthSession | null {
   const router = useRouter();
   const pathname = usePathname();
-  const [session, setSession] = useState<AuthSession | null>(null);
+  const [stored, setStored] = useState<AuthSession | null>(null);
 
   const guardedPath = path ?? pathname;
 
   useEffect(() => {
-    const stored = authStorage.getSession();
-    if (!stored) {
+    const s = authStorage.getSession();
+    if (!s) {
       router.push('/login');
       return;
     }
     // Signed in but not entitled to this screen: send them to their own
     // dashboard rather than the login page, which would look like a logout.
-    if (!canRoleAccessPath(stored.user.role, guardedPath)) {
-      router.replace(homePathForSession(stored));
+    if (!canRoleAccessPath(s.user.role, guardedPath)) {
+      router.replace(homePathForSession(s));
       return;
     }
-    setSession(stored);
+    setStored(s);
   }, [router, guardedPath]);
+
+  // Fetch live permissions from the server. Skip until we know the user is
+  // logged in (stored !== null) to avoid an unauthenticated /auth/me call.
+  const { data: meData } = useMeQuery(undefined, {
+    skip: stored === null,
+    refetchOnMountOrArgChange: true,
+    refetchOnFocus: true,
+  });
+
+  // Once live permissions arrive, re-check the route. If the permission that
+  // gates this page was revoked, redirect away — direct URL access is blocked
+  // the same way as sidebar removal.
+  useEffect(() => {
+    if (!stored || !meData?.permissions) return;
+    if (!canRoleAccessPath(stored.user.role, guardedPath, meData.permissions)) {
+      router.replace(homePathForSession(stored));
+    }
+  }, [stored, meData?.permissions, guardedPath, router]);
+
+  // Overlay the fresh permissions on top of the stored session so that every
+  // hasPermission() call in child components always sees the current grants.
+  const session = useMemo<AuthSession | null>(() => {
+    if (!stored) return null;
+    if (!meData?.permissions) return stored;
+    return { ...stored, permissions: meData.permissions };
+  }, [stored, meData?.permissions]);
 
   return session;
 }

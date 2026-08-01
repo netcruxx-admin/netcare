@@ -102,6 +102,10 @@ export interface DashboardRoute {
   icon: LucideIcon;
   /** Roles allowed to open this route. Empty means nobody — never omit it. */
   roles: string[];
+  /** Permission code required to see this route in the nav. When set, the
+   *  user must hold this permission (from session.permissions) in addition to
+   *  their role being in `roles`. Falls back to role-only when omitted. */
+  permission?: string;
   /** Per-role label override, where roles name the same screen differently. */
   labelByRole?: Record<string, string>;
   /** Hidden unless the hospital has this module enabled. */
@@ -141,13 +145,16 @@ export const dashboardRoutes: DashboardRoute[] = [
     labelByRole: { [superadminRole]: 'Overview', [adminRole]: 'Overview' },
   },
 
+  { path: '/dashboard/hospitals', label: 'Hospitals', icon: Building2, roles: [superadminRole], permission: 'hospitals.manage' },
+
   // ── Booking and scheduling ────────────────────────────────────────────────
   {
     path: '/dashboard/book',
     label: 'Book Appointment',
     icon: CalendarPlus,
-    roles: [adminRole, patientRole],
-    // Admins reach booking from the appointments screen, not the sidebar.
+    roles: [superadminRole, adminRole, patientRole],
+    permission: 'appointments.create',
+    // Admins and superadmin reach booking from the appointments screen, not the sidebar.
     hideInNav: true,
   },
   {
@@ -155,6 +162,7 @@ export const dashboardRoutes: DashboardRoute[] = [
     label: 'Appointments',
     icon: CalendarDays,
     roles: [superadminRole, adminRole, doctorRole, nurseRole, patientRole],
+    permission: 'appointments.read',
     labelByRole: { [patientRole]: 'Appointment History' },
   },
   {
@@ -162,6 +170,7 @@ export const dashboardRoutes: DashboardRoute[] = [
     label: 'Schedule',
     icon: CalendarRange,
     roles: [adminRole, doctorRole, patientRole],
+    permission: 'schedule.read',
   },
 
   // ── People ────────────────────────────────────────────────────────────────
@@ -170,6 +179,7 @@ export const dashboardRoutes: DashboardRoute[] = [
     label: 'Patients',
     icon: UserRound,
     roles: [superadminRole, ...staffRoles],
+    permission: 'patients.read',
     labelByRole: { [doctorRole]: 'My Patients', [superadminRole]: 'All Patients' },
   },
   {
@@ -177,6 +187,7 @@ export const dashboardRoutes: DashboardRoute[] = [
     label: 'Doctors',
     icon: Stethoscope,
     roles: [superadminRole, adminRole],
+    permission: 'doctors.read',
   },
 
   // ── Clinical work ─────────────────────────────────────────────────────────
@@ -185,6 +196,7 @@ export const dashboardRoutes: DashboardRoute[] = [
     label: 'Pregnancies',
     icon: Baby,
     roles: [doctorRole, patientRole],
+    permission: 'pregnancies.read',
     labelByRole: { [patientRole]: 'Pregnancy' },
     module: 'anc',
     specialties: ['obstetric', 'gynec', 'gynaec', 'maternal'],
@@ -196,6 +208,7 @@ export const dashboardRoutes: DashboardRoute[] = [
     label: 'Newborns',
     icon: Baby,
     roles: [doctorRole, patientRole],
+    permission: 'babies.read',
     labelByRole: { [patientRole]: 'My Baby' },
     module: 'anc',
     specialties: ['neonat', 'pediatric', 'paediatric', 'child'],
@@ -207,6 +220,7 @@ export const dashboardRoutes: DashboardRoute[] = [
     label: 'Video Consults',
     icon: Video,
     roles: [doctorRole, patientRole],
+    permission: 'video_consults.join',
     labelByRole: { [patientRole]: 'Video Consult' },
     module: 'telemedicine',
   },
@@ -215,6 +229,7 @@ export const dashboardRoutes: DashboardRoute[] = [
     label: 'Record Vitals',
     icon: HeartPulse,
     roles: [nurseRole],
+    permission: 'vitals.record',
     module: 'nursing',
   },
   {
@@ -222,9 +237,10 @@ export const dashboardRoutes: DashboardRoute[] = [
     label: 'Prescriptions',
     icon: Pill,
     roles: [doctorRole],
+    permission: 'prescriptions.read',
     module: 'pharmacy',
   },
-  { path: '/dashboard/completed', label: 'Completed Visits', icon: CheckCircle, roles: [doctorRole] },
+  { path: '/dashboard/completed', label: 'Completed Visits', icon: CheckCircle, roles: [doctorRole], permission: 'appointments.read' },
 
   // ── Records and lab ───────────────────────────────────────────────────────
   {
@@ -232,6 +248,7 @@ export const dashboardRoutes: DashboardRoute[] = [
     label: 'Medical Records',
     icon: FileText,
     roles: [patientRole],
+    permission: 'medical_records.read',
     module: 'medicalRecords',
   },
   {
@@ -239,6 +256,7 @@ export const dashboardRoutes: DashboardRoute[] = [
     label: 'Medical History',
     icon: HeartPulse,
     roles: [patientRole],
+    permission: 'medical_records.read',
     module: 'medicalRecords',
   },
   {
@@ -246,6 +264,7 @@ export const dashboardRoutes: DashboardRoute[] = [
     label: 'Lab Orders',
     icon: ClipboardList,
     roles: [doctorRole, labRole],
+    permission: 'lab_orders.read',
     labelByRole: { [labRole]: 'Test Orders' },
     module: 'lab',
   },
@@ -254,6 +273,7 @@ export const dashboardRoutes: DashboardRoute[] = [
     label: 'Reports',
     icon: FileBarChart,
     roles: [labRole, patientRole],
+    permission: 'lab_reports.read',
     labelByRole: { [patientRole]: 'Test Reports' },
     module: 'lab',
   },
@@ -262,6 +282,7 @@ export const dashboardRoutes: DashboardRoute[] = [
     label: 'Tests',
     icon: FlaskConical,
     roles: [adminRole, labRole],
+    permission: 'lab_tests.manage',
     labelByRole: { [labRole]: 'Test Catalog' },
     module: 'lab',
   },
@@ -270,6 +291,7 @@ export const dashboardRoutes: DashboardRoute[] = [
     label: 'Payments',
     icon: CreditCard,
     roles: [patientRole],
+    permission: 'payments.read',
     module: 'payments',
   },
 
@@ -279,26 +301,28 @@ export const dashboardRoutes: DashboardRoute[] = [
     label: 'Profile',
     icon: User,
     roles: [...clinicalRoles, patientRole],
+    permission: 'profile.manage',
   },
 
   // ── Administration ────────────────────────────────────────────────────────
-  { path: '/dashboard/hospitals', label: 'Hospitals', icon: Building2, roles: [superadminRole] },
   {
     path: '/dashboard/departments',
     label: 'Departments',
     icon: Building2,
     roles: [superadminRole, adminRole],
+    permission: 'departments.read',
   },
   {
     path: '/dashboard/medicines',
     label: 'Medicines',
     icon: Pill,
     roles: [adminRole],
+    permission: 'medicines.manage',
     module: 'pharmacy',
   },
-  { path: '/dashboard/users', label: 'Users', icon: Users, roles: [superadminRole, adminRole] },
-  { path: '/dashboard/roles', label: 'Roles', icon: ShieldCheck, roles: [superadminRole] },
-  { path: '/dashboard/setup', label: 'Hospital Setup', icon: Settings, roles: [adminRole] },
+  { path: '/dashboard/users', label: 'Users', icon: Users, roles: [superadminRole, adminRole], permission: 'users.read' },
+  { path: '/dashboard/roles', label: 'Roles', icon: ShieldCheck, roles: [superadminRole], permission: 'roles.manage' },
+  { path: '/dashboard/setup', label: 'Hospital Setup', icon: Settings, roles: [adminRole], permission: 'hospital.settings.manage' },
 ];
 
 /**
@@ -330,13 +354,24 @@ export function findRoute(path: string): DashboardRoute | undefined {
 /**
  * Whether a role may open a path. Unknown paths are allowed — the route table
  * governs the dashboard screens it lists, and is not a URL whitelist.
+ *
+ * Optionally pass the user's live permissions so that routes gated by a
+ * permission code are also blocked when that permission is not held.
  */
-export function canRoleAccessPath(role: string, path: string): boolean {
+export function canRoleAccessPath(
+  role: string,
+  path: string,
+  permissions?: { code: string; scope?: string | null }[],
+): boolean {
   if (alwaysAllowedPaths.includes(path)) return true;
   if (alwaysAllowedPathPrefixes.some((p) => path === p || path.startsWith(`${p}/`))) return true;
   const route = findRoute(path);
   if (!route) return true;
-  return route.roles.includes(role);
+  if (!route.roles.includes(role)) return false;
+  if (route.permission && permissions) {
+    return permissions.some((p) => p.code === route.permission);
+  }
+  return true;
 }
 
 /** Sidebar label for a route, honouring any per-role override. */
@@ -354,15 +389,27 @@ export function navRoutesForRole(
     modules: HospitalModules;
     specialization?: string;
     patientContext?: PatientContext;
+    /** Resolved permissions from the session. When provided, routes whose
+     *  `permission` field the user doesn't hold are hidden from the nav. */
+    permissions?: { code: string; scope?: string | null }[];
   },
 ): DashboardRoute[] {
-  const { modules, specialization = '', patientContext } = options;
+  const { modules, specialization = '', patientContext, permissions } = options;
   const spec = specialization.toLowerCase();
+
+  // Build a quick lookup set. Undefined means no permission data available
+  // (e.g. old stored session) — fall back to role-only filtering in that case.
+  const heldCodes = permissions
+    ? new Set(permissions.map((p) => p.code))
+    : null;
 
   return dashboardRoutes.filter((route) => {
     if (!route.roles.includes(role)) return false;
     if (route.hideInNav) return false;
     if (route.module && !modules[route.module]) return false;
+    // Permission gate: if the route declares a required permission and we have
+    // permission data, hide the route when the user doesn't hold it.
+    if (route.permission && heldCodes && !heldCodes.has(route.permission)) return false;
     if (route.specialties && role === doctorRole) {
       return route.specialties.some((keyword) => spec.includes(keyword));
     }

@@ -134,6 +134,28 @@ def update_doctor(
     return _with_user(db, doctor)
 
 
+@router.delete("/{doctor_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_doctor(
+    doctor_id: str,
+    db: Session = Depends(get_db),
+    user: models.User = Depends(get_current_user),
+    _: dict = Depends(require_permission("doctors.manage")),
+    tenant_id: str = Depends(get_tenant_id),
+):
+    doctor = (
+        scoped(db, models.Doctor, tenant_id)
+        .filter(models.Doctor.id == doctor_id)
+        .first()
+    )
+    if doctor is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Doctor not found")
+    linked_user = db.get(models.User, doctor.user_id)
+    db.delete(doctor)
+    if linked_user:
+        db.delete(linked_user)
+    db.commit()
+
+
 @router.get("/{doctor_id}/availability", response_model=schemas.DoctorAvailabilityOut)
 def doctor_availability(
     doctor_id: str,
