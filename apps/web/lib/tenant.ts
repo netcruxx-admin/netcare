@@ -1,34 +1,19 @@
 // -----------------------------------------------------------------------------
 // Tenant-resolution seam — the ONE place that answers "which hospital am I?"
 //
-// This is the runtime counterpart to the multi-tenant data model in db.ts (every
-// row carries a `hospitalId`). Keep this file dependency-free (no imports from
-// db.ts / hospitalConfig.ts) so both of those can import it without a cycle.
+// The answer is only ever a hint for the backend: it resolves the tenant from
+// the request host and, for an authenticated call, from the caller's own user
+// row. Nothing here can widen what a user may see.
 //
 // Resolution priority:
-//   1. Subdomain           — sunrise.localhost → 'hosp-2'   (URL is authoritative)
-//   2. URL search param ?h — used when superadmin navigates to a tenant-scoped page
-//   3. localStorage switch — set by the in-app hospital switcher / onboarding
-//   4. Default             — the flagship tenant
+//   1. Subdomain           — sunrise.localhost → "sunrise"  (URL is authoritative)
+//   2. URL search param ?h — superadmin navigating to a tenant-scoped page
+//   3. Nothing             — let the backend decide from the host
 //
-// On real subdomains the browser gives each origin its own localStorage, so
-// tenants are naturally isolated; on the bare host the localStorage switch lets
-// you flip between tenants that all live in one store (best for demoing scoping).
+// There is deliberately no default tenant. Inventing one would make the client
+// name a hospital it has no reason to believe in — and on a fresh install there
+// are no hospitals at all until the platform onboards the first one.
 // -----------------------------------------------------------------------------
-
-import { ACTIVE_HOSPITAL_KEY, DEFAULT_HOSPITAL_ID } from './constants';
-
-// Re-export for back-compat (definitions live in ./constants).
-export { ACTIVE_HOSPITAL_KEY, DEFAULT_HOSPITAL_ID } from './constants';
-
-// subdomain label → hospitalId. Populated by the registry at import time via
-// registerTenantSubdomains() so this file needn't know the tenant catalog.
-const subdomainMap: Record<string, string> = {};
-
-/** Registry calls this so subdomain resolution knows the tenant catalog. */
-export function registerTenantSubdomains(map: Record<string, string>): void {
-  Object.assign(subdomainMap, map);
-}
 
 /** The subdomain label of the current URL, or null on the bare host / SSR. */
 export function currentSubdomain(): string | null {
@@ -41,45 +26,18 @@ export function currentSubdomain(): string | null {
   return label;
 }
 
-/** Maps the URL subdomain to a hospitalId, if it names a known tenant. */
-export function resolveFromSubdomain(): string | null {
-  const label = currentSubdomain();
-  return label ? subdomainMap[label] ?? null : null;
-}
-
 /**
- * The active tenant id. SSR-safe: returns the default when there's no window,
- * so server render and first client render agree (avoids hydration mismatch);
- * client code that needs the resolved tenant should read it after mount.
+ * The tenant hint to send with API calls, or "" when there is none.
+ *
+ * SSR-safe: returns "" with no window, so server render and first client render
+ * agree and the backend falls back to host-based resolution either way.
  */
 export function getCurrentHospitalId(): string {
-  if (typeof window === 'undefined') return DEFAULT_HOSPITAL_ID;
-  // If on a hospital subdomain (e.g. cityeyecare.localhost:3000), send the
-  // subdomain label — the backend resolves it to the real hospital ID.
+  if (typeof window === 'undefined') return '';
+  // On a hospital subdomain, send the label — the backend maps it to the id.
   const label = currentSubdomain();
   if (label) return label;
-  // Superadmin navigates to tenant-scoped pages (e.g. /appointment/123?h=hosp-id).
-  // The ?h param carries the target hospital so all queries on that page scope correctly.
-  const urlH = new URLSearchParams(window.location.search).get('h');
-  if (urlH) return urlH;
-  const stored = localStorage.getItem(ACTIVE_HOSPITAL_KEY);
-  if (stored) return stored;
-  return DEFAULT_HOSPITAL_ID;
-}
-
-/**
- * Switch the active tenant (in-app switcher / onboarding). Persists to
- * localStorage; callers typically reload so all data reads re-scope cleanly.
- */
-export function setCurrentHospitalId(id: string): void {
-  if (typeof window !== 'undefined') {
-    localStorage.setItem(ACTIVE_HOSPITAL_KEY, id);
-  }
-}
-
-/** Clears an explicit switch, falling back to subdomain/default resolution. */
-export function clearHospitalOverride(): void {
-  if (typeof window !== 'undefined') {
-    localStorage.removeItem(ACTIVE_HOSPITAL_KEY);
-  }
+  // Superadmin deep-links carry the target hospital (e.g. /appointment/1?h=hosp-x)
+  // so every query on that page scopes to it.
+  return new URLSearchParams(window.location.search).get('h') ?? '';
 }

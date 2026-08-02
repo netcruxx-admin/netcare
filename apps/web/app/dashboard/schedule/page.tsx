@@ -15,6 +15,9 @@ export default function SchedulePage() {
         [doctorRole]: DoctorSchedule,
         [patientRole]: PatientSchedule,
       }}
+      // The board reads the doctor roster rather than the viewer's own diary,
+      // so it suits anyone allowed to see the whole schedule.
+      viewsByScope={{ all: AdminSchedule }}
     />
   );
 }

@@ -6,7 +6,7 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { LogOut, Menu, X, Search } from 'lucide-react';
 import Image from 'next/image';
 import { authStorage } from '@/lib/auth';
-import type { HospitalModules } from '@/lib/hospitalConfig';
+import type { HospitalModules } from '@/lib/types';
 import {
   doctorRole,
   navRoutesForRole,
@@ -14,9 +14,9 @@ import {
   routeLabel,
   superadminRole,
   type PatientContext,
+  type PermissionGrant,
 } from '@/lib/roles';
 import { useGetCurrentHospitalQuery, useListHospitalsQuery, useMeQuery } from '@/store/api';
-import { NotificationBell } from '@/components/NotificationBell';
 import { CommandPalette } from '@/components/CommandPalette';
 
 export function DashboardShell({
@@ -38,7 +38,7 @@ export function DashboardShell({
   const searchParams = useSearchParams();
   const [open, setOpen] = useState(false);
   const [cmdOpen, setCmdOpen] = useState(false);
-  const [sessionUser, setSessionUser] = useState<{ id: string; name: string; role: string } | null>(null);
+  const [storedGrants, setStoredGrants] = useState<PermissionGrant[] | undefined>(undefined);
 
   // Live permissions from the server — refetches whenever the component mounts or
   // the window refocuses, so nav updates immediately after a permission change.
@@ -61,7 +61,7 @@ export function DashboardShell({
   const { data: hospitalData } = useGetCurrentHospitalQuery(undefined, { skip: role === superadminRole });
   const hospital = role === superadminRole
     // The platform wordmark is our own: navy → teal, exactly as "Net"/"Care" render in the logo.
-    ? { id: '', name: 'NetCare Platform', theme: { primary: '#00346e', primaryDark: '#019695' }, modules: {} as HospitalModules }
+    ? { id: '', name: 'NetCare Platform', theme: { primary: '#00346e', primaryDark: '#019695' }, modules: {} as Partial<HospitalModules> }
     : {
         id: hospitalData?.id ?? '',
         name: hospitalData?.name ?? '…',
@@ -70,7 +70,9 @@ export function DashboardShell({
           primary: (hospitalData?.theme as Record<string, string>)?.primary ?? '#00509f',
           primaryDark: (hospitalData?.theme as Record<string, string>)?.primaryDark ?? '#019695',
         },
-        modules: (hospitalData?.modules ?? {}) as HospitalModules,
+        // The backend returns whichever modules this tenant has; anything
+        // missing counts as disabled rather than being asserted into existence.
+        modules: (hospitalData?.modules ?? {}) as Partial<HospitalModules>,
       };
 
   // Paint the active tenant's brand colours so each hospital looks distinct.
@@ -88,7 +90,7 @@ export function DashboardShell({
   useEffect(() => {
     const s = authStorage.getSession();
     if (!s) return;
-    setSessionUser({ id: s.user.id, name: s.user.name, role: s.user.role });
+    setStoredGrants(s.permissions);
   }, []);
 
   // Cmd/Ctrl+K opens the command palette.
@@ -108,11 +110,14 @@ export function DashboardShell({
 
   // The sidebar is the route table filtered to this role — no menu is defined
   // here, so adding a screen means adding one route in lib/roles.ts.
+  // Grants from the session render the menu on first paint; the live ones from
+  // /auth/me replace them the moment they arrive, so a revoked permission drops
+  // out of the sidebar without a re-login.
   const navItems = navRoutesForRole(role, {
     modules,
     specialization,
     patientContext: patientCtx,
-    permissions: meData?.permissions,
+    permissions: meData?.permissions ?? storedGrants,
   }).map((route) => ({
     label: routeLabel(route, role),
     href: route.path,
@@ -230,7 +235,6 @@ export function DashboardShell({
           >
             <Search className="w-5 h-5" />
           </button>
-          {sessionUser && <NotificationBell user={sessionUser} />}
         </div>
       </div>
 
@@ -276,7 +280,6 @@ export function DashboardShell({
                 <span>Search…</span>
                 <kbd className="ml-2 text-[10px] font-sans bg-white border border-slate-200 rounded px-1.5 py-0.5 text-slate-500">⌘K</kbd>
               </button>
-              {sessionUser && <NotificationBell user={sessionUser} />}
               <span className="text-sm text-slate-600">
                 Welcome, <span className="font-semibold text-slate-900">{userName}</span>
               </span>

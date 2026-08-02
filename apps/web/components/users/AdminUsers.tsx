@@ -106,7 +106,9 @@ export function AdminUsers({ session }: RoleViewProps) {
     if (!deleting) return;
     setSaveError('');
     try {
-      await deleteUser(deleting.id).unwrap();
+      // No hospitalId: an admin acts inside their own tenant, which the token
+      // already carries. Only the platform screens target another hospital.
+      await deleteUser({ id: deleting.id }).unwrap();
       setDeleting(null);
     } catch (err) {
       setSaveError(apiError(err, 'Failed to delete user'));

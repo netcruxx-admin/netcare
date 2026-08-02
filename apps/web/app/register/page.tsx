@@ -7,7 +7,6 @@ import Image from 'next/image';
 import { useActiveHospital } from '@/hooks/useActiveHospital';
 import { useRegistration } from './useRegistration';
 import { RoleStep } from './steps/RoleStep';
-import { VerifyStep } from './steps/VerifyStep';
 import { AccountStep } from './steps/AccountStep';
 import { DetailsStep } from './steps/DetailsStep';
 
@@ -16,18 +15,11 @@ export default function RegisterPage() {
   const {
     step,
     userType,
-    departments,
     serverError,
     success,
-    lookupState,
-    verified,
     formik,
-    needsDetails,
-    verifyConfig,
-    hasVerify,
     wizardSteps,
     currentIndex,
-    handleFetchDetails,
     handleRoleSelect,
     backToRole,
     goToStep,
@@ -94,29 +86,15 @@ export default function RegisterPage() {
                   </div>
                 )}
 
-                {step === 'verify' && verifyConfig ? (
-                  <VerifyStep
-                    formik={formik}
-                    verifyConfig={verifyConfig}
-                    lookupState={lookupState}
-                    verified={verified}
-                    onFetch={handleFetchDetails}
-                    onBack={backToRole}
-                  />
-                ) : step === 'account' ? (
+                {step === 'account' ? (
                   <AccountStep
                     formik={formik}
-                    needsDetails={needsDetails}
-                    hasVerify={hasVerify}
-                    onBack={() => (hasVerify ? goToStep('verify') : backToRole())}
+                    needsDetails
+                    hasVerify={false}
+                    onBack={backToRole}
                   />
                 ) : (
-                  <DetailsStep
-                    formik={formik}
-                    userType={userType}
-                    departments={departments}
-                    onBack={() => goToStep('account')}
-                  />
+                  <DetailsStep formik={formik} onBack={() => goToStep('account')} />
                 )}
 
                 <div className="text-center">

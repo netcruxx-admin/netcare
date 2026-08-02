@@ -13,7 +13,7 @@ import type { LucideIcon } from 'lucide-react';
 
 export interface User {
   id: string;
-  // Tenant this row belongs to. Optional so older localStorage snapshots and
+  // Tenant this row belongs to. Optional so responses that omit it and
   // partially-built objects stay valid; it's stamped automatically on write.
   hospitalId?: string;
   email: string;
@@ -429,7 +429,11 @@ export interface DoctorDetails {
 
 export type RegisterDetails = PatientDetails | DoctorDetails;
 
-// == Hospital config / tenancy ================================================
+// == Hospital modules =========================================================
+//
+// The hospital record itself (id, name, subdomain, category, theme, modules)
+// is HospitalInfo in store/api.ts — it comes from GET /hospitals/current and is
+// not modelled locally.
 
 /** Which optional feature-modules a hospital has switched on. */
 export interface HospitalModules {
@@ -440,31 +444,6 @@ export interface HospitalModules {
   medicalRecords: boolean; // clinical records + history
   telemedicine: boolean;   // video consults (future)
   anc: boolean;            // antenatal / pregnancy tracker (maternity-only, future)
-}
-
-export interface HospitalConfig {
-  /** Stable id — the tenant key stamped onto every row (`hospitalId`). */
-  id: string;
-  /** Subdomain label this tenant is served on, e.g. "sunrise" → sunrise.host. */
-  subdomain: string;
-  name: string;
-  tagline: string;
-  /** Hospital vertical — drives which template/catalog/modules make sense. */
-  type: 'maternity' | 'multi-specialty' | 'dental' | 'eye' | 'diagnostic';
-  currency: string; // ISO 4217, e.g. "INR"
-  /** Branding colors. Exposed for future CSS-variable theming / white-labeling. */
-  theme: {
-    primary: string;
-    primaryDark: string;
-  };
-  modules: HospitalModules;
-  /** Specializations doctors can be assigned to (was free-text in seed data). */
-  specializations: string[];
-  /** Seed catalog — departments/medicines/tests this hospital offers. Used to
-   *  populate a fresh database; admins can then edit via the admin UI. */
-  departments: Department[];
-  medicines: Medicine[];
-  labTests: LabTest[];
 }
 
 // == Hospital categories (vertical templates) =================================
@@ -500,49 +479,3 @@ export interface HospitalCategory {
   signatureFeatures: CategoryFeature[];
 }
 
-// == Notifications ============================================================
-
-export type NotificationTone = 'info' | 'success' | 'warning';
-
-export interface AppNotification {
-  id: string;
-  title: string;
-  description: string;
-  time: string; // ISO
-  href?: string;
-  tone: NotificationTone;
-}
-
-// == Verification registries (mock KYC services) ==============================
-
-export interface DoctorRegistryRecord {
-  registrationNumber: string;
-  name: string;
-  qualification: string;
-  specialization: string;
-  medicalCouncil: string;
-  registrationYear: string;
-  /** Council standing — a real API would return this too. */
-  status: 'active' | 'suspended';
-}
-
-export interface NurseRegistryRecord {
-  registrationNumber: string;
-  name: string;
-  qualification: string;
-  nursingCouncil: string;
-  registrationYear: string;
-  /** Council standing. */
-  status: 'active' | 'suspended';
-}
-
-export interface AadhaarRecord {
-  aadhaarNumber: string;
-  name: string;
-  /** ISO date (YYYY-MM-DD). */
-  dateOfBirth: string;
-  /** Matches the app's gender options: 'Female' | 'Male' | 'Other'. */
-  gender: string;
-  phone: string;
-  address: string;
-}

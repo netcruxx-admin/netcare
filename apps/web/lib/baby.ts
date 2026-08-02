@@ -4,7 +4,7 @@
 // Pure functions / static data; no persistence.
 // -----------------------------------------------------------------------------
 
-import type { Immunization } from './db';
+import type { Immunization } from './types';
 import { MS_PER_DAY } from './constants';
 import type { ImmStatus, VaccineDose, WhoPoint } from './types';
 

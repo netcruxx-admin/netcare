@@ -13,6 +13,7 @@ export default function DoctorsPage() {
         [superadminRole]: PlatformDoctors,
         [adminRole]: AdminDoctors,
       }}
+      viewsByScope={{ all: AdminDoctors, own: AdminDoctors }}
     />
   );
 }

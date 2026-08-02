@@ -8,10 +8,10 @@
 // becoming an infinitely-configurable monster — each category is a curated
 // template.
 //
-// The currently-active category is stored per browser (localStorage) so it can
-// be switched from the admin "Hospital Setup" page and the app re-shapes live.
-// When the backend becomes multi-tenant, the active category simply moves onto
-// the Hospital record and this file becomes the template catalog.
+// This file is the template CATALOG only — code-owned reference data, like the
+// permission catalog on the backend. Which category a hospital actually is, and
+// which modules it actually has, live on the Hospital record and arrive from
+// `GET /hospitals/current`. Nothing here is per-browser state.
 // -----------------------------------------------------------------------------
 
 import {
@@ -22,9 +22,6 @@ import {
   TestTube,
 } from 'lucide-react';
 
-import { getActiveHospitalConfig } from './hospitalConfig';
-import { getCurrentHospitalId } from './tenant';
-import { ACTIVE_CATEGORY_KEY } from './constants';
 import type { HospitalCategory, HospitalCategoryId, HospitalModules } from './types';
 
 // Re-export the category types (definitions live in ./types).
@@ -165,36 +162,14 @@ export const HOSPITAL_CATEGORIES: Record<HospitalCategoryId, HospitalCategory> =
 
 export const CATEGORY_LIST: HospitalCategory[] = Object.values(HOSPITAL_CATEGORIES);
 
-// Category override is stored PER TENANT so switching hospitals shows the right
-// modules/nav (key suffixed with the active hospitalId).
-function categoryKey(): string {
-  return `${ACTIVE_CATEGORY_KEY}:${getCurrentHospitalId()}`;
-}
-
-/** The category the active hospital is currently running as. Defaults to that
- *  hospital's configured type; overridable per tenant from Hospital Setup. */
-export function getActiveCategoryId(): HospitalCategoryId {
-  if (typeof window !== 'undefined') {
-    const stored = localStorage.getItem(categoryKey());
-    if (stored && stored in HOSPITAL_CATEGORIES) {
-      return stored as HospitalCategoryId;
-    }
-  }
-  return getActiveHospitalConfig().type;
-}
-
-export function getActiveCategory(): HospitalCategory {
-  return HOSPITAL_CATEGORIES[getActiveCategoryId()];
-}
-
-export function setActiveCategory(id: HospitalCategoryId): void {
-  if (typeof window !== 'undefined') {
-    localStorage.setItem(categoryKey(), id);
-  }
-}
-
-/** Modules enabled for the active category — the source of truth for which
- *  features/nav items are visible. */
-export function getEnabledModules(): HospitalModules {
-  return getActiveCategory().modules;
+/** The template for a category code, or undefined for one this build doesn't
+ *  know. The hospital's *actual* category and modules come from the API
+ *  (`GET /hospitals/current`); this catalog only describes what each category
+ *  suggests, for the setup screen's preview. */
+export function getCategoryTemplate(
+  id: string | undefined,
+): HospitalCategory | undefined {
+  return id && id in HOSPITAL_CATEGORIES
+    ? HOSPITAL_CATEGORIES[id as HospitalCategoryId]
+    : undefined;
 }

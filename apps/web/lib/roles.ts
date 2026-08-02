@@ -8,9 +8,14 @@
  * redirect and the role pickers.
  *
  * Routes are role-agnostic (`/dashboard/patients`, not `/dashboard/doctor/patients`).
- * A route lists the roles allowed to open it; the page then renders the view for
- * whichever role is signed in. That is what removes the folder-per-role layout
- * and the access check copy-pasted into every page.
+ * A route declares the **permission** it needs; the page then renders the view
+ * for whichever role is signed in. That is what removes the folder-per-role
+ * layout and the access check copy-pasted into every page.
+ *
+ * Access is decided by permissions, never by role name. A role invented by the
+ * superadmin at runtime works the moment its grants are ticked — there is no
+ * list of role codes here for anyone to remember to update. The role codes below
+ * exist only to label the shipped roles' curated menus and pick their views.
  */
 import type { LucideIcon } from 'lucide-react';
 import {
@@ -37,7 +42,7 @@ import {
   Users,
   Video,
 } from 'lucide-react';
-import type { HospitalModules } from './hospitalConfig';
+import type { HospitalModules } from './types';
 import type { AuthSession } from './types';
 
 // -----------------------------------------------------------------------------
@@ -100,12 +105,31 @@ export interface DashboardRoute {
   /** Sidebar label, and the fallback page title. */
   label: string;
   icon: LucideIcon;
-  /** Roles allowed to open this route. Empty means nobody — never omit it. */
-  roles: string[];
-  /** Permission code required to see this route in the nav. When set, the
-   *  user must hold this permission (from session.permissions) in addition to
-   *  their role being in `roles`. Falls back to role-only when omitted. */
+  /**
+   * The capability this screen needs. **This is the access decision** — hold it
+   * and you may open the route, whatever your role is called. Omitted only for
+   * routes open to anyone signed in (see `openToAnySignedInUser`).
+   */
   permission?: string;
+  /**
+   * Which shipped roles have a *view* built for this screen. This is a fact
+   * about the UI, not about authority: it never grants access and never denies
+   * it. It exists so the six built-in roles keep their curated sidebar — an
+   * admin holds `appointments.read` but has no use for the doctor's "Completed
+   * Visits" screen. A role that is not one of the shipped six is not narrowed
+   * by it, so a superadmin-created role sees every screen its grants unlock.
+   */
+  viewRoles: string[];
+  /**
+   * Keep this screen out of the nav for roles outside `viewRoles`, even when
+   * they hold the permission. For screens with no generic form — a doctor's own
+   * completed visits, a clinician's profile record — where offering the link to
+   * a role with no view would only lead to the "not available" notice.
+   *
+   * It hides a menu entry; it does not deny access. The permission still does
+   * that, here and at the API.
+   */
+  viewRolesOnly?: boolean;
   /** Per-role label override, where roles name the same screen differently. */
   labelByRole?: Record<string, string>;
   /** Hidden unless the hospital has this module enabled. */
@@ -128,31 +152,31 @@ const allRoles = [superadminRole, adminRole, doctorRole, nurseRole, labRole, pat
  * Every dashboard route, once.
  *
  * There is no role in any path: `/dashboard/appointments` serves five roles, and
- * the page picks the view for whoever is signed in. `module` gates a route on a
- * hospital feature for all of its roles; `specialties` only ever narrows doctors
- * and `patientVisible` only ever narrows patients, so one entry can carry all
- * three without them interfering.
+ * the page picks the view for whoever is signed in. `permission` is the gate;
+ * `module` gates a route on a hospital feature for everyone; `specialties` only
+ * ever narrows doctors and `patientVisible` only ever narrows patients, so one
+ * entry can carry all of them without them interfering.
  *
  * Ordered as the sidebar reads — landing page, day-to-day work, then account and
- * administration last. Each role sees this order filtered to its own routes.
+ * administration last. Each user sees this order filtered to their own grants.
  */
 export const dashboardRoutes: DashboardRoute[] = [
   {
     path: '/dashboard',
     label: 'Dashboard',
     icon: LayoutDashboard,
-    roles: allRoles,
+    viewRoles: allRoles,
     labelByRole: { [superadminRole]: 'Overview', [adminRole]: 'Overview' },
   },
 
-  { path: '/dashboard/hospitals', label: 'Hospitals', icon: Building2, roles: [superadminRole], permission: 'hospitals.manage' },
+  { path: '/dashboard/hospitals', label: 'Hospitals', icon: Building2, viewRoles: [superadminRole], permission: 'hospitals.manage' },
 
   // ── Booking and scheduling ────────────────────────────────────────────────
   {
     path: '/dashboard/book',
     label: 'Book Appointment',
     icon: CalendarPlus,
-    roles: [superadminRole, adminRole, patientRole],
+    viewRoles: [superadminRole, adminRole, patientRole],
     permission: 'appointments.create',
     // Admins and superadmin reach booking from the appointments screen, not the sidebar.
     hideInNav: true,
@@ -161,7 +185,7 @@ export const dashboardRoutes: DashboardRoute[] = [
     path: '/dashboard/appointments',
     label: 'Appointments',
     icon: CalendarDays,
-    roles: [superadminRole, adminRole, doctorRole, nurseRole, patientRole],
+    viewRoles: [superadminRole, adminRole, doctorRole, nurseRole, patientRole],
     permission: 'appointments.read',
     labelByRole: { [patientRole]: 'Appointment History' },
   },
@@ -169,7 +193,7 @@ export const dashboardRoutes: DashboardRoute[] = [
     path: '/dashboard/schedule',
     label: 'Schedule',
     icon: CalendarRange,
-    roles: [adminRole, doctorRole, patientRole],
+    viewRoles: [adminRole, doctorRole, patientRole],
     permission: 'schedule.read',
   },
 
@@ -178,7 +202,7 @@ export const dashboardRoutes: DashboardRoute[] = [
     path: '/dashboard/patients',
     label: 'Patients',
     icon: UserRound,
-    roles: [superadminRole, ...staffRoles],
+    viewRoles: [superadminRole, ...staffRoles],
     permission: 'patients.read',
     labelByRole: { [doctorRole]: 'My Patients', [superadminRole]: 'All Patients' },
   },
@@ -186,7 +210,7 @@ export const dashboardRoutes: DashboardRoute[] = [
     path: '/dashboard/doctors',
     label: 'Doctors',
     icon: Stethoscope,
-    roles: [superadminRole, adminRole],
+    viewRoles: [superadminRole, adminRole],
     permission: 'doctors.read',
   },
 
@@ -195,7 +219,7 @@ export const dashboardRoutes: DashboardRoute[] = [
     path: '/dashboard/pregnancies',
     label: 'Pregnancies',
     icon: Baby,
-    roles: [doctorRole, patientRole],
+    viewRoles: [doctorRole, patientRole],
     permission: 'pregnancies.read',
     labelByRole: { [patientRole]: 'Pregnancy' },
     module: 'anc',
@@ -207,7 +231,7 @@ export const dashboardRoutes: DashboardRoute[] = [
     path: '/dashboard/babies',
     label: 'Newborns',
     icon: Baby,
-    roles: [doctorRole, patientRole],
+    viewRoles: [doctorRole, patientRole],
     permission: 'babies.read',
     labelByRole: { [patientRole]: 'My Baby' },
     module: 'anc',
@@ -219,7 +243,7 @@ export const dashboardRoutes: DashboardRoute[] = [
     path: '/dashboard/video-consults',
     label: 'Video Consults',
     icon: Video,
-    roles: [doctorRole, patientRole],
+    viewRoles: [doctorRole, patientRole],
     permission: 'video_consults.join',
     labelByRole: { [patientRole]: 'Video Consult' },
     module: 'telemedicine',
@@ -228,7 +252,7 @@ export const dashboardRoutes: DashboardRoute[] = [
     path: '/dashboard/vitals',
     label: 'Record Vitals',
     icon: HeartPulse,
-    roles: [nurseRole],
+    viewRoles: [nurseRole],
     permission: 'vitals.record',
     module: 'nursing',
   },
@@ -236,18 +260,20 @@ export const dashboardRoutes: DashboardRoute[] = [
     path: '/dashboard/prescriptions',
     label: 'Prescriptions',
     icon: Pill,
-    roles: [doctorRole],
+    viewRoles: [doctorRole],
     permission: 'prescriptions.read',
     module: 'pharmacy',
   },
-  { path: '/dashboard/completed', label: 'Completed Visits', icon: CheckCircle, roles: [doctorRole], permission: 'appointments.read' },
+  // A doctor's own finished visits. Every role holding appointments.read would
+  // otherwise be offered it, and there is no version of the screen for them.
+  { path: '/dashboard/completed', label: 'Completed Visits', icon: CheckCircle, viewRoles: [doctorRole], permission: 'appointments.read', viewRolesOnly: true },
 
   // ── Records and lab ───────────────────────────────────────────────────────
   {
     path: '/dashboard/records',
     label: 'Medical Records',
     icon: FileText,
-    roles: [patientRole],
+    viewRoles: [patientRole],
     permission: 'medical_records.read',
     module: 'medicalRecords',
   },
@@ -255,7 +281,7 @@ export const dashboardRoutes: DashboardRoute[] = [
     path: '/dashboard/medical-history',
     label: 'Medical History',
     icon: HeartPulse,
-    roles: [patientRole],
+    viewRoles: [patientRole],
     permission: 'medical_records.read',
     module: 'medicalRecords',
   },
@@ -263,7 +289,7 @@ export const dashboardRoutes: DashboardRoute[] = [
     path: '/dashboard/lab-orders',
     label: 'Lab Orders',
     icon: ClipboardList,
-    roles: [doctorRole, labRole],
+    viewRoles: [doctorRole, labRole],
     permission: 'lab_orders.read',
     labelByRole: { [labRole]: 'Test Orders' },
     module: 'lab',
@@ -272,7 +298,7 @@ export const dashboardRoutes: DashboardRoute[] = [
     path: '/dashboard/reports',
     label: 'Reports',
     icon: FileBarChart,
-    roles: [labRole, patientRole],
+    viewRoles: [labRole, patientRole],
     permission: 'lab_reports.read',
     labelByRole: { [patientRole]: 'Test Reports' },
     module: 'lab',
@@ -281,7 +307,7 @@ export const dashboardRoutes: DashboardRoute[] = [
     path: '/dashboard/tests',
     label: 'Tests',
     icon: FlaskConical,
-    roles: [adminRole, labRole],
+    viewRoles: [adminRole, labRole],
     permission: 'lab_tests.manage',
     labelByRole: { [labRole]: 'Test Catalog' },
     module: 'lab',
@@ -290,7 +316,7 @@ export const dashboardRoutes: DashboardRoute[] = [
     path: '/dashboard/payments',
     label: 'Payments',
     icon: CreditCard,
-    roles: [patientRole],
+    viewRoles: [patientRole],
     permission: 'payments.read',
     module: 'payments',
   },
@@ -300,8 +326,11 @@ export const dashboardRoutes: DashboardRoute[] = [
     path: '/dashboard/profile',
     label: 'Profile',
     icon: User,
-    roles: [...clinicalRoles, patientRole],
+    viewRoles: [...clinicalRoles, patientRole],
     permission: 'profile.manage',
+    // The forms here edit a doctor/nurse/patient record. A role with none of
+    // those has nothing to edit yet — PUT /users/me exists but has no screen.
+    viewRolesOnly: true,
   },
 
   // ── Administration ────────────────────────────────────────────────────────
@@ -309,20 +338,20 @@ export const dashboardRoutes: DashboardRoute[] = [
     path: '/dashboard/departments',
     label: 'Departments',
     icon: Building2,
-    roles: [superadminRole, adminRole],
+    viewRoles: [superadminRole, adminRole],
     permission: 'departments.read',
   },
   {
     path: '/dashboard/medicines',
     label: 'Medicines',
     icon: Pill,
-    roles: [adminRole],
+    viewRoles: [adminRole],
     permission: 'medicines.manage',
     module: 'pharmacy',
   },
-  { path: '/dashboard/users', label: 'Users', icon: Users, roles: [superadminRole, adminRole], permission: 'users.read' },
-  { path: '/dashboard/roles', label: 'Roles', icon: ShieldCheck, roles: [superadminRole], permission: 'roles.manage' },
-  { path: '/dashboard/setup', label: 'Hospital Setup', icon: Settings, roles: [adminRole], permission: 'hospital.settings.manage' },
+  { path: '/dashboard/users', label: 'Users', icon: Users, viewRoles: [superadminRole, adminRole], permission: 'users.read' },
+  { path: '/dashboard/roles', label: 'Roles', icon: ShieldCheck, viewRoles: [superadminRole], permission: 'roles.manage' },
+  { path: '/dashboard/setup', label: 'Hospital Setup', icon: Settings, viewRoles: [adminRole], permission: 'hospital.settings.manage' },
 ];
 
 /**
@@ -351,27 +380,57 @@ export function findRoute(path: string): DashboardRoute | undefined {
   return dashboardRoutes.find((r) => r.path === path);
 }
 
+/** A resolved grant as the server reports it on the session. */
+export type PermissionGrant = { code: string; scope?: string | null };
+
+/** Whether the session holds a capability at all. */
+export function hasPermission(
+  permissions: PermissionGrant[] | undefined,
+  code: string,
+): boolean {
+  return !!permissions?.some((p) => p.code === code);
+}
+
 /**
- * Whether a role may open a path. Unknown paths are allowed — the route table
- * governs the dashboard screens it lists, and is not a URL whitelist.
- *
- * Optionally pass the user's live permissions so that routes gated by a
- * permission code are also blocked when that permission is not held.
+ * The scope a capability was granted at — 'own', 'all', or undefined when the
+ * capability isn't held. Screens use this to decide how much to show, rather
+ * than asking what the user's role is called.
  */
-export function canRoleAccessPath(
-  role: string,
+export function permissionScope(
+  permissions: PermissionGrant[] | undefined,
+  code: string,
+): string | undefined {
+  const grant = permissions?.find((p) => p.code === code);
+  if (!grant) return undefined;
+  return grant.scope ?? undefined;
+}
+
+/**
+ * Whether a signed-in user may open a path.
+ *
+ * The permission decides — not the role. That is what makes a role the
+ * superadmin invented at runtime work without a code change: grant it
+ * `patients.read` and /dashboard/patients opens for it.
+ *
+ * Unknown paths are allowed: the route table governs the dashboard screens it
+ * lists and is not a URL whitelist. It is also only the client's copy of the
+ * decision — the API enforces the same permission again on every request, so a
+ * user who forces their way to a screen still sees nothing they may not read.
+ */
+export function canAccessPath(
+  permissions: PermissionGrant[] | undefined,
   path: string,
-  permissions?: { code: string; scope?: string | null }[],
 ): boolean {
   if (alwaysAllowedPaths.includes(path)) return true;
   if (alwaysAllowedPathPrefixes.some((p) => path === p || path.startsWith(`${p}/`))) return true;
   const route = findRoute(path);
   if (!route) return true;
-  if (!route.roles.includes(role)) return false;
-  if (route.permission && permissions) {
-    return permissions.some((p) => p.code === route.permission);
-  }
-  return true;
+  if (!route.permission) return true;
+  // No permission data yet (a session stored before grants were resolved):
+  // don't lock the user out of their own dashboard over a missing field. The
+  // API is still enforcing, and useDashboardGuard re-checks once /auth/me lands.
+  if (!permissions) return true;
+  return hasPermission(permissions, route.permission);
 }
 
 /** Sidebar label for a route, honouring any per-role override. */
@@ -380,36 +439,41 @@ export function routeLabel(route: DashboardRoute, role: string): string {
 }
 
 /**
- * Sidebar entries for a role: its routes, minus ones whose module is disabled,
- * whose specialty doesn't match the doctor, or that don't apply to this patient.
+ * Sidebar entries: the routes this user's permissions unlock, minus ones whose
+ * module is disabled, whose specialty doesn't match the doctor, or that don't
+ * apply to this patient.
+ *
+ * Permissions decide *whether* a screen is reachable. `viewRoles` only decides
+ * whether it is worth putting in a shipped role's menu — an admin holds
+ * `appointments.read` but the doctor's "Completed Visits" screen is not their
+ * workflow. A role that isn't one of the shipped six is not narrowed that way,
+ * so a superadmin can invent "receptionist", tick five permissions, and get a
+ * working sidebar with no code change.
  */
 export function navRoutesForRole(
   role: string,
   options: {
-    modules: HospitalModules;
+    /** A module the hospital hasn't enabled is simply absent, which reads as
+     *  off — the safe direction for a feature flag. */
+    modules: Partial<HospitalModules>;
     specialization?: string;
     patientContext?: PatientContext;
-    /** Resolved permissions from the session. When provided, routes whose
-     *  `permission` field the user doesn't hold are hidden from the nav. */
-    permissions?: { code: string; scope?: string | null }[];
+    /** Resolved grants from the session. Without them nothing is shown beyond
+     *  the always-open routes — an empty menu is the safe direction to fail. */
+    permissions?: PermissionGrant[];
   },
 ): DashboardRoute[] {
   const { modules, specialization = '', patientContext, permissions } = options;
   const spec = specialization.toLowerCase();
-
-  // Build a quick lookup set. Undefined means no permission data available
-  // (e.g. old stored session) — fall back to role-only filtering in that case.
-  const heldCodes = permissions
-    ? new Set(permissions.map((p) => p.code))
-    : null;
+  const isShippedRole = builtInRoleCodes.includes(role);
 
   return dashboardRoutes.filter((route) => {
-    if (!route.roles.includes(role)) return false;
     if (route.hideInNav) return false;
     if (route.module && !modules[route.module]) return false;
-    // Permission gate: if the route declares a required permission and we have
-    // permission data, hide the route when the user doesn't hold it.
-    if (route.permission && heldCodes && !heldCodes.has(route.permission)) return false;
+    if (route.permission && !hasPermission(permissions, route.permission)) return false;
+    // Curated menu for the shipped roles; everything earned for the rest,
+    // except screens that exist in no generic form.
+    if ((isShippedRole || route.viewRolesOnly) && !route.viewRoles.includes(role)) return false;
     if (route.specialties && role === doctorRole) {
       return route.specialties.some((keyword) => spec.includes(keyword));
     }

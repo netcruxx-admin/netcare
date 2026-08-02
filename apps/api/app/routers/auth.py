@@ -40,6 +40,16 @@ def register(
     db: Session = Depends(get_db),
     tenant_id: str = Depends(resolve_public_tenant),
 ):
+    # Which hospital this account belongs to is decided by the host the request
+    # arrived on, never by the body or a header. If that could not be resolved
+    # there is no safe default — guessing would file the account, and every
+    # record it goes on to create, under someone else's tenant.
+    if not tenant_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Could not determine which hospital this sign-up belongs to.",
+        )
+
     # Email is unique per tenant, so the check is scoped to this hospital.
     existing = (
         db.query(models.User)

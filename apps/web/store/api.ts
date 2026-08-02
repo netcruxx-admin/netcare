@@ -280,11 +280,14 @@ export const api = createApi({
             // malformed session — skip
           }
         }
-        // Attach tenant id so the backend scopes correctly.
-        // Only set if not already provided per-request (e.g. superadmin editing
-        // a record that belongs to a specific hospital).
-        if (!headers.has('X-Hospital-Id')) {
-          headers.set('X-Hospital-Id', getCurrentHospitalId());
+        // Attach the tenant hint so the backend scopes correctly. Only set if
+        // not already provided per-request (e.g. superadmin editing a record
+        // that belongs to a specific hospital), and only when we actually have
+        // one — sending an empty or invented id would name a hospital we have
+        // no reason to believe in.
+        const tenantHint = getCurrentHospitalId();
+        if (tenantHint && !headers.has('X-Hospital-Id')) {
+          headers.set('X-Hospital-Id', tenantHint);
         }
       }
       return headers;

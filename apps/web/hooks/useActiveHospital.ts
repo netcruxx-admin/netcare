@@ -1,27 +1,32 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-
-import {
-  getHospitalConfig,
-  type HospitalConfig,
-} from '@/lib/hospitalConfig';
-import { DEFAULT_HOSPITAL_ID, getCurrentHospitalId } from '@/lib/tenant';
+import { useGetCurrentHospitalQuery, type HospitalInfo } from '@/store/api';
 
 /**
- * The active tenant's config, resolved on the client.
+ * The active tenant, straight from the backend.
  *
- * SSR-safe: the first render (server + client hydration) uses the default
- * tenant so the markup matches; the real tenant (subdomain / switcher) is
- * resolved in an effect right after mount. Components should read the hospital
- * name/branding/etc. through this hook rather than a static import.
+ * `GET /hospitals/current` is public and resolves the tenant from the request
+ * host's subdomain, so this works on the signed-out pages (landing, login,
+ * register, shared report links) as well as inside the dashboard.
+ *
+ * Returns a blank-but-shaped hospital while the request is in flight so callers
+ * can read fields without null-checking every one; `isLoading` is there for the
+ * callers that would rather hold rendering until the real name arrives.
  */
-export function useActiveHospital(): HospitalConfig {
-  const [id, setId] = useState<string>(DEFAULT_HOSPITAL_ID);
+const PLACEHOLDER: HospitalInfo = {
+  id: '',
+  name: '',
+  subdomain: '',
+  category: '',
+  tagline: '',
+  currency: 'INR',
+  modules: {},
+  theme: {},
+  status: '',
+  createdAt: '',
+};
 
-  useEffect(() => {
-    setId(getCurrentHospitalId());
-  }, []);
-
-  return getHospitalConfig(id);
+export function useActiveHospital(): HospitalInfo & { isLoading: boolean } {
+  const { data, isLoading } = useGetCurrentHospitalQuery();
+  return { ...(data ?? PLACEHOLDER), isLoading };
 }

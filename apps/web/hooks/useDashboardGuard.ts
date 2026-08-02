@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { authStorage } from '@/lib/auth';
-import { canRoleAccessPath, homePathForSession } from '@/lib/roles';
+import { canAccessPath, homePathForSession } from '@/lib/roles';
 import { useMeQuery } from '@/store/api';
 import type { AuthSession } from '@/lib/types';
 
@@ -36,7 +36,9 @@ export function useDashboardGuard(path?: string): AuthSession | null {
     }
     // Signed in but not entitled to this screen: send them to their own
     // dashboard rather than the login page, which would look like a logout.
-    if (!canRoleAccessPath(s.user.role, guardedPath)) {
+    // Judged on the grants stored at login; the effect below re-judges on the
+    // live ones, so a grant revoked since then still takes effect.
+    if (!canAccessPath(s.permissions, guardedPath)) {
       router.replace(homePathForSession(s));
       return;
     }
@@ -56,7 +58,7 @@ export function useDashboardGuard(path?: string): AuthSession | null {
   // the same way as sidebar removal.
   useEffect(() => {
     if (!stored || !meData?.permissions) return;
-    if (!canRoleAccessPath(stored.user.role, guardedPath, meData.permissions)) {
+    if (!canAccessPath(meData.permissions, guardedPath)) {
       router.replace(homePathForSession(stored));
     }
   }, [stored, meData?.permissions, guardedPath, router]);

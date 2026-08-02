@@ -15,6 +15,9 @@ export default function PatientsPage() {
         [nurseRole]: HospitalPatients,
         [superadminRole]: PlatformPatients,
       }}
+      // HospitalPatients renders whatever the API returns, which the permission
+      // scope has already narrowed — so it serves either scope safely.
+      viewsByScope={{ all: HospitalPatients, own: HospitalPatients }}
     />
   );
 }

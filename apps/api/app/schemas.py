@@ -1,7 +1,8 @@
-from typing import List, Literal, Optional
+from typing import List, Literal, Optional, get_args
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, ValidationInfo, field_validator
 from pydantic.alias_generators import to_camel
+from pydantic_core import PydanticUndefined
 
 # Any code present in the `roles` table. Not a Literal: the catalog is
 # superadmin-managed at runtime (routers/roles.py), so a closed union here would
@@ -40,8 +41,51 @@ class CamelModel(BaseModel):
     )
 
 
+# Empty value to substitute when a NULL column meets a non-optional field.
+_EMPTY_FOR_TYPE: dict[type, object] = {str: "", int: 0, float: 0.0, bool: False, dict: {}, list: []}
+
+
+class OutModel(CamelModel):
+    """Base for response models: a NULL column never fails a read.
+
+    Most nullable columns are declared non-optional here because the app always
+    writes "" or 0 through the ORM. That default is client-side though — a
+    direct SQL insert, a bulk insert in a migration, or an imported row writes a
+    real NULL, and strict validation would then turn one bad row into a 500 for
+    the *entire* list endpoint, not just that record.
+
+    So responses coerce NULL to the field's declared default, or to the empty
+    value for its type. Requests deliberately do NOT inherit this: input stays
+    strict, because a client sending null for a required field is a bug worth
+    rejecting. Tolerant on the way out, strict on the way in.
+    """
+
+    @field_validator("*", mode="before")
+    @classmethod
+    def _null_to_empty(cls, value: object, info: ValidationInfo) -> object:
+        if value is not None:
+            return value
+        field = cls.model_fields.get(info.field_name or "")
+        if field is None:
+            return value
+        # A field that genuinely accepts None keeps it.
+        if type(None) in get_args(field.annotation):
+            return value
+        # Prefer what the schema already declares (keeps Literals valid, e.g.
+        # status defaulting to "ordered" rather than an invalid "").
+        if field.default is not PydanticUndefined:
+            return field.default
+        # A Literal with no default: fall back to its first member, which is the
+        # initial state by convention ("scheduled", "pending", "ordered").
+        # Better a defensible starting value than a 500 on the whole list.
+        literal_options = get_args(field.annotation)
+        if literal_options and all(isinstance(o, str) for o in literal_options):
+            return literal_options[0]
+        return _EMPTY_FOR_TYPE.get(field.annotation, value)
+
+
 # ---------- Hospital (tenant) ----------
-class HospitalOut(CamelModel):
+class HospitalOut(OutModel):
     id: str
     name: str
     subdomain: str
@@ -80,7 +124,7 @@ class HospitalUpdate(CamelModel):
 
 
 # ---------- Permissions ----------
-class PermissionOut(CamelModel):
+class PermissionOut(OutModel):
     """One entry of the grantable catalog, for the superadmin's permission matrix."""
 
     code: str
@@ -103,7 +147,7 @@ class PermissionGrant(CamelModel):
 
 
 # ---------- Role (platform-wide catalog, superadmin-managed) ----------
-class RoleOut(CamelModel):
+class RoleOut(OutModel):
     code: str
     label: str
     description: str = ""
@@ -119,7 +163,7 @@ class RoleOut(CamelModel):
     user_count: int = 0
 
 
-class RoleOptionOut(CamelModel):
+class RoleOptionOut(OutModel):
     """Slim projection for role pickers. Readable by any signed-in user, unlike
     the full catalog — it carries no user counts or platform-internal detail."""
 
@@ -218,7 +262,7 @@ class LoginRequest(CamelModel):
     password: str
 
 
-class UserOut(CamelModel):
+class UserOut(OutModel):
     id: str
     hospital_id: Optional[str] = None
     email: str
@@ -229,7 +273,7 @@ class UserOut(CamelModel):
 
 
 # ---------- Patient ----------
-class PatientOut(CamelModel):
+class PatientOut(OutModel):
     id: str
     hospital_id: Optional[str] = None
     user_id: str
@@ -270,7 +314,7 @@ class TimeSlot(CamelModel):
     available: bool = True
 
 
-class DoctorOut(CamelModel):
+class DoctorOut(OutModel):
     id: str
     hospital_id: Optional[str] = None
     user_id: str
@@ -304,7 +348,7 @@ class DoctorUpdate(CamelModel):
     verification_status: Optional[str] = None
 
 
-class DoctorAvailabilityOut(CamelModel):
+class DoctorAvailabilityOut(OutModel):
     """What a booker needs to pick a slot, and nothing more: the times already
     taken and the doctor's blocks. Deliberately carries no appointment detail,
     so it is safe for a patient who cannot read other people's bookings."""
@@ -316,7 +360,7 @@ class DoctorAvailabilityOut(CamelModel):
 
 
 # ---------- Department ----------
-class DepartmentOut(CamelModel):
+class DepartmentOut(OutModel):
     id: str
     hospital_id: Optional[str] = None
     name: str
@@ -361,7 +405,7 @@ class AppointmentUpdate(CamelModel):
     department_id: Optional[str] = None
 
 
-class AppointmentOut(CamelModel):
+class AppointmentOut(OutModel):
     id: str
     hospital_id: Optional[str] = None
     patient_id: str
@@ -369,7 +413,7 @@ class AppointmentOut(CamelModel):
     department_id: str
     date: str
     time: str
-    status: AppointmentStatus
+    status: AppointmentStatus = "scheduled"
     mode: AppointmentMode = "in-person"
     reason: str = ""
     notes: str = ""
@@ -388,7 +432,7 @@ class MedicalRecordCreate(CamelModel):
     lab_reports: List[str] = []
 
 
-class MedicalRecordOut(CamelModel):
+class MedicalRecordOut(OutModel):
     id: str
     patient_id: str
     appointment_id: str
@@ -408,12 +452,12 @@ class PaymentCreate(CamelModel):
     status: PaymentStatus = "pending"
 
 
-class PaymentOut(CamelModel):
+class PaymentOut(OutModel):
     id: str
     appointment_id: str
     patient_id: str
     amount: float
-    status: PaymentStatus
+    status: PaymentStatus = "pending"
     payment_method: str = ""
     created_at: str
 
@@ -430,7 +474,7 @@ class PrescriptionCreate(CamelModel):
     instructions: str = ""
 
 
-class PrescriptionOut(CamelModel):
+class PrescriptionOut(OutModel):
     id: str
     appointment_id: str
     patient_id: str
@@ -457,7 +501,7 @@ class VitalsCreate(CamelModel):
     notes: str = ""
 
 
-class VitalsOut(CamelModel):
+class VitalsOut(OutModel):
     id: str
     appointment_id: str
     patient_id: str
@@ -497,7 +541,7 @@ class MedicineUpdate(CamelModel):
     stock: Optional[int] = None
 
 
-class MedicineOut(CamelModel):
+class MedicineOut(OutModel):
     id: str
     hospital_id: Optional[str] = None
     name: str
@@ -535,7 +579,7 @@ class LabTestUpdate(CamelModel):
     parameters: Optional[List[TestParameterTemplate]] = None
 
 
-class LabTestOut(CamelModel):
+class LabTestOut(OutModel):
     id: str
     hospital_id: Optional[str] = None
     name: str
@@ -568,7 +612,7 @@ class TestOrderUpdate(CamelModel):
     clinical_note: Optional[str] = None
 
 
-class TestOrderOut(CamelModel):
+class TestOrderOut(OutModel):
     id: str
     hospital_id: Optional[str] = None
     patient_id: str
@@ -599,7 +643,7 @@ class TestResultUpsert(CamelModel):
     reported_by: str = ""
 
 
-class TestResultOut(CamelModel):
+class TestResultOut(OutModel):
     id: str
     hospital_id: Optional[str] = None
     order_id: str
@@ -621,7 +665,7 @@ class ScheduleBlockCreate(CamelModel):
     note: str = ""
 
 
-class ScheduleBlockOut(CamelModel):
+class ScheduleBlockOut(OutModel):
     id: str
     hospital_id: Optional[str] = None
     doctor_id: str
@@ -644,7 +688,7 @@ class VideoSlotBook(CamelModel):
     appointment_id: str
 
 
-class VideoSlotOut(CamelModel):
+class VideoSlotOut(OutModel):
     id: str
     hospital_id: Optional[str] = None
     doctor_id: str
@@ -682,7 +726,7 @@ class PregnancyUpdate(CamelModel):
     notes: Optional[str] = None
 
 
-class PregnancyOut(CamelModel):
+class PregnancyOut(OutModel):
     id: str
     hospital_id: Optional[str] = None
     patient_id: str
@@ -715,7 +759,7 @@ class ANCVisitCreate(CamelModel):
     notes: str = ""
 
 
-class ANCVisitOut(CamelModel):
+class ANCVisitOut(OutModel):
     id: str
     hospital_id: Optional[str] = None
     pregnancy_id: str
@@ -747,7 +791,7 @@ class BabyCreate(CamelModel):
     gestational_weeks: int = 0
 
 
-class BabyOut(CamelModel):
+class BabyOut(OutModel):
     id: str
     hospital_id: Optional[str] = None
     mother_patient_id: str
@@ -770,7 +814,7 @@ class GrowthMeasurementCreate(CamelModel):
     head_circumference: float = 0
 
 
-class GrowthMeasurementOut(CamelModel):
+class GrowthMeasurementOut(OutModel):
     id: str
     hospital_id: Optional[str] = None
     baby_id: str
@@ -793,7 +837,7 @@ class ImmunizationMarkGiven(CamelModel):
     given_date: str
 
 
-class ImmunizationOut(CamelModel):
+class ImmunizationOut(OutModel):
     id: str
     hospital_id: Optional[str] = None
     baby_id: str

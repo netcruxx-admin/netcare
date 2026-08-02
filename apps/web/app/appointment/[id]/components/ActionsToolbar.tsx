@@ -14,7 +14,7 @@ import {
   XCircle,
 } from 'lucide-react';
 import type { Appointment } from '@/lib/types';
-import { getEnabledModules } from '@/lib/hospitalCategories';
+import { useActiveHospital } from '@/hooks/useActiveHospital';
 import type { ConfirmAction } from '../useAppointmentDetail';
 
 interface ActionsToolbarProps {
@@ -56,10 +56,13 @@ export function ActionsToolbar({
   onConfirm,
 }: ActionsToolbarProps) {
   const router = useRouter();
+  // Which features this tenant has is the hospital's own record, not a local
+  // template — a module the hospital hasn't bought must not offer a button.
+  const { modules } = useActiveHospital();
 
   return (
     <div className="mb-8 flex flex-wrap gap-2">
-      {getEnabledModules().telemedicine && appointment.mode === 'video' && appointment.status === 'scheduled' && (isPatient || canManage) && (
+      {modules.telemedicine && appointment.mode === 'video' && appointment.status === 'scheduled' && (isPatient || canManage) && (
         <button
           onClick={() => router.push(`/dashboard/consult/${appointmentId}`)}
           className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg hover:shadow-lg transition font-semibold text-sm"
@@ -85,7 +88,7 @@ export function ActionsToolbar({
           <button onClick={onPrescription} className={secondaryBtn}>
             <Pill className="w-4 h-4" /> Add Prescription
           </button>
-          {getEnabledModules().lab && (
+          {modules.lab && (
             <button onClick={onOrderTest} className={secondaryBtn}>
               <FlaskConical className="w-4 h-4" /> Order Test
             </button>

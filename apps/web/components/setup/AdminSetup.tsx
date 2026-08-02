@@ -1,27 +1,22 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { Check, X, Sparkles, Building2, Layers, Database, Trash2 } from 'lucide-react';
-// The demo-data helpers below are still backed by the local mock store; the
-// department template is applied through the real API.
-import { dbOperations } from '@/lib/db';
+import { Check, X, Sparkles, Building2, Layers } from 'lucide-react';
 import { apiError } from '@/lib/apiError';
 import {
   useCreateDepartmentMutation,
   useDeleteDepartmentMutation,
   useListDepartmentsQuery,
 } from '@/store/api';
+import { useActiveHospital } from '@/hooks/useActiveHospital';
 import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
 import {
   CATEGORY_LIST,
   HOSPITAL_CATEGORIES,
-  getActiveCategoryId,
-  setActiveCategory,
   type HospitalCategoryId,
 } from '@/lib/hospitalCategories';
-import type { HospitalModules } from '@/lib/hospitalConfig';
+import type { HospitalModules } from '@/lib/types';
 
 // Human labels for the module flags, in display order.
 const MODULE_LABELS: { key: keyof HospitalModules; label: string }[] = [
@@ -35,61 +30,48 @@ const MODULE_LABELS: { key: keyof HospitalModules; label: string }[] = [
 ];
 
 export function AdminSetup({ session }: RoleViewProps) {
-  const router = useRouter();
-  const [activeId, setActiveId] = useState<HospitalCategoryId>('maternity');
+  // The hospital's real category and modules — set at onboarding and changed
+  // only by the platform (hospitals.manage), so this screen reports them rather
+  // than pretending a hospital admin can switch them.
+  const hospital = useActiveHospital();
+  const activeId = hospital.category as HospitalCategoryId;
   const [selectedId, setSelectedId] = useState<HospitalCategoryId>('maternity');
   const [applyDepartments, setApplyDepartments] = useState(true);
-  const [dataMsg, setDataMsg] = useState('');
-  const [confirmClear, setConfirmClear] = useState(false);
+  const [applied, setApplied] = useState('');
 
   useEffect(() => {
-    const current = getActiveCategoryId();
-    setActiveId(current);
-    setSelectedId(current);
-  }, [session]);
+    if (hospital.category) setSelectedId(hospital.category as HospitalCategoryId);
+  }, [hospital.category]);
 
   const { data: existingDepartments = [] } = useListDepartmentsQuery();
   const [createDepartment] = useCreateDepartmentMutation();
   const [deleteDepartment] = useDeleteDepartmentMutation();
   const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
 
   const selected = HOSPITAL_CATEGORIES[selectedId];
-  const isDirty = selectedId !== activeId;
+  // Modules shown for the hospital's own category are the ones it actually has;
+  // for any other category this is a preview of that template.
+  const isActiveCategory = selectedId === activeId;
 
   const handleApply = async () => {
-    setActiveCategory(selectedId);
-
-    if (applyDepartments) {
+    setError('');
+    setApplied('');
+    setBusy(true);
+    try {
       // Replace the department list with this category's template.
-      setError('');
-      try {
-        for (const d of existingDepartments) {
-          await deleteDepartment(d.id).unwrap();
-        }
-        for (const d of selected.departments) {
-          await createDepartment({ name: d.name, description: d.description }).unwrap();
-        }
-      } catch (err) {
-        setError(apiError(err, 'Could not apply the department template'));
-        return;
+      for (const d of existingDepartments) {
+        await deleteDepartment({ id: d.id }).unwrap();
       }
+      for (const d of selected.departments) {
+        await createDepartment({ name: d.name, description: d.description }).unwrap();
+      }
+      setApplied(`Departments replaced with the ${selected.label} template.`);
+    } catch (err) {
+      setError(apiError(err, 'Could not apply the department template'));
+    } finally {
+      setBusy(false);
     }
-
-    // Full reload so every screen re-reads the active category / modules.
-    window.location.reload();
-  };
-
-  const loadDemo = () => {
-    dbOperations.loadMaternityDemo();
-    setDataMsg('Sample maternity data loaded — explore the patient, doctor and admin dashboards.');
-    setTimeout(() => setDataMsg(''), 4000);
-  };
-
-  const clearData = () => {
-    dbOperations.clearOperationalData();
-    setConfirmClear(false);
-    setDataMsg('All operational data cleared. The app is back to a clean slate.');
-    setTimeout(() => setDataMsg(''), 4000);
   };
 
   return (
@@ -97,7 +79,7 @@ export function AdminSetup({ session }: RoleViewProps) {
       role={session.user.role}
       userName={session.user.name}
       title="Hospital Setup"
-      subtitle="Choose your hospital type — it decides which features are enabled"
+      subtitle="Your hospital type and the departments that go with it"
     >
       <div className="space-y-6">
         {/* Category picker */}
@@ -144,11 +126,23 @@ export function AdminSetup({ session }: RoleViewProps) {
           {/* Modules */}
           <div className="rounded-xl border border-slate-200 bg-white p-5">
             <h3 className="text-sm font-semibold text-slate-900 mb-3">
-              Features enabled for a {selected.label} hospital
+              {isActiveCategory
+                ? 'Features enabled for your hospital'
+                : `Features a ${selected.label} hospital would get`}
             </h3>
+            {!isActiveCategory && (
+              <p className="text-xs text-slate-500 mb-3">
+                Preview of the {selected.label} template — not your hospital&apos;s
+                current plan.
+              </p>
+            )}
             <ul className="space-y-2">
               {MODULE_LABELS.map(({ key, label }) => {
-                const on = selected.modules[key];
+                // Real flags for the hospital's own category; template preview
+                // for any other.
+                const on = isActiveCategory
+                  ? Boolean(hospital.modules[key])
+                  : selected.modules[key];
                 return (
                   <li key={key} className="flex items-center gap-2 text-sm">
                     <span
@@ -219,55 +213,18 @@ export function AdminSetup({ session }: RoleViewProps) {
           </div>
         </section>
 
-        {/* Demo data */}
-        <section className="rounded-xl border border-slate-200 bg-white p-5">
-          <div className="flex items-center gap-2 mb-1">
-            <Database className="w-4 h-4 text-cyan-600" />
-            <h3 className="text-sm font-semibold text-slate-900">Demo data</h3>
-          </div>
-          <p className="text-xs text-slate-500 mb-4">
-            Populate the app with a realistic maternity scenario for demos &amp; pitches — patients at
-            different pregnancy stages, antenatal visits, appointments, lab results and payments. The
-            app ships empty by default; you can clear this any time.
-          </p>
-          {error && (
-            <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</p>
-          )}
-          {dataMsg && (
-            <div className="mb-3 text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2">
-              {dataMsg}
-            </div>
-          )}
-          <div className="flex flex-wrap gap-2">
-            <button
-              onClick={loadDemo}
-              className="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-cyan-500 to-brand-teal text-white text-sm font-semibold px-4 py-2 shadow hover:opacity-95"
-            >
-              <Sparkles className="w-4 h-4" /> Load sample maternity data
-            </button>
-            {confirmClear ? (
-              <div className="inline-flex items-center gap-2">
-                <span className="text-sm text-slate-600">Clear everything?</span>
-                <button onClick={clearData} className="text-sm font-semibold text-red-600 hover:text-red-700 px-2 py-1">
-                  Yes, clear
-                </button>
-                <button onClick={() => setConfirmClear(false)} className="text-sm text-slate-500 hover:text-slate-700 px-2 py-1">
-                  Cancel
-                </button>
-              </div>
-            ) : (
-              <button
-                onClick={() => setConfirmClear(true)}
-                className="inline-flex items-center gap-2 rounded-lg border border-slate-300 text-slate-600 text-sm font-medium px-4 py-2 hover:bg-slate-50"
-              >
-                <Trash2 className="w-4 h-4" /> Clear all data
-              </button>
-            )}
-          </div>
-        </section>
-
         {/* Apply bar */}
         <section className="sticky bottom-0 bg-slate-50 -mx-4 px-4 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8 py-4 border-t border-slate-200">
+          {error && (
+            <p className="mb-3 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+              {error}
+            </p>
+          )}
+          {applied && (
+            <p className="mb-3 text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2">
+              {applied}
+            </p>
+          )}
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <label className="flex items-center gap-2 text-sm text-slate-600">
               <input
@@ -276,21 +233,21 @@ export function AdminSetup({ session }: RoleViewProps) {
                 onChange={(e) => setApplyDepartments(e.target.checked)}
                 className="rounded border-slate-300 text-cyan-600 focus:ring-cyan-500"
               />
-              Also replace departments with this category&apos;s template
+              Replace my departments with the {selected.label} template
             </label>
             <button
               onClick={handleApply}
-              disabled={!isDirty && !applyDepartments}
+              disabled={!applyDepartments || busy}
               className="inline-flex items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-cyan-500 to-brand-teal text-white text-sm font-semibold px-5 py-2.5 shadow hover:opacity-95 disabled:opacity-40 disabled:cursor-not-allowed"
             >
-              {isDirty ? `Switch to ${selected.label}` : 'Re-apply category'}
+              {busy ? 'Applying…' : 'Apply department template'}
             </button>
           </div>
-          {isDirty && (
-            <p className="text-xs text-amber-600 mt-2">
-              Switching will change which features and menu items are visible across the app.
-            </p>
-          )}
+          <p className="text-xs text-amber-600 mt-2">
+            This deletes your current departments and recreates them from the
+            template. Your hospital&apos;s category and enabled features are set by
+            the platform and are not changed here.
+          </p>
         </section>
       </div>
     </DashboardShell>

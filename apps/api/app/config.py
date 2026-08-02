@@ -11,10 +11,25 @@ class Settings(BaseSettings):
     cors_origins: str = "http://localhost:3000"
     # Tenant used before login when the request host carries no known subdomain
     # (e.g. the FE talking to the API on bare localhost). Mirrors the frontend's
-    # DEFAULT_HOSPITAL_ID in lib/tenant.ts.
+    # DEFAULT_HOSPITAL_ID in lib/tenant.ts. Development only — in production an
+    # unrecognised host resolves to no tenant rather than silently to this one.
     default_hospital_id: str = "hosp-1"
+    # "development" or "production". Governs the convenience affordances that are
+    # safe on a laptop and unsafe on the internet: the X-Hospital-Id override on
+    # pre-login requests, the default-tenant fallback, and the *.localhost CORS
+    # regex. Set ENVIRONMENT=production before deploying.
+    environment: str = "development"
+    # Bootstrap credentials for the platform superadmin, created on first boot.
+    # The default password is a demo convenience and is refused in production —
+    # set SUPERADMIN_PASSWORD (and ideally SUPERADMIN_EMAIL) before deploying.
+    superadmin_email: str = "superadmin@platform.com"
+    superadmin_password: str = "password123"
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    @property
+    def is_production(self) -> bool:
+        return self.environment.strip().lower() == "production"
 
     @property
     def cors_origins_list(self) -> list[str]:

@@ -1,50 +1,24 @@
-// Constants, validation schemas and the per-role "verify & auto-fill" config
-// for the registration wizard. Kept out of the page/hook so the orchestration
-// and the presentational steps stay readable.
+// Constants and validation schemas for the registration wizard. Kept out of the
+// page/hook so the orchestration and the presentational steps stay readable.
+//
+// Public sign-up creates patients only — a staff account carries access to other
+// people's records, so the backend provisions those through POST /users
+// (`RegisterRole = Literal["patient"]`). There is deliberately no clinician
+// branch here, and no identity-verification step: the Aadhaar / medical-council
+// lookups that used to sit in front of this form were a hardcoded fixture, not a
+// KYC provider. When a real one is wired up (POST /verifications/…), the step
+// comes back — against the backend, not a list in the bundle.
 import * as Yup from 'yup';
-import { BadgeCheck, Fingerprint } from 'lucide-react';
-import type { LucideIcon } from 'lucide-react';
-import { SAMPLE_REGISTRATION_NUMBERS } from '@/lib/doctorRegistry';
-import { SAMPLE_NURSE_REGISTRATION_NUMBERS } from '@/lib/nurseRegistry';
-import { SAMPLE_AADHAAR_NUMBERS } from '@/lib/aadhaarRegistry';
 
-export type Role = 'patient' | 'doctor' | 'admin' | 'lab' | 'nurse';
-export type Step = 'role' | 'verify' | 'account' | 'details';
-
-// Per-role config for the first "verify & auto-fill" step. Patients verify via
-// Aadhaar; doctors and nurses via their council registration number.
-export interface VerifyConfig {
-  field: 'aadhaarNumber' | 'licenseNumber';
-  label: string;
-  placeholder: string;
-  icon: LucideIcon;
-  intro: string;
-  verifiedTitle: string;
-  samples: string[];
-}
+export type Role = 'patient';
+export type Step = 'role' | 'account' | 'details';
 
 export const BLOOD_GROUPS = ['A+', 'A-', 'B+', 'B-', 'O+', 'O-', 'AB+', 'AB-'];
 export const GENDERS = ['Female', 'Male', 'Other', 'Prefer not to say'];
-export const MEDICAL_COUNCILS = [
-  'National Medical Commission (NMC)',
-  'Andhra Pradesh Medical Council',
-  'Delhi Medical Council',
-  'Gujarat Medical Council',
-  'Karnataka Medical Council',
-  'Maharashtra Medical Council',
-  'Tamil Nadu Medical Council',
-  'Telangana State Medical Council',
-  'Uttar Pradesh Medical Council',
-  'West Bengal Medical Council',
-  'Other',
-];
 
 const PHONE_REGEX = /^[+]?[\d\s().-]{7,20}$/;
-export const CURRENT_YEAR = new Date().getFullYear();
 
 export const initialValues = {
-  // verification
-  aadhaarNumber: '',
   // account
   name: '',
   email: '',
@@ -61,14 +35,6 @@ export const initialValues = {
   chronicDiseases: '',
   insuranceProvider: '',
   insuranceNumber: '',
-  // doctor details
-  licenseNumber: '',
-  medicalCouncil: '',
-  registrationYear: '',
-  qualification: '',
-  specialization: '',
-  experienceYears: '',
-  consultationFee: '',
 };
 
 export type FormValues = typeof initialValues;
@@ -94,67 +60,3 @@ export const accountSchema = Yup.object({
 export const patientDetailsSchema = Yup.object({
   emergencyPhone: Yup.string().matches(PHONE_REGEX, 'Please enter a valid phone number').notRequired(),
 });
-
-export const licenseSchema = Yup.object({
-  licenseNumber: Yup.string().trim().required('Registration number is required'),
-});
-
-export const aadhaarSchema = Yup.object({
-  aadhaarNumber: Yup.string()
-    .transform((v) => (typeof v === 'string' ? v.replace(/\D/g, '') : v))
-    .matches(/^\d{12}$/, 'Enter a valid 12-digit Aadhaar number')
-    .required('Aadhaar number is required'),
-});
-
-export const doctorDetailsSchema = Yup.object({
-  licenseNumber: Yup.string().trim().required('Medical registration number is required'),
-  qualification: Yup.string().trim().required('Qualification is required'),
-  specialization: Yup.string().required('Specialization is required'),
-  registrationYear: Yup.number()
-    .transform((v, orig) => (orig === '' ? undefined : v))
-    .typeError('Enter a valid year')
-    .min(1950, 'Enter a valid year')
-    .max(CURRENT_YEAR, 'Year cannot be in the future')
-    .notRequired(),
-  experienceYears: Yup.number()
-    .transform((v, orig) => (orig === '' ? undefined : v))
-    .typeError('Enter a number')
-    .min(0, 'Cannot be negative')
-    .max(60, 'Please check this value')
-    .notRequired(),
-  consultationFee: Yup.number()
-    .transform((v, orig) => (orig === '' ? undefined : v))
-    .typeError('Enter a number')
-    .min(0, 'Cannot be negative')
-    .notRequired(),
-});
-
-export const VERIFY_CONFIG: Record<'patient' | 'doctor' | 'nurse', VerifyConfig> = {
-  patient: {
-    field: 'aadhaarNumber',
-    label: 'Aadhaar Number',
-    placeholder: 'e.g. 2345 6789 0123',
-    icon: Fingerprint,
-    intro: "Enter your Aadhaar number — we'll fetch your details and fill in the rest for you.",
-    verifiedTitle: 'Verified with UIDAI (Aadhaar)',
-    samples: SAMPLE_AADHAAR_NUMBERS,
-  },
-  doctor: {
-    field: 'licenseNumber',
-    label: 'Medical Registration / License Number',
-    placeholder: 'e.g. MH-2012-045678',
-    icon: BadgeCheck,
-    intro: "Enter your medical registration number — we'll fetch your council-verified details and fill in the rest for you.",
-    verifiedTitle: 'Verified with the medical council',
-    samples: SAMPLE_REGISTRATION_NUMBERS,
-  },
-  nurse: {
-    field: 'licenseNumber',
-    label: 'Nursing Council Registration Number',
-    placeholder: 'e.g. INC-2016-118822',
-    icon: BadgeCheck,
-    intro: "Enter your nursing council registration number — we'll fetch your verified details and fill in the rest for you.",
-    verifiedTitle: 'Verified with the nursing council',
-    samples: SAMPLE_NURSE_REGISTRATION_NUMBERS,
-  },
-};

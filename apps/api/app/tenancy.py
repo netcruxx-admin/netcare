@@ -47,8 +47,19 @@ def resolve_public_tenant(
     db: Session = Depends(get_db),
     x_hospital_id: Optional[str] = Header(default=None),
 ) -> str:
-    """Tenant for pre-login requests: explicit header > subdomain > default."""
-    if x_hospital_id:
+    """Tenant for pre-login requests, resolved from the request host.
+
+    Returns "" when no tenant could be determined. Callers must decide what that
+    means for them: /auth/login treats it as "not a tenant user" and falls back
+    to the platform superadmin lookup, while /auth/register refuses outright —
+    it must never guess which hospital an account belongs to.
+
+    `X-Hospital-Id` is honoured only in development. On a pre-login request the
+    header is attacker-controlled, so trusting it in production would let anyone
+    create an account inside any hospital regardless of the host they came in
+    on. In production the host subdomain is the only input.
+    """
+    if x_hospital_id and not settings.is_production:
         hospital = db.get(models.Hospital, x_hospital_id)
         if hospital is None:
             # Also try treating the value as a subdomain label (frontend sends
@@ -73,6 +84,10 @@ def resolve_public_tenant(
         if hospital is not None:
             return hospital.id
 
+    # An unrecognised host must not silently become the default tenant in
+    # production — that lands a typo'd subdomain on another hospital's login.
+    if settings.is_production:
+        return ""
     return settings.default_hospital_id
 
 

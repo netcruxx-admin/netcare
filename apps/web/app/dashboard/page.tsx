@@ -7,6 +7,7 @@ import { LabDashboard } from '@/components/home/LabDashboard';
 import { NurseDashboard } from '@/components/home/NurseDashboard';
 import { PatientDashboard } from '@/components/home/PatientDashboard';
 import { PlatformOverview } from '@/components/home/PlatformOverview';
+import { GenericDashboard } from '@/components/home/GenericDashboard';
 import { adminRole, doctorRole, labRole, nurseRole, patientRole, superadminRole } from '@/lib/roles';
 
 export default function HomePage() {
@@ -21,6 +22,8 @@ export default function HomePage() {
         [labRole]: LabDashboard,
         [patientRole]: PatientDashboard,
       }}
+      // Everyone lands here, including roles created after this code shipped.
+      fallback={GenericDashboard}
     />
   );
 }

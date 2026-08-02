@@ -19,6 +19,10 @@ export default function AppointmentsPage() {
         [nurseRole]: NurseAppointments,
         [patientRole]: PatientAppointments,
       }}
+      // A role invented by the superadmin gets the hospital-wide board when its
+      // grant says `all`. There is no `own` fallback on purpose: the doctor and
+      // patient views read a doctor/patient record that such a user won't have.
+      viewsByScope={{ all: AdminAppointments }}
     />
   );
 }
