@@ -1,16 +1,19 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { Search, UserRound } from 'lucide-react';
 import { DashboardShell } from '@/components/DashboardShell';
 import { ExportButton } from '@/components/ExportButton';
+import { TablePagination } from '@/components/TablePagination';
+import { useDebounced } from '@/hooks/useDebounced';
+
+/** Rows per page for the patients table. */
+const PAGE_SIZE = 20;
 import type { RoleViewProps } from '@/components/RoleView';
 import { adminRole, doctorRole, nurseRole } from '@/lib/roles';
 import {
-  useGetDoctorByUserQuery,
-  useListAppointmentsQuery,
-  useListPatientsQuery,
+  useListPatientsPagedQuery,
 } from '@/store/api';
 
 /**
@@ -151,64 +154,47 @@ export function HospitalPatients({ session }: RoleViewProps) {
   const role = session.user.role;
   const view = viewByRole[role] ?? viewByRole[nurseRole];
   const [query, setQuery] = useState('');
+  const [page, setPage] = useState(1);
 
-  // A doctor's list is scoped to their own appointments, so their doctor record
-  // has to resolve before the appointments query can be filtered.
-  const { data: doctor } = useGetDoctorByUserQuery(session.user.id, {
-    skip: !view.onlyOwnPatients,
+  // No appointments fetch here any more: a doctor's `patients.read` grant is
+  // already scoped to the patients they treat, and the visit columns arrive
+  // with the page.
+  // Search and paging run server-side; the per-row visit aggregates come with
+  // the page (withStats) rather than being derived from every appointment in
+  // the hospital.
+  const debouncedQuery = useDebounced(query);
+  const { data: patientPage } = useListPatientsPagedQuery({
+    q: debouncedQuery.trim() || undefined,
+    withStats: true,
+    limit: PAGE_SIZE,
+    offset: (page - 1) * PAGE_SIZE,
   });
-  const appointmentsReady = !view.onlyOwnPatients || Boolean(doctor);
-  const { data: appointments = [] } = useListAppointmentsQuery(
-    view.onlyOwnPatients && doctor ? { doctorId: doctor.id } : undefined,
-    { skip: !appointmentsReady },
-  );
-  const { data: patients = [] } = useListPatientsQuery();
+  const patients = patientPage?.items ?? [];
+  const totalPatients = patientPage?.total ?? 0;
 
-  const rows = useMemo(() => {
-    const byPatient = new Map<string, typeof appointments>();
-    appointments.forEach((appointment) => {
-      const list = byPatient.get(appointment.patientId) ?? [];
-      list.push(appointment);
-      byPatient.set(appointment.patientId, list);
-    });
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedQuery]);
 
-    const source = view.onlyOwnPatients
-      ? patients.filter((patient) => byPatient.has(patient.id))
-      : patients;
-
-    const query_ = query.trim().toLowerCase();
-    return source
-      .map((patient) => {
-        const own = byPatient.get(patient.id) ?? [];
-        const past = own
-          .filter((a) => a.status !== 'cancelled' && a.date <= todayStr)
-          .sort((a, b) => b.date.localeCompare(a.date));
-        const upcoming = own
-          .filter((a) => a.status === 'scheduled' && a.date >= todayStr)
-          .sort((a, b) => a.date.localeCompare(b.date));
-        return {
+  const rows = useMemo(
+    () =>
+      patients
+        .map((patient) => ({
           patientId: patient.id,
           name: patient.user?.name ?? 'Patient',
           email: patient.user?.email ?? '—',
           phone: patient.phone || patient.user?.phone || '—',
           gender: patient.gender || '—',
           bloodGroup: patient.bloodGroup || '—',
-          visits: own.filter((a) => a.status === 'completed').length,
-          appointments: own.length,
-          lastVisit: past[0]?.date ?? null,
-          nextVisit: upcoming[0]?.date ?? null,
-        };
-      })
-      .filter((row) => {
-        if (!query_) return true;
-        return (
-          row.name.toLowerCase().includes(query_) ||
-          row.email.toLowerCase().includes(query_) ||
-          row.phone.toLowerCase().includes(query_)
-        );
-      })
-      .sort(view.sort);
-  }, [patients, appointments, query, view]);
+          // Aggregated by the API for this page (withStats).
+          visits: patient.visitCount ?? 0,
+          appointments: patient.visitCount ?? 0,
+          lastVisit: patient.lastVisit ?? null,
+          nextVisit: patient.nextVisit ?? null,
+        }))
+        .sort(view.sort),
+    [patients, view],
+  );
 
   return (
     <DashboardShell
@@ -239,7 +225,7 @@ export function HospitalPatients({ session }: RoleViewProps) {
 
         <div className="bg-white rounded-lg shadow">
           <div className="px-6 py-4 border-b">
-            <h3 className="font-semibold text-slate-900">Patients ({rows.length})</h3>
+            <h3 className="font-semibold text-slate-900">Patients ({totalPatients})</h3>
           </div>
           {rows.length === 0 ? (
             <div className="text-center py-16">
@@ -280,6 +266,12 @@ export function HospitalPatients({ session }: RoleViewProps) {
                   ))}
                 </tbody>
               </table>
+              <TablePagination
+                page={page}
+                pageSize={PAGE_SIZE}
+                total={totalPatients}
+                onPageChange={setPage}
+              />
             </div>
           )}
         </div>

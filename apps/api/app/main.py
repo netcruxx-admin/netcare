@@ -108,6 +108,9 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    # Without this the browser hides X-Total-Count from JS, and a paginated
+    # table has no way to know how many pages there are.
+    expose_headers=["X-Total-Count"],
 )
 
 for module in (

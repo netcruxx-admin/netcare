@@ -289,6 +289,11 @@ class PatientOut(OutModel):
     insurance_provider: str = ""
     insurance_number: str = ""
     documents: List[str] = []
+    # Appointment aggregates, present only when the caller asks for withStats.
+    # Absent (0/None) otherwise, so the common read stays cheap.
+    visit_count: int = 0
+    last_visit: Optional[str] = None
+    next_visit: Optional[str] = None
     user: Optional["UserOut"] = None
 
 
@@ -420,6 +425,22 @@ class AppointmentOut(OutModel):
     follow_up_of: Optional[str] = None
     rescheduled: bool = False
     created_at: str
+    # Display fields resolved server-side. Without them a table of appointments
+    # has to fetch every patient in the hospital just to turn an id into a name,
+    # which defeats paging the appointments themselves.
+    patient_name: str = ""
+    patient_phone: str = ""
+    doctor_name: str = ""
+
+
+class AppointmentStatsOut(OutModel):
+    """Counts across the caller's whole visible set, for the summary tiles."""
+
+    total: int = 0
+    scheduled: int = 0
+    completed: int = 0
+    cancelled: int = 0
+    rescheduled: int = 0
 
 
 # ---------- Medical Record ----------
@@ -624,6 +645,8 @@ class TestOrderOut(OutModel):
     clinical_note: str = ""
     ordered_at: str
     updated_at: str
+    # Resolved server-side, for the same reason as AppointmentOut.
+    patient_name: str = ""
 
 
 class TestResultParameter(CamelModel):

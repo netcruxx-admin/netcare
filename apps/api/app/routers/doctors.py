@@ -12,6 +12,7 @@ from ..authz import (
 )
 from ..database import get_db
 from ..tenancy import get_tenant_id, scoped
+from ..utils import attach_users
 
 router = APIRouter(prefix="/doctors", tags=["doctors"])
 
@@ -34,7 +35,7 @@ def list_doctors(
     query = scoped(db, models.Doctor, tenant_id)
     if scope == SCOPE_OWN:
         query = query.filter(models.Doctor.user_id == user.id)
-    return [_with_user(db, d) for d in query.all()]
+    return attach_users(db, query.all(), schemas.DoctorOut, schemas.UserOut)
 
 
 @router.get("/by-user/{user_id}", response_model=schemas.DoctorOut)

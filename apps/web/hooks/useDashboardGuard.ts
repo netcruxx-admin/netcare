@@ -49,7 +49,7 @@ export function useDashboardGuard(path?: string): AuthSession | null {
   // logged in (stored !== null) to avoid an unauthenticated /auth/me call.
   const { data: meData } = useMeQuery(undefined, {
     skip: stored === null,
-    refetchOnMountOrArgChange: true,
+    refetchOnMountOrArgChange: 30,
     refetchOnFocus: true,
   });
 

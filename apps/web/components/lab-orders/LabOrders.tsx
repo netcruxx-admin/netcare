@@ -9,8 +9,7 @@ import { apiError } from '@/lib/apiError';
 import {
   useDeleteTestOrderMutation,
   useListLabTestsQuery,
-  useListPatientsQuery,
-  useListTestOrdersQuery,
+  useListTestOrdersPagedQuery,
   useListTestResultsQuery,
   useUpdateTestOrderMutation,
   useUpsertTestResultMutation,
@@ -18,6 +17,11 @@ import {
 import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
 import { ExportButton } from '@/components/ExportButton';
+import { TablePagination } from '@/components/TablePagination';
+import { useDebounced } from '@/hooks/useDebounced';
+
+/** Rows per page for the orders table. */
+const PAGE_SIZE = 20;
 import {
   ORDER_STATUS_LABEL,
   ORDER_STATUS_STYLE,
@@ -44,6 +48,7 @@ function LabOrdersInner({ session }: RoleViewProps) {
   const openParam = searchParams.get('open');
 
   const [query, setQuery] = useState('');
+  const [page, setPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState<'all' | TestOrderStatus>('all');
   const [toast, setToast] = useState('');
   const [error, setError] = useState('');
@@ -52,10 +57,24 @@ function LabOrdersInner({ session }: RoleViewProps) {
   const [draft, setDraft] = useState<DraftTest[]>([]);
   const [deleting, setDeleting] = useState<TestOrder | null>(null);
 
-  const { data: orders = [] } = useListTestOrdersQuery();
+  // Filter, search and page on the server: with only one page in hand, doing it
+  // here would search 20 rows and present that as the whole result.
+  const debouncedQuery = useDebounced(query);
+  const { data: orderPage } = useListTestOrdersPagedQuery({
+    q: debouncedQuery.trim() || undefined,
+    status: statusFilter === 'all' ? undefined : statusFilter,
+    limit: PAGE_SIZE,
+    offset: (page - 1) * PAGE_SIZE,
+  });
+  const orders = orderPage?.items ?? [];
+  const totalOrders = orderPage?.total ?? 0;
+
+  // A new filter means a new result set — page 2 of the old one is meaningless.
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedQuery, statusFilter]);
   const { data: results = [] } = useListTestResultsQuery();
   const { data: tests = [] } = useListLabTestsQuery();
-  const { data: patients = [] } = useListPatientsQuery();
   const [updateTestOrder] = useUpdateTestOrderMutation();
   const [upsertTestResult] = useUpsertTestResultMutation();
   const [deleteTestOrder] = useDeleteTestOrderMutation();
@@ -66,17 +85,15 @@ function LabOrdersInner({ session }: RoleViewProps) {
   };
 
   const lookups = useMemo(() => {
-    const patientById = new Map(patients.map((p) => [p.id, p]));
     const testById = new Map(tests.map((t) => [t.id, t]));
-    const patientName = (id: string) => patientById.get(id)?.user?.name ?? 'Patient';
     const resultsByOrder = new Map<string, TestResult[]>();
     results.forEach((r) => {
       const list = resultsByOrder.get(r.orderId) ?? [];
       list.push(r);
       resultsByOrder.set(r.orderId, list);
     });
-    return { patientName, testById, resultsByOrder };
-  }, [patients, tests, results]);
+    return { testById, resultsByOrder };
+  }, [tests, results]);
 
   const buildDraft = (order: TestOrder): DraftTest[] => {
     const existingResults = lookups.resultsByOrder.get(order.id) ?? [];
@@ -198,21 +215,21 @@ function LabOrdersInner({ session }: RoleViewProps) {
   };
 
   const rows = useMemo(() => {
-    const q = query.trim().toLowerCase();
     return orders
       .map((o) => ({
         order: o,
-        patient: lookups.patientName(o.patientId),
+        // Name resolved by the API; no need to hold every patient in memory.
+        // Resolved by the API — this screen no longer downloads every
+        // patient in the hospital to name twenty rows.
+        patient: o.patientName || 'Patient',
         tests: o.items.map((i) => i.name).join(', '),
         hasResults: (lookups.resultsByOrder.get(o.id)?.length ?? 0) > 0,
       }))
-      .filter((r) => statusFilter === 'all' || r.order.status === statusFilter)
-      .filter((r) => !q || r.patient.toLowerCase().includes(q) || r.order.id.toLowerCase().includes(q) || r.tests.toLowerCase().includes(q))
       .sort((a, b) => {
         if (a.order.priority !== b.order.priority) return a.order.priority === 'urgent' ? -1 : 1;
         return a.order.orderedAt < b.order.orderedAt ? 1 : -1;
       });
-  }, [orders, lookups, query, statusFilter]);
+  }, [orders, lookups]);
 
   return (
     <DashboardShell role={session.user.role} userName={session.user.name} title="Test Orders" subtitle="Process orders and publish results">
@@ -256,7 +273,7 @@ function LabOrdersInner({ session }: RoleViewProps) {
         {/* Table */}
         <div className="bg-white rounded-lg shadow">
           <div className="px-6 py-4 border-b">
-            <h3 className="font-semibold text-slate-900">Orders ({rows.length})</h3>
+            <h3 className="font-semibold text-slate-900">Orders ({totalOrders})</h3>
           </div>
           {rows.length === 0 ? (
             <div className="text-center py-16">
@@ -264,6 +281,7 @@ function LabOrdersInner({ session }: RoleViewProps) {
               <p className="text-slate-600">No orders match your filters.</p>
             </div>
           ) : (
+            <>
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
@@ -343,6 +361,13 @@ function LabOrdersInner({ session }: RoleViewProps) {
                 </tbody>
               </table>
             </div>
+            <TablePagination
+              page={page}
+              pageSize={PAGE_SIZE}
+              total={totalOrders}
+              onPageChange={setPage}
+            />
+            </>
           )}
         </div>
       </div>
@@ -355,7 +380,7 @@ function LabOrdersInner({ session }: RoleViewProps) {
               <div>
                 <h3 className="text-lg font-bold text-slate-900">Enter Results</h3>
                 <p className="text-sm text-slate-500">
-                  {lookups.patientName(resultsOrder.patientId)} · <span className="font-mono">{resultsOrder.id}</span>
+                  {resultsOrder.patientName || 'Patient'} · <span className="font-mono">{resultsOrder.id}</span>
                 </p>
               </div>
               <button onClick={() => setResultsOrder(null)} className="text-slate-500 hover:text-slate-900">

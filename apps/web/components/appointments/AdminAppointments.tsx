@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Formik, Form } from 'formik';
@@ -31,14 +31,16 @@ import { FormField } from '@/components/form/FormField';
 import { FollowUpModal } from '@/components/FollowUpModal';
 import { ActionIcon } from '@/components/ActionIcon';
 import { ExportButton } from '@/components/ExportButton';
+import { useDebounced } from '@/hooks/useDebounced';
 import { blockedSlotSet } from '@/lib/schedule';
 import {
   useCreateVitalsMutation,
   useDeleteAppointmentMutation,
-  useListAppointmentsQuery,
+  useListAppointmentsPagedQuery,
+  useLazyListAppointmentsPagedQuery,
+  useGetAppointmentStatsQuery,
   useListDepartmentsQuery,
   useListDoctorsQuery,
-  useListPatientsQuery,
   useListScheduleBlocksQuery,
   useUpdateAppointmentMutation,
 } from '@/store/api';
@@ -159,10 +161,8 @@ export function AdminAppointments({ session }: RoleViewProps) {
   const { data: scheduleBlocks = [] } = useListScheduleBlocksQuery();
   const router = useRouter();
 
-  const { data: appointments = [] } = useListAppointmentsQuery();
   const { data: departments = [] } = useListDepartmentsQuery();
   const { data: doctors = [] } = useListDoctorsQuery();
-  const { data: patients = [] } = useListPatientsQuery();
   const [updateAppointment] = useUpdateAppointmentMutation();
   const [deleteAppointment] = useDeleteAppointmentMutation();
   const [createVitals] = useCreateVitalsMutation();
@@ -172,6 +172,29 @@ export function AdminAppointments({ session }: RoleViewProps) {
   const [query, setQuery] = useState('');
   const [date, setDate] = useState('');
   const [page, setPage] = useState(1);
+
+  // Filtering and paging both happen server-side: once the table shows one page
+  // of many, filtering what already arrived would search a single page and
+  // present it as the whole result.
+  const debouncedQuery = useDebounced(query);
+  const listArgs = {
+    q: debouncedQuery.trim() || undefined,
+    status: status === 'all' ? undefined : status,
+    departmentId: deptId === 'all' ? undefined : deptId,
+    date: date || undefined,
+  };
+  const { data: page_ } = useListAppointmentsPagedQuery({
+    ...listArgs,
+    limit: PAGE_SIZE,
+    offset: (page - 1) * PAGE_SIZE,
+  });
+  const appointments = page_?.items ?? [];
+  const totalRows = page_?.total ?? 0;
+  // Tiles summarise everything the caller can see, not the rows on screen.
+  const { data: stats = { total: 0, scheduled: 0, completed: 0, cancelled: 0, rescheduled: 0 } } =
+    useGetAppointmentStatsQuery();
+  // Export pulls the whole filtered set, not just the visible page.
+  const [fetchAllForExport] = useLazyListAppointmentsPagedQuery();
 
   // Action modals (each holds the target appointment)
   const [editing, setEditing] = useState<Appointment | null>(null);
@@ -191,65 +214,39 @@ export function AdminAppointments({ session }: RoleViewProps) {
 
   useEffect(() => {
     setPage(1);
-  }, [query, status, deptId, date]);
+  }, [debouncedQuery, status, deptId, date]);
 
-  const rows = useMemo(() => {
-    const doctorById = new Map(doctors.map((d) => [d.id, d]));
-    const patientById = new Map(patients.map((p) => [p.id, p]));
-    const deptById = new Map(departments.map((d) => [d.id, d]));
-
-    const doctorName = (id: string) => {
-      const name = doctorById.get(id)?.user?.name;
+  const doctorName = useCallback(
+    (id: string) => {
+      const name = doctors.find((d) => d.id === id)?.user?.name;
       return name ? `Dr. ${name}` : '—';
-    };
-    const patientOf = (id: string) => {
-      const p = patientById.get(id);
-      return { name: p?.user?.name ?? '—', phone: p?.phone || '—' };
-    };
+    },
+    [doctors],
+  );
 
-    const q = query.trim().toLowerCase();
-    return appointments
-      .map((a) => {
-        const p = patientOf(a.patientId);
-        return {
-          appt: a,
-          id: a.id,
-          date: a.date,
-          time: a.time,
-          status: a.status,
-          patient: p.name,
-          phone: p.phone,
-          doctor: doctorName(a.doctorId),
-          dept: deptById.get(a.departmentId)?.name ?? '—',
-          departmentId: a.departmentId,
-        };
-      })
-      .filter((r) => status === 'all' || r.status === status)
-      .filter((r) => deptId === 'all' || r.departmentId === deptId)
-      .filter((r) => !date || r.date === date)
-      .filter(
-        (r) =>
-          !q ||
-          r.patient.toLowerCase().includes(q) ||
-          r.doctor.toLowerCase().includes(q) ||
-          r.phone.toLowerCase().includes(q),
-      )
-      .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
-  }, [appointments, doctors, patients, departments, status, deptId, date, query]);
+  const toRow = useCallback(
+    (a: Appointment) => ({
+      appt: a,
+      id: a.id,
+      date: a.date,
+      time: a.time,
+      status: a.status,
+      // Resolved by the API, so this table no longer downloads every patient in
+      // the hospital just to turn an id into a name.
+      patient: a.patientName || '—',
+      phone: a.patientPhone || '—',
+      doctor: a.doctorName ? `Dr. ${a.doctorName}` : doctorName(a.doctorId),
+      dept: departments.find((d) => d.id === a.departmentId)?.name ?? '—',
+      departmentId: a.departmentId,
+    }),
+    [departments, doctorName],
+  );
 
-  const stats = useMemo(() => {
-    const appts = appointments;
-    return {
-      total: appts.length,
-      scheduled: appts.filter((a) => a.status === 'scheduled').length,
-      completed: appts.filter((a) => a.status === 'completed').length,
-      rescheduled: appts.filter((a) => a.rescheduled).length,
-      cancelled: appts.filter((a) => a.status === 'cancelled').length,
-    };
-  }, [appointments]);
+  // Already filtered, sorted and paged by the server.
+  const rows = useMemo(() => appointments.map(toRow), [appointments, toRow]);
 
-  const totalPages = Math.ceil(rows.length / PAGE_SIZE);
-  const pageRows = rows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const totalPages = Math.max(1, Math.ceil(totalRows / PAGE_SIZE));
+  const pageRows = rows; // the server already returned exactly this page
   const pageItems = buildPageItems(page, totalPages);
 
 
@@ -386,6 +383,13 @@ export function AdminAppointments({ session }: RoleViewProps) {
               filename="appointments"
               headers={['Patient', 'Phone', 'Date', 'Time', 'Doctor', 'Department', 'Status']}
               rows={rows.map((r) => [r.patient, r.phone, r.date, r.time, r.doctor, r.dept, r.status])}
+              // Export the whole filtered set, not just the page on screen.
+              getRows={async () => {
+                const all = await fetchAllForExport(listArgs).unwrap();
+                return all.items
+                  .map(toRow)
+                  .map((r) => [r.patient, r.phone, r.date, r.time, r.doctor, r.dept, r.status]);
+              }}
             />
             <Link
               href="/dashboard/book"
@@ -399,7 +403,7 @@ export function AdminAppointments({ session }: RoleViewProps) {
         {/* Table */}
         <div className="bg-white rounded-lg shadow">
           <div className="px-6 py-4 border-b flex items-center justify-between">
-            <h3 className="font-semibold text-slate-900">Appointments ({rows.length})</h3>
+            <h3 className="font-semibold text-slate-900">Appointments ({totalRows})</h3>
             {totalPages > 1 && <span className="text-sm text-slate-500">Page {page} of {totalPages}</span>}
           </div>
           {rows.length === 0 ? (

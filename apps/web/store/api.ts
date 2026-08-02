@@ -259,6 +259,44 @@ export interface DepartmentCreateBody { name: string; description?: string }
 export interface DepartmentUpdateBody { name?: string; description?: string }
 
 // ---------------------------------------------------------------------------
+// Paged lists
+// ---------------------------------------------------------------------------
+/** One page of a list, plus how many rows match in total (ignoring the page). */
+export interface Paged<T> {
+  items: T[];
+  total: number;
+}
+
+/** Query args every paged endpoint accepts. `q` searches server-side. */
+export interface PageArgs {
+  q?: string;
+  limit?: number;
+  offset?: number;
+}
+
+/** Counts across everything the caller can see — not just the current page. */
+export interface AppointmentStats {
+  total: number;
+  scheduled: number;
+  completed: number;
+  cancelled: number;
+  rescheduled: number;
+}
+
+/** The row count lives in a header, so the body stays a plain array. */
+function pageOf<T>(items: T[], meta?: { response?: Response }): Paged<T> {
+  const header = meta?.response?.headers.get('X-Total-Count');
+  return { items, total: header === null || header === undefined ? items.length : Number(header) };
+}
+
+/** Drop empty params so they don't become `?q=&status=` on the wire. */
+function cleanParams(params: object): Record<string, unknown> {
+  return Object.fromEntries(
+    Object.entries(params).filter(([, v]) => v !== undefined && v !== '' && v !== null),
+  );
+}
+
+// ---------------------------------------------------------------------------
 // RTK Query API slice
 // ---------------------------------------------------------------------------
 export const api = createApi({
@@ -452,6 +490,34 @@ export const api = createApi({
               { type: 'Patient', id: 'LIST' },
             ]
           : [{ type: 'Patient', id: 'LIST' }],
+    }),
+
+    // ── Paged list variants ───────────────────────────────────────────────────
+    // A screen showing a long table asks for one page and searches server-side;
+    // the unpaged hooks above stay for the screens that use these lists as
+    // lookup tables (resolving an id to a name), where a partial list would drop
+    // names from the UI rather than page them.
+    listPatientsPaged: build.query<Paged<Patient>, PageArgs & { withStats?: boolean }>({
+      query: (params) => ({ url: '/patients', params: cleanParams(params) }),
+      transformResponse: pageOf<Patient>,
+      providesTags: [{ type: 'Patient', id: 'LIST' }],
+    }),
+    listAppointmentsPaged: build.query<
+      Paged<Appointment>,
+      PageArgs & { status?: string; departmentId?: string; date?: string }
+    >({
+      query: (params) => ({ url: '/appointments', params: cleanParams(params) }),
+      transformResponse: pageOf<Appointment>,
+      providesTags: [{ type: 'Appointment', id: 'LIST' }],
+    }),
+    listTestOrdersPaged: build.query<Paged<TestOrder>, PageArgs & { status?: string }>({
+      query: (params) => ({ url: '/test-orders', params: cleanParams(params) }),
+      transformResponse: pageOf<TestOrder>,
+      providesTags: [{ type: 'TestOrder', id: 'LIST' }],
+    }),
+    getAppointmentStats: build.query<AppointmentStats, void>({
+      query: () => '/appointments/stats',
+      providesTags: [{ type: 'Appointment', id: 'LIST' }],
     }),
     getPatient: build.query<Patient, string>({
       query: (id) => `/patients/${id}`,
@@ -874,10 +940,14 @@ export const {
   useRegisterMutation,
   useMeQuery,
   useListAppointmentsQuery,
+  useListAppointmentsPagedQuery,
+  useLazyListAppointmentsPagedQuery,
+  useGetAppointmentStatsQuery,
   useGetAppointmentQuery,
   useCreateAppointmentMutation,
   useUpdateAppointmentMutation,
   useListPatientsQuery,
+  useListPatientsPagedQuery,
   useGetPatientQuery,
   useGetPatientByUserQuery,
   useUpdatePatientMutation,
@@ -921,6 +991,7 @@ export const {
   useUpdateLabTestMutation,
   useDeleteLabTestMutation,
   useListTestOrdersQuery,
+  useListTestOrdersPagedQuery,
   useGetTestOrderQuery,
   useCreateTestOrderMutation,
   useUpdateTestOrderMutation,

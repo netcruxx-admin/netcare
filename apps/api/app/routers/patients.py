@@ -6,7 +6,11 @@ read any patient's records by putting their id in the URL — tenant scoping alo
 does not stop one patient reading another's chart.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from datetime import date as date_module
+from typing import Optional
+
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from .. import models, schemas
@@ -21,6 +25,7 @@ from ..authz import (
 )
 from ..database import get_db
 from ..tenancy import get_tenant_id, scoped
+from ..utils import attach_users, paginate
 
 router = APIRouter(prefix="/patients", tags=["patients"])
 
@@ -86,6 +91,11 @@ def _sub_resource(
 
 @router.get("", response_model=list[schemas.PatientOut])
 def list_patients(
+    response: Response,
+    q: Optional[str] = Query(default=None),
+    with_stats: bool = Query(default=False, alias="withStats"),
+    limit: Optional[int] = Query(default=None, ge=1),
+    offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
     user: models.User = Depends(get_current_user),
     scope: str = Depends(require_permission("patients.read")),
@@ -94,7 +104,68 @@ def list_patients(
     query = scoped(db, models.Patient, tenant_id)
     if scope == SCOPE_OWN:
         query = query.filter(own_patients_filter(db, user))
-    return [_with_user(db, p) for p in query.all()]
+    if q:
+        # Search has to run here rather than in the client: once a page is only
+        # 50 of 10,000 rows, filtering what already arrived would search one
+        # page and call it the whole result.
+        like = f"%{q.strip().lower()}%"
+        query = query.outerjoin(
+            models.User, models.User.id == models.Patient.user_id
+        ).filter(
+            or_(
+                func.lower(models.User.name).like(like),
+                func.lower(models.User.email).like(like),
+                func.lower(models.User.phone).like(like),
+                func.lower(models.Patient.phone).like(like),
+            )
+        )
+    # Stable order, so page 2 cannot repeat or skip a row from page 1.
+    query = query.order_by(models.Patient.id)
+    query = paginate(query, response, limit, offset)
+    rows = query.all()
+    out = attach_users(db, rows, schemas.PatientOut, schemas.UserOut)
+
+    if with_stats:
+        # Visit counts and last/next visit dates, aggregated for this page only.
+        # The patients table shows them per row, and deriving them client-side
+        # means downloading every appointment in the hospital to count them.
+        ids = [p.id for p in rows]
+        if ids:
+            today = date_module.today().isoformat()
+            agg = dict(
+                db.query(models.Appointment.patient_id, func.count())
+                .filter(
+                    models.Appointment.patient_id.in_(ids),
+                    models.Appointment.status == "completed",
+                )
+                .group_by(models.Appointment.patient_id)
+                .all()
+            )
+            last = dict(
+                db.query(models.Appointment.patient_id, func.max(models.Appointment.date))
+                .filter(
+                    models.Appointment.patient_id.in_(ids),
+                    models.Appointment.status != "cancelled",
+                    models.Appointment.date <= today,
+                )
+                .group_by(models.Appointment.patient_id)
+                .all()
+            )
+            nxt = dict(
+                db.query(models.Appointment.patient_id, func.min(models.Appointment.date))
+                .filter(
+                    models.Appointment.patient_id.in_(ids),
+                    models.Appointment.status == "scheduled",
+                    models.Appointment.date >= today,
+                )
+                .group_by(models.Appointment.patient_id)
+                .all()
+            )
+            for item in out:
+                item.visit_count = agg.get(item.id, 0)
+                item.last_visit = last.get(item.id)
+                item.next_visit = nxt.get(item.id)
+    return out
 
 
 @router.get("/by-user/{user_id}", response_model=schemas.PatientOut)

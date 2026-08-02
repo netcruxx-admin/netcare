@@ -3,7 +3,7 @@
 Every backend endpoint, the permission that guards it, and which frontend screen
 calls it. Also records what the frontend still needs that does not exist yet.
 
-**Status as of 2026-08-02.** 100 endpoints implemented; 12 endpoints outstanding
+**Status as of 2026-08-02.** 101 endpoints implemented; 12 endpoints outstanding
 across 6 capabilities (§4), of which 3 capabilities are launch-blocking.
 Regenerate the route/permission table with:
 
@@ -49,6 +49,52 @@ Notes that matter when reading the tables below:
 In production an unrecognised host resolves to **no tenant** rather than falling
 back to a default; `/auth/register` refuses outright rather than guessing which
 hospital an account belongs to.
+
+### Response conventions
+
+**Nulls never fail a read.** Response models inherit `OutModel`, which coerces a
+NULL column to the field's declared default (or the empty value for its type).
+Most nullable columns are declared non-optional because the app always writes
+`""`/`0` through the ORM — but that is a client-side SQLAlchemy default, not a
+`server_default`, so a direct SQL insert, a bulk insert in a migration, or an
+imported row writes a real NULL. Without the coercion one such row would 500 the
+*entire* list endpoint rather than just that record. Request models deliberately
+do **not** inherit this: input stays strict.
+
+### Pagination, search and filtering
+
+Three list endpoints — `/patients`, `/appointments`, `/test-orders` — accept:
+
+| Param | Meaning |
+|---|---|
+| `limit` | Page size. Omit for everything. Capped at `MAX_PAGE_SIZE` (200). |
+| `offset` | Rows to skip. |
+| `q` | Free-text search, applied **server-side** (see below). |
+
+Every response sets **`X-Total-Count`**: the number of rows matching the filters
+across the whole result, ignoring the page. It is listed in the CORS
+`expose_headers`, or the browser would hide it from JS.
+
+`limit` defaults to *unlimited*, and that is deliberate. Several screens use
+these lists as lookup tables rather than tables — resolving an id to a name — and
+a default page size would drop names from the UI rather than page them. So
+pagination is opt-in per caller: screens rendering a long table pass a limit,
+screens building a map do not.
+
+Search and filtering run on the server for the same reason paging does: once a
+page is 50 of 10,000 rows, filtering what already arrived would search one page
+and present it as the whole result.
+
+To keep a paginated table from having to fetch every patient just to render
+names, the list responses carry their own display fields:
+
+| Response | Added fields |
+|---|---|
+| `AppointmentOut` | `patientName`, `patientPhone`, `doctorName` |
+| `TestOrderOut` | `patientName` |
+| `PatientOut` | `visitCount`, `lastVisit`, `nextVisit` — only with `?withStats=true` |
+
+These are resolved in two batched queries per page, never per row.
 
 ---
 
@@ -112,7 +158,8 @@ self-service can never widen your own access.
 
 | Method | Path | Permission | Called by |
 |---|---|---|---|
-| GET | `/patients` | `patients.read` | `/dashboard/patients`, `/book`, `/vitals`, `/prescriptions`, `/reports`, `/lab-orders`, `/schedule`, `/pregnancies`, `/babies`, `/completed`, `/video-consults` |
+| GET | `/patients` | `patients.read` | `/dashboard/patients` (paged), `/book`, `/vitals`, `/prescriptions`, `/reports`, `/schedule`, `/pregnancies`, `/babies`, `/completed`, `/video-consults` |
+| | ↳ params: `q`, `withStats`, `limit`, `offset` | | searches name / email / phone |
 | GET | `/patients/by-user/{userId}` | `patients.read` | `/dashboard/medical-history`, `/babies`, `/pregnancies`, `/book`, `/video-consults` |
 | GET | `/patients/{id}` | `patients.read` | `/patient/[id]`, `/consult/[id]`, `/appointment/[id]`, `/report/[id]` |
 | PUT | `/patients/{id}` | `patients.manage`, `profile.manage` | `/dashboard/patients`, `/dashboard/profile` |
@@ -148,7 +195,9 @@ handing over the records.
 
 | Method | Path | Permission | Called by |
 |---|---|---|---|
-| GET | `/appointments` | `appointments.read` | `/dashboard/appointments`, `/dashboard`, `/completed`, `/schedule`, `/vitals`, `/patients`, `/video-consults` |
+| GET | `/appointments` | `appointments.read` | `/dashboard/appointments` (paged), `/dashboard`, `/completed`, `/schedule`, `/vitals`, `/video-consults` |
+| | ↳ params: `q`, `status`, `departmentId`, `date`, `patientId`, `doctorId`, `limit`, `offset` | | `q` searches patient name/phone and doctor name |
+| GET | `/appointments/stats` | `appointments.read` | `/dashboard/appointments` (summary tiles) |
 | POST | `/appointments` | `appointments.create` | `/dashboard/book`, `/video-consults` |
 | GET | `/appointments/{id}` | `appointments.read` | `/appointment/[id]`, `/consult/[id]` |
 | PUT | `/appointments/{id}` | `appointments.manage` | `/dashboard/appointments`, `/appointment/[id]`, `/consult/[id]` |
@@ -195,7 +244,8 @@ or time moves. Facts about what happened are the server's to write.
 | POST | `/lab-tests` | `lab_tests.manage` | `/dashboard/tests` |
 | PUT | `/lab-tests/{id}` | `lab_tests.manage` | `/dashboard/tests` |
 | DELETE | `/lab-tests/{id}` | `lab_tests.manage` | `/dashboard/tests` |
-| GET | `/test-orders` | `lab_orders.read` | `/dashboard/lab-orders`, `/reports`, `/dashboard`, `/patient/[id]`, `/appointment/[id]` |
+| GET | `/test-orders` | `lab_orders.read` | `/dashboard/lab-orders` (paged), `/reports`, `/dashboard`, `/patient/[id]`, `/appointment/[id]` |
+| | ↳ params: `q`, `status`, `patientId`, `doctorId`, `appointmentId`, `limit`, `offset` | | `q` searches order id, patient name, test names |
 | POST | `/test-orders` | `lab_orders.create` | `/dashboard/appointments` |
 | GET | `/test-orders/{id}` | `lab_orders.read` | `/report/[id]` |
 | PUT | `/test-orders/{id}` | `lab_orders.process` | `/dashboard/lab-orders` |
@@ -285,11 +335,11 @@ Every screen and the endpoints behind it. All data goes through
 | Page | Endpoints |
 |---|---|
 | `/dashboard` | `/superadmin/overview`, `/appointments`, `/patients`, `/doctors`, `/departments`, `/payments`, `/vitals`, `/test-orders`, `/hospitals`, `/hospitals/current`, `/doctors/by-user/{id}`, `/patients/{id}/appointments` |
-| `/dashboard/appointments` | `/appointments` (list/update/delete), `/patients`, `/doctors`, `/departments`, `/vitals`, `/medicines`, `/lab-tests`, `/schedule-blocks`, `/hospitals`, 4× `/superadmin/*` · `POST /prescriptions`, `/test-orders`, `/vitals` |
+| `/dashboard/appointments` | **paged** `/appointments` + `/appointments/stats`, `/doctors`, `/departments`, `/schedule-blocks` · `PUT`+`DELETE /appointments/{id}` · `POST /vitals` |
 | `/dashboard/book` | `POST /appointments` · `/doctors/{id}/availability`, `/departments`, `/doctors`, `/patients`, `/patients/by-user/{id}`, `/hospitals`, `/schedule-blocks` |
 | `/dashboard/completed` | `/appointments`, `/patients` |
 | `/dashboard/consult/[id]` | `/appointments/{id}`, `/doctors/{id}`, `/patients/{id}` · `POST /medical-records` · `PUT /appointments/{id}` |
-| `/dashboard/patients` | `/patients`, `PUT`+`DELETE /patients/{id}`, `/appointments`, `/hospitals`, `/superadmin/patients`, `/superadmin/appointments`, `/doctors/by-user/{id}` |
+| `/dashboard/patients` | **paged** `/patients?withStats=true` — one request, nothing else |
 | `/dashboard/doctors` | `/doctors`, `PUT`+`DELETE /doctors/{id}`, `/departments`, `/hospitals`, `/superadmin/doctors` |
 | `/dashboard/users` | `/users` (list/create/update/delete), `/roles/assignable`, `/hospitals`, `/superadmin/users` |
 | `/dashboard/roles` | `/roles` (list/create/update/delete), `/permissions` |
@@ -297,7 +347,7 @@ Every screen and the endpoints behind it. All data goes through
 | `/dashboard/departments` | `/departments` (list/create/update/delete), `/hospitals`, `/superadmin/departments` |
 | `/dashboard/payments` | `GET /patients/{id}/payments` |
 | `/dashboard/profile` | `PUT /users/me`, `/doctors/by-user/{id}`, `PUT /doctors/{id}`, `/departments` |
-| `/dashboard/lab-orders` | `/test-orders` (list/update/delete/review), `/test-results` (list/upsert), `/lab-tests`, `/patients` |
+| `/dashboard/lab-orders` | **paged** `/test-orders` (+ update/delete/review), `/test-results` (list/upsert), `/lab-tests` |
 | `/dashboard/tests` | `/lab-tests` (list/create/update/delete) |
 | `/dashboard/reports` | `/test-orders`, `/test-results`, `/patients`, `/doctors` |
 | `/dashboard/records` | `/patients/{id}/prescriptions`, `/patients/{id}/vitals` |
@@ -373,9 +423,12 @@ there is no video transport behind them.
 
 ### Hardening
 
-7. **Pagination** on `/patients`, `/appointments`, `/test-orders` — all return unbounded lists.
-8. **Token refresh / revocation** — 7-day JWT in `localStorage`, no logout invalidation.
-9. **Rate limiting** on `/auth/login` — no lockout, no throttle.
+7. **Token refresh / revocation** — 7-day JWT in `localStorage`, no logout invalidation.
+8. **Rate limiting** on `/auth/login` — no lockout, no throttle.
+9. **Remaining unbounded lists** — `/vitals`, `/prescriptions`, `/medical-records`,
+   `/payments`, `/video-slots`, `/pregnancies`, `/babies` still return everything.
+   They grow more slowly than the three that were paginated, but the same
+   `paginate()` helper applies when they need it.
 
 ### Implemented but never called
 
@@ -387,6 +440,7 @@ No backend work needed; these are missing UI, not missing endpoints.
 | `PUT /pregnancies/{id}` | pregnancy edit |
 | `DELETE /hospitals/{id}` | hospital delete |
 | `GET /doctors/{id}/appointments` | superseded by `/appointments?doctorId=` |
+| `GET /patients` (unpaged) | still used by 18 screens as a lookup table; the three big tables no longer call it |
 | `GET /hospitals/{id}`, `GET /roles/{code}`, `GET /babies/{id}`, `GET /pregnancies/{id}`, `PUT /superadmin/patients/{id}` | detail reads the UI gets from list endpoints |
 
 ---

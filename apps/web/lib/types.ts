@@ -43,6 +43,11 @@ export interface Patient {
   insuranceProvider: string;
   insuranceNumber: string;
   documents: string[];
+  /** Appointment aggregates — populated only when the list is fetched with
+   *  withStats=true, so the cheap reads stay cheap. */
+  visitCount?: number;
+  lastVisit?: string | null;
+  nextVisit?: string | null;
   user?: User;
 }
 
@@ -88,6 +93,11 @@ export interface Appointment {
   reason: string;
   notes: string;
   rescheduled?: boolean;
+  /** Display fields resolved server-side, so a table needn't fetch every
+   *  patient and doctor just to turn ids into names. */
+  patientName?: string;
+  patientPhone?: string;
+  doctorName?: string;
   // Set when this appointment was booked as a follow-up to an earlier one.
   followUpOf?: string;
   createdAt: string;
@@ -227,6 +237,8 @@ export interface TestOrder {
   clinicalNote: string;
   orderedAt: string;
   updatedAt: string;
+  /** Resolved server-side, for the same reason as Appointment.patientName. */
+  patientName?: string;
 }
 
 export interface TestResultParameter {

@@ -40,9 +40,11 @@ export function DashboardShell({
   const [cmdOpen, setCmdOpen] = useState(false);
   const [storedGrants, setStoredGrants] = useState<PermissionGrant[] | undefined>(undefined);
 
-  // Live permissions from the server — refetches whenever the component mounts or
-  // the window refocuses, so nav updates immediately after a permission change.
-  const { data: meData } = useMeQuery(undefined, { refetchOnMountOrArgChange: true, refetchOnFocus: true });
+  // Live permissions from the server. Refetched when the cached copy is older
+  // than 30s or the window refocuses, so a revoked permission leaves the sidebar
+  // without a re-login — without re-fetching on every single navigation. The
+  // backend re-checks on every request regardless; this only drives the menu.
+  const { data: meData } = useMeQuery(undefined, { refetchOnMountOrArgChange: 30, refetchOnFocus: true });
   const specialization = '';
   const patientCtx: PatientContext = { specializations: [], hasPregnancy: false, hasBaby: false };
 

@@ -43,7 +43,12 @@
       "Bash(kill %1)",
       "Bash(psql -d medicare -t -c \"select relname, n_live_tup from pg_stat_user_tables where n_live_tup > 0 order by relname;\")",
       "Bash(psql -d medicare -t -c \"select email, role from users;\")",
-      "Bash(psql -d medicare -t -A '-F|' -c ' *)"
+      "Bash(psql -d medicare -t -A '-F|' -c ' *)",
+      "Bash(pkill -f \"uvicorn app.main:app --port 811\")",
+      "Bash(psql -d postgres -q -c \"select pg_terminate_backend\\(pid\\) from pg_stat_activity where datname='medicare_nulltest';\")",
+      "Bash(dropdb --if-exists medicare_nulltest)",
+      "Bash(psql -d postgres -t -A -c \"select datname from pg_database where datname like 'medicare%';\")",
+      "Bash(psql -d medicare -t -c \"select relname, n_live_tup from pg_stat_user_tables where n_live_tup>0 order by relname;\")"
     ]
   }
 }

@@ -4,15 +4,16 @@ reviewed. All rows are tenant-scoped."""
 
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status, Query
-from sqlalchemy.orm import Session
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from sqlalchemy import String, cast, func, or_
+from sqlalchemy.orm import Session, aliased
 
 from .. import models, schemas
 from ..auth import get_current_user
 from ..authz import SCOPE_OWN, caller_doctor_id, require_permission
 from ..database import get_db
 from ..tenancy import get_tenant_id, scoped
-from ..utils import new_id, now_iso
+from ..utils import new_id, now_iso, paginate, patient_display
 
 router = APIRouter(tags=["lab"])
 
@@ -20,9 +21,14 @@ router = APIRouter(tags=["lab"])
 # ---------- Test orders ----------
 @router.get("/test-orders", response_model=list[schemas.TestOrderOut])
 def list_test_orders(
+    response: Response,
     patient_id: Optional[str] = Query(default=None, alias="patientId"),
     doctor_id: Optional[str] = Query(default=None, alias="doctorId"),
     appointment_id: Optional[str] = Query(default=None, alias="appointmentId"),
+    q: Optional[str] = Query(default=None),
+    status_filter: Optional[str] = Query(default=None, alias="status"),
+    limit: Optional[int] = Query(default=None, ge=1),
+    offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
     scope: str = Depends(require_permission("lab_orders.read")),
     tenant_id: str = Depends(get_tenant_id),
@@ -34,7 +40,37 @@ def list_test_orders(
         query = query.filter(models.TestOrder.doctor_id == doctor_id)
     if appointment_id:
         query = query.filter(models.TestOrder.appointment_id == appointment_id)
-    return query.all()
+    if status_filter:
+        query = query.filter(models.TestOrder.status == status_filter)
+    if q:
+        # Order id, the patient's name, or any test name on the order. `items`
+        # is a JSON array of tests, so it is matched as text — crude, but it
+        # keeps the client's "search by test name" behaviour working.
+        like = f"%{q.strip().lower()}%"
+        pat_user = aliased(models.User)
+        query = (
+            query.outerjoin(
+                models.Patient, models.Patient.id == models.TestOrder.patient_id
+            )
+            .outerjoin(pat_user, pat_user.id == models.Patient.user_id)
+            .filter(
+                or_(
+                    func.lower(models.TestOrder.id).like(like),
+                    func.lower(pat_user.name).like(like),
+                    func.lower(cast(models.TestOrder.items, String)).like(like),
+                )
+            )
+        )
+    query = query.order_by(models.TestOrder.ordered_at.desc(), models.TestOrder.id)
+    rows = paginate(query, response, limit, offset).all()
+
+    patients = patient_display(db, (r.patient_id for r in rows))
+    out = []
+    for row in rows:
+        item = schemas.TestOrderOut.model_validate(row)
+        item.patient_name = patients.get(row.patient_id, ("", ""))[0]
+        out.append(item)
+    return out
 
 
 @router.post(
