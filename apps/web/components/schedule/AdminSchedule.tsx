@@ -169,7 +169,7 @@ export function AdminSchedule({ session }: RoleViewProps) {
                 refetchAppointments();
                 refetchBlocks();
               }}
-              className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-cyan-500 to-teal-600 text-white rounded-lg text-sm font-semibold hover:shadow-lg transition"
+              className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg text-sm font-semibold hover:shadow-lg transition"
             >
               <RefreshCw className="w-4 h-4" /> Refresh
             </button>
@@ -187,7 +187,7 @@ export function AdminSchedule({ session }: RoleViewProps) {
                 {doctors.map((d) => (
                   <th
                     key={d.id}
-                    className="bg-gradient-to-r from-cyan-600 to-teal-600 text-white font-semibold px-4 py-3 text-center min-w-[180px] border-l border-teal-500/40"
+                    className="bg-gradient-to-r from-cyan-500 to-brand-teal text-white font-semibold px-4 py-3 text-center min-w-[180px] border-l border-teal-500/40"
                   >
                     <div>{d.name}</div>
                     <div className="text-xs font-normal text-cyan-100">{d.specialization}</div>

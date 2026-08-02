@@ -40,7 +40,7 @@ export function DoctorNewborns({ session }: RoleViewProps) {
     <DashboardShell role={session.user.role} userName={session.user.name} title="Newborns" subtitle="Growth tracking & immunisations">
       <div className="space-y-4">
         <div className="flex justify-end">
-          <button onClick={() => setShowRegister(true)} className="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-cyan-500 to-teal-600 text-white text-sm font-semibold px-4 py-2 shadow hover:opacity-95">
+          <button onClick={() => setShowRegister(true)} className="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-cyan-500 to-brand-teal text-white text-sm font-semibold px-4 py-2 shadow hover:opacity-95">
             <Plus className="w-4 h-4" /> Register newborn
           </button>
         </div>
@@ -202,7 +202,7 @@ function RegisterBabyModal({ onClose, onSaved }: { onClose: () => void; onSaved:
         {error && <p className="text-sm text-red-600">{error}</p>}
         <div className="flex justify-end gap-2 pt-1">
           <button onClick={onClose} className="px-4 py-2 text-sm text-slate-600 hover:text-slate-900">Cancel</button>
-          <button onClick={save} className="px-4 py-2 text-sm font-semibold text-white bg-gradient-to-r from-cyan-500 to-teal-600 rounded-lg">Register</button>
+          <button onClick={save} className="px-4 py-2 text-sm font-semibold text-white bg-gradient-to-r from-cyan-500 to-brand-teal rounded-lg">Register</button>
         </div>
       </div>
     </Modal>
@@ -244,7 +244,7 @@ function GrowthModal({ baby, onClose }: { baby: Baby; onClose: () => void }) {
           <Field label="Length (cm)"><input type="number" step="0.1" value={height || ''} onChange={(e) => setHeight(+e.target.value)} className={inputCls} /></Field>
           <Field label="Head circ. (cm)"><input type="number" step="0.1" value={head || ''} onChange={(e) => setHead(+e.target.value)} className={inputCls} /></Field>
         </div>
-        <button onClick={add} className="w-full py-2 rounded-lg bg-gradient-to-r from-cyan-500 to-teal-600 text-white text-sm font-semibold">Add measurement</button>
+        <button onClick={add} className="w-full py-2 rounded-lg bg-gradient-to-r from-cyan-500 to-brand-teal text-white text-sm font-semibold">Add measurement</button>
 
         <div className="pt-2">
           <p className="text-xs font-medium text-slate-500 mb-1">Recorded measurements</p>

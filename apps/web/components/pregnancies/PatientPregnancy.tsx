@@ -107,7 +107,7 @@ export function PatientPregnancy({ session }: RoleViewProps) {
           </div>
           <div className="h-3 rounded-full bg-slate-100 overflow-hidden">
             <div
-              className="h-full rounded-full bg-gradient-to-r from-cyan-500 to-teal-600 transition-all"
+              className="h-full rounded-full bg-gradient-to-r from-cyan-500 to-brand-teal transition-all"
               style={{ width: `${progress}%` }}
             />
           </div>

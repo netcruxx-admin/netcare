@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git checkout *)",
+      "Bash(echo \"--- exit: $? \\(no matches = clean\\) ---\")",
+      "Bash(python3 -c ' *)"
+    ]
+  }
+}

@@ -304,7 +304,7 @@ function LabOrdersInner({ session }: RoleViewProps) {
                             {next && (
                               <button
                                 onClick={() => advance(r.order)}
-                                className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-gradient-to-r from-cyan-500 to-teal-600 text-white hover:shadow transition whitespace-nowrap"
+                                className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-gradient-to-r from-cyan-500 to-brand-teal text-white hover:shadow transition whitespace-nowrap"
                               >
                                 → {ORDER_STATUS_LABEL[next]}
                               </button>
@@ -427,7 +427,7 @@ function LabOrdersInner({ session }: RoleViewProps) {
               <button onClick={() => saveResults(false)} className="flex-1 px-4 py-2 bg-white border border-cyan-500 text-cyan-700 rounded hover:bg-cyan-50 font-semibold transition">
                 Save Draft
               </button>
-              <button onClick={() => saveResults(true)} className="flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-teal-600 text-white rounded hover:shadow-lg font-semibold transition">
+              <button onClick={() => saveResults(true)} className="flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded hover:shadow-lg font-semibold transition">
                 Save &amp; Publish
               </button>
             </div>

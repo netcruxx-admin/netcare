@@ -187,7 +187,7 @@ export function EditHospitalModal({ open, hospital, onClose, onSuccess }: Props)
                   <button
                     type="submit"
                     disabled={isSubmitting}
-                    className="flex-1 px-4 py-2.5 bg-slate-900 text-white rounded-lg font-semibold text-sm hover:bg-slate-700 transition disabled:opacity-50"
+                    className="flex-1 px-4 py-2.5 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg font-semibold text-sm hover:shadow-lg transition disabled:opacity-50"
                   >
                     {isSubmitting ? 'Saving…' : 'Save Changes'}
                   </button>

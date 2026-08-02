@@ -135,7 +135,7 @@ export function DoctorSchedule({ session }: RoleViewProps) {
             <button onClick={() => setWeekOffset((w) => w + 1)} className="flex items-center gap-1 px-3 py-2 bg-slate-500 text-white rounded-lg text-sm font-medium hover:bg-slate-600 transition">
               Next <ChevronRight className="w-4 h-4" />
             </button>
-            <button onClick={() => setBlockOpen(true)} className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-cyan-500 to-teal-600 text-white rounded-lg text-sm font-semibold hover:shadow-lg transition">
+            <button onClick={() => setBlockOpen(true)} className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg text-sm font-semibold hover:shadow-lg transition">
               <Ban className="w-4 h-4" /> Add Block
             </button>
           </div>
@@ -148,7 +148,7 @@ export function DoctorSchedule({ session }: RoleViewProps) {
               <tr>
                 <th className="sticky left-0 z-10 bg-teal-800 text-white font-semibold px-4 py-3 text-left w-24">Time</th>
                 {model.days.map((d) => (
-                  <th key={d.dateStr} className={`font-semibold px-3 py-3 text-center min-w-[130px] border-l border-teal-500/40 ${d.isToday ? 'bg-gradient-to-r from-cyan-600 to-teal-600 text-white' : 'bg-teal-700 text-white'}`}>
+                  <th key={d.dateStr} className={`font-semibold px-3 py-3 text-center min-w-[130px] border-l border-teal-500/40 ${d.isToday ? 'bg-gradient-to-r from-cyan-500 to-brand-teal text-white' : 'bg-teal-700 text-white'}`}>
                     <div>{d.dow}</div>
                     <div className="text-xs font-normal text-cyan-100">{d.month} {d.day}</div>
                   </th>

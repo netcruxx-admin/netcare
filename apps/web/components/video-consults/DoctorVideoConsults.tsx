@@ -136,7 +136,7 @@ export function DoctorVideoConsults({ session }: RoleViewProps) {
           <button
             onClick={publish}
             disabled={picked.size === 0}
-            className="mt-4 inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-cyan-500 to-teal-600 text-white text-sm font-semibold px-4 py-2 shadow hover:opacity-95 disabled:opacity-40"
+            className="mt-4 inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-cyan-500 to-brand-teal text-white text-sm font-semibold px-4 py-2 shadow hover:opacity-95 disabled:opacity-40"
           >
             <Plus className="w-4 h-4" /> Publish {picked.size > 0 ? `${picked.size} slot${picked.size === 1 ? '' : 's'}` : 'slots'}
           </button>
@@ -163,7 +163,7 @@ export function DoctorVideoConsults({ session }: RoleViewProps) {
                   </div>
                   <button
                     onClick={() => router.push(`/dashboard/consult/${a.id}`)}
-                    className="inline-flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-cyan-500 to-teal-600 text-white text-sm font-semibold px-3 py-1.5"
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-cyan-500 to-brand-teal text-white text-sm font-semibold px-3 py-1.5"
                   >
                     <Video className="w-4 h-4" /> Join
                   </button>

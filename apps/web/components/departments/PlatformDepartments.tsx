@@ -86,7 +86,7 @@ export function PlatformDepartments({ session }: RoleViewProps) {
           {hasPermission(session, 'departments.manage') && (
             <button
               onClick={openAdd}
-              className="flex items-center gap-2 px-3 py-1.5 bg-slate-900 text-white rounded-lg text-sm font-medium hover:bg-slate-700 transition"
+              className="flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg text-sm font-medium hover:shadow-lg transition"
             >
               <Plus className="w-4 h-4" /> Add Department
             </button>

@@ -165,7 +165,7 @@ function NurseVitalsInner({ session }: RoleViewProps) {
                       <td className="py-3 px-6 text-right">
                         <button
                           onClick={() => setRecording(a)}
-                          className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-cyan-500 to-teal-600 text-white text-sm font-semibold hover:shadow transition"
+                          className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-cyan-500 to-brand-teal text-white text-sm font-semibold hover:shadow transition"
                         >
                           {a.hasVitals ? 'Add again' : 'Record'}
                         </button>
@@ -236,7 +236,7 @@ function NurseVitalsInner({ session }: RoleViewProps) {
                   <button type="button" onClick={() => setRecording(null)} className="flex-1 px-4 py-2 bg-slate-200 text-slate-700 rounded hover:bg-slate-300 transition">
                     Cancel
                   </button>
-                  <button type="submit" className="flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-teal-600 text-white rounded hover:shadow-lg font-semibold transition">
+                  <button type="submit" className="flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded hover:shadow-lg font-semibold transition">
                     Save Vitals
                   </button>
                 </div>

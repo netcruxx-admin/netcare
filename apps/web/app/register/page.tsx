@@ -66,7 +66,7 @@ export default function RegisterPage() {
                       <div className="flex items-center gap-2">
                         <div
                           className={`w-7 h-7 rounded-full flex items-center justify-center text-sm font-semibold transition ${
-                            i <= currentIndex ? 'bg-gradient-to-br from-cyan-500 to-teal-600 text-white' : 'bg-slate-100 text-slate-400'
+                            i <= currentIndex ? 'bg-gradient-to-br from-cyan-500 to-brand-teal text-white' : 'bg-slate-100 text-slate-400'
                           }`}
                         >
                           {i < currentIndex ? <CheckCircle className="w-4 h-4" /> : i + 1}

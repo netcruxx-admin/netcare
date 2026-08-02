@@ -47,7 +47,7 @@ export function DoctorPregnancies({ session }: RoleViewProps) {
         <div className="flex justify-end">
           <button
             onClick={() => setShowNew(true)}
-            className="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-cyan-500 to-teal-600 text-white text-sm font-semibold px-4 py-2 shadow hover:opacity-95"
+            className="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-cyan-500 to-brand-teal text-white text-sm font-semibold px-4 py-2 shadow hover:opacity-95"
           >
             <Plus className="w-4 h-4" /> New pregnancy record
           </button>
@@ -205,7 +205,7 @@ function NewPregnancyModal({ onClose, onSaved }: { onClose: () => void; onSaved:
         {error && <p className="text-sm text-red-600">{error}</p>}
         <div className="flex justify-end gap-2 pt-1">
           <button onClick={onClose} className="px-4 py-2 text-sm text-slate-600 hover:text-slate-900">Cancel</button>
-          <button onClick={save} className="px-4 py-2 text-sm font-semibold text-white bg-gradient-to-r from-cyan-500 to-teal-600 rounded-lg">Save record</button>
+          <button onClick={save} className="px-4 py-2 text-sm font-semibold text-white bg-gradient-to-r from-cyan-500 to-brand-teal rounded-lg">Save record</button>
         </div>
       </div>
     </Modal>
@@ -282,7 +282,7 @@ function NewVisitModal({
         </Field>
         <div className="flex justify-end gap-2 pt-1">
           <button onClick={onClose} className="px-4 py-2 text-sm text-slate-600 hover:text-slate-900">Cancel</button>
-          <button onClick={save} className="px-4 py-2 text-sm font-semibold text-white bg-gradient-to-r from-cyan-500 to-teal-600 rounded-lg">Save visit</button>
+          <button onClick={save} className="px-4 py-2 text-sm font-semibold text-white bg-gradient-to-r from-cyan-500 to-brand-teal rounded-lg">Save visit</button>
         </div>
       </div>
     </Modal>

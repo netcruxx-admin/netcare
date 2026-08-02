@@ -29,6 +29,11 @@
   --chart-4: #8b5cf6;
   --chart-5: #ec4899;
   --radius: 0.625rem;
+  /* Sampled from public/logo/logo-full.png — the mark's own three colours.
+     Brand constants, not theme tokens: they do not flip in dark mode. */
+  --brand-navy: #00346e;
+  --brand-blue: #00509f;
+  --brand-teal: #019695;
   --sidebar: #ffffff;
   --sidebar-foreground: #0f172a;
   --sidebar-primary: #0891b2;
@@ -101,6 +106,9 @@
   --color-chart-3: var(--chart-3);
   --color-chart-4: var(--chart-4);
   --color-chart-5: var(--chart-5);
+  --color-brand-navy: var(--brand-navy);
+  --color-brand-blue: var(--brand-blue);
+  --color-brand-teal: var(--brand-teal);
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);

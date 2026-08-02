@@ -27,7 +27,7 @@ export function PatientDashboard({ session }: RoleViewProps) {
       <div className="space-y-8">
         {/* Welcome Section */}
         <div className="grid md:grid-cols-3 gap-6">
-          <div className="bg-gradient-to-r from-cyan-500 to-teal-600 text-white rounded-lg p-6 space-y-2">
+          <div className="bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg p-6 space-y-2">
             <h2 className="text-2xl font-bold">Welcome, {session.user.name.split(' ')[0]}</h2>
             <p className="text-cyan-100">Manage your health appointments and records</p>
           </div>
@@ -64,7 +64,7 @@ export function PatientDashboard({ session }: RoleViewProps) {
                 <p className="text-slate-600 mb-6">No upcoming appointments</p>
                 <Link
                   href="/dashboard/book"
-                  className="inline-block px-6 py-2 bg-gradient-to-r from-cyan-500 to-teal-600 text-white rounded-lg hover:shadow-lg transition"
+                  className="inline-block px-6 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg hover:shadow-lg transition"
                 >
                   Book an Appointment
                 </Link>

@@ -112,7 +112,7 @@ export function PatientVideoConsult({ session }: RoleViewProps) {
           <div className="flex gap-2 justify-center mt-6">
             <button
               onClick={() => router.push(`/dashboard/consult/${bookedApptId}`)}
-              className="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-cyan-500 to-teal-600 text-white text-sm font-semibold px-4 py-2"
+              className="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-cyan-500 to-brand-teal text-white text-sm font-semibold px-4 py-2"
             >
               <Video className="w-4 h-4" /> Join now
             </button>
@@ -224,7 +224,7 @@ export function PatientVideoConsult({ session }: RoleViewProps) {
             {error && <p className="mt-4 text-sm text-red-600">{error}</p>}
             <button
               onClick={() => book(confirm)}
-              className="mt-5 w-full py-2.5 rounded-lg bg-gradient-to-r from-cyan-500 to-teal-600 text-white font-semibold text-sm"
+              className="mt-5 w-full py-2.5 rounded-lg bg-gradient-to-r from-cyan-500 to-brand-teal text-white font-semibold text-sm"
             >
               Confirm booking
             </button>

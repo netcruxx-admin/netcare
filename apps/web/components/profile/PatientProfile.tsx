@@ -104,7 +104,7 @@ export function PatientProfile({ session }: RoleViewProps) {
                 <div
                   className={`w-10 h-10 rounded-full flex items-center justify-center font-bold ${
                     step.number <= currentStep
-                      ? 'bg-gradient-to-r from-cyan-500 to-teal-600 text-white'
+                      ? 'bg-gradient-to-r from-cyan-500 to-brand-teal text-white'
                       : 'bg-slate-200 text-slate-600'
                   }`}
                 >
@@ -113,7 +113,7 @@ export function PatientProfile({ session }: RoleViewProps) {
                 {idx < steps.length - 1 && (
                   <div
                     className={`flex-1 h-1 mx-2 ${
-                      step.number < currentStep ? 'bg-gradient-to-r from-cyan-500 to-teal-600' : 'bg-slate-200'
+                      step.number < currentStep ? 'bg-gradient-to-r from-cyan-500 to-brand-teal' : 'bg-slate-200'
                     }`}
                   />
                 )}
@@ -323,7 +323,7 @@ export function PatientProfile({ session }: RoleViewProps) {
                 <button
                   type="button"
                   onClick={handleNext}
-                  className="flex-1 px-6 py-2 bg-gradient-to-r from-cyan-500 to-teal-600 text-white font-semibold rounded-lg hover:shadow-lg transition flex items-center justify-center gap-2"
+                  className="flex-1 px-6 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white font-semibold rounded-lg hover:shadow-lg transition flex items-center justify-center gap-2"
                 >
                   Next <ChevronRight className="w-5 h-5" />
                 </button>

@@ -106,7 +106,7 @@ export function PlatformDoctors({ session }: RoleViewProps) {
           {hasPermission(session, 'doctors.manage') && (
             <button
               onClick={() => setAddModalOpen(true)}
-              className="flex items-center gap-2 px-3 py-1.5 bg-slate-900 text-white rounded-lg text-sm font-medium hover:bg-slate-700 transition"
+              className="flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg text-sm font-medium hover:shadow-lg transition"
             >
               <Plus className="w-4 h-4" /> Add Doctor
             </button>
@@ -238,7 +238,7 @@ export function PlatformDoctors({ session }: RoleViewProps) {
                     <button type="button" onClick={() => setEditing(null)} className="flex-1 px-4 py-2 bg-slate-200 text-slate-700 rounded hover:bg-slate-300 transition">
                       Cancel
                     </button>
-                    <button type="submit" disabled={isSubmitting} className="flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-teal-600 text-white rounded hover:shadow-lg font-semibold transition disabled:opacity-50">
+                    <button type="submit" disabled={isSubmitting} className="flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded hover:shadow-lg font-semibold transition disabled:opacity-50">
                       {isSubmitting ? 'Saving…' : 'Save Changes'}
                     </button>
                   </div>

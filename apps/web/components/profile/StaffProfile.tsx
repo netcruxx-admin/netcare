@@ -97,7 +97,7 @@ export function StaffProfile({ session }: RoleViewProps) {
     >
       <div className="max-w-3xl mx-auto space-y-6">
         {/* Summary card */}
-        <div className="bg-gradient-to-r from-cyan-500 to-teal-600 text-white rounded-lg p-6 flex items-center gap-4">
+        <div className="bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg p-6 flex items-center gap-4">
           <div className="w-16 h-16 rounded-full bg-white/20 flex items-center justify-center text-2xl font-bold shrink-0">
             {currentSession.user.name.charAt(0).toUpperCase()}
           </div>
@@ -216,7 +216,7 @@ export function StaffProfile({ session }: RoleViewProps) {
               <div className="sm:col-span-2 flex justify-end pt-2">
                 <button
                   type="submit"
-                  className="px-6 py-2 bg-gradient-to-r from-cyan-500 to-teal-600 text-white rounded-lg hover:shadow-lg font-semibold transition"
+                  className="px-6 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg hover:shadow-lg font-semibold transition"
                 >
                   Save Changes
                 </button>

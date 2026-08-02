@@ -99,7 +99,7 @@ export function DoctorDashboard({ session }: RoleViewProps) {
     <DashboardShell role={session.user.role} userName={session.user.name} title="Dashboard" subtitle="Your day at a glance">
       <div className="space-y-6">
         {/* Welcome banner */}
-        <div className="bg-gradient-to-r from-cyan-500 to-teal-600 text-white rounded-lg p-6 flex items-center justify-between gap-4">
+        <div className="bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg p-6 flex items-center justify-between gap-4">
           <div>
             <h2 className="text-2xl font-bold">Welcome back, Dr. {session.user.name}</h2>
             <p className="text-cyan-100 flex items-center gap-2 mt-1">

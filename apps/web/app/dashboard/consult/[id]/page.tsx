@@ -174,7 +174,7 @@ export default function ConsultRoomPage() {
               <SelfVideo stream={stream} className="w-full h-full object-cover" />
             ) : (
               <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-400">
-                {mediaError ? <CameraOff className="w-10 h-10 mb-2" /> : <div className="w-24 h-24 rounded-full bg-gradient-to-br from-cyan-500 to-teal-600 flex items-center justify-center text-4xl font-bold text-white">{initials(selfName)}</div>}
+                {mediaError ? <CameraOff className="w-10 h-10 mb-2" /> : <div className="w-24 h-24 rounded-full bg-gradient-to-br from-cyan-500 to-brand-teal flex items-center justify-center text-4xl font-bold text-white">{initials(selfName)}</div>}
                 <p className="text-sm mt-3">{mediaError ? 'Camera unavailable — you can still join' : 'Camera is off'}</p>
               </div>
             )}
@@ -192,7 +192,7 @@ export default function ConsultRoomPage() {
           </div>
 
           <div className="flex justify-center mt-6">
-            <button onClick={() => setPhase('call')} className="px-8 py-3 rounded-full bg-gradient-to-r from-cyan-500 to-teal-600 font-semibold hover:opacity-95 flex items-center gap-2">
+            <button onClick={() => setPhase('call')} className="px-8 py-3 rounded-full bg-gradient-to-r from-cyan-500 to-brand-teal font-semibold hover:opacity-95 flex items-center gap-2">
               <VideoIcon className="w-5 h-5" /> Join now
             </button>
           </div>
@@ -242,7 +242,7 @@ export default function ConsultRoomPage() {
         <div className="flex-1 relative p-4 flex items-center justify-center">
           {/* Remote tile */}
           <div className="w-full h-full max-w-4xl rounded-2xl bg-gradient-to-br from-slate-700 to-slate-800 flex items-center justify-center relative overflow-hidden">
-            <div className="w-28 h-28 rounded-full bg-gradient-to-br from-cyan-500 to-teal-600 flex items-center justify-center text-4xl font-bold">
+            <div className="w-28 h-28 rounded-full bg-gradient-to-br from-cyan-500 to-brand-teal flex items-center justify-center text-4xl font-bold">
               {initials(otherName)}
             </div>
             {remote === 'connecting' && (
@@ -296,7 +296,7 @@ export default function ConsultRoomPage() {
               </div>
               <div className="p-3 border-t border-slate-700 flex gap-2">
                 <input value={draft} onChange={(e) => setDraft(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && sendMessage()} placeholder="Type a message…" className="flex-1 bg-slate-700 rounded-lg px-3 py-2 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-cyan-500/40" />
-                <button onClick={sendMessage} className="p-2 rounded-lg bg-cyan-600 hover:bg-cyan-500"><Send className="w-4 h-4" /></button>
+                <button onClick={sendMessage} className="p-2 rounded-lg bg-gradient-to-r from-cyan-500 to-brand-teal hover:shadow-lg"><Send className="w-4 h-4" /></button>
               </div>
             </>
           ) : (

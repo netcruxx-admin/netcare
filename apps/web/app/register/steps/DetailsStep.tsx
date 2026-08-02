@@ -73,7 +73,7 @@ export function DetailsStep({ formik, userType, departments, onBack }: DetailsSt
       <button
         type="submit"
         disabled={formik.isSubmitting}
-        className="w-full bg-gradient-to-r from-cyan-500 to-teal-600 text-white py-2 rounded-lg font-semibold hover:shadow-lg transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+        className="w-full bg-gradient-to-r from-cyan-500 to-brand-teal text-white py-2 rounded-lg font-semibold hover:shadow-lg transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
       >
         {userType === 'doctor' && <ShieldCheck className="w-5 h-5" />}
         {formik.isSubmitting ? 'Creating account...' : 'Create Account'}

@@ -244,7 +244,7 @@ export function PlatformAppointments({ session }: RoleViewProps) {
           {hasPermission(session, 'appointments.create') && (
             <button
               onClick={() => router.push(selectedHospitalId ? `/dashboard/book?h=${selectedHospitalId}` : '/dashboard/book')}
-              className="flex items-center gap-2 px-3 py-1.5 bg-slate-900 text-white rounded-lg text-sm font-medium hover:bg-slate-700 transition"
+              className="flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg text-sm font-medium hover:shadow-lg transition"
             >
               <Plus className="w-4 h-4" /> Add Appointment
             </button>
@@ -344,7 +344,7 @@ export function PlatformAppointments({ session }: RoleViewProps) {
                 <FormField name="reason" label="Reason" as="textarea" placeholder="Reason for visit" />
                 <div className="flex gap-3 pt-2">
                   <button type="button" onClick={() => setEditing(null)} className="flex-1 px-4 py-2 bg-slate-200 text-slate-700 rounded hover:bg-slate-300 transition">Cancel</button>
-                  <button type="submit" className="flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-teal-600 text-white rounded hover:shadow-lg font-semibold transition">Save Changes</button>
+                  <button type="submit" className="flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded hover:shadow-lg font-semibold transition">Save Changes</button>
                 </div>
               </Form>
             </Formik>
@@ -399,7 +399,7 @@ export function PlatformAppointments({ session }: RoleViewProps) {
             </div>
             <div className="flex gap-3 mt-6">
               <button onClick={() => setRescheduling(null)} className="flex-1 px-4 py-2 bg-slate-200 text-slate-700 rounded hover:bg-slate-300 transition">Cancel</button>
-              <button onClick={saveReschedule} disabled={!reDate || !reTime} className="flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-teal-600 text-white rounded hover:shadow-lg font-semibold transition disabled:opacity-50">Reschedule</button>
+              <button onClick={saveReschedule} disabled={!reDate || !reTime} className="flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded hover:shadow-lg font-semibold transition disabled:opacity-50">Reschedule</button>
             </div>
           </div>
         </div>
@@ -451,7 +451,7 @@ export function PlatformAppointments({ session }: RoleViewProps) {
                 </div>
                 <div className="col-span-2 flex gap-3 pt-2">
                   <button type="button" onClick={() => setAddingVitals(null)} className="flex-1 px-4 py-2 bg-slate-200 text-slate-700 rounded hover:bg-slate-300 transition">Cancel</button>
-                  <button type="submit" className="flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-teal-600 text-white rounded hover:shadow-lg font-semibold transition">Save Vitals</button>
+                  <button type="submit" className="flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded hover:shadow-lg font-semibold transition">Save Vitals</button>
                 </div>
               </Form>
             </Formik>

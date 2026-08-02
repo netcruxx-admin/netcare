@@ -60,13 +60,15 @@ export function DashboardShell({
   // Active tenant branding from the real backend (skipped for superadmin).
   const { data: hospitalData } = useGetCurrentHospitalQuery(undefined, { skip: role === superadminRole });
   const hospital = role === superadminRole
-    ? { id: '', name: 'NetCare Platform', theme: { primary: '#0f172a', primaryDark: '#1e293b' }, modules: {} as HospitalModules }
+    // The platform wordmark is our own: navy → teal, exactly as "Net"/"Care" render in the logo.
+    ? { id: '', name: 'NetCare Platform', theme: { primary: '#00346e', primaryDark: '#019695' }, modules: {} as HospitalModules }
     : {
         id: hospitalData?.id ?? '',
         name: hospitalData?.name ?? '…',
         theme: {
-          primary: (hospitalData?.theme as Record<string, string>)?.primary ?? '#0891b2',
-          primaryDark: (hospitalData?.theme as Record<string, string>)?.primaryDark ?? '#0d9488',
+          // Unbranded tenants fall back to the logo's blue → teal, matching the icon beside it.
+          primary: (hospitalData?.theme as Record<string, string>)?.primary ?? '#00509f',
+          primaryDark: (hospitalData?.theme as Record<string, string>)?.primaryDark ?? '#019695',
         },
         modules: (hospitalData?.modules ?? {}) as HospitalModules,
       };
@@ -171,7 +173,7 @@ export function DashboardShell({
               onClick={() => setOpen(false)}
               className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition ${
                 active
-                  ? 'bg-gradient-to-r from-cyan-500 to-teal-600 text-white shadow'
+                  ? 'bg-gradient-to-r from-cyan-500 to-brand-teal text-white shadow'
                   : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
               }`}
             >

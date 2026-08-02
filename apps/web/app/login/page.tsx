@@ -94,7 +94,7 @@ export default function LoginPage() {
       <div className="flex-1 flex items-center justify-center px-6 py-12">
         <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl p-8 space-y-8 border border-cyan-100">
           <div className="text-center">
-            <h2 className="text-3xl font-bold bg-gradient-to-r from-cyan-600 to-teal-600 bg-clip-text text-transparent">Sign In</h2>
+            <h2 className="text-3xl font-bold bg-gradient-to-r from-cyan-600 to-brand-teal bg-clip-text text-transparent">Sign In</h2>
             <p className="text-slate-600 mt-2">Access your NetCare account</p>
           </div>
 
@@ -109,7 +109,7 @@ export default function LoginPage() {
                   onClick={() => handleTypeSelect(type)}
                   className={`py-2 px-4 rounded-lg font-medium transition capitalize ${
                     loginType === type
-                      ? 'bg-gradient-to-r from-cyan-500 to-teal-600 text-white shadow-lg'
+                      ? 'bg-gradient-to-r from-cyan-500 to-brand-teal text-white shadow-lg'
                       : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                   }`}
                 >
@@ -136,7 +136,7 @@ export default function LoginPage() {
               <button
                 type="submit"
                 disabled={isLoading || formik.isSubmitting}
-                className="w-full bg-gradient-to-r from-cyan-500 to-teal-600 text-white py-2 rounded-lg font-semibold hover:shadow-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full bg-gradient-to-r from-cyan-500 to-brand-teal text-white py-2 rounded-lg font-semibold hover:shadow-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isLoading || formik.isSubmitting ? 'Signing in...' : 'Sign In'}
               </button>

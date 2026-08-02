@@ -327,7 +327,7 @@ export function PatientBook({ session }: RoleViewProps) {
                           const errs = await validateForm();
                           if (!errs.date && !errs.time) setStep(3);
                         }}
-                        className="flex-1 px-6 py-2 bg-cyan-600 text-white rounded-lg hover:bg-cyan-700 transition"
+                        className="flex-1 px-6 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg hover:shadow-lg transition"
                       >
                         Next
                       </button>

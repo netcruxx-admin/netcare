@@ -56,7 +56,7 @@ export function PatientAppointments({ session }: RoleViewProps) {
             <p className="text-slate-600 mb-6">No appointments yet</p>
             <Link
               href="/dashboard/book"
-              className="inline-block px-6 py-2 bg-gradient-to-r from-cyan-500 to-teal-600 text-white rounded-lg hover:shadow-lg transition"
+              className="inline-block px-6 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg hover:shadow-lg transition"
             >
               Book an Appointment
             </Link>

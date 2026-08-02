@@ -80,7 +80,7 @@ export function PatientReports({ session }: RoleViewProps) {
                 </div>
                 <div className="shrink-0">
                   {r.ready ? (
-                    <Link href={`/report/${r.order.id}`} className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-cyan-500 to-teal-600 text-white rounded-lg text-sm font-semibold hover:shadow-lg transition">
+                    <Link href={`/report/${r.order.id}`} className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg text-sm font-semibold hover:shadow-lg transition">
                       View Report
                     </Link>
                   ) : (

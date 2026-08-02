@@ -62,7 +62,7 @@ export function ActionsToolbar({
       {getEnabledModules().telemedicine && appointment.mode === 'video' && appointment.status === 'scheduled' && (isPatient || canManage) && (
         <button
           onClick={() => router.push(`/dashboard/consult/${appointmentId}`)}
-          className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-cyan-500 to-teal-600 text-white rounded-lg hover:shadow-lg transition font-semibold text-sm"
+          className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg hover:shadow-lg transition font-semibold text-sm"
         >
           <Video className="w-4 h-4" /> Join Video Consult
         </button>

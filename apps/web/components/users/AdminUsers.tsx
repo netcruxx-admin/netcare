@@ -162,7 +162,7 @@ export function AdminUsers({ session }: RoleViewProps) {
           <h3 className="text-lg font-semibold text-slate-900">Users ({filtered.length})</h3>
           <button
             onClick={openAdd}
-            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-cyan-500 to-teal-600 text-white rounded-lg hover:shadow-lg transition"
+            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg hover:shadow-lg transition"
           >
             <Plus className="w-4 h-4" />
             Add User
@@ -307,7 +307,7 @@ export function AdminUsers({ session }: RoleViewProps) {
                   </button>
                   <button
                     type="submit"
-                    className="flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-teal-600 text-white rounded hover:shadow-lg font-semibold transition"
+                    className="flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded hover:shadow-lg font-semibold transition"
                   >
                     {editing ? 'Save Changes' : 'Add User'}
                   </button>

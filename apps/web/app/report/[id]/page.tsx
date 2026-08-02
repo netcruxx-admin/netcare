@@ -63,7 +63,7 @@ export default function LabReportPage() {
         <button onClick={() => router.back()} className="inline-flex items-center gap-2 text-slate-600 hover:text-slate-900 font-medium">
           <ArrowLeft className="w-4 h-4" /> Back
         </button>
-        <button onClick={() => window.print()} className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-cyan-500 to-teal-600 text-white rounded-lg text-sm font-semibold hover:shadow-lg transition">
+        <button onClick={() => window.print()} className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg text-sm font-semibold hover:shadow-lg transition">
           <Printer className="w-4 h-4" /> Print / Save PDF
         </button>
       </div>

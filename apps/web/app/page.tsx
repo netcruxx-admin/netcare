@@ -24,7 +24,7 @@ export default function LandingPage() {
             </Link>
             <Link
               href="/register"
-              className="px-6 py-2 bg-gradient-to-r from-cyan-500 to-teal-600 text-white font-semibold rounded-lg hover:shadow-lg transition"
+              className="px-6 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white font-semibold rounded-lg hover:shadow-lg transition"
             >
               Get Started
             </Link>
@@ -39,7 +39,7 @@ export default function LandingPage() {
             <div className="space-y-6">
               <h2 className="text-5xl md:text-6xl font-bold text-slate-900 leading-tight">
                 Your Health,
-                <span className="block bg-gradient-to-r from-cyan-600 to-teal-600 bg-clip-text text-transparent">Our Priority</span>
+                <span className="block bg-gradient-to-r from-cyan-600 to-brand-teal bg-clip-text text-transparent">Our Priority</span>
               </h2>
               <p className="text-lg text-slate-600 leading-relaxed">
                 Book appointments with healthcare professionals, manage your medical records, and stay on top of your health—all in one place.
@@ -47,7 +47,7 @@ export default function LandingPage() {
               <div className="flex gap-4 pt-4">
                 <Link
                   href="/register"
-                  className="px-8 py-3 bg-gradient-to-r from-cyan-500 to-teal-600 text-white font-semibold rounded-lg hover:shadow-lg transition"
+                  className="px-8 py-3 bg-gradient-to-r from-cyan-500 to-brand-teal text-white font-semibold rounded-lg hover:shadow-lg transition"
                 >
                   Start Booking
                 </Link>
@@ -100,7 +100,7 @@ export default function LandingPage() {
             <h2 className="text-4xl font-bold text-slate-900 mb-4">
               Why Choose NetCare?
             </h2>
-            <div className="h-1 w-16 bg-gradient-to-r from-cyan-500 to-teal-600 mx-auto rounded-full"></div>
+            <div className="h-1 w-16 bg-gradient-to-r from-cyan-500 to-brand-teal mx-auto rounded-full"></div>
           </div>
           <div className="grid md:grid-cols-3 gap-8">
             {[
@@ -152,7 +152,7 @@ export default function LandingPage() {
       </section>
 
       {/* CTA Section */}
-      <section className="py-20 bg-gradient-to-r from-cyan-600 to-teal-600">
+      <section className="py-20 bg-gradient-to-r from-cyan-500 to-brand-teal">
         <div className="max-w-6xl mx-auto px-6 text-center">
           <h2 className="text-4xl md:text-5xl font-bold text-white mb-6">
             Ready to Take Control of Your Health?
@@ -170,7 +170,7 @@ export default function LandingPage() {
       </section>
 
       {/* Footer */}
-      <footer className="bg-slate-900 text-slate-400 py-12">
+      <footer className="bg-brand-navy text-slate-400 py-12">
         <div className="max-w-6xl mx-auto px-6">
           <div className="grid md:grid-cols-4 gap-8 mb-8">
             <div>

@@ -73,7 +73,7 @@ export function NurseDashboard({ session }: RoleViewProps) {
   return (
     <DashboardShell role={session.user.role} userName={session.user.name} title="Nursing Station" subtitle="Daily overview">
       <div className="space-y-6">
-        <div className="bg-gradient-to-r from-cyan-500 to-teal-600 text-white rounded-lg p-6 flex items-center justify-between gap-4">
+        <div className="bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg p-6 flex items-center justify-between gap-4">
           <div>
             <h2 className="text-2xl font-bold">Welcome, {session.user.name}</h2>
             <p className="text-cyan-100 mt-1">

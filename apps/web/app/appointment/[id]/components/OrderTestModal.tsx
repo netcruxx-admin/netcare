@@ -123,7 +123,7 @@ export function OrderTestModal({ appointmentId, patientId, doctorId, onClose, on
           type="button"
           onClick={save}
           disabled={selected.size === 0}
-          className="flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-teal-600 text-white rounded-lg hover:shadow-lg font-semibold transition disabled:opacity-40 disabled:cursor-not-allowed"
+          className="flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg hover:shadow-lg font-semibold transition disabled:opacity-40 disabled:cursor-not-allowed"
         >
           Order {selected.size > 0 ? `(${selected.size})` : ''}
         </button>

@@ -318,7 +318,7 @@ function SuperadminBookForm({ session }: RoleViewProps) {
                   <button
                     type="submit"
                     disabled={success || !hospitalId}
-                    className="flex-1 px-6 py-2 bg-gradient-to-r from-cyan-500 to-teal-600 text-white rounded-lg hover:shadow-lg transition font-semibold disabled:opacity-50"
+                    className="flex-1 px-6 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg hover:shadow-lg transition font-semibold disabled:opacity-50"
                   >
                     Book Appointment
                   </button>

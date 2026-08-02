@@ -115,7 +115,7 @@ export function AdminTests({ session }: RoleViewProps) {
           <h3 className="text-lg font-semibold text-slate-900">Tests ({filtered.length})</h3>
           <button
             onClick={openAdd}
-            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-cyan-500 to-teal-600 text-white rounded-lg hover:shadow-lg transition"
+            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg hover:shadow-lg transition"
           >
             <Plus className="w-4 h-4" />
             Add Test
@@ -128,7 +128,7 @@ export function AdminTests({ session }: RoleViewProps) {
             <p className="text-slate-600 mb-6">No tests yet</p>
             <button
               onClick={openAdd}
-              className="inline-flex items-center gap-2 px-6 py-2 bg-gradient-to-r from-cyan-500 to-teal-600 text-white rounded-lg hover:shadow-lg transition"
+              className="inline-flex items-center gap-2 px-6 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg hover:shadow-lg transition"
             >
               <Plus className="w-4 h-4" />
               Add Test
@@ -225,7 +225,7 @@ export function AdminTests({ session }: RoleViewProps) {
                   <button type="button" onClick={closeModal} className="flex-1 px-4 py-2 bg-slate-200 text-slate-700 rounded hover:bg-slate-300 transition">
                     Cancel
                   </button>
-                  <button type="submit" className="flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-teal-600 text-white rounded hover:shadow-lg font-semibold transition">
+                  <button type="submit" className="flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded hover:shadow-lg font-semibold transition">
                     {editing ? 'Save Changes' : 'Add Test'}
                   </button>
                 </div>

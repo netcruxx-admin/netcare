@@ -117,7 +117,7 @@ export function PatientPayments({ session }: RoleViewProps) {
                         {payment.status === 'pending' && (
                           <button
                             onClick={() => setCheckout(payment)}
-                            className="inline-flex items-center gap-1 px-3 py-1 rounded-lg bg-gradient-to-r from-cyan-500 to-teal-600 text-white font-semibold text-sm hover:shadow"
+                            className="inline-flex items-center gap-1 px-3 py-1 rounded-lg bg-gradient-to-r from-cyan-500 to-brand-teal text-white font-semibold text-sm hover:shadow"
                           >
                             <CreditCard className="w-4 h-4" /> Pay Now
                           </button>
@@ -183,7 +183,7 @@ export function PatientPayments({ session }: RoleViewProps) {
                 >
                   Close
                 </button>
-                <button className="flex-1 px-6 py-2 bg-gradient-to-r from-cyan-500 to-teal-600 text-white rounded-lg hover:shadow-lg transition">
+                <button className="flex-1 px-6 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg hover:shadow-lg transition">
                   <Download className="w-4 h-4 inline mr-2" />
                   Download PDF
                 </button>
@@ -230,7 +230,7 @@ function CheckoutModal({
       <div className="absolute inset-0 bg-black/50" onClick={processing ? undefined : onClose} />
       <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
         {/* Header */}
-        <div className="bg-gradient-to-r from-cyan-500 to-teal-600 text-white px-5 py-4">
+        <div className="bg-gradient-to-r from-cyan-500 to-brand-teal text-white px-5 py-4">
           <div className="flex items-center justify-between">
             <span className="text-sm font-medium opacity-90">Secure Checkout</span>
             {!processing && (
@@ -314,7 +314,7 @@ function CheckoutModal({
 
             <button
               onClick={pay}
-              className="mt-4 w-full py-3 rounded-lg bg-gradient-to-r from-cyan-500 to-teal-600 text-white font-semibold hover:shadow-lg transition"
+              className="mt-4 w-full py-3 rounded-lg bg-gradient-to-r from-cyan-500 to-brand-teal text-white font-semibold hover:shadow-lg transition"
             >
               Pay ₹{payment.amount.toLocaleString('en-IN')}
             </button>

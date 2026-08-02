@@ -220,7 +220,7 @@ export function AdminOverview({ session }: RoleViewProps) {
                   key={p.label}
                   onClick={() => setPeriod(p.value)}
                   className={`px-3 py-1.5 rounded-md text-sm font-medium transition ${
-                    active ? 'bg-gradient-to-r from-cyan-500 to-teal-600 text-white shadow' : 'text-slate-600 hover:bg-slate-100'
+                    active ? 'bg-gradient-to-r from-cyan-500 to-brand-teal text-white shadow' : 'text-slate-600 hover:bg-slate-100'
                   }`}
                 >
                   {p.label}

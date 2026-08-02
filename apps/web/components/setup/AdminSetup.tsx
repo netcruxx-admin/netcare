@@ -122,7 +122,7 @@ export function AdminSetup({ session }: RoleViewProps) {
                   }`}
                 >
                   <div className="flex items-start justify-between">
-                    <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-cyan-500 to-teal-600 flex items-center justify-center">
+                    <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-cyan-500 to-brand-teal flex items-center justify-center">
                       <Icon className="w-5 h-5 text-white" />
                     </div>
                     {isCurrent && (
@@ -241,7 +241,7 @@ export function AdminSetup({ session }: RoleViewProps) {
           <div className="flex flex-wrap gap-2">
             <button
               onClick={loadDemo}
-              className="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-cyan-500 to-teal-600 text-white text-sm font-semibold px-4 py-2 shadow hover:opacity-95"
+              className="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-cyan-500 to-brand-teal text-white text-sm font-semibold px-4 py-2 shadow hover:opacity-95"
             >
               <Sparkles className="w-4 h-4" /> Load sample maternity data
             </button>
@@ -281,7 +281,7 @@ export function AdminSetup({ session }: RoleViewProps) {
             <button
               onClick={handleApply}
               disabled={!isDirty && !applyDepartments}
-              className="inline-flex items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-cyan-500 to-teal-600 text-white text-sm font-semibold px-5 py-2.5 shadow hover:opacity-95 disabled:opacity-40 disabled:cursor-not-allowed"
+              className="inline-flex items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-cyan-500 to-brand-teal text-white text-sm font-semibold px-5 py-2.5 shadow hover:opacity-95 disabled:opacity-40 disabled:cursor-not-allowed"
             >
               {isDirty ? `Switch to ${selected.label}` : 'Re-apply category'}
             </button>
