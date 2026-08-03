@@ -12,6 +12,9 @@ import { resolveHomePath } from '@/lib/roles';
 import { useRegisterMutation } from '@/store/api';
 import {
   accountSchema,
+  ageFromDateOfBirth,
+  AGE_OF_MAJORITY,
+  consentSchema,
   FormValues,
   initialValues,
   patientDetailsSchema,
@@ -28,10 +31,11 @@ export function useRegistration() {
   const [success, setSuccess] = useState(false);
 
   // Validate only the fields relevant to the current step.
-  const validationSchema = useMemo(
-    () => (step === 'account' ? accountSchema : patientDetailsSchema),
-    [step],
-  );
+  const validationSchema = useMemo(() => {
+    if (step === 'account') return accountSchema;
+    if (step === 'consent') return consentSchema;
+    return patientDetailsSchema;
+  }, [step]);
 
   const doRegister = async (values: FormValues) => {
     setServerError('');
@@ -43,6 +47,14 @@ export function useRegistration() {
         name: values.name,
         role: 'patient',
         phone: values.phone.trim(),
+        // Sent so the backend can tell whether this is a minor, which decides
+        // whether it demands a guardian on the consent (DPDP s.9).
+        dateOfBirth: values.dateOfBirth,
+        gender: values.gender,
+        bloodGroup: values.bloodGroup,
+        consents: values.consents,
+        guardianName: values.guardianName.trim(),
+        guardianRelationship: values.guardianRelationship.trim(),
       }).unwrap();
 
       authStorage.setSession({
@@ -52,6 +64,7 @@ export function useRegistration() {
         role: result.role,
         permissions: result.permissions,
         token: result.token,
+        refreshToken: result.refreshToken,
         isAuthenticated: true,
       });
       setSuccess(true);
@@ -71,6 +84,11 @@ export function useRegistration() {
       if (detail?.toLowerCase().includes('already')) {
         setServerError('Email already registered');
         setStep('account');
+      } else if (detail?.toLowerCase().includes('consent') || detail?.toLowerCase().includes('guardian')) {
+        // The consents are the only thing the last step controls, so send the
+        // user back to the step that can actually fix the refusal.
+        setServerError(detail);
+        setStep('consent');
       } else {
         setServerError(detail ?? 'An error occurred. Please try again.');
       }
@@ -82,9 +100,15 @@ export function useRegistration() {
     validationSchema,
     validateOnMount: false,
     onSubmit: async (values, { setSubmitting }) => {
-      // "Submit" on the account step advances to health details.
+      // The first two steps only advance; the account is created on the last
+      // one, so that no data is submitted before the notice has been shown.
       if (step === 'account') {
         setStep('details');
+        setSubmitting(false);
+        return;
+      }
+      if (step === 'details') {
+        setStep('consent');
         setSubmitting(false);
         return;
       }
@@ -112,9 +136,14 @@ export function useRegistration() {
   };
 
   // Progress indicator: the named steps and where we are in them.
-  const wizardSteps = ['Account', 'Details'];
-  const stepOrder: Step[] = ['account', 'details'];
+  const wizardSteps = ['Account', 'Details', 'Consent'];
+  const stepOrder: Step[] = ['account', 'details', 'consent'];
   const currentIndex = Math.max(0, stepOrder.indexOf(step));
+
+  // Drives the guardian fields on the consent step. The backend makes the real
+  // decision — this only decides what to ask for.
+  const age = ageFromDateOfBirth(formik.values.dateOfBirth);
+  const isMinor = age !== null && age < AGE_OF_MAJORITY;
 
   return {
     // state
@@ -126,6 +155,7 @@ export function useRegistration() {
     // derived
     wizardSteps,
     currentIndex,
+    isMinor,
     // actions
     doRegister,
     handleRoleSelect,

@@ -489,3 +489,225 @@ class Immunization(Base):
     status = Column(String, default="pending")  # pending | given
     given_date = Column(String, nullable=True)
     created_at = Column(String, nullable=False)
+
+
+# -----------------------------------------------------------------------------
+# Audit trail — see app/audit.py for why this exists and what fills it in.
+# -----------------------------------------------------------------------------
+
+
+class AuditLog(Base):
+    """One row per request that touched tenant data.
+
+    Deliberately *not* a child of any clinical table: the trail has to outlive
+    the record it describes, or deleting a patient would erase the evidence of
+    who read them. That is also why there is no ForeignKey on patient_id or
+    actor_user_id — those are identifiers, not relationships, and a cascade here
+    would be a compliance bug.
+
+    Nothing in the app updates or deletes these rows. Enforcing that in the
+    database (an append-only trigger, or a role without UPDATE/DELETE) is the
+    next step for a deployment that needs the trail to be tamper-evident.
+    """
+
+    __tablename__ = "audit_logs"
+
+    id = Column(String, primary_key=True)
+    # Correlates the trail row with an X-Request-Id the client was handed.
+    request_id = Column(String, index=True, nullable=False)
+    # NULL for platform-level actions and for failed logins, where no tenant was
+    # ever resolved. Not an FK for the same reason as above.
+    hospital_id = Column(String, index=True, nullable=True)
+    # NULL when the request never authenticated (a rejected token, a bad login).
+    actor_user_id = Column(String, index=True, nullable=True)
+    actor_role = Column(String, default="")
+    actor_ip = Column(String, default="")
+    user_agent = Column(String, default="")
+    method = Column(String, nullable=False)
+    # The matched route template, not the concrete URL — group-by-able.
+    path = Column(String, nullable=False)
+    # The capability the caller acted under, and at what breadth. Together these
+    # answer "by what authority?", which is the question a 403 review asks.
+    permission = Column(String, default="")
+    scope = Column(String, nullable=True)
+    subject_type = Column(String, default="")
+    subject_id = Column(String, default="")
+    # The person the accessed data is about — the column an inspector filters on
+    # to answer "who has opened this patient's chart?".
+    patient_id = Column(String, index=True, nullable=True)
+    # read | create | update | delete | login | login_failed | other
+    action = Column(String, nullable=False)
+    status_code = Column(Integer, nullable=False)
+    # success | denied | failed | error
+    outcome = Column(String, nullable=False)
+    detail = Column(String, default="")
+    duration_ms = Column(Integer, default=0)
+    created_at = Column(String, index=True, nullable=False)
+
+    __table_args__ = (
+        # The two questions the table is actually queried with: "what happened
+        # at this hospital lately" and "who touched this patient".
+        Index("ix_audit_tenant_time", "hospital_id", "created_at"),
+        Index("ix_audit_patient_time", "patient_id", "created_at"),
+        Index("ix_audit_actor_time", "actor_user_id", "created_at"),
+    )
+
+
+# -----------------------------------------------------------------------------
+# Consent — see app/consent.py for the obligations these two tables answer.
+# -----------------------------------------------------------------------------
+
+
+class ConsentPurpose(Base):
+    """One thing the hospital may do with a person's data, stated in advance.
+
+    Code-owned and versioned, exactly like Permission: a purpose exists because
+    a feature processes data for it, so it arrives by migration rather than
+    being typed in by a hospital. That is what makes the notice auditable — the
+    text a patient agreed to is a row this repository can show you, not free
+    text someone edited afterwards.
+
+    Itemised on purpose. DPDP requires consent to be specific and unconditional,
+    so "treatment" and "marketing" have to be separately refusable; bundling
+    them into one tickbox is the failure mode this table exists to prevent.
+    """
+
+    __tablename__ = "consent_purposes"
+
+    # e.g. "treatment", "communications.marketing"
+    code = Column(String, primary_key=True)
+    label = Column(String, nullable=False)
+    # The notice itself — what the person is being told, in plain words.
+    notice = Column(Text, nullable=False)
+    # Bumped whenever `notice` changes materially. Copied onto every Consent, so
+    # a record always says which text was agreed to rather than pointing at
+    # whatever the current wording happens to be.
+    version = Column(Integer, nullable=False, default=1)
+    # True when the service genuinely cannot be delivered without it (you cannot
+    # be treated without the hospital processing your health data). Everything
+    # else must be refusable without losing care — that is what "unconditional"
+    # means, and why this flag is not just a UI hint.
+    required = Column(Boolean, nullable=False, default=False)
+    # Feature this purpose belongs to, mirroring Permission.module: a hospital
+    # without telemedicine should not be asking for a telemedicine consent.
+    module = Column(String, nullable=True)
+    # "per_person" — asked once at registration and stands until withdrawn.
+    # "per_event" — asked each time (a teleconsultation, under the Telemedicine
+    # Practice Guidelines 2020, is consented per consultation).
+    cadence = Column(String, nullable=False, default="per_person")
+    sort_order = Column(Integer, nullable=False, default=0)
+
+
+class Consent(Base):
+    """A person's answer to one purpose, at one point in time.
+
+    Append-mostly: withdrawal writes `withdrawn_at` on the row rather than
+    deleting it, because "they consented and later withdrew" and "they never
+    consented" are different facts and only one of them is a defence.
+
+    Not FK-linked to Patient for the same reason AuditLog is not: the proof that
+    consent was obtained has to outlive the record it authorised.
+    """
+
+    __tablename__ = "consents"
+
+    id = Column(String, primary_key=True)
+    hospital_id = Column(String, ForeignKey("hospitals.id"), index=True, nullable=False)
+    # The person the data is about. user_id rather than patient_id because staff
+    # have data-protection rights too, and their consent has nowhere else to go.
+    subject_user_id = Column(String, index=True, nullable=False)
+    purpose_code = Column(
+        String, ForeignKey("consent_purposes.code"), index=True, nullable=False
+    )
+    # The notice version actually shown. See ConsentPurpose.version.
+    version = Column(Integer, nullable=False, default=1)
+    # "explicit" — a clear affirmative action by the subject.
+    # "implied_patient_initiated" — the Telemedicine Practice Guidelines treat a
+    #   consultation the patient started as consented; the row records that this
+    #   is *why*, so nobody later mistakes it for a ticked box.
+    method = Column(String, nullable=False, default="explicit")
+    # Who operated the form. Differs from subject_user_id when a receptionist
+    # records consent at the desk, which is the case an auditor asks about.
+    recorded_by_user_id = Column(String, nullable=True)
+    # DPDP requires verifiable consent from a parent or lawful guardian for a
+    # data principal under 18. Populated whenever the subject was a minor on the
+    # day it was given — see consent.py, which refuses to record without it.
+    guardian_user_id = Column(String, nullable=True)
+    # The guardian usually has no account of their own — a parent consenting for
+    # a newborn is not a user of this system — so naming them has to work
+    # without one. Either field identifies them; both may be set when the parent
+    # is themselves a patient here.
+    guardian_name = Column(String, default="")
+    guardian_relationship = Column(String, default="")
+    # Ties a per_event consent to the thing it authorised (a teleconsultation).
+    appointment_id = Column(String, index=True, nullable=True)
+    # Evidence of the act, same fields the audit trail keeps.
+    ip = Column(String, default="")
+    user_agent = Column(String, default="")
+    granted_at = Column(String, nullable=False)
+    # Set when withdrawn. Withdrawal must be as easy as granting was, so this is
+    # written by the subject's own request — no staff approval step.
+    withdrawn_at = Column(String, nullable=True)
+
+    __table_args__ = (
+        # "What does this person currently allow?" — the query every guard runs.
+        Index("ix_consents_subject_purpose", "subject_user_id", "purpose_code"),
+    )
+
+
+# -----------------------------------------------------------------------------
+# Sessions — see app/sessions.py. What makes a sign-in revocable.
+# -----------------------------------------------------------------------------
+
+
+class Session(Base):
+    """One sign-in, and the server's ability to end it.
+
+    A JWT is a bearer credential nobody can take back: once signed, it is valid
+    until it expires, whatever happens to the person holding it. That is fine
+    for a session measured in minutes and unacceptable for one measured in days
+    over health records — a dismissed employee's token would keep working.
+
+    So the access token stays short and carries `sid` pointing here, and this
+    row is checked on every request. Ending a session is a write to this table,
+    which takes effect on the very next call rather than whenever the token
+    happens to lapse.
+    """
+
+    __tablename__ = "sessions"
+
+    # Also the `sid` claim in every access token issued from this session.
+    id = Column(String, primary_key=True)
+    # All the rotations descended from one sign-in. Refresh tokens rotate on
+    # every use, so a stolen one is only useful until the real client next
+    # refreshes — at which point the theft becomes *visible*, and revoking the
+    # family is how the whole line is cut rather than just the copy presented.
+    family_id = Column(String, index=True, nullable=False)
+    user_id = Column(String, index=True, nullable=False)
+    # NULL for a platform superadmin, who belongs to no hospital.
+    hospital_id = Column(String, index=True, nullable=True)
+    # SHA-256 of the refresh token. Hashed for the same reason a password is:
+    # a database leak must not hand over live sessions. Plain SHA-256 rather
+    # than bcrypt because the input is 384 bits of CSPRNG output, so there is no
+    # low-entropy guess to slow down — only a constant-time compare to get right.
+    refresh_token_hash = Column(String, unique=True, index=True, nullable=False)
+    issued_at = Column(String, nullable=False)
+    # When the refresh token dies. The access token carries its own, much
+    # shorter, expiry inside the JWT.
+    expires_at = Column(String, nullable=False)
+    # Set the moment this token is exchanged. A second presentation after this
+    # is set is replay, not a race, and revokes the family.
+    rotated_at = Column(String, nullable=True)
+    revoked_at = Column(String, nullable=True)
+    # logout | logout_all | password_change | role_change | user_deleted |
+    # hospital_suspended | refresh_reuse | superseded
+    revoked_reason = Column(String, default="")
+    last_used_at = Column(String, nullable=True)
+    ip = Column(String, default="")
+    user_agent = Column(String, default="")
+
+    __table_args__ = (
+        # "Is this session still good?" runs on every authenticated request, and
+        # "cut every session this person has" runs on dismissal.
+        Index("ix_sessions_user_live", "user_id", "revoked_at"),
+    )

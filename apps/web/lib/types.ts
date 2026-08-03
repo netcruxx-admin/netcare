@@ -432,7 +432,13 @@ export interface AuthSession {
   /** What this user may do, as resolved by the server (role grants ∩ the
    *  hospital's modules). Never computed on the client. */
   permissions?: { code: string; scope?: 'own' | 'all' | null }[];
+  /** Short-lived access token (minutes). Renewed silently by store/baseQuery. */
   token: string;
+  /** Opaque, long-lived, and the only thing that can mint a new access token.
+   *  Rotates on every use, so whatever came back last is the one to keep.
+   *  Optional so a session stored before this existed still parses — it will
+   *  simply fail to renew once, and sign the user in again. */
+  refreshToken?: string;
   isAuthenticated: boolean;
 }
 
@@ -511,3 +517,48 @@ export interface HospitalCategory {
   signatureFeatures: CategoryFeature[];
 }
 
+
+// ---------------------------------------------------------------------------
+// Consent (DPDP 2023). Mirrors apps/api/app/schemas.py.
+// ---------------------------------------------------------------------------
+
+/** One thing the hospital may ask to do with a person's data.
+ *
+ *  Code-owned and versioned on the backend, so the wording shown here is a row
+ *  the API returns rather than copy living in this bundle — the text a patient
+ *  agreed to has to be reproducible later, and a string in the frontend that
+ *  changed on the next deploy would not be. */
+export interface ConsentPurpose {
+  code: string;
+  label: string;
+  notice: string;
+  version: number;
+  /** True when care genuinely cannot be delivered without it. Everything else
+   *  must be refusable without losing care, which is why the form separates
+   *  them rather than presenting one tickbox. */
+  required: boolean;
+  module: string | null;
+  /** `per_person` is settled at sign-up; `per_event` is asked each time (a
+   *  teleconsultation, under the Telemedicine Practice Guidelines 2020). */
+  cadence: 'per_person' | 'per_event';
+  sortOrder: number;
+}
+
+export interface Consent {
+  id: string;
+  subjectUserId: string;
+  purposeCode: string;
+  version: number;
+  method: 'explicit' | 'implied_patient_initiated';
+  recordedByUserId: string | null;
+  guardianUserId: string | null;
+  guardianName: string;
+  guardianRelationship: string;
+  appointmentId: string | null;
+  grantedAt: string;
+  withdrawnAt: string | null;
+  /** Set when the notice has been reworded since this was given, so the UI can
+   *  re-ask. Not treated as withdrawn — that would stop care over a typo fix. */
+  stale: boolean;
+  purposeLabel: string;
+}

@@ -1,8 +1,11 @@
-import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
+import { createApi } from '@reduxjs/toolkit/query/react';
+import { baseQueryWithReauth } from './baseQuery';
 import type {
   ANCVisit,
   Appointment,
   Baby,
+  Consent,
+  ConsentPurpose,
   Department,
   Doctor,
   GrowthMeasurement,
@@ -37,6 +40,10 @@ export interface ApiAuthResponse {
    *  hospital's enabled modules, resolved server-side on every auth response. */
   permissions?: PermissionGrant[];
   token: string;
+  /** Absent on /auth/me, which reports an existing session rather than opening
+   *  one and so has no new refresh token to hand out. */
+  refreshToken?: string;
+  expiresIn?: number;
   isAuthenticated: boolean;
 }
 
@@ -82,6 +89,27 @@ export interface RegisterBody {
   name: string;
   role: 'patient' | 'doctor' | 'nurse' | 'lab';
   phone?: string;
+  dateOfBirth?: string;
+  gender?: string;
+  bloodGroup?: string;
+  /**
+   * Purpose codes ticked on the notice. The backend refuses the sign-up unless
+   * every required purpose is here — an account cannot exist before there is a
+   * lawful basis for the data it will hold (DPDP 2023).
+   */
+  consents?: string[];
+  /** Named when the person signing up is under 18 (DPDP s.9). */
+  guardianName?: string;
+  guardianRelationship?: string;
+}
+export interface ConsentCreateBody {
+  purposeCode: string;
+  subjectUserId?: string;
+  guardianUserId?: string;
+  guardianName?: string;
+  guardianRelationship?: string;
+  appointmentId?: string;
+  method?: 'explicit' | 'implied_patient_initiated';
 }
 export interface AppointmentCreateBody {
   patientId: string;
@@ -302,35 +330,10 @@ function cleanParams(params: object): Record<string, unknown> {
 export const api = createApi({
   reducerPath: 'api',
 
-  baseQuery: fetchBaseQuery({
-    baseUrl: process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000',
-    prepareHeaders: (headers) => {
-      // Attach JWT from the stored auth session
-      if (typeof window !== 'undefined') {
-        const raw = localStorage.getItem(AUTH_SESSION_KEY);
-        if (raw) {
-          try {
-            const session = JSON.parse(raw) as { token?: string };
-            if (session.token) {
-              headers.set('Authorization', `Bearer ${session.token}`);
-            }
-          } catch {
-            // malformed session — skip
-          }
-        }
-        // Attach the tenant hint so the backend scopes correctly. Only set if
-        // not already provided per-request (e.g. superadmin editing a record
-        // that belongs to a specific hospital), and only when we actually have
-        // one — sending an empty or invented id would name a hospital we have
-        // no reason to believe in.
-        const tenantHint = getCurrentHospitalId();
-        if (tenantHint && !headers.has('X-Hospital-Id')) {
-          headers.set('X-Hospital-Id', tenantHint);
-        }
-      }
-      return headers;
-    },
-  }),
+  // Renewal and tenant headers live in ./baseQuery — a 401 refreshes once and
+  // replays, with concurrent refreshes serialised so token rotation is not
+  // mistaken for theft.
+  baseQuery: baseQueryWithReauth,
 
   tagTypes: [
     'Hospital',
@@ -355,6 +358,7 @@ export const api = createApi({
     'Baby',
     'Growth',
     'Immunization',
+    'Consent',
   ],
 
   endpoints: (build) => ({
@@ -435,6 +439,39 @@ export const api = createApi({
     }),
     me: build.query<ApiAuthResponse, void>({
       query: () => '/auth/me',
+    }),
+    // Ends this session server-side. Clearing localStorage alone would leave a
+    // live session behind on a shared machine — the token would keep working
+    // for anyone who recovered it.
+    logout: build.mutation<void, void>({
+      query: () => ({ url: '/auth/logout', method: 'POST' }),
+    }),
+    // "Sign out everywhere" — the stolen-laptop button.
+    logoutAll: build.mutation<void, void>({
+      query: () => ({ url: '/auth/logout-all', method: 'POST' }),
+    }),
+
+    // ── Consent ──────────────────────────────────────────────────────────────
+    // The notice. Unauthenticated on purpose: the sign-up form has to show it
+    // before it collects anything, and it has no token at that point.
+    listConsentPurposes: build.query<ConsentPurpose[], void>({
+      query: () => '/consent-purposes',
+    }),
+    listConsents: build.query<Consent[], { subjectUserId?: string; includeWithdrawn?: boolean } | void>({
+      query: (params) => ({ url: '/consents', params: params ?? undefined }),
+      providesTags: ['Consent'],
+    }),
+    createConsent: build.mutation<Consent, ConsentCreateBody>({
+      query: (body) => ({ url: '/consents', method: 'POST', body }),
+      invalidatesTags: ['Consent'],
+    }),
+    withdrawConsent: build.mutation<void, { purposeCode: string; subjectUserId?: string }>({
+      query: ({ purposeCode, subjectUserId }) => ({
+        url: `/consents/${purposeCode}/withdraw`,
+        method: 'POST',
+        params: subjectUserId ? { subjectUserId } : undefined,
+      }),
+      invalidatesTags: ['Consent'],
     }),
 
     // ── Appointments ─────────────────────────────────────────────────────────
@@ -1063,6 +1100,12 @@ export const {
   useDeleteHospitalMutation,
   useLoginMutation,
   useRegisterMutation,
+  useLogoutMutation,
+  useLogoutAllMutation,
+  useListConsentPurposesQuery,
+  useListConsentsQuery,
+  useCreateConsentMutation,
+  useWithdrawConsentMutation,
   useMeQuery,
   useListAppointmentsQuery,
   useListAppointmentsPagedQuery,

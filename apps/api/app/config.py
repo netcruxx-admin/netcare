@@ -7,7 +7,26 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+psycopg://localhost:5432/medicare"
     jwt_secret: str = "change-me-to-a-long-random-string"
     jwt_algorithm: str = "HS256"
-    jwt_expire_minutes: int = 60 * 24 * 7  # 7 days
+    # How long an access token is good for. Short on purpose: a JWT cannot be
+    # recalled, so this is the longest a revoked sign-in can keep working in the
+    # worst case. The client refreshes silently, so shortening it costs nothing
+    # a user can feel.
+    access_token_minutes: int = 15
+    # How long a sign-in survives without re-entering a password. The refresh
+    # token *is* revocable (see sessions.py), so this being long is safe in a way
+    # a seven-day access token was not.
+    refresh_token_days: int = 7
+    # Failed sign-ins tolerated from one address for one account, and from one
+    # address across all accounts, within the window below.
+    #
+    # Two thresholds because they stop different attacks: the per-account one
+    # stops guessing at a known email, the per-address one stops spraying one
+    # password across many. Both are scoped to the source address so a remote
+    # attacker cannot lock a real user out of their own account by failing on
+    # purpose — that would turn a defence into a denial of service.
+    login_max_failures_per_account: int = 5
+    login_max_failures_per_ip: int = 20
+    login_failure_window_minutes: int = 15
     cors_origins: str = "http://localhost:3000"
     # Tenant used before login when the request host carries no known subdomain
     # (e.g. the FE talking to the API on bare localhost). Mirrors the frontend's

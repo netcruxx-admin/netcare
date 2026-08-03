@@ -58,6 +58,7 @@ export default function LoginPage() {
           role: result.role,
           permissions: result.permissions,
           token: result.token,
+          refreshToken: result.refreshToken,
           isAuthenticated: true,
         });
 

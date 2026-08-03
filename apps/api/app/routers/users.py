@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from .. import models, schemas
 from ..auth import get_current_user, hash_password
+from .. import sessions
 from ..authz import SCOPE_OWN, require_permission
 from ..database import get_db
 from ..tenancy import get_tenant_id, scoped
@@ -193,6 +194,21 @@ def update_user(
 
     for field, value in fields.items():
         setattr(user, field, value)
+
+    # Changing what someone is, or the password that proves they are them, has
+    # to reach the sessions they already hold. Permissions were always resolved
+    # per request so a demotion took effect immediately; identity was not, and
+    # without this a demoted user keeps their old access until their refresh
+    # window lapses. A password reset carries the same weight — it is what an
+    # admin does *because* an account is suspected compromised, so leaving the
+    # attacker's session alive would defeat the point.
+    if role is not None or password:
+        sessions.revoke_all_for_user(
+            db,
+            user.id,
+            reason=sessions.REVOKED_ROLE_CHANGE if role is not None else sessions.REVOKED_PASSWORD_CHANGE,
+        )
+
     db.commit()
     db.refresh(user)
     return schemas.UserOut.model_validate(user)
@@ -210,5 +226,9 @@ def delete_user(
     # Deleting yourself would leave the session pointing at a missing user.
     if user.id == actor.id:
         raise HTTPException(status.HTTP_409_CONFLICT, "You cannot delete your own account")
+    # Cut the sessions before the row goes: get_current_user would reject them
+    # anyway once the user is missing, but leaving live rows behind pointing at
+    # a deleted account makes the session table lie about who is signed in.
+    sessions.revoke_all_for_user(db, user.id, reason=sessions.REVOKED_USER_DELETED)
     db.delete(user)
     db.commit()

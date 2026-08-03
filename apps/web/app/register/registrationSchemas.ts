@@ -11,7 +11,7 @@
 import * as Yup from 'yup';
 
 export type Role = 'patient';
-export type Step = 'role' | 'account' | 'details';
+export type Step = 'role' | 'account' | 'details' | 'consent';
 
 export const BLOOD_GROUPS = ['A+', 'A-', 'B+', 'B-', 'O+', 'O-', 'AB+', 'AB-'];
 export const GENDERS = ['Female', 'Male', 'Other', 'Prefer not to say'];
@@ -35,6 +35,11 @@ export const initialValues = {
   chronicDiseases: '',
   insuranceProvider: '',
   insuranceNumber: '',
+  // consent — purpose codes ticked on the notice, and the guardian who ticked
+  // them when the patient is under 18 (DPDP s.9).
+  consents: [] as string[],
+  guardianName: '',
+  guardianRelationship: '',
 };
 
 export type FormValues = typeof initialValues;
@@ -60,3 +65,28 @@ export const accountSchema = Yup.object({
 export const patientDetailsSchema = Yup.object({
   emergencyPhone: Yup.string().matches(PHONE_REGEX, 'Please enter a valid phone number').notRequired(),
 });
+
+/** Age in whole years, or null when no usable date of birth was given.
+ *
+ *  Mirrors `_age_on` in apps/api/app/consent.py, and unknown means adult in both
+ *  places: the backend is the one that refuses a minor's sign-up without a
+ *  guardian, so this only decides whether to *show* the guardian fields. */
+export function ageFromDateOfBirth(dateOfBirth: string): number | null {
+  if (!dateOfBirth) return null;
+  const born = new Date(dateOfBirth);
+  if (Number.isNaN(born.getTime())) return null;
+  const today = new Date();
+  let age = today.getFullYear() - born.getFullYear();
+  const beforeBirthday =
+    today.getMonth() < born.getMonth() ||
+    (today.getMonth() === born.getMonth() && today.getDate() < born.getDate());
+  if (beforeBirthday) age -= 1;
+  return age;
+}
+
+export const AGE_OF_MAJORITY = 18;
+
+/** The consent step validates nothing through Yup — which purposes are required
+ *  is the backend's answer, fetched with the notice, so the step gates its own
+ *  submit button on that rather than on a schema written here. */
+export const consentSchema = Yup.object({});

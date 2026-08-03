@@ -24,7 +24,7 @@ from typing import Optional
 from fastapi import Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from . import models
+from . import audit, models
 from .auth import get_current_user
 from .database import get_db
 
@@ -147,7 +147,13 @@ def require_any_permission(*codes: str):
     ) -> dict[str, Optional[str]]:
         permissions = effective_permissions(db, user)
         held = {code: permissions[code] for code in codes if code in permissions}
+        for code, scope in held.items():
+            audit.record_permission(code, scope)
         if not held:
+            # Record what was wanted, so the trail shows a denial rather than a
+            # request with no authority attached.
+            audit.record_permission(codes[0] if codes else "", None)
+            audit.record_action("permission_denied")
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="You do not have permission to do this",
@@ -172,7 +178,12 @@ def require_permission(code: str):
         db: Session = Depends(get_db),
     ) -> Optional[str]:
         permissions = effective_permissions(db, user)
+        # Recorded before the check, so a refusal is audited with the capability
+        # it was reaching for — a denied access attempt is the most interesting
+        # line in a medico-legal review, and it never reaches the handler.
+        audit.record_permission(code, permissions.get(code))
         if code not in permissions:
+            audit.record_action("permission_denied")
             # Deliberately identical whether the permission was never granted or
             # was stripped by the module mask — callers learn nothing about the
             # tenant's plan from a 403.

@@ -215,6 +215,14 @@ class RegisterRequest(CamelModel):
     gender: Optional[str] = None
     blood_group: Optional[str] = None
     date_of_birth: Optional[str] = None
+    # Purposes the person ticked on the notice. Every required purpose must be
+    # present or the sign-up is refused — an account cannot exist before there
+    # is a lawful basis for the data it is about to hold. Codes come from
+    # GET /consent-purposes, which is public for exactly this reason.
+    consents: List[str] = []
+    # Named when the person signing up is under 18 (DPDP s.9).
+    guardian_name: str = ""
+    guardian_relationship: str = ""
 
 
 class UserCreate(CamelModel):
@@ -910,5 +918,101 @@ class AuthResponse(CamelModel):
     # the hospital's enabled modules. Sent on every auth response rather than
     # baked into the JWT, so a superadmin's change takes effect immediately.
     permissions: List[PermissionGrant] = []
+    # Short-lived (minutes). Bound to a server-side session, so a revoked
+    # sign-in stops working on the next request rather than at expiry.
     token: str
+    # Opaque, long-lived, and the only thing that can mint a new access token.
+    # Rotates on every use — the client must store whatever came back last.
+    # Absent on /auth/me, which reports an existing session rather than opening
+    # one and so has no new refresh token to hand out.
+    refresh_token: Optional[str] = None
+    # Seconds until `token` expires, so a client can refresh ahead of a 401
+    # instead of discovering it mid-request.
+    expires_in: int = 0
     is_authenticated: bool = True
+
+
+class RefreshRequest(CamelModel):
+    refresh_token: str
+
+
+# ---------- Audit trail ----------
+class AuditLogOut(OutModel):
+    id: str
+    request_id: str
+    hospital_id: Optional[str] = None
+    actor_user_id: Optional[str] = None
+    actor_role: str = ""
+    actor_ip: str = ""
+    user_agent: str = ""
+    method: str
+    path: str
+    permission: str = ""
+    scope: Optional[str] = None
+    subject_type: str = ""
+    subject_id: str = ""
+    patient_id: Optional[str] = None
+    action: str
+    status_code: int
+    outcome: str
+    detail: str = ""
+    duration_ms: int = 0
+    created_at: str
+    # Resolved server-side: a trail listing every access by "user-3f2a" is not
+    # something a hospital administrator can act on during an inspection.
+    actor_name: str = ""
+    patient_name: str = ""
+
+
+# ---------- Consent ----------
+ConsentCadence = Literal["per_person", "per_event"]
+ConsentMethod = Literal["explicit", "implied_patient_initiated"]
+
+
+class ConsentPurposeOut(OutModel):
+    code: str
+    label: str
+    notice: str
+    version: int = 1
+    required: bool = False
+    module: Optional[str] = None
+    cadence: ConsentCadence = "per_person"
+    sort_order: int = 0
+
+
+class ConsentOut(OutModel):
+    id: str
+    subject_user_id: str
+    purpose_code: str
+    version: int = 1
+    method: ConsentMethod = "explicit"
+    recorded_by_user_id: Optional[str] = None
+    guardian_user_id: Optional[str] = None
+    guardian_name: str = ""
+    guardian_relationship: str = ""
+    appointment_id: Optional[str] = None
+    granted_at: str
+    withdrawn_at: Optional[str] = None
+    # Resolved server-side: true when the notice has been reworded since this
+    # was given, so the UI can re-ask without the client diffing versions.
+    stale: bool = False
+    # The label for the purpose, so a consent list is readable on its own.
+    purpose_label: str = ""
+
+
+class ConsentCreate(CamelModel):
+    purpose_code: str
+    # Omitted when a person consents for themselves. Staff recording consent at
+    # the desk name the subject explicitly.
+    subject_user_id: Optional[str] = None
+    # Required when the subject is under 18 (DPDP s.9). Either identifies the
+    # guardian — a parent consenting for a newborn rarely has an account here.
+    guardian_user_id: Optional[str] = None
+    guardian_name: str = ""
+    guardian_relationship: str = ""
+    # Set for a per-event purpose — which teleconsultation this authorises.
+    appointment_id: Optional[str] = None
+    # A patient who started the consultation themselves is treated as having
+    # consented under the Telemedicine Practice Guidelines 2020; the client says
+    # so here rather than the server guessing from who called the endpoint.
+    method: ConsentMethod = "explicit"

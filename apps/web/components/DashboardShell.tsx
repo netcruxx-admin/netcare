@@ -16,7 +16,12 @@ import {
   type PatientContext,
   type PermissionGrant,
 } from '@/lib/roles';
-import { useGetCurrentHospitalQuery, useListHospitalsQuery, useMeQuery } from '@/store/api';
+import {
+  useGetCurrentHospitalQuery,
+  useListHospitalsQuery,
+  useLogoutMutation,
+  useMeQuery,
+} from '@/store/api';
 import { CommandPalette } from '@/components/CommandPalette';
 
 export function DashboardShell({
@@ -36,6 +41,7 @@ export function DashboardShell({
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const [logoutMutation] = useLogoutMutation();
   const [open, setOpen] = useState(false);
   const [cmdOpen, setCmdOpen] = useState(false);
   const [storedGrants, setStoredGrants] = useState<PermissionGrant[] | undefined>(undefined);
@@ -133,7 +139,16 @@ export function DashboardShell({
   const navHref = (href: string) =>
     selectedHospitalId ? `${href}?h=${selectedHospitalId}` : href;
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    // Told to the server first: clearing localStorage alone leaves the session
+    // live, so a token recovered from a shared machine would keep working for
+    // the rest of the refresh window. The local clear happens either way — a
+    // failed call must not trap someone in a session they asked to leave.
+    try {
+      await logoutMutation().unwrap();
+    } catch {
+      // Offline, or the session was already gone. Nothing to recover from.
+    }
     authStorage.clearSession();
     router.push('/');
   };

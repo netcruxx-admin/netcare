@@ -8,6 +8,7 @@ import { useActiveHospital } from '@/hooks/useActiveHospital';
 import { useRegistration } from './useRegistration';
 import { RoleStep } from './steps/RoleStep';
 import { AccountStep } from './steps/AccountStep';
+import { ConsentStep } from './steps/ConsentStep';
 import { DetailsStep } from './steps/DetailsStep';
 
 export default function RegisterPage() {
@@ -20,6 +21,7 @@ export default function RegisterPage() {
     formik,
     wizardSteps,
     currentIndex,
+    isMinor,
     handleRoleSelect,
     backToRole,
     goToStep,
@@ -39,7 +41,7 @@ export default function RegisterPage() {
       {/* Registration Form */}
       <div className="flex-1 flex items-center justify-center px-6 py-12">
         <div
-          className={`w-full ${step === 'details' ? 'max-w-2xl' : 'max-w-md'} bg-white rounded-lg shadow-xl p-8 space-y-8`}
+          className={`w-full ${step === 'details' || step === 'consent' ? 'max-w-2xl' : 'max-w-md'} bg-white rounded-lg shadow-xl p-8 space-y-8`}
         >
           <FormikProvider value={formik}>
             {step === 'role' ? (
@@ -86,15 +88,23 @@ export default function RegisterPage() {
                   </div>
                 )}
 
-                {step === 'account' ? (
+                {step === 'account' && (
                   <AccountStep
                     formik={formik}
                     needsDetails
                     hasVerify={false}
                     onBack={backToRole}
                   />
-                ) : (
+                )}
+                {step === 'details' && (
                   <DetailsStep formik={formik} onBack={() => goToStep('account')} />
+                )}
+                {step === 'consent' && (
+                  <ConsentStep
+                    formik={formik}
+                    isMinor={isMinor}
+                    onBack={() => goToStep('details')}
+                  />
                 )}
 
                 <div className="text-center">

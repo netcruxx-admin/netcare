@@ -20,7 +20,7 @@ from typing import Optional
 from fastapi import Depends, Header, HTTPException, Request, status
 from sqlalchemy.orm import Query, Session
 
-from . import models
+from . import audit, models
 from .auth import get_current_user
 from .config import settings
 from .database import get_db
@@ -106,6 +106,10 @@ def get_tenant_id(
             )
         if db.get(models.Hospital, x_hospital_id) is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Unknown hospital")
+        # A superadmin has no home tenant, so the trail row would otherwise have
+        # no hospital on it — and a platform user reaching into a hospital's
+        # records is precisely the access that hospital wants to see.
+        audit.record_tenant(x_hospital_id)
         return x_hospital_id
 
     if not user.hospital_id:

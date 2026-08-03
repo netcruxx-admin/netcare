@@ -6,6 +6,7 @@ import { AlertCircle, CheckCircle, ChevronRight } from 'lucide-react';
 import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
 import { homePathForSession } from '@/lib/roles';
+import { ConsentSettings } from './ConsentSettings';
 
 /** The patient's own profile: a four-step wizard, unrelated to the staff form. */
 export function PatientProfile({ session }: RoleViewProps) {
@@ -339,6 +340,11 @@ export function PatientProfile({ session }: RoleViewProps) {
             </div>
           </form>
         </div>
+
+        {/* Below the wizard rather than inside it: consent is not a step you
+            complete once, it is a setting you come back to. Putting it behind
+            "Next" would make withdrawal harder than granting was. */}
+        <ConsentSettings />
       </div>
     </DashboardShell>
   );

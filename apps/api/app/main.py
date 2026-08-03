@@ -8,9 +8,12 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .config import Settings, settings
 from .database import SessionLocal
+from .audit import AuditMiddleware
 from .routers import (
     appointments,
+    audit,
     auth,
+    consents,
     babies,
     departments,
     doctors,
@@ -93,6 +96,11 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# Added before CORS so it ends up *inside* it: Starlette makes the last-added
+# middleware outermost, and a preflight that CORS answers by itself is not an
+# access to anything and should not land in the trail.
+app.add_middleware(AuditMiddleware)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins_list,
@@ -109,12 +117,16 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
     # Without this the browser hides X-Total-Count from JS, and a paginated
-    # table has no way to know how many pages there are.
-    expose_headers=["X-Total-Count"],
+    # table has no way to know how many pages there are. X-Request-Id is exposed
+    # for the same reason: it is the handle that ties a user's bug report to the
+    # exact row in the audit trail.
+    expose_headers=["X-Total-Count", "X-Request-Id"],
 )
 
 for module in (
     auth,
+    audit,
+    consents,
     hospitals,
     patients,
     doctors,

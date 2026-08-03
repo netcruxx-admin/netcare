@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from .. import models, schemas
+from .. import consent as consent_lib, models, schemas
 from ..auth import get_current_user
 from ..authz import (
     SCOPE_OWN,
@@ -147,6 +147,29 @@ def create_appointment(
         **body.model_dump(),
     )
     db.add(appointment)
+    db.flush()
+
+    if appointment.mode == "video":
+        # Telemedicine Practice Guidelines 2020: a teleconsultation is consented
+        # per consultation, not once at sign-up. A booking the patient made
+        # themselves carries implied consent under the Guidelines, so it is
+        # recorded here with that reason on the row; when staff or the doctor
+        # books it, the patient has not been asked yet and the explicit consent
+        # has to be captured before the call — POST /consents does that.
+        own_patient = caller_patient_id(db, user)
+        if own_patient is not None and appointment.patient_id == own_patient:
+            purpose = db.get(models.ConsentPurpose, "telemedicine")
+            if purpose is not None:
+                consent_lib.record(
+                    db,
+                    tenant_id=tenant_id,
+                    subject_user_id=user.id,
+                    purpose=purpose,
+                    method=consent_lib.METHOD_IMPLIED_PATIENT_INITIATED,
+                    recorded_by_user_id=user.id,
+                    appointment_id=appointment.id,
+                )
+
     db.commit()
     db.refresh(appointment)
     return appointment

@@ -3,7 +3,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.orm import Session
 
-from .. import models, schemas
+from .. import audit, models, schemas, sessions
 from ..authz import require_permission
 from ..database import get_db
 from ..utils import ListQuery, list_params, paginate, text_search
@@ -74,6 +74,11 @@ def onboard_hospital(
     )
     db.commit()
     db.refresh(hospital)
+    # Provisioning a tenant also mints its first admin account, so it belongs in
+    # that tenant's own trail from row one — otherwise the hospital's earliest
+    # audit entry is someone already inside it.
+    audit.record_tenant(hospital.id)
+    audit.record_subject("hospital", hospital.id, detail=hospital.subdomain)
     return hospital
 
 
@@ -99,8 +104,19 @@ def update_hospital(
     hospital = db.get(models.Hospital, hospital_id)
     if hospital is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Hospital not found")
-    for field, value in body.model_dump(exclude_unset=True).items():
+    fields = body.model_dump(exclude_unset=True)
+    for field, value in fields.items():
         setattr(hospital, field, value)
+
+    # Suspending a tenant already blocks new sign-ins, but that leaves everyone
+    # currently inside there until their refresh window lapses — which is up to
+    # a week of a suspended hospital still reading records. Cutting the sessions
+    # is what makes the suspension take effect now.
+    if fields.get("status") == "suspended":
+        sessions.revoke_all_for_hospital(
+            db, hospital.id, reason=sessions.REVOKED_HOSPITAL_SUSPENDED
+        )
+
     db.commit()
     db.refresh(hospital)
     return hospital
@@ -115,5 +131,8 @@ def delete_hospital(
     hospital = db.get(models.Hospital, hospital_id)
     if hospital is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Hospital not found")
+    sessions.revoke_all_for_hospital(
+        db, hospital.id, reason=sessions.REVOKED_HOSPITAL_SUSPENDED
+    )
     db.delete(hospital)
     db.commit()
