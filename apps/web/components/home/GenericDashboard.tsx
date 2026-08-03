@@ -4,6 +4,7 @@ import Link from 'next/link';
 import type { HospitalModules } from '@/lib/types';
 import { navRoutesForRole, routeLabel } from '@/lib/roles';
 import { useGetCurrentHospitalQuery } from '@/store/api';
+import { currentSubdomain } from '@/lib/tenant';
 import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
 
@@ -17,7 +18,7 @@ import type { RoleViewProps } from '@/components/RoleView';
  * isn't.
  */
 export function GenericDashboard({ session }: RoleViewProps) {
-  const { data: hospital } = useGetCurrentHospitalQuery();
+  const { data: hospital } = useGetCurrentHospitalQuery(undefined, { skip: !currentSubdomain() });
   const role = session.user.role;
 
   const routes = navRoutesForRole(role, {

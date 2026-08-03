@@ -1,6 +1,7 @@
 'use client';
 
 import { useGetCurrentHospitalQuery, type HospitalInfo } from '@/store/api';
+import { currentSubdomain } from '@/lib/tenant';
 
 /**
  * The active tenant, straight from the backend.
@@ -27,6 +28,6 @@ const PLACEHOLDER: HospitalInfo = {
 };
 
 export function useActiveHospital(): HospitalInfo & { isLoading: boolean } {
-  const { data, isLoading } = useGetCurrentHospitalQuery();
+  const { data, isLoading } = useGetCurrentHospitalQuery(undefined, { skip: !currentSubdomain() });
   return { ...(data ?? PLACEHOLDER), isLoading };
 }

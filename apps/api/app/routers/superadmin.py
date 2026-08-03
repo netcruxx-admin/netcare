@@ -143,7 +143,7 @@ def all_departments(
     return paginate(query, response, params.limit, params.offset).all()
 
 
-@router.get("/users")
+@router.get("/users", response_model=list[schemas.UserOut])
 def all_users(
     response: Response,
     hospital_id: Optional[str] = Query(default=None, alias="hospitalId"),

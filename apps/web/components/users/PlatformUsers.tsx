@@ -2,13 +2,10 @@
 
 import { useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Formik, Form } from 'formik';
-import * as Yup from 'yup';
-import { Users, Plus, X, AlertTriangle, Search, Pencil, Trash2 } from 'lucide-react';
+import { Users, Plus, AlertTriangle, Search, Pencil, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
-import { FormField } from '@/components/form/FormField';
 import { AddUserModal } from '@/components/superadmin/AddUserModal';
 import { HospitalBadge } from '@/components/superadmin/HospitalBadge';
 import { ActionIcon } from '@/components/ActionIcon';
@@ -21,7 +18,6 @@ import {
   useGetSuperadminUsersPagedQuery,
   useListHospitalsQuery,
   useListAssignableRolesQuery,
-  useUpdateUserMutation,
   useDeleteUserMutation,
 } from '@/store/api';
 import type { RoleOption } from '@/store/api';
@@ -40,10 +36,10 @@ export function PlatformUsers({ session }: RoleViewProps) {
   const searchParams = useSearchParams();
   const selectedHospitalId = searchParams.get('h') ?? '';
 
-  const [addModalOpen, setAddModalOpen] = useState(false);
+  const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<User | null>(null);
   const [deleting, setDeleting] = useState<User | null>(null);
-  const [saveError, setSaveError] = useState('');
+  const [deleteError, setDeleteError] = useState('');
   const [roleFilter, setRoleFilter] = useState('all');
 
   // Both filters go to the API, so the page count and the "(filtered)" total
@@ -60,7 +56,6 @@ export function PlatformUsers({ session }: RoleViewProps) {
   const totalUsers = userPage?.total ?? 0;
   const { data: hospitals = [] } = useListHospitalsQuery();
   const { data: assignableRoles = EMPTY_ROLES } = useListAssignableRolesQuery();
-  const [updateUser] = useUpdateUserMutation();
   const [deleteUser] = useDeleteUserMutation();
 
   const roleOptions = useMemo(
@@ -68,35 +63,18 @@ export function PlatformUsers({ session }: RoleViewProps) {
     [assignableRoles],
   );
 
-  const editSchema = useMemo(
-    () =>
-      Yup.object({
-        name: Yup.string().trim().required('Name is required').max(100, 'Too long'),
-        email: Yup.string().trim().email('Enter a valid email').required('Email is required'),
-        phone: Yup.string()
-          .trim()
-          .required('Phone is required')
-          .matches(/^[+]?[\d\s().-]{7,20}$/, 'Enter a valid phone number'),
-        role: Yup.string()
-          .oneOf(roleOptions.map((r) => r.value), 'Select a role')
-          .required('Role is required'),
-      }),
-    [roleOptions],
-  );
-
   const showHospital = !selectedHospitalId;
 
   const confirmDelete = async () => {
     if (!deleting) return;
-    setSaveError('');
+    setDeleteError('');
     try {
       await deleteUser({ id: deleting.id, hospitalId: deleting.hospitalId ?? undefined }).unwrap();
       setDeleting(null);
       refetch();
       toast.success('User deleted');
     } catch (err) {
-      setSaveError(apiError(err, 'Failed to delete user'));
-      setDeleting(null);
+      setDeleteError(apiError(err, 'Failed to delete user'));
     }
   };
 
@@ -107,10 +85,6 @@ export function PlatformUsers({ session }: RoleViewProps) {
       title="All Users"
       subtitle={selectedHospitalId ? 'Filtered by selected hospital' : 'Every staff account across all hospitals'}
     >
-      {saveError && (
-        <p className="mb-4 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{saveError}</p>
-      )}
-
       {/* Search & filter toolbar */}
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <div className="relative flex-1 min-w-[200px] max-w-md">
@@ -142,7 +116,7 @@ export function PlatformUsers({ session }: RoleViewProps) {
           </p>
           {hasPermission(session, 'users.manage') && (
             <button
-              onClick={() => setAddModalOpen(true)}
+              onClick={() => { setEditing(null); setModalOpen(true); }}
               className="flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg text-sm font-medium hover:shadow-lg transition"
             >
               <Plus className="w-4 h-4" /> Add User
@@ -192,7 +166,7 @@ export function PlatformUsers({ session }: RoleViewProps) {
                       <td className="py-3 px-6 text-slate-500 text-sm">{u.createdAt ? new Date(u.createdAt).toLocaleDateString() : '—'}</td>
                       <td className="py-3 px-6 text-right">
                         <div className="flex items-center justify-end gap-1">
-                          {hasPermission(session, 'users.manage') && <ActionIcon icon={Pencil} label="Edit" onClick={() => setEditing(u)} />}
+                          {hasPermission(session, 'users.manage') && <ActionIcon icon={Pencil} label="Edit" onClick={() => { setEditing(u); setModalOpen(true); }} />}
                           {hasPermission(session, 'users.manage') && (isSelf ? (
                             <span className="p-2 text-slate-300 cursor-not-allowed" title="Cannot delete yourself">
                               <Trash2 className="w-4 h-4" />
@@ -217,76 +191,15 @@ export function PlatformUsers({ session }: RoleViewProps) {
         )}
       </div>
 
-      {/* Add modal */}
+      {/* Add / Edit modal — superadmin mode: hospitals prop enables hospital selector */}
       <AddUserModal
-        open={addModalOpen}
-        onClose={() => setAddModalOpen(false)}
-        onSuccess={() => { refetch(); setAddModalOpen(false); }}
+        open={modalOpen}
+        onClose={() => { setModalOpen(false); setEditing(null); }}
+        onSuccess={() => { refetch(); setModalOpen(false); setEditing(null); }}
+        editing={editing}
         preselectedHospitalId={selectedHospitalId}
         hospitals={hospitals}
       />
-
-      {/* Edit modal */}
-      {editing && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg shadow-2xl max-w-md w-full p-6 max-h-[90vh] overflow-y-auto">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-bold text-slate-900">Edit User</h3>
-              <button onClick={() => setEditing(null)} className="text-slate-500 hover:text-slate-900">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <Formik
-              initialValues={{
-                name: editing.name,
-                email: editing.email,
-                phone: editing.phone ?? '',
-                role: editing.role,
-              }}
-              validationSchema={editSchema}
-              onSubmit={async (values, { setSubmitting }) => {
-                setSaveError('');
-                try {
-                  await updateUser({
-                    id: editing.id,
-                    hospitalId: editing.hospitalId,
-                    body: {
-                      name: values.name.trim(),
-                      email: values.email.trim(),
-                      phone: values.phone.trim(),
-                      role: values.role,
-                    },
-                  }).unwrap();
-                  refetch();
-                  setEditing(null);
-                  toast.success('User updated');
-                } catch (err) {
-                  setSaveError(apiError(err, 'Failed to save user'));
-                } finally {
-                  setSubmitting(false);
-                }
-              }}
-            >
-              {({ isSubmitting }) => (
-                <Form className="space-y-4">
-                  <FormField name="name" label="Full Name" placeholder="e.g. John Doe" autoFocus required />
-                  <FormField name="email" label="Email" type="email" placeholder="user@example.com" required />
-                  <FormField name="phone" label="Phone Number" type="tel" placeholder="+91 98765 43210" required />
-                  <FormField name="role" label="Role" as="select" placeholder="Select a role" options={roleOptions} required />
-                  <div className="flex gap-3 pt-2">
-                    <button type="button" onClick={() => setEditing(null)} className="flex-1 px-4 py-2 bg-slate-200 text-slate-700 rounded hover:bg-slate-300 transition">
-                      Cancel
-                    </button>
-                    <button type="submit" disabled={isSubmitting} className="flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded hover:shadow-lg font-semibold transition disabled:opacity-50">
-                      {isSubmitting ? 'Saving…' : 'Save Changes'}
-                    </button>
-                  </div>
-                </Form>
-              )}
-            </Formik>
-          </div>
-        </div>
-      )}
 
       {/* Delete confirmation modal */}
       {deleting && (
@@ -305,8 +218,11 @@ export function PlatformUsers({ session }: RoleViewProps) {
                 </p>
               </div>
             </div>
-            <div className="flex gap-3 mt-6">
-              <button onClick={() => setDeleting(null)} className="flex-1 px-4 py-2 bg-slate-200 text-slate-700 rounded hover:bg-slate-300 transition">
+            {deleteError && (
+              <p className="mt-3 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{deleteError}</p>
+            )}
+            <div className="flex gap-3 mt-4">
+              <button onClick={() => { setDeleting(null); setDeleteError(''); }} className="flex-1 px-4 py-2 bg-slate-200 text-slate-700 rounded hover:bg-slate-300 transition">
                 Cancel
               </button>
               <button onClick={confirmDelete} className="flex-1 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 font-semibold transition">

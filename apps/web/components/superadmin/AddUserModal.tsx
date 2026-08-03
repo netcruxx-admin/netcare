@@ -1,120 +1,217 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useMemo, useState } from 'react';
+import { Formik, Form } from 'formik';
+import * as Yup from 'yup';
 import { X } from 'lucide-react';
 import { toast } from 'sonner';
+import { FormField } from '@/components/form/FormField';
 import { superadminPost } from '@/lib/superadminFetch';
-import { useListAssignableRolesQuery } from '@/store/api';
-import type { HospitalInfo } from '@/store/api';
+import {
+  useCreateUserMutation,
+  useUpdateUserMutation,
+  useListAssignableRolesQuery,
+} from '@/store/api';
+import type { HospitalInfo, RoleOption } from '@/store/api';
+import type { User } from '@/lib/types';
+
+const EMPTY_ROLES: RoleOption[] = [];
 
 interface Props {
   open: boolean;
   onClose: () => void;
   onSuccess: () => void;
-  preselectedHospitalId: string;
-  hospitals: HospitalInfo[];
+  editing?: User | null;
+  // Superadmin-only: pass hospitals to enable hospital selector
+  hospitals?: HospitalInfo[];
+  preselectedHospitalId?: string;
 }
 
-export function AddUserModal({ open, onClose, onSuccess, preselectedHospitalId, hospitals }: Props) {
+export function AddUserModal({
+  open,
+  onClose,
+  onSuccess,
+  editing = null,
+  hospitals,
+  preselectedHospitalId = '',
+}: Props) {
+  const isSuperadmin = hospitals !== undefined;
+  const isEditing = editing !== null;
+
   const [hospitalId, setHospitalId] = useState(preselectedHospitalId);
-  const [form, setForm] = useState({ name: '', email: '', password: 'password123', role: '', phone: '' });
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
 
-  // Staff provisioning goes through POST /users (guarded by users.manage), so
-  // every assignable role is offerable — including ones added at runtime.
-  const { data: assignableRoles } = useListAssignableRolesQuery();
-  const roles = assignableRoles ?? [];
+  const { data: assignableRoles = EMPTY_ROLES } = useListAssignableRolesQuery();
+  const roleOptions = useMemo(
+    () => assignableRoles.map((r) => ({ value: r.code, label: r.label })),
+    [assignableRoles],
+  );
 
-  // Default to the first available role once the catalog arrives.
-  useEffect(() => {
-    if (!form.role && roles.length > 0) {
-      setForm((f) => ({ ...f, role: roles[0].code }));
-    }
-  }, [roles, form.role]);
+  const [createUser] = useCreateUserMutation();
+  const [updateUser] = useUpdateUserMutation();
+
+  const schema = useMemo(
+    () =>
+      Yup.object({
+        name: Yup.string().trim().required('Name is required').max(100, 'Too long'),
+        email: Yup.string().trim().email('Enter a valid email').required('Email is required'),
+        phone: Yup.string()
+          .trim()
+          .required('Phone is required')
+          .matches(/^[+]?[\d\s().-]{7,20}$/, 'Enter a valid phone number'),
+        role: Yup.string()
+          .oneOf(roleOptions.map((r) => r.value), 'Select a role')
+          .required('Role is required'),
+        password: isEditing
+          ? Yup.string()
+          : Yup.string().min(6, 'At least 6 characters').required('Password is required'),
+      }),
+    [isEditing, roleOptions],
+  );
 
   if (!open) return null;
 
-  const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
-    setForm((f) => ({ ...f, [k]: e.target.value }));
-
   const handleClose = () => {
-    setForm({ name: '', email: '', password: 'password123', role: roles[0]?.code ?? '', phone: '' });
-    setError(''); setHospitalId(preselectedHospitalId); onClose();
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!hospitalId) { setError('Please select a hospital'); return; }
-    if (!form.name.trim() || !form.email.trim() || !form.password) { setError('Name, email and password are required'); return; }
-    setLoading(true); setError('');
-    try {
-      await superadminPost('/users', hospitalId, {
-        name: form.name.trim(), email: form.email.trim(),
-        password: form.password, role: form.role, phone: form.phone.trim() || undefined,
-      });
-      toast.success('User created successfully');
-      onSuccess(); handleClose();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create user');
-    } finally {
-      setLoading(false);
-    }
+    setHospitalId(preselectedHospitalId);
+    onClose();
   };
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg">
         <div className="flex justify-between items-center px-6 py-4 border-b border-slate-100">
-          <h3 className="text-lg font-bold text-slate-900">Add User</h3>
-          <button onClick={handleClose} className="text-slate-400 hover:text-slate-900 p-1"><X className="w-5 h-5" /></button>
+          <h3 className="text-lg font-bold text-slate-900">{isEditing ? 'Edit User' : 'Add User'}</h3>
+          <button onClick={handleClose} className="text-slate-400 hover:text-slate-900 p-1">
+            <X className="w-5 h-5" />
+          </button>
         </div>
-        <form onSubmit={handleSubmit} className="px-6 py-5 space-y-4">
-          {!preselectedHospitalId ? (
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Hospital <span className="text-red-500">*</span></label>
-              <select value={hospitalId} onChange={(e) => setHospitalId(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-cyan-500">
-                <option value="">Select a hospital…</option>
-                {hospitals.map((h) => <option key={h.id} value={h.id}>{h.name}</option>)}
-              </select>
-            </div>
-          ) : (
-            <div className="bg-slate-50 rounded-lg px-3 py-2 text-sm text-slate-600">
-              Hospital: <span className="font-medium text-slate-900">{hospitals.find(h => h.id === preselectedHospitalId)?.name}</span>
-            </div>
+
+        <Formik
+          initialValues={{
+            name: editing?.name ?? '',
+            email: editing?.email ?? '',
+            phone: editing?.phone ?? '',
+            role: editing?.role ?? (roleOptions[0]?.value ?? ''),
+            password: '',
+          }}
+          enableReinitialize
+          validationSchema={schema}
+          onSubmit={async (values, { setSubmitting, setStatus }) => {
+            setStatus('');
+            const body = {
+              name: values.name.trim(),
+              email: values.email.trim(),
+              phone: values.phone.trim(),
+              role: values.role,
+            };
+
+            try {
+              if (isEditing) {
+                // Both admin and superadmin edit use the same mutation;
+                // superadmin passes hospitalId so the request targets the right tenant.
+                await updateUser({
+                  id: editing!.id,
+                  hospitalId: isSuperadmin ? editing!.hospitalId : undefined,
+                  body,
+                }).unwrap();
+                toast.success('User updated');
+              } else {
+                if (isSuperadmin) {
+                  if (!hospitalId) {
+                    setStatus('Please select a hospital');
+                    return;
+                  }
+                  await superadminPost('/users', hospitalId, { ...body, password: values.password });
+                } else {
+                  await createUser({ ...body, password: values.password }).unwrap();
+                }
+                toast.success('User created');
+              }
+
+              onSuccess();
+              handleClose();
+            } catch (err) {
+              const msg = err instanceof Error
+                ? err.message
+                : (err as { data?: { detail?: string } })?.data?.detail ?? 'Failed to save user';
+              setStatus(msg);
+            } finally {
+              setSubmitting(false);
+            }
+          }}
+        >
+          {({ isSubmitting, status }) => (
+            <Form className="px-6 py-5 space-y-4">
+              {/* Hospital selector — superadmin only, create only */}
+              {isSuperadmin && !isEditing && (
+                preselectedHospitalId ? (
+                  <div className="bg-slate-50 rounded-lg px-3 py-2 text-sm text-slate-600">
+                    Hospital:{' '}
+                    <span className="font-medium text-slate-900">
+                      {hospitals.find((h) => h.id === preselectedHospitalId)?.name}
+                    </span>
+                  </div>
+                ) : (
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                      Hospital <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      value={hospitalId}
+                      onChange={(e) => setHospitalId(e.target.value)}
+                      className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-cyan-500"
+                    >
+                      <option value="">Select a hospital…</option>
+                      {hospitals.map((h) => (
+                        <option key={h.id} value={h.id}>{h.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                )
+              )}
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="col-span-2 sm:col-span-1">
+                  <FormField name="name" label="Full Name" placeholder="e.g. John Doe" autoFocus required />
+                </div>
+                <div className="col-span-2 sm:col-span-1">
+                  <FormField name="role" label="Role" as="select" placeholder="Select a role" options={roleOptions} required />
+                </div>
+                <div className="col-span-2 sm:col-span-1">
+                  <FormField name="email" label="Email" type="email" placeholder="user@example.com" required />
+                </div>
+                <div className="col-span-2 sm:col-span-1">
+                  <FormField name="phone" label="Phone Number" type="tel" placeholder="+91 98765 43210" required />
+                </div>
+                {!isEditing && (
+                  <div className="col-span-2">
+                    <FormField name="password" label="Password" type="password" placeholder="Minimum 6 characters" required />
+                  </div>
+                )}
+              </div>
+
+              {status && (
+                <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{status}</p>
+              )}
+
+              <div className="flex gap-3 pt-1">
+                <button
+                  type="button"
+                  onClick={handleClose}
+                  className="flex-1 px-4 py-2.5 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 text-sm font-medium transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="flex-1 px-4 py-2.5 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg text-sm font-semibold hover:shadow-lg transition disabled:opacity-50"
+                >
+                  {isSubmitting ? 'Saving…' : isEditing ? 'Save Changes' : 'Add User'}
+                </button>
+              </div>
+            </Form>
           )}
-
-          <div className="grid grid-cols-2 gap-4">
-            <div className="col-span-2 sm:col-span-1">
-              <label className="block text-sm font-medium text-slate-700 mb-1">Full Name <span className="text-red-500">*</span></label>
-              <input value={form.name} onChange={set('name')} placeholder="e.g. Ravi Sharma" className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-cyan-500" />
-            </div>
-            <div className="col-span-2 sm:col-span-1">
-              <label className="block text-sm font-medium text-slate-700 mb-1">Role <span className="text-red-500">*</span></label>
-              <select value={form.role} onChange={set('role')} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-cyan-500">
-                {roles.map((r) => <option key={r.code} value={r.code}>{r.label}</option>)}
-              </select>
-            </div>
-            <div className="col-span-2 sm:col-span-1">
-              <label className="block text-sm font-medium text-slate-700 mb-1">Email <span className="text-red-500">*</span></label>
-              <input type="email" value={form.email} onChange={set('email')} placeholder="user@hospital.com" className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-cyan-500" />
-            </div>
-            <div className="col-span-2 sm:col-span-1">
-              <label className="block text-sm font-medium text-slate-700 mb-1">Phone</label>
-              <input value={form.phone} onChange={set('phone')} placeholder="+91 98765 43210" className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-cyan-500" />
-            </div>
-            <div className="col-span-2">
-              <label className="block text-sm font-medium text-slate-700 mb-1">Password <span className="text-red-500">*</span></label>
-              <input type="password" value={form.password} onChange={set('password')} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-cyan-500" />
-            </div>
-          </div>
-
-          {error && <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</p>}
-          <div className="flex gap-3 pt-1">
-            <button type="button" onClick={handleClose} className="flex-1 px-4 py-2.5 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 text-sm font-medium transition">Cancel</button>
-            <button type="submit" disabled={loading} className="flex-1 px-4 py-2.5 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg text-sm font-semibold hover:shadow-lg transition disabled:opacity-50">{loading ? 'Adding…' : 'Add User'}</button>
-          </div>
-        </form>
+        </Formik>
       </div>
     </div>
   );
