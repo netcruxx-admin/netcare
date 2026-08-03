@@ -72,6 +72,31 @@ patients, doctors, users, roles, permissions, medical_records, prescriptions, pa
 lab (tests/orders/results), medicines, schedule blocks, video slots, maternity (pregnancy/ANC/baby/
 growth/immunization).
 
+## Hospital Registration (the tenant record)
+A hospital is five tables, split by access shape rather than tidiness:
+
+| Table | Holds | Read |
+|-------|-------|------|
+| `hospitals` | runtime config (name, subdomain, category, modules, theme) **+ legal identity** (legal name, entity type, registration no, PAN, GSTIN, HFR id, NABH) **+ `onboarding_status`** | every request |
+| `hospital_profiles` | address, contacts, medical director, bed counts, on-site services, operational config (MRN/invoice format, slot length), branding assets | once per screen |
+| `hospital_licences` | one row per statutory licence, each with its own expiry | expiry sweeps |
+| `hospital_documents` | uploaded scans; metadata only, bytes behind `file_url` | on demand |
+| `hospital_subscriptions` | plan, limits, billing contact — **ours, not theirs** | billing only |
+
+- `status` (active/suspended) and `onboarding_status` (pending/documents_submitted/verified/rejected)
+  are **different axes**. A verified hospital can be suspended for non-payment. Never collapse them.
+- Which licences apply is a rule, not a list: `licences_for(category, modules)` in
+  `app/licences.py`. The frontend fetches it from `GET /hospitals/meta/onboarding` rather than
+  restating it — one copy of the rule.
+- Nothing in registration is *required* to create a tenant. Trials and demos exist before the
+  paperwork does; the wizard records how far it got in `onboarding_status` instead of blocking.
+- `verified_at` / `verified_by` are written by the server on the status transition — facts about
+  what happened are not the client's to send.
+- Uploads go through `app/storage.py`, the one seam that knows whether a file is on local disk or
+  in a bucket. Local disk is dev-only (`UPLOAD_DIR`, served at `/files`).
+- Tenant FKs are `ON DELETE CASCADE` as of `d1a4f8c62b93`. Before that `DELETE /hospitals/{id}`
+  failed on any hospital that had ever been provisioned. `audit_logs` still carries no FK by design.
+
 ## Frontend: Route Architecture
 - **One route per screen**, not one per role: `/dashboard/appointments`, never `/dashboard/admin/appointments`.
 - `apps/web/lib/roles.ts` is the single source for role codes, the route table, and nav — the only
@@ -127,7 +152,11 @@ pnpm dev:all   # starts both frontend and backend
 | `apps/api/app/models.py` | All SQLAlchemy ORM models |
 | `apps/api/app/schemas.py` | All Pydantic request/response schemas |
 | `apps/api/app/seed.py` | Demo data seeder (idempotent) |
-| `apps/api/app/provisioning.py` | Hospital onboarding logic |
+| `apps/api/app/provisioning.py` | Hospital onboarding — creates tenant + profile + licences + subscription + first admin in one transaction |
+| `apps/api/app/licences.py` | **Licence/document catalog + wizard enumerations** (states, councils, entity types) |
+| `apps/api/app/storage.py` | Upload seam — local disk in dev, object storage in prod |
+| `apps/web/components/hospitals/OnboardHospitalWizard.tsx` | **The 8-step onboarding form** |
+| `apps/web/components/hospitals/onboarding/config.ts` | Wizard shape, per-step validation, payload builder |
 | `apps/web/lib/roles.ts` | **Role codes, route table, nav — the one file for routing** |
 | `apps/web/store/api.ts` | Every API call (RTK Query) |
 | `apps/web/lib/types.ts` | All TypeScript interfaces (mirror of the backend schemas) |

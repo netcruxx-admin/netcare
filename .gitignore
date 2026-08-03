@@ -13,6 +13,8 @@ apps/api/.venv/
 apps/api/venv/
 apps/api/*.egg-info/
 apps/api/.env
+# Locally-stored registration document uploads (see app/storage.py).
+apps/api/uploads/
 
 node_modules
 

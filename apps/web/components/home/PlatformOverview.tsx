@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Building2, Users, UserRound, Stethoscope, CalendarDays, LayoutDashboard, Plus } from 'lucide-react';
 import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
-import { OnboardHospitalModal } from '@/components/OnboardHospitalModal';
+import { OnboardHospitalWizard } from '@/components/hospitals/OnboardHospitalWizard';
 import { useGetSuperadminOverviewQuery, useListHospitalsQuery } from '@/store/api';
 
 export function PlatformOverview({ session }: RoleViewProps) {
@@ -109,7 +109,7 @@ export function PlatformOverview({ session }: RoleViewProps) {
         </div>
       </div>
 
-      <OnboardHospitalModal open={modalOpen} onClose={() => setModalOpen(false)} />
+      <OnboardHospitalWizard open={modalOpen} onClose={() => setModalOpen(false)} />
     </DashboardShell>
   );
 }

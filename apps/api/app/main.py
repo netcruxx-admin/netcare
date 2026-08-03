@@ -5,7 +5,9 @@ from alembic import command
 from alembic.config import Config as AlembicConfig
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
+from . import storage
 from .config import Settings, settings
 from .database import SessionLocal
 from .audit import AuditMiddleware
@@ -149,6 +151,20 @@ for module in (
     babies,
 ):
     app.include_router(module.router)
+
+
+# Uploaded registration documents, served straight off disk in development.
+#
+# Unauthenticated by design *and* by limitation: StaticFiles has no hook for a
+# permission check, and the URLs are unguessable (every stored name carries a
+# random id). That is adequate for a laptop and is not access control — a
+# production deployment serves these from object storage behind signed URLs,
+# which is the other half of why app/storage.py exists as a seam.
+app.mount(
+    settings.files_url_prefix,
+    StaticFiles(directory=str(storage.ensure_root())),
+    name="files",
+)
 
 
 @app.get("/", tags=["health"])

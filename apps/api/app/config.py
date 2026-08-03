@@ -38,6 +38,16 @@ class Settings(BaseSettings):
     # pre-login requests, the default-tenant fallback, and the *.localhost CORS
     # regex. Set ENVIRONMENT=production before deploying.
     environment: str = "development"
+    # Where uploaded registration documents are written, and the URL prefix they
+    # are served back under. Local disk is a development affordance: it does not
+    # survive a container restart and does not exist on a second instance, so a
+    # real deployment points these at object storage. Everything above the
+    # storage seam (app/storage.py) is written not to care which it is.
+    upload_dir: str = "uploads"
+    files_url_prefix: str = "/files"
+    # Per-file ceiling. Registration scans are photographs of certificates; 10MB
+    # is generous for one and small enough that a truncated read is cheap.
+    max_upload_mb: int = 10
     # Bootstrap credentials for the platform superadmin, created on first boot.
     # The default password is a demo convenience and is refused in production —
     # set SUPERADMIN_PASSWORD (and ideally SUPERADMIN_EMAIL) before deploying.

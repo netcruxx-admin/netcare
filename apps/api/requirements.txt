@@ -6,4 +6,6 @@ pydantic-settings>=2.7
 PyJWT>=2.10
 bcrypt>=4.2
 alembic>=1.13
+# Multipart bodies — registration document uploads (POST /hospitals/{id}/documents).
+python-multipart>=0.0.20
 psycopg[binary]>=3.2

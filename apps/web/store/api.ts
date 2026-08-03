@@ -47,6 +47,10 @@ export interface ApiAuthResponse {
   isAuthenticated: boolean;
 }
 
+/** Where a tenant is in registration. Orthogonal to `status`, which is whether
+ *  it may sign in today — a verified hospital can still be suspended. */
+export type OnboardingStatus = 'pending' | 'documents_submitted' | 'verified' | 'rejected';
+
 export interface HospitalInfo {
   id: string;
   name: string;
@@ -57,17 +61,195 @@ export interface HospitalInfo {
   modules: Record<string, boolean>;
   theme: Record<string, string>;
   status: string;
+
+  // Legal identity — printed on invoices and reports.
+  legalName: string;
+  entityType: string;
+  ownership: string;
+  registrationNo: string;
+  registrationAuthority: string;
+  registrationValidTill: string;
+  pan: string;
+  gstin: string;
+  hfrId: string;
+  nabhStatus: string;
+  nabhValidTill: string;
+
+  onboardingStatus: OnboardingStatus;
+  verifiedAt: string;
+  verifiedBy: string;
+  goLiveDate: string;
+
   createdAt: string;
+}
+
+/** The registration detail behind a hospital. Every field optional on the way
+ *  in: a tenant is routinely created for a trial before the paperwork lands. */
+export interface HospitalProfileBody {
+  addressLine1?: string;
+  addressLine2?: string;
+  city?: string;
+  district?: string;
+  state?: string;
+  pincode?: string;
+  country?: string;
+  latitude?: number | null;
+  longitude?: number | null;
+
+  phonePrimary?: string;
+  phoneSecondary?: string;
+  phoneEmergency?: string;
+  email?: string;
+  website?: string;
+
+  ownerName?: string;
+  ownerPhone?: string;
+  ownerEmail?: string;
+  medicalDirectorName?: string;
+  medicalDirectorRegNo?: string;
+  medicalDirectorCouncil?: string;
+  medicalDirectorQualification?: string;
+
+  facilityType?: string;
+  bedCount?: number;
+  icuBeds?: number;
+  nicuBeds?: number;
+  emergencyBeds?: number;
+  operationTheatres?: number;
+  ambulanceCount?: number;
+  hasPharmacy?: boolean;
+  hasLab?: boolean;
+  hasRadiology?: boolean;
+  hasBloodBank?: boolean;
+  hasEmergency?: boolean;
+  hasAmbulance?: boolean;
+  specialties?: string[];
+
+  timezone?: string;
+  locale?: string;
+  financialYearStart?: string;
+  opdHours?: Record<string, unknown>;
+  weeklyOff?: string[];
+  appointmentSlotMinutes?: number;
+  invoicePrefix?: string;
+  invoiceSeriesStart?: number;
+  mrnPrefix?: string;
+  mrnFormat?: string;
+
+  logoUrl?: string;
+  letterheadUrl?: string;
+  signatureUrl?: string;
+  notes?: string;
+}
+
+export interface HospitalProfile extends HospitalProfileBody {
+  id: string;
+  hospitalId: string;
+  updatedAt: string;
+}
+
+export type LicenceStatus = 'pending' | 'active' | 'expired' | 'rejected';
+
+export interface HospitalLicenceBody {
+  /** A code from the served catalog (GET /hospitals/meta/onboarding), not a
+   *  closed union — the catalog is reference data the product extends. */
+  type: string;
+  number?: string;
+  issuingAuthority?: string;
+  issuedOn?: string;
+  expiresOn?: string;
+  status?: LicenceStatus;
+  documentUrl?: string;
+  notes?: string;
+}
+
+export interface HospitalLicence extends HospitalLicenceBody {
+  id: string;
+  hospitalId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface HospitalDocument {
+  id: string;
+  hospitalId: string;
+  docType: string;
+  licenceType: string;
+  title: string;
+  fileName: string;
+  fileUrl: string;
+  contentType: string;
+  sizeBytes: number;
+  uploadedBy: string;
+  uploadedAt: string;
+  notes: string;
+}
+
+export interface HospitalSubscriptionBody {
+  plan?: string;
+  status?: string;
+  billingCycle?: string;
+  price?: number;
+  currency?: string;
+  startedOn?: string;
+  trialEndsOn?: string;
+  renewsOn?: string;
+  /** 0 means unmetered — an explicit sentinel, not "unknown". */
+  maxUsers?: number;
+  maxDoctors?: number;
+  maxBeds?: number;
+  billingContactName?: string;
+  billingContactEmail?: string;
+  billingContactPhone?: string;
+  billingAddress?: string;
+  billingGstin?: string;
+  notes?: string;
+}
+
+export interface HospitalSubscription extends HospitalSubscriptionBody {
+  id: string;
+  hospitalId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Everything registered about one hospital — what POST /hospitals returns and
+ *  what the settings screen reads in a single round trip. */
+export interface HospitalDetail {
+  hospital: HospitalInfo;
+  profile: HospitalProfile | null;
+  licences: HospitalLicence[];
+  documents: HospitalDocument[];
+  subscription: HospitalSubscription | null;
 }
 
 export interface HospitalCreateBody {
   name: string;
   subdomain: string;
   category: string;
+  tagline?: string;
+  currency?: string;
   theme?: { primary: string; primaryDark: string };
-  adminEmail?: string;
-  adminPassword?: string;
-  adminName?: string;
+  modules?: Record<string, boolean>;
+
+  legalName?: string;
+  entityType?: string;
+  ownership?: string;
+  registrationNo?: string;
+  registrationAuthority?: string;
+  registrationValidTill?: string;
+  pan?: string;
+  gstin?: string;
+  hfrId?: string;
+  nabhStatus?: string;
+  nabhValidTill?: string;
+  onboardingStatus?: OnboardingStatus;
+  goLiveDate?: string;
+
+  profile?: HospitalProfileBody;
+  licences?: HospitalLicenceBody[];
+  subscription?: HospitalSubscriptionBody;
+  admin?: { email?: string; password?: string; name?: string; phone?: string };
 }
 
 export interface HospitalUpdateBody {
@@ -77,6 +259,50 @@ export interface HospitalUpdateBody {
   category?: string;
   theme?: { primary: string; primaryDark: string };
   status?: string;
+
+  legalName?: string;
+  entityType?: string;
+  ownership?: string;
+  registrationNo?: string;
+  registrationAuthority?: string;
+  registrationValidTill?: string;
+  pan?: string;
+  gstin?: string;
+  hfrId?: string;
+  nabhStatus?: string;
+  nabhValidTill?: string;
+  onboardingStatus?: OnboardingStatus;
+  goLiveDate?: string;
+}
+
+/** One entry of a served catalog. `code`/`label` is the shape every select in
+ *  the wizard needs; licence types carry the extra fields below. */
+export interface CatalogOption {
+  code: string;
+  label: string;
+  description?: string;
+  authority?: string;
+  categories?: string[];
+  module?: string | null;
+  expires?: boolean;
+  sortOrder?: number;
+  tagline?: string;
+}
+
+/** The catalogs the onboarding wizard renders. Fetched rather than restated in
+ *  TypeScript: which licences apply is already a rule on the backend (category
+ *  + enabled modules), and a second copy of it here would drift. */
+export interface OnboardingMeta {
+  licenceTypes: CatalogOption[];
+  documentTypes: CatalogOption[];
+  entityTypes: CatalogOption[];
+  ownershipTypes: CatalogOption[];
+  facilityTypes: CatalogOption[];
+  nabhStatuses: CatalogOption[];
+  subscriptionPlans: CatalogOption[];
+  states: string[];
+  medicalCouncils: string[];
+  categories: CatalogOption[];
 }
 
 // ---------------------------------------------------------------------------
@@ -417,7 +643,17 @@ export const api = createApi({
       query: () => '/hospitals',
       providesTags: ['Hospital'],
     }),
-    onboardHospital: build.mutation<HospitalInfo, HospitalCreateBody>({
+    getHospitalDetail: build.query<HospitalDetail, string>({
+      query: (id) => `/hospitals/${id}/detail`,
+      providesTags: ['Hospital'],
+    }),
+    /** The wizard's selects. Cached per category, since the licence list
+     *  depends on it. */
+    getOnboardingMeta: build.query<OnboardingMeta, string | void>({
+      query: (category) =>
+        category ? `/hospitals/meta/onboarding?category=${category}` : '/hospitals/meta/onboarding',
+    }),
+    onboardHospital: build.mutation<HospitalDetail, HospitalCreateBody>({
       query: (body) => ({ url: '/hospitals', method: 'POST', body }),
       invalidatesTags: ['Hospital'],
     }),
@@ -427,6 +663,82 @@ export const api = createApi({
     }),
     deleteHospital: build.mutation<void, string>({
       query: (id) => ({ url: `/hospitals/${id}`, method: 'DELETE' }),
+      invalidatesTags: ['Hospital'],
+    }),
+    /** PUT, not PATCH: the settings screen edits the whole profile as one form
+     *  and submits all of it. */
+    replaceHospitalProfile: build.mutation<
+      HospitalProfile,
+      { id: string; body: HospitalProfileBody }
+    >({
+      query: ({ id, body }) => ({ url: `/hospitals/${id}/profile`, method: 'PUT', body }),
+      invalidatesTags: ['Hospital'],
+    }),
+    addHospitalLicence: build.mutation<
+      HospitalLicence,
+      { id: string; body: HospitalLicenceBody }
+    >({
+      query: ({ id, body }) => ({ url: `/hospitals/${id}/licences`, method: 'POST', body }),
+      invalidatesTags: ['Hospital'],
+    }),
+    updateHospitalLicence: build.mutation<
+      HospitalLicence,
+      { id: string; licenceId: string; body: Partial<HospitalLicenceBody> }
+    >({
+      query: ({ id, licenceId, body }) => ({
+        url: `/hospitals/${id}/licences/${licenceId}`,
+        method: 'PATCH',
+        body,
+      }),
+      invalidatesTags: ['Hospital'],
+    }),
+    deleteHospitalLicence: build.mutation<void, { id: string; licenceId: string }>({
+      query: ({ id, licenceId }) => ({
+        url: `/hospitals/${id}/licences/${licenceId}`,
+        method: 'DELETE',
+      }),
+      invalidatesTags: ['Hospital'],
+    }),
+    /** Multipart — the one endpoint here that does not send JSON. Do not set
+     *  Content-Type: the browser has to add the multipart boundary itself. */
+    uploadHospitalDocument: build.mutation<
+      HospitalDocument,
+      {
+        id: string;
+        file: File;
+        docType?: string;
+        licenceType?: string;
+        title?: string;
+        notes?: string;
+      }
+    >({
+      query: ({ id, file, docType, licenceType, title, notes }) => {
+        const form = new FormData();
+        form.append('file', file);
+        if (docType) form.append('docType', docType);
+        if (licenceType) form.append('licenceType', licenceType);
+        if (title) form.append('title', title);
+        if (notes) form.append('notes', notes);
+        return { url: `/hospitals/${id}/documents`, method: 'POST', body: form };
+      },
+      invalidatesTags: ['Hospital'],
+    }),
+    deleteHospitalDocument: build.mutation<void, { id: string; documentId: string }>({
+      query: ({ id, documentId }) => ({
+        url: `/hospitals/${id}/documents/${documentId}`,
+        method: 'DELETE',
+      }),
+      invalidatesTags: ['Hospital'],
+    }),
+    replaceHospitalSubscription: build.mutation<
+      HospitalSubscription,
+      { id: string; body: HospitalSubscriptionBody }
+    >({
+      query: ({ id, body }) => ({
+        url: `/hospitals/${id}/subscription`,
+        method: 'PUT',
+        body,
+      }),
       invalidatesTags: ['Hospital'],
     }),
 
@@ -1095,9 +1407,18 @@ export const {
   useDeleteRoleMutation,
   useGetCurrentHospitalQuery,
   useListHospitalsQuery,
+  useGetHospitalDetailQuery,
+  useGetOnboardingMetaQuery,
   useOnboardHospitalMutation,
   useUpdateHospitalMutation,
   useDeleteHospitalMutation,
+  useReplaceHospitalProfileMutation,
+  useAddHospitalLicenceMutation,
+  useUpdateHospitalLicenceMutation,
+  useDeleteHospitalLicenceMutation,
+  useUploadHospitalDocumentMutation,
+  useDeleteHospitalDocumentMutation,
+  useReplaceHospitalSubscriptionMutation,
   useLoginMutation,
   useRegisterMutation,
   useLogoutMutation,

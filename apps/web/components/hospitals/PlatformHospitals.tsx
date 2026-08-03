@@ -6,7 +6,7 @@ import { Building2, Plus, Ban, RotateCcw, Pencil } from 'lucide-react';
 import { toast } from 'sonner';
 import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
-import { OnboardHospitalModal } from '@/components/OnboardHospitalModal';
+import { OnboardHospitalWizard } from '@/components/hospitals/OnboardHospitalWizard';
 import { EditHospitalModal } from '@/components/EditHospitalModal';
 import { ActionIcon } from '@/components/ActionIcon';
 import { apiError } from '@/lib/apiError';
@@ -120,8 +120,12 @@ export function PlatformHospitals({ session }: RoleViewProps) {
         )}
       </div>
 
-      {/* Onboard modal */}
-      <OnboardHospitalModal open={onboardOpen} onClose={() => setOnboardOpen(false)} />
+      {/* Onboard wizard */}
+      <OnboardHospitalWizard
+        open={onboardOpen}
+        onClose={() => setOnboardOpen(false)}
+        onCreated={refetch}
+      />
 
       {/* Edit modal */}
       {editing && (

@@ -1,3 +1,4 @@
+import re
 from typing import List, Literal, Optional, get_args
 
 from pydantic import BaseModel, ConfigDict, ValidationInfo, field_validator
@@ -18,6 +19,24 @@ AppointmentMode = Literal["in-person", "video"]
 PaymentStatus = Literal["pending", "completed", "failed"]
 HospitalCategory = Literal["maternity", "multi-specialty", "dental", "eye", "diagnostic"]
 HospitalStatus = Literal["active", "suspended"]
+# Where a tenant is in *registration*. Orthogonal to HospitalStatus, which is
+# whether it may currently sign in — a verified hospital can be suspended for
+# non-payment, and a trial can be active while its paperwork is still pending.
+OnboardingStatus = Literal["pending", "documents_submitted", "verified", "rejected"]
+EntityType = Literal[
+    "", "proprietorship", "partnership", "llp", "private_limited",
+    "public_limited", "trust", "society", "government",
+]
+OwnershipType = Literal["", "private", "trust", "government", "psu"]
+FacilityType = Literal[
+    "", "clinic", "polyclinic", "nursing_home", "day_care", "hospital",
+    "diagnostic_centre",
+]
+NabhStatus = Literal["none", "pre_accreditation", "entry_level", "full"]
+LicenceStatus = Literal["pending", "active", "expired", "rejected"]
+SubscriptionPlan = Literal["trial", "basic", "standard", "enterprise"]
+SubscriptionStatus = Literal["trial", "active", "past_due", "cancelled", "expired"]
+BillingCycle = Literal["monthly", "quarterly", "annual"]
 TestOrderStatus = Literal[
     "ordered", "sample_collected", "in_progress", "completed", "reviewed"
 ]
@@ -85,6 +104,27 @@ class OutModel(CamelModel):
 
 
 # ---------- Hospital (tenant) ----------
+# Format checks for the statutory identifiers. Deliberately shape-only: they
+# catch a transposed character at the point of entry, and they say nothing about
+# whether the number is real. Verifying that is the superadmin's job against the
+# uploaded certificate, which is why `onboarding_status` exists.
+_PAN_RE = re.compile(r"^[A-Z]{5}[0-9]{4}[A-Z]$")
+_GSTIN_RE = re.compile(r"^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][0-9A-Z][Z][0-9A-Z]$")
+_PINCODE_RE = re.compile(r"^[1-9][0-9]{5}$")
+_SUBDOMAIN_RE = re.compile(r"^[a-z0-9]([a-z0-9-]*[a-z0-9])?$")
+# Reserved because each already resolves to something on the platform; a tenant
+# taking one would shadow it for every user.
+RESERVED_SUBDOMAINS = {
+    "www", "api", "app", "admin", "superadmin", "platform", "dashboard",
+    "mail", "static", "assets", "files", "docs", "status", "support",
+}
+
+
+def _upper_or_empty(value: Optional[str]) -> str:
+    """Statutory ids are canonically uppercase; users type them either way."""
+    return (value or "").strip().upper()
+
+
 class HospitalOut(OutModel):
     id: str
     name: str
@@ -95,22 +135,331 @@ class HospitalOut(OutModel):
     modules: dict = {}
     theme: dict = {}
     status: HospitalStatus = "active"
+
+    # Legal identity
+    legal_name: str = ""
+    entity_type: EntityType = ""
+    ownership: OwnershipType = ""
+    registration_no: str = ""
+    registration_authority: str = ""
+    registration_valid_till: str = ""
+    pan: str = ""
+    gstin: str = ""
+    hfr_id: str = ""
+    nabh_status: NabhStatus = "none"
+    nabh_valid_till: str = ""
+
+    # Onboarding lifecycle
+    onboarding_status: OnboardingStatus = "pending"
+    verified_at: str = ""
+    verified_by: str = ""
+    go_live_date: str = ""
+
     created_at: str
 
 
-class HospitalCreate(CamelModel):
-    """Onboard a new tenant. Modules/theme/departments are seeded from the
-    chosen category template unless overridden."""
+class HospitalProfileBase(CamelModel):
+    """The registration detail behind a hospital. Every field optional: a tenant
+    is routinely created for a trial long before the paperwork lands, and a
+    half-filled profile is the normal intermediate state, not an error."""
 
+    # Address
+    address_line1: str = ""
+    address_line2: str = ""
+    city: str = ""
+    district: str = ""
+    state: str = ""
+    pincode: str = ""
+    country: str = "India"
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+
+    # Contact
+    phone_primary: str = ""
+    phone_secondary: str = ""
+    phone_emergency: str = ""
+    email: str = ""
+    website: str = ""
+
+    # Owner / responsible clinician
+    owner_name: str = ""
+    owner_phone: str = ""
+    owner_email: str = ""
+    medical_director_name: str = ""
+    medical_director_reg_no: str = ""
+    medical_director_council: str = ""
+    medical_director_qualification: str = ""
+
+    # Clinical profile
+    facility_type: FacilityType = ""
+    bed_count: int = 0
+    icu_beds: int = 0
+    nicu_beds: int = 0
+    emergency_beds: int = 0
+    operation_theatres: int = 0
+    ambulance_count: int = 0
+    has_pharmacy: bool = False
+    has_lab: bool = False
+    has_radiology: bool = False
+    has_blood_bank: bool = False
+    has_emergency: bool = False
+    has_ambulance: bool = False
+    specialties: List[str] = []
+
+    # Operations
+    timezone: str = "Asia/Kolkata"
+    locale: str = "en-IN"
+    financial_year_start: str = "04-01"
+    opd_hours: dict = {}
+    weekly_off: List[str] = []
+    appointment_slot_minutes: int = 15
+    invoice_prefix: str = "INV"
+    invoice_series_start: int = 1
+    mrn_prefix: str = "MRN"
+    mrn_format: str = "{prefix}-{seq:06d}"
+
+    # Branding assets
+    logo_url: str = ""
+    letterhead_url: str = ""
+    signature_url: str = ""
+
+    notes: str = ""
+
+    @field_validator("pincode")
+    @classmethod
+    def _check_pincode(cls, value: str) -> str:
+        value = (value or "").strip()
+        if value and not _PINCODE_RE.match(value):
+            raise ValueError("PIN code must be 6 digits and cannot start with 0")
+        return value
+
+    @field_validator(
+        "bed_count", "icu_beds", "nicu_beds", "emergency_beds",
+        "operation_theatres", "ambulance_count",
+    )
+    @classmethod
+    def _non_negative(cls, value: int) -> int:
+        if value is not None and value < 0:
+            raise ValueError("Cannot be negative")
+        return value
+
+    @field_validator("appointment_slot_minutes")
+    @classmethod
+    def _slot_length(cls, value: int) -> int:
+        if value is not None and not (5 <= value <= 240):
+            raise ValueError("Slot length must be between 5 and 240 minutes")
+        return value
+
+
+class HospitalProfileOut(OutModel, HospitalProfileBase):
+    id: str
+    hospital_id: str
+    updated_at: str = ""
+
+
+class HospitalProfileUpdate(HospitalProfileBase):
+    """Full replacement of the profile — the settings screen edits it as one
+    form, so a PUT with the whole object is honest about what it does."""
+
+
+class HospitalLicenceBase(CamelModel):
+    # Not a Literal: the catalog in licences.py is reference data the product
+    # extends, and a superadmin recording a licence type we have not named yet
+    # should not need a deploy.
+    type: str
+    number: str = ""
+    issuing_authority: str = ""
+    issued_on: str = ""
+    expires_on: str = ""
+    status: LicenceStatus = "pending"
+    document_url: str = ""
+    notes: str = ""
+
+    @field_validator("type")
+    @classmethod
+    def _type_present(cls, value: str) -> str:
+        value = (value or "").strip()
+        if not value:
+            raise ValueError("Licence type is required")
+        return value
+
+
+class HospitalLicenceCreate(HospitalLicenceBase):
+    pass
+
+
+class HospitalLicenceUpdate(CamelModel):
+    number: Optional[str] = None
+    issuing_authority: Optional[str] = None
+    issued_on: Optional[str] = None
+    expires_on: Optional[str] = None
+    status: Optional[LicenceStatus] = None
+    document_url: Optional[str] = None
+    notes: Optional[str] = None
+
+
+class HospitalLicenceOut(OutModel, HospitalLicenceBase):
+    id: str
+    hospital_id: str
+    created_at: str
+    updated_at: str = ""
+
+
+class HospitalDocumentOut(OutModel):
+    id: str
+    hospital_id: str
+    doc_type: str = "other"
+    licence_type: str = ""
+    title: str = ""
+    file_name: str = ""
+    file_url: str
+    content_type: str = ""
+    size_bytes: int = 0
+    uploaded_by: str = ""
+    uploaded_at: str
+    notes: str = ""
+
+
+class HospitalSubscriptionBase(CamelModel):
+    plan: SubscriptionPlan = "trial"
+    status: SubscriptionStatus = "trial"
+    billing_cycle: BillingCycle = "monthly"
+    price: float = 0.0
+    currency: str = "INR"
+    started_on: str = ""
+    trial_ends_on: str = ""
+    renews_on: str = ""
+    # 0 means unmetered — see the model. A negative ceiling is meaningless.
+    max_users: int = 0
+    max_doctors: int = 0
+    max_beds: int = 0
+    billing_contact_name: str = ""
+    billing_contact_email: str = ""
+    billing_contact_phone: str = ""
+    billing_address: str = ""
+    billing_gstin: str = ""
+    notes: str = ""
+
+    @field_validator("max_users", "max_doctors", "max_beds", "price")
+    @classmethod
+    def _non_negative(cls, value):
+        if value is not None and value < 0:
+            raise ValueError("Cannot be negative")
+        return value
+
+
+class HospitalSubscriptionOut(OutModel, HospitalSubscriptionBase):
+    id: str
+    hospital_id: str
+    created_at: str
+    updated_at: str = ""
+
+
+class HospitalSubscriptionUpdate(HospitalSubscriptionBase):
+    """Full replacement, same reasoning as the profile."""
+
+
+class HospitalAdminCreate(CamelModel):
+    """The hospital's first admin. Minted with the tenant so it is usable the
+    moment onboarding finishes — a hospital nobody can log into is not onboarded."""
+
+    email: Optional[str] = None
+    password: Optional[str] = None
+    name: Optional[str] = None
+    phone: Optional[str] = ""
+
+
+class HospitalCreate(CamelModel):
+    """Onboard a new tenant, in one request.
+
+    The wizard collects identity, registration, profile, licences and the
+    commercial terms across several screens, but they arrive together and commit
+    together: a hospital that exists with no profile row, or with half its
+    licences, is a state nothing downstream is prepared for. Documents are the
+    one exception — they are files, so they upload against the created hospital
+    afterwards (POST /hospitals/{id}/documents).
+
+    Everything past `category` is optional. Modules, theme, tagline and
+    departments seed from the category template when omitted.
+    """
+
+    # --- Identity (the only required part) ---
     name: str
     subdomain: str
     category: HospitalCategory
-    # Optional theme override (primary/primaryDark colours from the UI picker).
+    tagline: Optional[str] = None
+    currency: Optional[str] = None
     theme: Optional[dict] = None
-    # Optional first admin for the hospital; defaults are derived if omitted.
+    modules: Optional[dict] = None
+
+    # --- Legal identity ---
+    legal_name: str = ""
+    entity_type: EntityType = ""
+    ownership: OwnershipType = ""
+    registration_no: str = ""
+    registration_authority: str = ""
+    registration_valid_till: str = ""
+    pan: str = ""
+    gstin: str = ""
+    hfr_id: str = ""
+    nabh_status: NabhStatus = "none"
+    nabh_valid_till: str = ""
+    onboarding_status: OnboardingStatus = "pending"
+    go_live_date: str = ""
+
+    # --- The rest of the registration ---
+    profile: Optional[HospitalProfileUpdate] = None
+    licences: List[HospitalLicenceCreate] = []
+    subscription: Optional[HospitalSubscriptionUpdate] = None
+    admin: Optional[HospitalAdminCreate] = None
+
+    # Kept from the original flat body so existing callers (and the seed) do not
+    # break; `admin` above wins when both are supplied.
     admin_email: Optional[str] = None
     admin_password: Optional[str] = None
     admin_name: Optional[str] = None
+
+    @field_validator("name")
+    @classmethod
+    def _name_present(cls, value: str) -> str:
+        value = (value or "").strip()
+        if not value:
+            raise ValueError("Hospital name is required")
+        return value
+
+    @field_validator("subdomain")
+    @classmethod
+    def _check_subdomain(cls, value: str) -> str:
+        value = (value or "").strip().lower()
+        if not _SUBDOMAIN_RE.match(value):
+            raise ValueError(
+                "Subdomain may contain only lowercase letters, digits and hyphens, "
+                "and cannot start or end with a hyphen"
+            )
+        if len(value) < 3 or len(value) > 40:
+            raise ValueError("Subdomain must be between 3 and 40 characters")
+        if value in RESERVED_SUBDOMAINS:
+            raise ValueError(f"'{value}' is reserved by the platform")
+        return value
+
+    @field_validator("pan", "gstin", "hfr_id")
+    @classmethod
+    def _normalise_ids(cls, value: Optional[str]) -> str:
+        return _upper_or_empty(value)
+
+    @field_validator("pan")
+    @classmethod
+    def _check_pan(cls, value: str) -> str:
+        if value and not _PAN_RE.match(value):
+            raise ValueError("PAN must look like ABCDE1234F")
+        return value
+
+    @field_validator("gstin")
+    @classmethod
+    def _check_gstin(cls, value: str) -> str:
+        if value and not _GSTIN_RE.match(value):
+            raise ValueError("GSTIN must be 15 characters, e.g. 27ABCDE1234F1Z5")
+        return value
 
 
 class HospitalUpdate(CamelModel):
@@ -121,6 +470,71 @@ class HospitalUpdate(CamelModel):
     theme: Optional[dict] = None
     category: Optional[HospitalCategory] = None
     status: Optional[HospitalStatus] = None
+
+    legal_name: Optional[str] = None
+    entity_type: Optional[EntityType] = None
+    ownership: Optional[OwnershipType] = None
+    registration_no: Optional[str] = None
+    registration_authority: Optional[str] = None
+    registration_valid_till: Optional[str] = None
+    pan: Optional[str] = None
+    gstin: Optional[str] = None
+    hfr_id: Optional[str] = None
+    nabh_status: Optional[NabhStatus] = None
+    nabh_valid_till: Optional[str] = None
+    onboarding_status: Optional[OnboardingStatus] = None
+    go_live_date: Optional[str] = None
+
+    @field_validator("pan", "gstin", "hfr_id")
+    @classmethod
+    def _normalise_ids(cls, value: Optional[str]) -> Optional[str]:
+        # None means "not being changed" on a PATCH, and must survive as None.
+        return value if value is None else _upper_or_empty(value)
+
+    @field_validator("pan")
+    @classmethod
+    def _check_pan(cls, value: Optional[str]) -> Optional[str]:
+        if value and not _PAN_RE.match(value):
+            raise ValueError("PAN must look like ABCDE1234F")
+        return value
+
+    @field_validator("gstin")
+    @classmethod
+    def _check_gstin(cls, value: Optional[str]) -> Optional[str]:
+        if value and not _GSTIN_RE.match(value):
+            raise ValueError("GSTIN must be 15 characters, e.g. 27ABCDE1234F1Z5")
+        return value
+
+
+class HospitalDetailOut(CamelModel):
+    """One hospital with everything registered about it — what the settings
+    screen and the review step of the wizard both read."""
+
+    hospital: HospitalOut
+    profile: Optional[HospitalProfileOut] = None
+    licences: List[HospitalLicenceOut] = []
+    documents: List[HospitalDocumentOut] = []
+    subscription: Optional[HospitalSubscriptionOut] = None
+
+
+class OnboardingMetaOut(CamelModel):
+    """The catalogs the onboarding wizard renders its selects from.
+
+    Served rather than duplicated in the frontend: the licence list is already
+    conditional on category and modules (see licences.py), and a copy in TS
+    would drift the first time a rule changed on one side only.
+    """
+
+    licence_types: List[dict] = []
+    document_types: List[dict] = []
+    entity_types: List[dict] = []
+    ownership_types: List[dict] = []
+    facility_types: List[dict] = []
+    nabh_statuses: List[dict] = []
+    subscription_plans: List[dict] = []
+    states: List[str] = []
+    medical_councils: List[str] = []
+    categories: List[dict] = []
 
 
 # ---------- Permissions ----------

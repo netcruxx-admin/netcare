@@ -23,14 +23,25 @@ from .database import Base
 
 
 class Hospital(Base):
-    """A tenant. Server-side source of truth for everything the frontend used to
-    hardcode in lib/hospitalConfig.ts (name, branding, currency, enabled
-    modules) plus the category that drives its template."""
+    """A tenant, and the facility's legal identity.
+
+    Two things live here and nothing else. The *runtime* config the frontend
+    used to hardcode in lib/hospitalConfig.ts (name, branding, currency, enabled
+    modules, category), and the *legal* identity that has to be printed on an
+    invoice or a report — registration number, PAN, GSTIN, HFR id.
+
+    Both are read on essentially every request path (`scoped()` resolves the
+    tenant, `/hospitals/current` renders the login page), so this table is
+    deliberately kept narrow. The bulky registration detail — address, bed
+    counts, letterheads, billing — is read once per screen at most and lives in
+    HospitalProfile, HospitalLicence, HospitalDocument and
+    HospitalSubscription, each on its own lifecycle.
+    """
 
     __tablename__ = "hospitals"
 
     id = Column(String, primary_key=True)  # e.g. "hosp-1"
-    name = Column(String, nullable=False)
+    name = Column(String, nullable=False)  # display/trading name
     subdomain = Column(String, unique=True, index=True, nullable=False)
     # maternity | multi-specialty | dental | eye | diagnostic
     category = Column(String, nullable=False, default="maternity")
@@ -41,7 +52,264 @@ class Hospital(Base):
     # Branding colors {"primary": "#...", "primaryDark": "#..."}.
     theme = Column(JSON, default=dict)
     status = Column(String, default="active")  # active | suspended
+
+    # --- Legal identity -------------------------------------------------
+    # The name on the registration certificate. Distinct from `name`: "Sunrise
+    # Hospital" trades under that, but invoices must carry "Sunrise Healthcare
+    # Services Pvt Ltd". Blank means "same as name".
+    legal_name = Column(String, default="")
+    # proprietorship | partnership | llp | private_limited | public_limited
+    # | trust | society | government
+    entity_type = Column(String, default="")
+    # private | trust | government | psu — who owns it, which is a different
+    # question from how it is incorporated.
+    ownership = Column(String, default="")
+    # Clinical Establishments Act (or the state Nursing Home Act) registration.
+    registration_no = Column(String, default="")
+    registration_authority = Column(String, default="")
+    registration_valid_till = Column(String, default="")  # ISO date
+
+    # --- Tax ------------------------------------------------------------
+    pan = Column(String, default="")
+    gstin = Column(String, default="")
+
+    # --- National registries / accreditation -----------------------------
+    # ABDM Health Facility Registry id. Without it a record cannot be linked to
+    # a patient's ABHA, so it is worth a column of its own rather than a licence
+    # row: it is an identifier, not something that expires.
+    hfr_id = Column(String, default="")
+    # none | entry_level | full | pre_accreditation
+    nabh_status = Column(String, default="none")
+    nabh_valid_till = Column(String, default="")
+
+    # --- Onboarding lifecycle -------------------------------------------
+    # Where this tenant is in *registration*, which is a different axis from
+    # `status` (whether it may currently log in). A hospital can be `active` and
+    # still be `documents_submitted` — that is the normal case for a trial.
+    # pending | documents_submitted | verified | rejected
+    onboarding_status = Column(String, default="pending")
+    verified_at = Column(String, default="")
+    verified_by = Column(String, default="")  # superadmin user id
+    go_live_date = Column(String, default="")
+
     created_at = Column(String, nullable=False)
+
+
+class HospitalProfile(Base):
+    """Everything about a facility that is registered once and read rarely.
+
+    Split from Hospital because of access shape, not tidiness: `hospitals` is
+    touched by every tenant-scoped request, and these ~40 columns are wanted
+    only by the onboarding wizard, the hospital-settings screen, and whatever
+    prints a letterhead. One row per hospital, created with it.
+    """
+
+    __tablename__ = "hospital_profiles"
+
+    id = Column(String, primary_key=True)
+    hospital_id = Column(
+        String,
+        ForeignKey("hospitals.id", ondelete="CASCADE"),
+        unique=True,
+        index=True,
+        nullable=False,
+    )
+
+    # --- Address ---------------------------------------------------------
+    address_line1 = Column(String, default="")
+    address_line2 = Column(String, default="")
+    city = Column(String, default="")
+    district = Column(String, default="")
+    state = Column(String, default="")
+    pincode = Column(String, default="")
+    country = Column(String, default="India")
+    latitude = Column(Float, nullable=True)
+    longitude = Column(Float, nullable=True)
+
+    # --- Contact ---------------------------------------------------------
+    phone_primary = Column(String, default="")
+    phone_secondary = Column(String, default="")
+    # Kept separate from phone_primary because it is the one printed on a
+    # discharge summary and dialled at 3am; it must not silently inherit the
+    # reception number.
+    phone_emergency = Column(String, default="")
+    email = Column(String, default="")
+    website = Column(String, default="")
+
+    # --- Owner and responsible clinician ---------------------------------
+    owner_name = Column(String, default="")
+    owner_phone = Column(String, default="")
+    owner_email = Column(String, default="")
+    # The registered medical practitioner in charge. Their council registration
+    # number is a statutory requirement and gets printed on reports, so it is a
+    # field rather than free text.
+    medical_director_name = Column(String, default="")
+    medical_director_reg_no = Column(String, default="")
+    medical_director_council = Column(String, default="")
+    medical_director_qualification = Column(String, default="")
+
+    # --- Clinical profile ------------------------------------------------
+    # clinic | polyclinic | nursing_home | day_care | hospital | diagnostic_centre
+    facility_type = Column(String, default="")
+    # Deliberately NOT derived from `modules`. Modules say what the tenant
+    # bought; these say what the building has. A hospital with 40 beds that has
+    # not bought the IPD module is a real and normal state.
+    bed_count = Column(Integer, default=0)
+    icu_beds = Column(Integer, default=0)
+    nicu_beds = Column(Integer, default=0)
+    emergency_beds = Column(Integer, default=0)
+    operation_theatres = Column(Integer, default=0)
+    ambulance_count = Column(Integer, default=0)
+    has_pharmacy = Column(Boolean, default=False)
+    has_lab = Column(Boolean, default=False)
+    has_radiology = Column(Boolean, default=False)
+    has_blood_bank = Column(Boolean, default=False)
+    has_emergency = Column(Boolean, default=False)
+    has_ambulance = Column(Boolean, default=False)
+    specialties = Column(JSON, default=list)  # list[str]
+
+    # --- Operations ------------------------------------------------------
+    timezone = Column(String, default="Asia/Kolkata")
+    locale = Column(String, default="en-IN")
+    financial_year_start = Column(String, default="04-01")  # MM-DD
+    # {"mon": {"open": "09:00", "close": "18:00", "closed": false}, ...}
+    opd_hours = Column(JSON, default=dict)
+    weekly_off = Column(JSON, default=list)  # list of day keys
+    appointment_slot_minutes = Column(Integer, default=15)
+    # Hospitals are opinionated about the shape of an invoice number and an MRN,
+    # and both block go-live if they are wrong. `{prefix}{seq}` style tokens.
+    invoice_prefix = Column(String, default="INV")
+    invoice_series_start = Column(Integer, default=1)
+    mrn_prefix = Column(String, default="MRN")
+    mrn_format = Column(String, default="{prefix}-{seq:06d}")
+
+    # --- Branding assets --------------------------------------------------
+    logo_url = Column(String, default="")
+    letterhead_url = Column(String, default="")
+    signature_url = Column(String, default="")
+
+    notes = Column(Text, default="")
+    updated_at = Column(String, default="")
+
+
+class HospitalLicence(Base):
+    """One statutory licence or registration held by a hospital.
+
+    A table rather than ten nullable columns on `hospitals`, for three reasons:
+    which licences apply depends on the vertical (a dental clinic has no PCPNDT
+    registration, a diagnostic centre has no drug licence), every one of them
+    expires and so needs the same reminder query, and a superadmin must be able
+    to record a licence type the code has never heard of without a migration.
+    `type` is therefore a plain string checked against the catalog in
+    licences.py, not an enum in the schema.
+    """
+
+    __tablename__ = "hospital_licences"
+
+    id = Column(String, primary_key=True)
+    hospital_id = Column(
+        String,
+        ForeignKey("hospitals.id", ondelete="CASCADE"),
+        index=True,
+        nullable=False,
+    )
+    # See LICENCE_TYPES in licences.py — e.g. "drug_licence", "pcpndt", "nabl".
+    type = Column(String, nullable=False)
+    number = Column(String, default="")
+    issuing_authority = Column(String, default="")
+    issued_on = Column(String, default="")  # ISO date
+    expires_on = Column(String, default="")  # ISO date; "" = does not expire
+    # pending | active | expired | rejected. Stored rather than computed from
+    # expires_on because "we have not received it yet" and "it lapsed" are
+    # different states that both mean "not usable".
+    status = Column(String, default="pending")
+    # The scan proving it. Points at a HospitalDocument.file_url rather than a
+    # FK, so a licence can cite a document that was uploaded before it.
+    document_url = Column(String, default="")
+    notes = Column(Text, default="")
+    created_at = Column(String, nullable=False)
+    updated_at = Column(String, default="")
+
+    __table_args__ = (
+        Index("ix_hospital_licences_expiry", "expires_on"),
+    )
+
+
+class HospitalDocument(Base):
+    """A file uploaded as part of a hospital's registration.
+
+    Metadata only — the bytes live wherever `file_url` points (local disk in
+    dev, object storage in production). Separate from HospitalLicence because
+    not every document proves a licence: a rent agreement, a board resolution
+    and a cancelled cheque are all registration evidence with no expiry.
+    """
+
+    __tablename__ = "hospital_documents"
+
+    id = Column(String, primary_key=True)
+    hospital_id = Column(
+        String,
+        ForeignKey("hospitals.id", ondelete="CASCADE"),
+        index=True,
+        nullable=False,
+    )
+    # See DOCUMENT_TYPES in licences.py — "registration_certificate", "pan_card",
+    # "gst_certificate", "licence" (paired with licence_type), "other".
+    doc_type = Column(String, nullable=False, default="other")
+    # When doc_type == "licence", which licence this is the scan of.
+    licence_type = Column(String, default="")
+    title = Column(String, default="")
+    file_name = Column(String, default="")
+    file_url = Column(String, nullable=False)
+    content_type = Column(String, default="")
+    size_bytes = Column(Integer, default=0)
+    uploaded_by = Column(String, default="")  # user id
+    uploaded_at = Column(String, nullable=False)
+    notes = Column(Text, default="")
+
+
+class HospitalSubscription(Base):
+    """The commercial relationship between the platform and one tenant.
+
+    Ours, not theirs — no hospital user should ever be able to write this, and
+    it is the one hospital-shaped table whose lifecycle is billing's rather than
+    the facility's. Kept off `hospitals` so a plan change or a renewal write
+    never touches the row every tenant-scoped request reads.
+    """
+
+    __tablename__ = "hospital_subscriptions"
+
+    id = Column(String, primary_key=True)
+    hospital_id = Column(
+        String,
+        ForeignKey("hospitals.id", ondelete="CASCADE"),
+        unique=True,
+        index=True,
+        nullable=False,
+    )
+    plan = Column(String, default="trial")  # trial | basic | standard | enterprise
+    # trial | active | past_due | cancelled | expired
+    status = Column(String, default="trial")
+    billing_cycle = Column(String, default="monthly")  # monthly | quarterly | annual
+    price = Column(Float, default=0.0)
+    currency = Column(String, default="INR")
+    started_on = Column(String, default="")
+    trial_ends_on = Column(String, default="")
+    renews_on = Column(String, default="")
+    # Seat/scale ceilings. 0 means "unmetered" — an explicit sentinel, because
+    # NULL here would read as "unknown" and a limit that is unknown must not be
+    # enforced as zero.
+    max_users = Column(Integer, default=0)
+    max_doctors = Column(Integer, default=0)
+    max_beds = Column(Integer, default=0)
+    billing_contact_name = Column(String, default="")
+    billing_contact_email = Column(String, default="")
+    billing_contact_phone = Column(String, default="")
+    billing_address = Column(Text, default="")
+    billing_gstin = Column(String, default="")
+    notes = Column(Text, default="")
+    created_at = Column(String, nullable=False)
+    updated_at = Column(String, default="")
 
 
 class Role(Base):
@@ -129,7 +397,7 @@ class User(Base):
 
     id = Column(String, primary_key=True)
     # NULL only for a platform superadmin; every tenant user has a hospital_id.
-    hospital_id = Column(String, ForeignKey("hospitals.id"), index=True, nullable=True)
+    hospital_id = Column(String, ForeignKey("hospitals.id", ondelete="CASCADE"), index=True, nullable=True)
     email = Column(String, index=True, nullable=False)
     password = Column(String, nullable=False)  # bcrypt hash
     name = Column(String, nullable=False)
@@ -162,7 +430,7 @@ class Patient(Base):
     __tablename__ = "patients"
 
     id = Column(String, primary_key=True)
-    hospital_id = Column(String, ForeignKey("hospitals.id"), index=True, nullable=False)
+    hospital_id = Column(String, ForeignKey("hospitals.id", ondelete="CASCADE"), index=True, nullable=False)
     user_id = Column(String, index=True, nullable=False)
     phone = Column(String, default="")
     date_of_birth = Column(String, default="")
@@ -182,7 +450,7 @@ class Doctor(Base):
     __tablename__ = "doctors"
 
     id = Column(String, primary_key=True)
-    hospital_id = Column(String, ForeignKey("hospitals.id"), index=True, nullable=False)
+    hospital_id = Column(String, ForeignKey("hospitals.id", ondelete="CASCADE"), index=True, nullable=False)
     user_id = Column(String, index=True, nullable=False)
     qualification = Column(Text, default="")
     specialization = Column(String, default="")
@@ -201,7 +469,7 @@ class Department(Base):
     __tablename__ = "departments"
 
     id = Column(String, primary_key=True)
-    hospital_id = Column(String, ForeignKey("hospitals.id"), index=True, nullable=False)
+    hospital_id = Column(String, ForeignKey("hospitals.id", ondelete="CASCADE"), index=True, nullable=False)
     name = Column(String, nullable=False)
     description = Column(Text, default="")
 
@@ -210,7 +478,7 @@ class Appointment(Base):
     __tablename__ = "appointments"
 
     id = Column(String, primary_key=True)
-    hospital_id = Column(String, ForeignKey("hospitals.id"), index=True, nullable=False)
+    hospital_id = Column(String, ForeignKey("hospitals.id", ondelete="CASCADE"), index=True, nullable=False)
     patient_id = Column(String, index=True, nullable=False)
     doctor_id = Column(String, index=True, nullable=False)
     department_id = Column(String, nullable=False)
@@ -232,7 +500,7 @@ class MedicalRecord(Base):
     __tablename__ = "medical_records"
 
     id = Column(String, primary_key=True)
-    hospital_id = Column(String, ForeignKey("hospitals.id"), index=True, nullable=False)
+    hospital_id = Column(String, ForeignKey("hospitals.id", ondelete="CASCADE"), index=True, nullable=False)
     patient_id = Column(String, index=True, nullable=False)
     appointment_id = Column(String, index=True, nullable=False)
     doctor_id = Column(String, nullable=False)
@@ -246,7 +514,7 @@ class Payment(Base):
     __tablename__ = "payments"
 
     id = Column(String, primary_key=True)
-    hospital_id = Column(String, ForeignKey("hospitals.id"), index=True, nullable=False)
+    hospital_id = Column(String, ForeignKey("hospitals.id", ondelete="CASCADE"), index=True, nullable=False)
     appointment_id = Column(String, index=True, nullable=False)
     patient_id = Column(String, index=True, nullable=False)
     amount = Column(Float, nullable=False)
@@ -259,7 +527,7 @@ class Prescription(Base):
     __tablename__ = "prescriptions"
 
     id = Column(String, primary_key=True)
-    hospital_id = Column(String, ForeignKey("hospitals.id"), index=True, nullable=False)
+    hospital_id = Column(String, ForeignKey("hospitals.id", ondelete="CASCADE"), index=True, nullable=False)
     appointment_id = Column(String, index=True, nullable=False)
     patient_id = Column(String, index=True, nullable=False)
     doctor_id = Column(String, nullable=False)
@@ -275,7 +543,7 @@ class Vitals(Base):
     __tablename__ = "vitals"
 
     id = Column(String, primary_key=True)
-    hospital_id = Column(String, ForeignKey("hospitals.id"), index=True, nullable=False)
+    hospital_id = Column(String, ForeignKey("hospitals.id", ondelete="CASCADE"), index=True, nullable=False)
     appointment_id = Column(String, index=True, nullable=False)
     patient_id = Column(String, index=True, nullable=False)
     doctor_id = Column(String, nullable=False)
@@ -298,7 +566,7 @@ class Medicine(Base):
     __tablename__ = "medicines"
 
     id = Column(String, primary_key=True)
-    hospital_id = Column(String, ForeignKey("hospitals.id"), index=True, nullable=False)
+    hospital_id = Column(String, ForeignKey("hospitals.id", ondelete="CASCADE"), index=True, nullable=False)
     name = Column(String, nullable=False)
     category = Column(String, default="")
     form = Column(String, default="")
@@ -311,7 +579,7 @@ class LabTest(Base):
     __tablename__ = "lab_tests"
 
     id = Column(String, primary_key=True)
-    hospital_id = Column(String, ForeignKey("hospitals.id"), index=True, nullable=False)
+    hospital_id = Column(String, ForeignKey("hospitals.id", ondelete="CASCADE"), index=True, nullable=False)
     name = Column(String, nullable=False)
     category = Column(String, default="")
     sample_type = Column(String, default="")
@@ -330,7 +598,7 @@ class TestOrder(Base):
     __tablename__ = "test_orders"
 
     id = Column(String, primary_key=True)
-    hospital_id = Column(String, ForeignKey("hospitals.id"), index=True, nullable=False)
+    hospital_id = Column(String, ForeignKey("hospitals.id", ondelete="CASCADE"), index=True, nullable=False)
     patient_id = Column(String, index=True, nullable=False)
     doctor_id = Column(String, index=True, nullable=False)
     appointment_id = Column(String, nullable=True)
@@ -348,7 +616,7 @@ class TestResult(Base):
     __tablename__ = "test_results"
 
     id = Column(String, primary_key=True)
-    hospital_id = Column(String, ForeignKey("hospitals.id"), index=True, nullable=False)
+    hospital_id = Column(String, ForeignKey("hospitals.id", ondelete="CASCADE"), index=True, nullable=False)
     order_id = Column(String, index=True, nullable=False)
     test_id = Column(String, nullable=False)
     test_name = Column(String, default="")
@@ -368,7 +636,7 @@ class ScheduleBlock(Base):
     __tablename__ = "schedule_blocks"
 
     id = Column(String, primary_key=True)
-    hospital_id = Column(String, ForeignKey("hospitals.id"), index=True, nullable=False)
+    hospital_id = Column(String, ForeignKey("hospitals.id", ondelete="CASCADE"), index=True, nullable=False)
     doctor_id = Column(String, index=True, nullable=False)
     date = Column(String, nullable=False)
     start_time = Column(String, nullable=False)
@@ -387,7 +655,7 @@ class VideoSlot(Base):
     __tablename__ = "video_slots"
 
     id = Column(String, primary_key=True)
-    hospital_id = Column(String, ForeignKey("hospitals.id"), index=True, nullable=False)
+    hospital_id = Column(String, ForeignKey("hospitals.id", ondelete="CASCADE"), index=True, nullable=False)
     doctor_id = Column(String, index=True, nullable=False)
     date = Column(String, nullable=False)
     time = Column(String, nullable=False)
@@ -406,7 +674,7 @@ class PregnancyRecord(Base):
     __tablename__ = "pregnancy_records"
 
     id = Column(String, primary_key=True)
-    hospital_id = Column(String, ForeignKey("hospitals.id"), index=True, nullable=False)
+    hospital_id = Column(String, ForeignKey("hospitals.id", ondelete="CASCADE"), index=True, nullable=False)
     patient_id = Column(String, index=True, nullable=False)
     lmp = Column(String, nullable=False)  # last menstrual period
     edd = Column(String, nullable=False)  # estimated due date
@@ -425,7 +693,7 @@ class ANCVisit(Base):
     __tablename__ = "anc_visits"
 
     id = Column(String, primary_key=True)
-    hospital_id = Column(String, ForeignKey("hospitals.id"), index=True, nullable=False)
+    hospital_id = Column(String, ForeignKey("hospitals.id", ondelete="CASCADE"), index=True, nullable=False)
     pregnancy_id = Column(String, index=True, nullable=False)
     patient_id = Column(String, index=True, nullable=False)
     doctor_id = Column(String, nullable=False)
@@ -450,7 +718,7 @@ class Baby(Base):
     __tablename__ = "babies"
 
     id = Column(String, primary_key=True)
-    hospital_id = Column(String, ForeignKey("hospitals.id"), index=True, nullable=False)
+    hospital_id = Column(String, ForeignKey("hospitals.id", ondelete="CASCADE"), index=True, nullable=False)
     mother_patient_id = Column(String, index=True, nullable=False)
     pregnancy_id = Column(String, nullable=True)
     name = Column(String, nullable=False)
@@ -468,7 +736,7 @@ class GrowthMeasurement(Base):
     __tablename__ = "growth_measurements"
 
     id = Column(String, primary_key=True)
-    hospital_id = Column(String, ForeignKey("hospitals.id"), index=True, nullable=False)
+    hospital_id = Column(String, ForeignKey("hospitals.id", ondelete="CASCADE"), index=True, nullable=False)
     baby_id = Column(String, index=True, nullable=False)
     date = Column(String, nullable=False)
     weight = Column(Float, default=0)
@@ -481,7 +749,7 @@ class Immunization(Base):
     __tablename__ = "immunizations"
 
     id = Column(String, primary_key=True)
-    hospital_id = Column(String, ForeignKey("hospitals.id"), index=True, nullable=False)
+    hospital_id = Column(String, ForeignKey("hospitals.id", ondelete="CASCADE"), index=True, nullable=False)
     baby_id = Column(String, index=True, nullable=False)
     vaccine = Column(String, nullable=False)
     age_label = Column(String, default="")
@@ -612,7 +880,7 @@ class Consent(Base):
     __tablename__ = "consents"
 
     id = Column(String, primary_key=True)
-    hospital_id = Column(String, ForeignKey("hospitals.id"), index=True, nullable=False)
+    hospital_id = Column(String, ForeignKey("hospitals.id", ondelete="CASCADE"), index=True, nullable=False)
     # The person the data is about. user_id rather than patient_id because staff
     # have data-protection rights too, and their consent has nowhere else to go.
     subject_user_id = Column(String, index=True, nullable=False)

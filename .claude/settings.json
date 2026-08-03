@@ -50,7 +50,11 @@
       "Bash(psql -d postgres -t -A -c \"select datname from pg_database where datname like 'medicare%';\")",
       "Bash(psql -d medicare -t -c \"select relname, n_live_tup from pg_stat_user_tables where n_live_tup>0 order by relname;\")",
       "Bash(python3 -c \"import fastapi, sys; print\\(sys.executable\\)\")",
-      "Bash(git add *)"
+      "Bash(git add *)",
+      "Bash(venv/bin/python -c ' *)",
+      "Bash(./venv/bin/python -c ' *)",
+      "Bash(PYTHONPATH=. ./venv/bin/python /private/tmp/claude-501/-Users-abhirsharma-Desktop-Projects-carbonhealth/97e43d1f-8455-4e34-9979-4748c7fdd0ad/scratchpad/e2e2.py)",
+      "Bash(PYTHONPATH=. ./venv/bin/python /private/tmp/claude-501/-Users-abhirsharma-Desktop-Projects-carbonhealth/97e43d1f-8455-4e34-9979-4748c7fdd0ad/scratchpad/e2e.py)"
     ]
   }
 }
