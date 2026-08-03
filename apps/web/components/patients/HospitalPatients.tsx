@@ -1,19 +1,18 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import Link from 'next/link';
 import { Search, UserRound } from 'lucide-react';
 import { DashboardShell } from '@/components/DashboardShell';
 import { ExportButton } from '@/components/ExportButton';
 import { TablePagination } from '@/components/TablePagination';
-import { useDebounced } from '@/hooks/useDebounced';
-
-/** Rows per page for the patients table. */
-const PAGE_SIZE = 20;
+import { useServerTable } from '@/hooks/useServerTable';
 import type { RoleViewProps } from '@/components/RoleView';
+import type { Patient } from '@/lib/types';
 import { adminRole, doctorRole, nurseRole } from '@/lib/roles';
 import {
   useListPatientsPagedQuery,
+  useLazyListPatientsPagedQuery,
 } from '@/store/api';
 
 /**
@@ -116,11 +115,11 @@ const viewByRole: Record<
       bloodGroupColumn,
       { header: 'Phone', render: (row) => row.phone },
       {
-        header: 'Appointments',
+        header: 'Visits',
         render: (row) => <span className="font-semibold text-slate-900">{row.appointments}</span>,
       },
     ],
-    exportHeaders: ['Name', 'Email', 'Gender', 'Blood Group', 'Phone', 'Appointments'],
+    exportHeaders: ['Name', 'Email', 'Gender', 'Blood Group', 'Phone', 'Visits'],
     exportRow: (row) => [row.name, row.email, row.gender, row.bloodGroup, row.phone, row.appointments],
     sort: (a, b) => b.appointments - a.appointments,
   },
@@ -150,11 +149,26 @@ const viewByRole: Record<
   },
 };
 
+function toRow(patient: Patient): PatientRow {
+  return {
+    patientId: patient.id,
+    name: patient.user?.name ?? 'Patient',
+    email: patient.user?.email ?? '—',
+    phone: patient.phone || patient.user?.phone || '—',
+    gender: patient.gender || '—',
+    bloodGroup: patient.bloodGroup || '—',
+    // Aggregated by the API for this page (withStats).
+    visits: patient.visitCount ?? 0,
+    appointments: patient.visitCount ?? 0,
+    lastVisit: patient.lastVisit ?? null,
+    nextVisit: patient.nextVisit ?? null,
+  };
+}
+
 export function HospitalPatients({ session }: RoleViewProps) {
   const role = session.user.role;
   const view = viewByRole[role] ?? viewByRole[nurseRole];
-  const [query, setQuery] = useState('');
-  const [page, setPage] = useState(1);
+  const table = useServerTable();
 
   // No appointments fetch here any more: a doctor's `patients.read` grant is
   // already scoped to the patients they treat, and the visit columns arrive
@@ -162,39 +176,17 @@ export function HospitalPatients({ session }: RoleViewProps) {
   // Search and paging run server-side; the per-row visit aggregates come with
   // the page (withStats) rather than being derived from every appointment in
   // the hospital.
-  const debouncedQuery = useDebounced(query);
+  const listArgs = { q: table.q.trim() || undefined, withStats: true };
   const { data: patientPage } = useListPatientsPagedQuery({
-    q: debouncedQuery.trim() || undefined,
-    withStats: true,
-    limit: PAGE_SIZE,
-    offset: (page - 1) * PAGE_SIZE,
+    ...listArgs,
+    limit: table.limit,
+    offset: table.offset,
   });
   const patients = patientPage?.items ?? [];
   const totalPatients = patientPage?.total ?? 0;
+  const [fetchAllForExport] = useLazyListPatientsPagedQuery();
 
-  useEffect(() => {
-    setPage(1);
-  }, [debouncedQuery]);
-
-  const rows = useMemo(
-    () =>
-      patients
-        .map((patient) => ({
-          patientId: patient.id,
-          name: patient.user?.name ?? 'Patient',
-          email: patient.user?.email ?? '—',
-          phone: patient.phone || patient.user?.phone || '—',
-          gender: patient.gender || '—',
-          bloodGroup: patient.bloodGroup || '—',
-          // Aggregated by the API for this page (withStats).
-          visits: patient.visitCount ?? 0,
-          appointments: patient.visitCount ?? 0,
-          lastVisit: patient.lastVisit ?? null,
-          nextVisit: patient.nextVisit ?? null,
-        }))
-        .sort(view.sort),
-    [patients, view],
-  );
+  const rows = useMemo(() => patients.map(toRow).sort(view.sort), [patients, view]);
 
   return (
     <DashboardShell
@@ -208,8 +200,8 @@ export function HospitalPatients({ session }: RoleViewProps) {
           <div className="relative flex-1 min-w-[220px] max-w-md">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
             <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
+              value={table.search}
+              onChange={(e) => table.setSearch(e.target.value)}
               placeholder={view.searchPlaceholder}
               className="w-full pl-9 pr-3 py-2 bg-white rounded-lg shadow text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
             />
@@ -219,6 +211,11 @@ export function HospitalPatients({ session }: RoleViewProps) {
               filename="patients"
               headers={view.exportHeaders}
               rows={rows.map(view.exportRow)}
+              // The table shows one page; the export means every matching row.
+              getRows={async () => {
+                const all = await fetchAllForExport(listArgs).unwrap();
+                return all.items.map(toRow).sort(view.sort).map(view.exportRow!);
+              }}
             />
           )}
         </div>
@@ -267,10 +264,10 @@ export function HospitalPatients({ session }: RoleViewProps) {
                 </tbody>
               </table>
               <TablePagination
-                page={page}
-                pageSize={PAGE_SIZE}
+                page={table.page}
+                pageSize={table.pageSize}
                 total={totalPatients}
-                onPageChange={setPage}
+                onPageChange={table.setPage}
               />
             </div>
           )}

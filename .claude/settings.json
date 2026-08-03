@@ -48,7 +48,9 @@
       "Bash(psql -d postgres -q -c \"select pg_terminate_backend\\(pid\\) from pg_stat_activity where datname='medicare_nulltest';\")",
       "Bash(dropdb --if-exists medicare_nulltest)",
       "Bash(psql -d postgres -t -A -c \"select datname from pg_database where datname like 'medicare%';\")",
-      "Bash(psql -d medicare -t -c \"select relname, n_live_tup from pg_stat_user_tables where n_live_tup>0 order by relname;\")"
+      "Bash(psql -d medicare -t -c \"select relname, n_live_tup from pg_stat_user_tables where n_live_tup>0 order by relname;\")",
+      "Bash(python3 -c \"import fastapi, sys; print\\(sys.executable\\)\")",
+      "Bash(git add *)"
     ]
   }
 }

@@ -3,7 +3,7 @@ Tenant-scoped; growth/immunizations are nested under a baby."""
 
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.orm import Session
 
 from .. import models, schemas
@@ -11,7 +11,16 @@ from ..auth import get_current_user
 from ..authz import require_permission
 from ..database import get_db
 from ..tenancy import get_tenant_id, scoped
-from ..utils import new_id, now_iso
+from ..utils import (
+    ListQuery,
+    attach_patient_names,
+    list_params,
+    new_id,
+    now_iso,
+    paginate,
+    patient_name_search,
+    text_search,
+)
 
 router = APIRouter(prefix="/babies", tags=["babies"])
 
@@ -27,7 +36,9 @@ def _get_baby(db: Session, baby_id: str, tenant_id: str) -> models.Baby:
 
 @router.get("", response_model=list[schemas.BabyOut])
 def list_babies(
+    response: Response,
     mother_patient_id: Optional[str] = Query(default=None, alias="motherPatientId"),
+    params: ListQuery = Depends(list_params),
     db: Session = Depends(get_db),
     scope: str = Depends(require_permission("babies.read")),
     tenant_id: str = Depends(get_tenant_id),
@@ -35,7 +46,21 @@ def list_babies(
     query = scoped(db, models.Baby, tenant_id)
     if mother_patient_id:
         query = query.filter(models.Baby.mother_patient_id == mother_patient_id)
-    return query.all()
+    # The card shows the mother's name, so that is what gets typed in.
+    query = patient_name_search(
+        query,
+        models.Baby,
+        params.q,
+        models.Baby.name,
+        patient_id_column=models.Baby.mother_patient_id,
+    )
+    query = query.order_by(models.Baby.date_of_birth.desc(), models.Baby.id)
+    rows = paginate(query, response, params.limit, params.offset).all()
+    out = [schemas.BabyOut.model_validate(row) for row in rows]
+    attach_patient_names(
+        db, out, id_attr="mother_patient_id", name_attr="mother_name"
+    )
+    return out
 
 
 @router.post("", response_model=schemas.BabyOut, status_code=status.HTTP_201_CREATED)
@@ -71,17 +96,19 @@ def get_baby(
 @router.get("/{baby_id}/growth", response_model=list[schemas.GrowthMeasurementOut])
 def list_growth(
     baby_id: str,
+    response: Response,
+    params: ListQuery = Depends(list_params),
     db: Session = Depends(get_db),
     scope: str = Depends(require_permission("babies.read")),
     tenant_id: str = Depends(get_tenant_id),
 ):
     _get_baby(db, baby_id, tenant_id)  # 404s if the baby isn't in this tenant
-    return (
+    query = (
         scoped(db, models.GrowthMeasurement, tenant_id)
         .filter(models.GrowthMeasurement.baby_id == baby_id)
         .order_by(models.GrowthMeasurement.date)
-        .all()
     )
+    return paginate(query, response, params.limit, params.offset).all()
 
 
 @router.post(
@@ -114,17 +141,19 @@ def add_growth(
 @router.get("/{baby_id}/immunizations", response_model=list[schemas.ImmunizationOut])
 def list_immunizations(
     baby_id: str,
+    response: Response,
+    params: ListQuery = Depends(list_params),
     db: Session = Depends(get_db),
     scope: str = Depends(require_permission("babies.read")),
     tenant_id: str = Depends(get_tenant_id),
 ):
     _get_baby(db, baby_id, tenant_id)
-    return (
+    query = (
         scoped(db, models.Immunization, tenant_id)
         .filter(models.Immunization.baby_id == baby_id)
         .order_by(models.Immunization.due_date)
-        .all()
     )
+    return paginate(query, response, params.limit, params.offset).all()
 
 
 @router.post(

@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from typing import Optional
+
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.orm import Session
 
 from .. import models, schemas
@@ -6,18 +8,26 @@ from ..auth import get_current_user
 from ..authz import require_permission
 from ..database import get_db
 from ..tenancy import get_tenant_id, scoped
-from ..utils import new_id
+from ..utils import ListQuery, list_params, new_id, paginate, text_search
 
 router = APIRouter(prefix="/lab-tests", tags=["lab-tests"])
 
 
 @router.get("", response_model=list[schemas.LabTestOut])
 def list_lab_tests(
+    response: Response,
+    category: Optional[str] = Query(default=None),
+    params: ListQuery = Depends(list_params),
     db: Session = Depends(get_db),
     scope: str = Depends(require_permission("lab_tests.read")),
     tenant_id: str = Depends(get_tenant_id),
 ):
-    return scoped(db, models.LabTest, tenant_id).all()
+    query = scoped(db, models.LabTest, tenant_id)
+    if category:
+        query = query.filter(models.LabTest.category == category)
+    query = text_search(query, [models.LabTest.name, models.LabTest.category, models.LabTest.sample_type], params.q)
+    query = query.order_by(models.LabTest.name)
+    return paginate(query, response, params.limit, params.offset).all()
 
 
 @router.post("", response_model=schemas.LabTestOut, status_code=status.HTTP_201_CREATED)

@@ -1,30 +1,43 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import Link from 'next/link';
 import { Search, Pill } from 'lucide-react';
-import { useListPatientsQuery, useListPrescriptionsQuery } from '@/store/api';
+import type { Prescription } from '@/lib/types';
+import { useLazyListPrescriptionsPagedQuery, useListPrescriptionsPagedQuery } from '@/store/api';
 import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
 import { ExportButton } from '@/components/ExportButton';
+import { TablePagination } from '@/components/TablePagination';
+import { useServerTable } from '@/hooks/useServerTable';
+
+const toRow = (rx: Prescription) => ({
+  ...rx,
+  // Resolved by the API — this screen no longer fetches every patient the
+  // doctor treats just to put a name beside a medicine.
+  patient: rx.patientName || 'Patient',
+  date: rx.createdAt.split('T')[0],
+});
+
+const exportRow = (r: ReturnType<typeof toRow>) => [
+  r.date, r.patient, r.medicineName, r.dosage, r.frequency, r.duration, r.instructions,
+];
 
 export function DoctorPrescriptions({ session }: RoleViewProps) {
-  const [query, setQuery] = useState('');
+  const table = useServerTable();
 
-  // Both are already narrowed to this doctor's own records by the API.
-  const { data: prescriptions = [] } = useListPrescriptionsQuery();
-  const { data: patients = [] } = useListPatientsQuery();
+  // Already narrowed to this doctor's own records by the API, and searched,
+  // sorted and paged there too.
+  const listArgs = { q: table.q.trim() || undefined };
+  const { data: prescriptionPage } = useListPrescriptionsPagedQuery({
+    ...listArgs,
+    limit: table.limit,
+    offset: table.offset,
+  });
+  const totalPrescriptions = prescriptionPage?.total ?? 0;
+  const [fetchAllForExport] = useLazyListPrescriptionsPagedQuery();
 
-  const rows = useMemo(() => {
-    const patientName = (id: string) =>
-      patients.find((p) => p.id === id)?.user?.name ?? 'Patient';
-
-    const q = query.trim().toLowerCase();
-    return prescriptions
-      .map((rx) => ({ ...rx, patient: patientName(rx.patientId), date: rx.createdAt.split('T')[0] }))
-      .filter((r) => !q || r.patient.toLowerCase().includes(q) || r.medicineName.toLowerCase().includes(q))
-      .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
-  }, [prescriptions, patients, query]);
+  const rows = useMemo(() => (prescriptionPage?.items ?? []).map(toRow), [prescriptionPage]);
 
   return (
     <DashboardShell role={session.user.role} userName={session.user.name} title="Prescriptions" subtitle="Medicines you have prescribed">
@@ -33,8 +46,8 @@ export function DoctorPrescriptions({ session }: RoleViewProps) {
           <div className="relative flex-1 min-w-[220px] max-w-md">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
             <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
+              value={table.search}
+              onChange={(e) => table.setSearch(e.target.value)}
               placeholder="Search patient or medicine…"
               className="w-full pl-9 pr-3 py-2 bg-white rounded-lg shadow text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
             />
@@ -42,13 +55,17 @@ export function DoctorPrescriptions({ session }: RoleViewProps) {
           <ExportButton
             filename="prescriptions"
             headers={['Date', 'Patient', 'Medicine', 'Dosage', 'Frequency', 'Duration', 'Instructions']}
-            rows={rows.map((r) => [r.date, r.patient, r.medicineName, r.dosage, r.frequency, r.duration, r.instructions])}
+            rows={rows.map(exportRow)}
+            getRows={async () => {
+              const all = await fetchAllForExport(listArgs).unwrap();
+              return all.items.map(toRow).map(exportRow);
+            }}
           />
         </div>
 
         <div className="bg-white rounded-lg shadow">
           <div className="px-6 py-4 border-b">
-            <h3 className="font-semibold text-slate-900">Prescriptions ({rows.length})</h3>
+            <h3 className="font-semibold text-slate-900">Prescriptions ({totalPrescriptions})</h3>
           </div>
           {rows.length === 0 ? (
             <div className="text-center py-16">
@@ -92,6 +109,12 @@ export function DoctorPrescriptions({ session }: RoleViewProps) {
                   ))}
                 </tbody>
               </table>
+              <TablePagination
+                page={table.page}
+                pageSize={table.pageSize}
+                total={totalPrescriptions}
+                onPageChange={table.setPage}
+              />
             </div>
           )}
         </div>

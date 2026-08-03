@@ -98,6 +98,8 @@ export interface Appointment {
   patientName?: string;
   patientPhone?: string;
   doctorName?: string;
+  /** Whether vitals have been recorded against this appointment. */
+  hasVitals?: boolean;
   // Set when this appointment was booked as a follow-up to an earlier one.
   followUpOf?: string;
   createdAt: string;
@@ -145,6 +147,8 @@ export interface Prescription {
   duration: string;
   instructions: string;
   createdAt: string;
+  /** Resolved by the API, so a table need not fetch every patient to name one. */
+  patientName?: string;
 }
 
 export interface Vitals {
@@ -161,6 +165,8 @@ export interface Vitals {
   height: number;
   notes: string;
   createdAt: string;
+  /** Resolved by the API, so a table need not fetch every patient to name one. */
+  patientName?: string;
 }
 
 export interface Medicine {
@@ -239,6 +245,13 @@ export interface TestOrder {
   updatedAt: string;
   /** Resolved server-side, for the same reason as Appointment.patientName. */
   patientName?: string;
+  /** Whether a report has been entered for this order. */
+  hasResults?: boolean;
+  /** Whether any reported parameter carries a non-normal flag. */
+  abnormal?: boolean;
+  /** When the report was filed and by whom; empty until one exists. */
+  reportedAt?: string;
+  reportedBy?: string;
 }
 
 export interface TestResultParameter {
@@ -280,6 +293,8 @@ export interface Baby {
   headCircumference: number;         // cm
   deliveryType: 'normal' | 'c-section' | 'assisted';
   gestationalWeeks: number;
+  /** Resolved by the API, so a list needn't fetch every patient to name one. */
+  motherName?: string;
   createdAt: string;
 }
 
@@ -359,6 +374,11 @@ export interface PregnancyRecord {
   status: 'active' | 'delivered' | 'closed';
   notes: string;
   createdAt: string;
+  /** Resolved by the API: the mother's name, how many antenatal visits there
+   *  have been, and the newest visit (whose readings drive the risk flags). */
+  patientName?: string;
+  visitCount?: number;
+  latestVisit?: ANCVisit | null;
 }
 
 export interface ANCVisit {

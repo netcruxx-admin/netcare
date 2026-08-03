@@ -12,12 +12,13 @@ import { FormField } from '@/components/form/FormField';
 import { AddPatientModal } from '@/components/superadmin/AddPatientModal';
 import { HospitalBadge } from '@/components/superadmin/HospitalBadge';
 import { ActionIcon } from '@/components/ActionIcon';
+import { TablePagination } from '@/components/TablePagination';
+import { useServerTable } from '@/hooks/useServerTable';
 import { apiError } from '@/lib/apiError';
 import { hasPermission } from '@/lib/auth';
 import type { Patient } from '@/lib/types';
 import {
-  useGetSuperadminPatientsQuery,
-  useGetSuperadminAppointmentsQuery,
+  useGetSuperadminPatientsPagedQuery,
   useListHospitalsQuery,
   useUpdatePatientMutation,
   useDeletePatientMutation,
@@ -47,27 +48,23 @@ export function PlatformPatients({ session }: RoleViewProps) {
   const [editing, setEditing] = useState<Patient | null>(null);
   const [deleting, setDeleting] = useState<Patient | null>(null);
   const [saveError, setSaveError] = useState('');
-  const [query, setQuery] = useState('');
 
-  const { data: allPatients = [], isLoading, refetch } = useGetSuperadminPatientsQuery();
-  const { data: allAppointments = [] } = useGetSuperadminAppointmentsQuery();
+  // The hospital filter, the search and the paging are all applied by the API.
+  // This screen spans every tenant on the platform, so it is the one that most
+  // needs to stop downloading the whole table to filter four fields of it.
+  const table = useServerTable({ filterKey: selectedHospitalId });
+  const { data: patientPage, isLoading, refetch } = useGetSuperadminPatientsPagedQuery({
+    q: table.q.trim() || undefined,
+    hospitalId: selectedHospitalId || undefined,
+    withStats: true,
+    limit: table.limit,
+    offset: table.offset,
+  });
+  const patients = patientPage?.items ?? [];
+  const totalPatients = patientPage?.total ?? 0;
   const { data: hospitals = [] } = useListHospitalsQuery();
   const [updatePatient] = useUpdatePatientMutation();
   const [deletePatient] = useDeletePatientMutation();
-
-  const patients = allPatients
-    .filter((p) => !selectedHospitalId || p.hospitalId === selectedHospitalId)
-    .filter((p) => {
-      const q = query.trim().toLowerCase();
-      return !q
-        || (p.user?.name ?? '').toLowerCase().includes(q)
-        || (p.user?.email ?? '').toLowerCase().includes(q)
-        || (p.gender ?? '').toLowerCase().includes(q)
-        || (p.bloodGroup ?? '').toLowerCase().includes(q);
-    });
-
-  const apptCount = new Map<string, number>();
-  allAppointments.forEach((a) => apptCount.set(a.patientId, (apptCount.get(a.patientId) ?? 0) + 1));
 
   const showHospital = !selectedHospitalId;
 
@@ -101,8 +98,8 @@ export function PlatformPatients({ session }: RoleViewProps) {
         <div className="relative max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
           <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            value={table.search}
+            onChange={(e) => table.setSearch(e.target.value)}
             placeholder="Search by name, email, gender or blood group…"
             className="w-full pl-9 pr-3 py-2 bg-white rounded-lg shadow text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
           />
@@ -112,8 +109,8 @@ export function PlatformPatients({ session }: RoleViewProps) {
       <div className="bg-white rounded-xl border border-slate-100 shadow-sm">
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
           <p className="text-sm text-slate-500">
-            {patients.length} patient{patients.length !== 1 ? 's' : ''}
-            {(selectedHospitalId || query) && <span className="text-slate-400"> (filtered)</span>}
+            {totalPatients} patient{totalPatients !== 1 ? 's' : ''}
+            {(selectedHospitalId || table.search) && <span className="text-slate-400"> (filtered)</span>}
           </p>
           {hasPermission(session, 'patients.manage') && (
             <button
@@ -137,7 +134,8 @@ export function PlatformPatients({ session }: RoleViewProps) {
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-100">
                   {showHospital && <th className="text-left py-3 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wide">Hospital</th>}
-                  {['Name', 'Email', 'Gender', 'Blood Group', 'Phone', 'Appointments'].map((h) => (
+                  {/* "Visits", not "Appointments": the API counts completed ones. */}
+                  {['Name', 'Email', 'Gender', 'Blood Group', 'Phone', 'Visits'].map((h) => (
                     <th key={h} className="text-left py-3 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wide">{h}</th>
                   ))}
                   <th className="text-right py-3 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wide">Actions</th>
@@ -156,7 +154,7 @@ export function PlatformPatients({ session }: RoleViewProps) {
                     <td className="py-3 px-6 text-slate-600 capitalize">{p.gender || '—'}</td>
                     <td className="py-3 px-6 text-slate-600">{p.bloodGroup || '—'}</td>
                     <td className="py-3 px-6 text-slate-600 text-sm">{p.user?.phone || '—'}</td>
-                    <td className="py-3 px-6 font-semibold text-slate-900">{apptCount.get(p.id) ?? 0}</td>
+                    <td className="py-3 px-6 font-semibold text-slate-900">{p.visitCount ?? 0}</td>
                     <td className="py-3 px-6 text-right">
                       <div className="flex items-center justify-end gap-1">
                         {hasPermission(session, 'patients.manage') && <ActionIcon icon={Pencil} label="Edit" onClick={() => setEditing(p)} />}
@@ -167,6 +165,12 @@ export function PlatformPatients({ session }: RoleViewProps) {
                 ))}
               </tbody>
             </table>
+            <TablePagination
+              page={table.page}
+              pageSize={table.pageSize}
+              total={totalPatients}
+              onPageChange={table.setPage}
+            />
           </div>
         )}
       </div>

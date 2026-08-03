@@ -1,6 +1,6 @@
 from typing import Optional
 
-from fastapi import APIRouter, Depends, status, Query
+from fastapi import APIRouter, Depends, Query, Response, status
 from sqlalchemy.orm import Session
 
 from .. import models, schemas
@@ -8,15 +8,25 @@ from ..auth import get_current_user
 from ..authz import SCOPE_OWN, own_record_filter, require_permission
 from ..database import get_db
 from ..tenancy import get_tenant_id, scoped
-from ..utils import new_id, now_iso
+from ..utils import (
+    ListQuery,
+    attach_patient_names,
+    list_params,
+    new_id,
+    now_iso,
+    paginate,
+    patient_name_search,
+)
 
 router = APIRouter(prefix="/vitals", tags=["vitals"])
 
 
 @router.get("", response_model=list[schemas.VitalsOut])
 def list_vitals(
+    response: Response,
     patient_id: Optional[str] = Query(default=None, alias="patientId"),
     appointment_id: Optional[str] = Query(default=None, alias="appointmentId"),
+    params: ListQuery = Depends(list_params),
     db: Session = Depends(get_db),
     user: models.User = Depends(get_current_user),
     scope: str = Depends(require_permission("vitals.read")),
@@ -32,7 +42,14 @@ def list_vitals(
     # else's id narrows the result to nothing rather than exposing their records.
     if scope == SCOPE_OWN:
         query = query.filter(own_record_filter(db, user, models.Vitals))
-    return query.all()
+    query = patient_name_search(
+        query, models.Vitals, params.q, models.Vitals.notes, models.Vitals.blood_pressure
+    )
+    query = query.order_by(models.Vitals.created_at.desc(), models.Vitals.id)
+    rows = paginate(query, response, params.limit, params.offset).all()
+    out = [schemas.VitalsOut.model_validate(row) for row in rows]
+    attach_patient_names(db, out)
+    return out
 
 
 @router.post("", response_model=schemas.VitalsOut, status_code=status.HTTP_201_CREATED)

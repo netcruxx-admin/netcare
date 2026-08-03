@@ -11,12 +11,15 @@ import { apiError } from '@/lib/apiError';
 import {
   useCreateLabTestMutation,
   useDeleteLabTestMutation,
-  useListLabTestsQuery,
+  useLazyListLabTestsPagedQuery,
+  useListLabTestsPagedQuery,
   useUpdateLabTestMutation,
 } from '@/store/api';
 import type { RoleViewProps } from '@/components/RoleView';
 import { FormField } from '@/components/form/FormField';
 import { ExportButton } from '@/components/ExportButton';
+import { TablePagination } from '@/components/TablePagination';
+import { useServerTable } from '@/hooks/useServerTable';
 
 
 const CATEGORIES = ['Blood Test', 'Imaging', 'Urine Test', 'Cardiac', 'Prenatal Screening', 'Other'];
@@ -43,21 +46,25 @@ export function AdminTests({ session }: RoleViewProps) {
   const [editing, setEditing] = useState<LabTest | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [deleting, setDeleting] = useState<LabTest | null>(null);
-  const [query, setQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
+  const table = useServerTable({ filterKey: categoryFilter });
 
-  const { data: tests = [], isLoading } = useListLabTestsQuery();
+  const listArgs = {
+    q: table.q.trim() || undefined,
+    category: categoryFilter === 'all' ? undefined : categoryFilter,
+  };
+  const { data: testPage, isLoading } = useListLabTestsPagedQuery({
+    ...listArgs,
+    limit: table.limit,
+    offset: table.offset,
+  });
+  const filtered = testPage?.items ?? [];
+  const totalTests = testPage?.total ?? 0;
+  const [fetchAllForExport] = useLazyListLabTestsPagedQuery();
   const [createLabTest] = useCreateLabTestMutation();
   const [updateLabTest] = useUpdateLabTestMutation();
   const [deleteLabTest] = useDeleteLabTestMutation();
   const [saveError, setSaveError] = useState('');
-
-  const filtered = tests
-    .filter((t) => categoryFilter === 'all' || t.category === categoryFilter)
-    .filter((t) => {
-      const q = query.trim().toLowerCase();
-      return !q || t.name.toLowerCase().includes(q) || t.category.toLowerCase().includes(q);
-    });
 
   const openAdd = () => {
     setEditing(null);
@@ -89,8 +96,8 @@ export function AdminTests({ session }: RoleViewProps) {
         <div className="relative flex-1 min-w-[220px] max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
           <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            value={table.search}
+            onChange={(e) => table.setSearch(e.target.value)}
             placeholder="Search test…"
             className="w-full pl-9 pr-3 py-2 bg-white rounded-lg shadow text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
           />
@@ -107,12 +114,16 @@ export function AdminTests({ session }: RoleViewProps) {
           filename="lab-tests"
           headers={['Name', 'Category', 'Sample', 'Price', 'Turnaround']}
           rows={filtered.map((t) => [t.name, t.category, t.sampleType, t.price, t.turnaroundTime])}
+          getRows={async () => {
+            const all = await fetchAllForExport(listArgs).unwrap();
+            return all.items.map((t) => [t.name, t.category, t.sampleType, t.price, t.turnaroundTime]);
+          }}
         />
       </div>
 
       <div className="bg-white rounded-lg shadow">
         <div className="flex justify-between items-center px-6 py-4 border-b">
-          <h3 className="text-lg font-semibold text-slate-900">Tests ({filtered.length})</h3>
+          <h3 className="text-lg font-semibold text-slate-900">Tests ({totalTests})</h3>
           <button
             onClick={openAdd}
             className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg hover:shadow-lg transition"
@@ -122,7 +133,7 @@ export function AdminTests({ session }: RoleViewProps) {
           </button>
         </div>
 
-        {tests.length === 0 ? (
+        {!isLoading && filtered.length === 0 ? (
           <div className="text-center py-16">
             <FlaskConical className="w-16 h-16 text-slate-300 mx-auto mb-4" />
             <p className="text-slate-600 mb-6">No tests yet</p>
@@ -167,6 +178,12 @@ export function AdminTests({ session }: RoleViewProps) {
                 ))}
               </tbody>
             </table>
+            <TablePagination
+              page={table.page}
+              pageSize={table.pageSize}
+              total={totalTests}
+              onPageChange={table.setPage}
+            />
           </div>
         )}
       </div>

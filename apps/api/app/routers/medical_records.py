@@ -1,6 +1,6 @@
 from typing import Optional
 
-from fastapi import APIRouter, Depends, status, Query
+from fastapi import APIRouter, Depends, Query, Response, status
 from sqlalchemy.orm import Session
 
 from .. import models, schemas
@@ -8,15 +8,17 @@ from ..auth import get_current_user
 from ..authz import SCOPE_OWN, own_record_filter, require_permission
 from ..database import get_db
 from ..tenancy import get_tenant_id, scoped
-from ..utils import new_id, now_iso
+from ..utils import ListQuery, list_params, new_id, now_iso, paginate, text_search
 
 router = APIRouter(prefix="/medical-records", tags=["medical-records"])
 
 
 @router.get("", response_model=list[schemas.MedicalRecordOut])
 def list_medical_records(
+    response: Response,
     patient_id: Optional[str] = Query(default=None, alias="patientId"),
     appointment_id: Optional[str] = Query(default=None, alias="appointmentId"),
+    params: ListQuery = Depends(list_params),
     db: Session = Depends(get_db),
     user: models.User = Depends(get_current_user),
     scope: str = Depends(require_permission("medical_records.read")),
@@ -32,7 +34,9 @@ def list_medical_records(
     # else's id narrows the result to nothing rather than exposing their records.
     if scope == SCOPE_OWN:
         query = query.filter(own_record_filter(db, user, models.MedicalRecord))
-    return query.all()
+    query = text_search(query, [models.MedicalRecord.diagnosis, models.MedicalRecord.prescription], params.q)
+    query = query.order_by(models.MedicalRecord.created_at.desc(), models.MedicalRecord.id)
+    return paginate(query, response, params.limit, params.offset).all()
 
 
 @router.post("", response_model=schemas.MedicalRecordOut, status_code=status.HTTP_201_CREATED)

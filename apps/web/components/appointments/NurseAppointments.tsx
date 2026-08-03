@@ -2,17 +2,17 @@
 
 import { useMemo, useState } from 'react';
 import { Search, CalendarDays, Eye, HeartPulse } from 'lucide-react';
-import type { Appointment, Doctor, Patient, User, Vitals } from '@/lib/types';
+import type { Appointment } from '@/lib/types';
 import {
-  useListAppointmentsQuery,
-  useListDoctorsQuery,
-  useListPatientsQuery,
-  useListVitalsQuery,
+  useLazyListAppointmentsPagedQuery,
+  useListAppointmentsPagedQuery,
 } from '@/store/api';
 import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
 import { ExportButton } from '@/components/ExportButton';
 import { ActionIcon } from '@/components/ActionIcon';
+import { TablePagination } from '@/components/TablePagination';
+import { useServerTable } from '@/hooks/useServerTable';
 
 function toDateStr(d: Date) {
   const y = d.getFullYear();
@@ -28,40 +28,38 @@ const STATUS_STYLE: Record<Appointment['status'], string> = {
   cancelled: 'bg-red-100 text-red-700',
 };
 
+const toRow = (a: Appointment) => ({
+  ...a,
+  // Names and the vitals flag are resolved by the API, so this screen no longer
+  // fetches every patient, doctor and vitals row in the hospital.
+  patient: a.patientName || 'Patient',
+  doctor: a.doctorName ? `Dr. ${a.doctorName}` : '—',
+  hasVitals: a.hasVitals ?? false,
+});
+
+const exportRow = (r: ReturnType<typeof toRow>) => [
+  r.date, r.time, r.patient, r.doctor, r.status, r.hasVitals ? 'Recorded' : 'Pending',
+];
+
 export function NurseAppointments({ session }: RoleViewProps) {
-  const [query, setQuery] = useState('');
   const [status, setStatus] = useState<'all' | Appointment['status']>('all');
   const [date, setDate] = useState<string>(todayStr);
+  const table = useServerTable({ filterKey: `${status}|${date}` });
 
-  const { data: appointments = [], isLoading } = useListAppointmentsQuery();
-  const { data: patients = [] } = useListPatientsQuery();
-  const { data: doctors = [] } = useListDoctorsQuery();
-  const { data: vitals = [] } = useListVitalsQuery();
+  const listArgs = {
+    q: table.q.trim() || undefined,
+    status: status === 'all' ? undefined : status,
+    date: date || undefined,
+  };
+  const { data: appointmentPage } = useListAppointmentsPagedQuery({
+    ...listArgs,
+    limit: table.limit,
+    offset: table.offset,
+  });
+  const totalAppointments = appointmentPage?.total ?? 0;
+  const [fetchAllForExport] = useLazyListAppointmentsPagedQuery();
 
-  const rows = useMemo(() => {
-    const patientById = new Map(patients.map((p) => [p.id, p]));
-    const doctorById = new Map(doctors.map((d) => [d.id, d]));
-    const withVitals = new Set(vitals.map((v) => v.appointmentId));
-
-    const patientName = (id: string) => patientById.get(id)?.user?.name ?? 'Patient';
-    const doctorName = (id: string) => {
-      const name = doctorById.get(id)?.user?.name;
-      return name ? `Dr. ${name}` : '—';
-    };
-
-    const q = query.trim().toLowerCase();
-    return appointments
-      .map((a) => ({
-        ...a,
-        patient: patientName(a.patientId),
-        doctor: doctorName(a.doctorId),
-        hasVitals: withVitals.has(a.id),
-      }))
-      .filter((a) => (status === 'all' ? true : a.status === status))
-      .filter((a) => (date ? a.date === date : true))
-      .filter((a) => !q || a.patient.toLowerCase().includes(q) || a.doctor.toLowerCase().includes(q))
-      .sort((a, b) => (a.date === b.date ? a.time.localeCompare(b.time) : a.date.localeCompare(b.date)));
-  }, [appointments, patients, doctors, vitals, query, status, date]);
+  const rows = useMemo(() => (appointmentPage?.items ?? []).map(toRow), [appointmentPage]);
 
   return (
     <DashboardShell role={session.user.role} userName={session.user.name} title="Appointments" subtitle="Support and vitals">
@@ -70,8 +68,8 @@ export function NurseAppointments({ session }: RoleViewProps) {
           <div className="relative flex-1 min-w-[200px] max-w-md">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
             <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
+              value={table.search}
+              onChange={(e) => table.setSearch(e.target.value)}
               placeholder="Search patient or doctor…"
               className="w-full pl-9 pr-3 py-2 bg-white rounded-lg shadow text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
             />
@@ -101,14 +99,18 @@ export function NurseAppointments({ session }: RoleViewProps) {
             <ExportButton
               filename="appointments"
               headers={['Date', 'Time', 'Patient', 'Doctor', 'Status', 'Vitals']}
-              rows={rows.map((r) => [r.date, r.time, r.patient, r.doctor, r.status, r.hasVitals ? 'Recorded' : 'Pending'])}
+              rows={rows.map(exportRow)}
+              getRows={async () => {
+                const all = await fetchAllForExport(listArgs).unwrap();
+                return all.items.map(toRow).map(exportRow);
+              }}
             />
           </div>
         </div>
 
         <div className="bg-white rounded-lg shadow">
           <div className="px-6 py-4 border-b">
-            <h3 className="font-semibold text-slate-900">Appointments ({rows.length})</h3>
+            <h3 className="font-semibold text-slate-900">Appointments ({totalAppointments})</h3>
           </div>
           {rows.length === 0 ? (
             <div className="text-center py-16">
@@ -166,6 +168,12 @@ export function NurseAppointments({ session }: RoleViewProps) {
                   ))}
                 </tbody>
               </table>
+              <TablePagination
+                page={table.page}
+                pageSize={table.pageSize}
+                total={totalAppointments}
+                onPageChange={table.setPage}
+              />
             </div>
           )}
         </div>

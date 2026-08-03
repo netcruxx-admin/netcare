@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Formik, Form } from 'formik';
@@ -13,10 +13,10 @@ import {
   useCreateTestOrderMutation,
   useCreateVitalsMutation,
   useGetDoctorByUserQuery,
-  useListAppointmentsQuery,
+  useLazyListAppointmentsPagedQuery,
+  useListAppointmentsPagedQuery,
   useListLabTestsQuery,
   useListMedicinesQuery,
-  useListPatientsQuery,
   useUpdateAppointmentMutation,
 } from '@/store/api';
 import { DashboardShell } from '@/components/DashboardShell';
@@ -25,6 +25,8 @@ import { FormField } from '@/components/form/FormField';
 import { FollowUpModal } from '@/components/FollowUpModal';
 import { ActionIcon } from '@/components/ActionIcon';
 import { ExportButton } from '@/components/ExportButton';
+import { TablePagination } from '@/components/TablePagination';
+import { useServerTable } from '@/hooks/useServerTable';
 
 const PAGE_SIZE = 20;
 
@@ -62,9 +64,8 @@ export function DoctorAppointments({ session }: RoleViewProps) {
   const router = useRouter();
 
   const [status, setStatus] = useState<'all' | Appointment['status']>('all');
-  const [query, setQuery] = useState('');
   const [date, setDate] = useState('');
-  const [page, setPage] = useState(1);
+  const table = useServerTable({ pageSize: PAGE_SIZE, filterKey: `${status}|${date}` });
 
   const [addingVitals, setAddingVitals] = useState<Appointment | null>(null);
   const [prescribing, setPrescribing] = useState<Appointment | null>(null);
@@ -81,8 +82,21 @@ export function DoctorAppointments({ session }: RoleViewProps) {
   // Appointments come back already narrowed to this doctor by the `own` scope
   // on appointments.read; the doctor record is still needed to raise orders.
   const { data: doctor } = useGetDoctorByUserQuery(session.user.id);
-  const { data: appointments = [] } = useListAppointmentsQuery();
-  const { data: patients = [] } = useListPatientsQuery();
+  // Search, filters and paging run server-side; patient name and phone arrive
+  // on each row, so the whole patient list is no longer needed here.
+  const listArgs = {
+    q: table.q.trim() || undefined,
+    status: status === 'all' ? undefined : status,
+    date: date || undefined,
+  };
+  const { data: appointmentPage } = useListAppointmentsPagedQuery({
+    ...listArgs,
+    limit: table.limit,
+    offset: table.offset,
+  });
+  const appointments = useMemo(() => appointmentPage?.items ?? [], [appointmentPage]);
+  const totalAppointments = appointmentPage?.total ?? 0;
+  const [fetchAllForExport] = useLazyListAppointmentsPagedQuery();
   const { data: medicines = [] } = useListMedicinesQuery();
   const { data: tests = [] } = useListLabTestsQuery();
   const [updateAppointment] = useUpdateAppointmentMutation();
@@ -95,31 +109,22 @@ export function DoctorAppointments({ session }: RoleViewProps) {
     setTimeout(() => setToast(''), 2500);
   };
 
-  useEffect(() => {
-    setPage(1);
-  }, [query, status, date]);
-
-  const rows = useMemo(() => {
-    const patientById = new Map(patients.map((p) => [p.id, p]));
-    const patientOf = (id: string) => {
-      const p = patientById.get(id);
-      return { name: p?.user?.name ?? '—', phone: p?.phone || '—' };
-    };
-
-    const q = query.trim().toLowerCase();
-    return appointments
-      .map((a) => {
-        const p = patientOf(a.patientId);
-        return { appt: a, id: a.id, date: a.date, time: a.time, status: a.status, reason: a.reason || 'Consultation', patient: p.name, phone: p.phone };
-      })
-      .filter((r) => status === 'all' || r.status === status)
-      .filter((r) => !date || r.date === date)
-      .filter((r) => !q || r.patient.toLowerCase().includes(q) || r.phone.toLowerCase().includes(q) || r.reason.toLowerCase().includes(q))
-      .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
-  }, [appointments, patients, status, date, query]);
-
-  const totalPages = Math.ceil(rows.length / PAGE_SIZE);
-  const pageRows = rows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  // Already filtered, sorted and paged by the server.
+  const rows = useMemo(
+    () =>
+      appointments.map((a) => ({
+        appt: a,
+        id: a.id,
+        date: a.date,
+        time: a.time,
+        status: a.status,
+        reason: a.reason || 'Consultation',
+        patient: a.patientName || '—',
+        phone: a.patientPhone || '—',
+      })),
+    [appointments],
+  );
+  const pageRows = rows;
 
   const medicineOptions = medicines.map((m) => ({
     value: m.name,
@@ -188,8 +193,8 @@ export function DoctorAppointments({ session }: RoleViewProps) {
           <div className="relative flex-1 min-w-[200px]">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
             <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
+              value={table.search}
+              onChange={(e) => table.setSearch(e.target.value)}
               placeholder="Search patient, phone or reason…"
               className="w-full pl-9 pr-3 py-2 bg-white rounded-lg shadow text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
             />
@@ -222,6 +227,18 @@ export function DoctorAppointments({ session }: RoleViewProps) {
               filename="my-appointments"
               headers={['Patient', 'Phone', 'Date', 'Time', 'Reason', 'Status']}
               rows={rows.map((r) => [r.patient, r.phone, r.date, r.time, r.reason, r.status])}
+              // The whole filtered set, not the page on screen.
+              getRows={async () => {
+                const all = await fetchAllForExport(listArgs).unwrap();
+                return all.items.map((a) => [
+                  a.patientName || '—',
+                  a.patientPhone || '—',
+                  a.date,
+                  a.time,
+                  a.reason || 'Consultation',
+                  a.status,
+                ]);
+              }}
             />
           </div>
         </div>
@@ -229,8 +246,7 @@ export function DoctorAppointments({ session }: RoleViewProps) {
         {/* Table */}
         <div className="bg-white rounded-lg shadow">
           <div className="px-6 py-4 border-b flex items-center justify-between">
-            <h3 className="font-semibold text-slate-900">Appointments ({rows.length})</h3>
-            {totalPages > 1 && <span className="text-sm text-slate-500">Page {page} of {totalPages}</span>}
+            <h3 className="font-semibold text-slate-900">Appointments ({totalAppointments})</h3>
           </div>
           {rows.length === 0 ? (
             <div className="text-center py-16">
@@ -289,25 +305,12 @@ export function DoctorAppointments({ session }: RoleViewProps) {
                 </table>
               </div>
 
-              {totalPages > 1 && (
-                <div className="px-6 py-4 border-t flex items-center justify-center gap-2">
-                  <button
-                    onClick={() => setPage((p) => Math.max(1, p - 1))}
-                    disabled={page === 1}
-                    className="px-3 py-1.5 rounded border text-sm disabled:opacity-40 hover:bg-slate-50"
-                  >
-                    Previous
-                  </button>
-                  <span className="text-sm text-slate-600">{page} / {totalPages}</span>
-                  <button
-                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                    disabled={page === totalPages}
-                    className="px-3 py-1.5 rounded border text-sm disabled:opacity-40 hover:bg-slate-50"
-                  >
-                    Next
-                  </button>
-                </div>
-              )}
+              <TablePagination
+                page={table.page}
+                pageSize={table.pageSize}
+                total={totalAppointments}
+                onPageChange={table.setPage}
+              />
             </>
           )}
         </div>

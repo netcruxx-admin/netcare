@@ -9,11 +9,13 @@ import type { RoleViewProps } from '@/components/RoleView';
 import { DepartmentModal } from '@/components/departments/DepartmentModal';
 import { HospitalBadge } from '@/components/superadmin/HospitalBadge';
 import { ActionIcon } from '@/components/ActionIcon';
+import { TablePagination } from '@/components/TablePagination';
+import { useServerTable } from '@/hooks/useServerTable';
 import { hasPermission } from '@/lib/auth';
 import { apiError } from '@/lib/apiError';
 import type { Department } from '@/lib/types';
 import {
-  useGetSuperadminDepartmentsQuery,
+  useGetSuperadminDepartmentsPagedQuery,
   useListHospitalsQuery,
   useDeleteDepartmentMutation,
 } from '@/store/api';
@@ -25,18 +27,18 @@ export function PlatformDepartments({ session }: RoleViewProps) {
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Department | null>(null);
   const [deleting, setDeleting] = useState<Department | null>(null);
-  const [query, setQuery] = useState('');
 
-  const { data: allDepartments = [], isLoading, refetch } = useGetSuperadminDepartmentsQuery();
+  const table = useServerTable({ filterKey: selectedHospitalId });
+  const { data: departmentPage, isLoading, refetch } = useGetSuperadminDepartmentsPagedQuery({
+    q: table.q.trim() || undefined,
+    hospitalId: selectedHospitalId || undefined,
+    limit: table.limit,
+    offset: table.offset,
+  });
+  const departments = departmentPage?.items ?? [];
+  const totalDepartments = departmentPage?.total ?? 0;
   const { data: hospitals = [] } = useListHospitalsQuery();
   const [deleteDepartment] = useDeleteDepartmentMutation();
-
-  const departments = allDepartments
-    .filter((d) => !selectedHospitalId || d.hospitalId === selectedHospitalId)
-    .filter((d) => {
-      const q = query.trim().toLowerCase();
-      return !q || d.name.toLowerCase().includes(q) || (d.description ?? '').toLowerCase().includes(q);
-    });
 
   const showHospital = !selectedHospitalId;
 
@@ -69,8 +71,8 @@ export function PlatformDepartments({ session }: RoleViewProps) {
         <div className="relative max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
           <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            value={table.search}
+            onChange={(e) => table.setSearch(e.target.value)}
             placeholder="Search by name or description…"
             className="w-full pl-9 pr-3 py-2 bg-white rounded-lg shadow text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
           />
@@ -80,8 +82,8 @@ export function PlatformDepartments({ session }: RoleViewProps) {
       <div className="bg-white rounded-xl border border-slate-100 shadow-sm">
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
           <p className="text-sm text-slate-500">
-            {departments.length} department{departments.length !== 1 ? 's' : ''}
-            {(selectedHospitalId || query) && <span className="text-slate-400"> (filtered)</span>}
+            {totalDepartments} department{totalDepartments !== 1 ? 's' : ''}
+            {(selectedHospitalId || table.search) && <span className="text-slate-400"> (filtered)</span>}
           </p>
           {hasPermission(session, 'departments.manage') && (
             <button
@@ -131,6 +133,12 @@ export function PlatformDepartments({ session }: RoleViewProps) {
                 ))}
               </tbody>
             </table>
+            <TablePagination
+              page={table.page}
+              pageSize={table.pageSize}
+              total={totalDepartments}
+              onPageChange={table.setPage}
+            />
           </div>
         )}
       </div>

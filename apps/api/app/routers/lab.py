@@ -13,7 +13,16 @@ from ..auth import get_current_user
 from ..authz import SCOPE_OWN, caller_doctor_id, require_permission
 from ..database import get_db
 from ..tenancy import get_tenant_id, scoped
-from ..utils import new_id, now_iso, paginate, patient_display
+from ..utils import (
+    ListQuery,
+    list_params,
+    new_id,
+    now_iso,
+    paginate,
+    patient_display,
+    result_summaries,
+    text_search,
+)
 
 router = APIRouter(tags=["lab"])
 
@@ -41,7 +50,11 @@ def list_test_orders(
     if appointment_id:
         query = query.filter(models.TestOrder.appointment_id == appointment_id)
     if status_filter:
-        query = query.filter(models.TestOrder.status == status_filter)
+        # Comma-separated, so the reports screen can ask for the one set it
+        # means ("completed,reviewed") instead of fetching everything and
+        # dropping the rest client-side.
+        wanted = [s.strip() for s in status_filter.split(",") if s.strip()]
+        query = query.filter(models.TestOrder.status.in_(wanted))
     if q:
         # Order id, the patient's name, or any test name on the order. `items`
         # is a JSON array of tests, so it is matched as text — crude, but it
@@ -65,10 +78,20 @@ def list_test_orders(
     rows = paginate(query, response, limit, offset).all()
 
     patients = patient_display(db, (r.patient_id for r in rows))
+    # Whether an order has a report, and whether anything on it is flagged.
+    # Both list screens show these as a badge; answering here is one query over
+    # the page instead of the client downloading every result in the hospital.
+    summaries = result_summaries(db, (r.id for r in rows))
     out = []
     for row in rows:
         item = schemas.TestOrderOut.model_validate(row)
         item.patient_name = patients.get(row.patient_id, ("", ""))[0]
+        summary = summaries.get(row.id)
+        if summary is not None:
+            item.has_results = summary.has_results
+            item.abnormal = summary.abnormal
+            item.reported_at = summary.reported_at
+            item.reported_by = summary.reported_by
         out.append(item)
     return out
 
@@ -190,15 +213,27 @@ def delete_test_order(
 # ---------- Test results ----------
 @router.get("/test-results", response_model=list[schemas.TestResultOut])
 def list_test_results(
+    response: Response,
     order_id: Optional[str] = Query(default=None, alias="orderId"),
+    params: ListQuery = Depends(list_params),
     db: Session = Depends(get_db),
     scope: str = Depends(require_permission("lab_reports.read")),
     tenant_id: str = Depends(get_tenant_id),
 ):
     query = scoped(db, models.TestResult, tenant_id)
     if order_id:
-        query = query.filter(models.TestResult.order_id == order_id)
-    return query.all()
+        # Comma-separated, so a screen showing several orders can ask for their
+        # results in one request instead of fetching every result in the
+        # hospital and filtering client-side.
+        wanted = [o.strip() for o in order_id.split(",") if o.strip()]
+        query = query.filter(models.TestResult.order_id.in_(wanted))
+    query = text_search(
+        query,
+        [models.TestResult.test_name, models.TestResult.remarks, models.TestResult.reported_by],
+        params.q,
+    )
+    query = query.order_by(models.TestResult.reported_at.desc(), models.TestResult.id)
+    return paginate(query, response, params.limit, params.offset).all()
 
 
 @router.post("/test-results", response_model=schemas.TestResultOut)

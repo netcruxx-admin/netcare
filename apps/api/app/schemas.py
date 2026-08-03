@@ -431,6 +431,8 @@ class AppointmentOut(OutModel):
     patient_name: str = ""
     patient_phone: str = ""
     doctor_name: str = ""
+    #: Whether vitals have been recorded against this appointment.
+    has_vitals: bool = False
 
 
 class AppointmentStatsOut(OutModel):
@@ -506,6 +508,8 @@ class PrescriptionOut(OutModel):
     duration: str = ""
     instructions: str = ""
     created_at: str
+    # Resolved server-side, for the same reason as AppointmentOut.
+    patient_name: str = ""
 
 
 # ---------- Vitals ----------
@@ -535,6 +539,8 @@ class VitalsOut(OutModel):
     height: float = 0
     notes: str = ""
     created_at: str
+    # Resolved server-side, for the same reason as AppointmentOut.
+    patient_name: str = ""
 
 
 # ---------- Payment update ----------
@@ -647,6 +653,13 @@ class TestOrderOut(OutModel):
     updated_at: str
     # Resolved server-side, for the same reason as AppointmentOut.
     patient_name: str = ""
+    #: Whether a report has been entered for this order.
+    has_results: bool = False
+    #: Whether any reported parameter carries a non-normal flag.
+    abnormal: bool = False
+    #: When the report was filed, and by whom. Empty until one exists.
+    reported_at: str = ""
+    reported_by: str = ""
 
 
 class TestResultParameter(CamelModel):
@@ -764,6 +777,13 @@ class PregnancyOut(OutModel):
     status: PregnancyStatus = "active"
     notes: str = ""
     created_at: str
+    # Resolved server-side, for the same reason as AppointmentOut: the card
+    # shows the mother's name, how many antenatal visits there have been, and
+    # the newest visit's readings (which drive the risk flags). Deriving them in
+    # the client means holding every patient and every ANC visit in memory.
+    patient_name: str = ""
+    visit_count: int = 0
+    latest_visit: Optional["ANCVisitOut"] = None
 
 
 # ---------- ANC visit ----------
@@ -800,6 +820,10 @@ class ANCVisitOut(OutModel):
     created_at: str
 
 
+# PregnancyOut refers to ANCVisitOut, which is only defined now.
+PregnancyOut.model_rebuild()
+
+
 # ---------- Baby / growth / immunization ----------
 class BabyCreate(CamelModel):
     mother_patient_id: str
@@ -828,6 +852,8 @@ class BabyOut(OutModel):
     delivery_type: DeliveryType = "normal"
     gestational_weeks: int = 0
     created_at: str
+    # Resolved server-side, for the same reason as AppointmentOut.
+    mother_name: str = ""
 
 
 class GrowthMeasurementCreate(CamelModel):

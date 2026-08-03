@@ -510,10 +510,119 @@ export const api = createApi({
       transformResponse: pageOf<Appointment>,
       providesTags: [{ type: 'Appointment', id: 'LIST' }],
     }),
-    listTestOrdersPaged: build.query<Paged<TestOrder>, PageArgs & { status?: string }>({
+    listTestOrdersPaged: build.query<
+      Paged<TestOrder>,
+      PageArgs & { status?: string; patientId?: string; doctorId?: string }
+    >({
       query: (params) => ({ url: '/test-orders', params: cleanParams(params) }),
       transformResponse: pageOf<TestOrder>,
       providesTags: [{ type: 'TestOrder', id: 'LIST' }],
+    }),
+    listDoctorsPaged: build.query<
+      Paged<Doctor>,
+      PageArgs & { specialization?: string; verificationStatus?: string }
+    >({
+      query: (params) => ({ url: '/doctors', params: cleanParams(params) }),
+      transformResponse: pageOf<Doctor>,
+      providesTags: [{ type: 'Doctor', id: 'LIST' }],
+    }),
+    listUsersPaged: build.query<Paged<User>, PageArgs & { role?: string }>({
+      query: (params) => ({ url: '/users', params: cleanParams(params) }),
+      transformResponse: pageOf<User>,
+      providesTags: [{ type: 'User', id: 'LIST' }],
+    }),
+    listDepartmentsPaged: build.query<Paged<Department>, PageArgs>({
+      query: (params) => ({ url: '/departments', params: cleanParams(params) }),
+      transformResponse: pageOf<Department>,
+      providesTags: [{ type: 'Department', id: 'LIST' }],
+    }),
+    listMedicinesPaged: build.query<Paged<Medicine>, PageArgs & { category?: string }>({
+      query: (params) => ({ url: '/medicines', params: cleanParams(params) }),
+      transformResponse: pageOf<Medicine>,
+      providesTags: [{ type: 'Medicine', id: 'LIST' }],
+    }),
+    listLabTestsPaged: build.query<Paged<LabTest>, PageArgs & { category?: string }>({
+      query: (params) => ({ url: '/lab-tests', params: cleanParams(params) }),
+      transformResponse: pageOf<LabTest>,
+      providesTags: [{ type: 'LabTest', id: 'LIST' }],
+    }),
+    listPrescriptionsPaged: build.query<
+      Paged<Prescription>,
+      PageArgs & { patientId?: string; doctorId?: string; appointmentId?: string }
+    >({
+      query: (params) => ({ url: '/prescriptions', params: cleanParams(params) }),
+      transformResponse: pageOf<Prescription>,
+      providesTags: [{ type: 'Prescription', id: 'LIST' }],
+    }),
+    listVitalsPaged: build.query<
+      Paged<Vitals>,
+      PageArgs & { patientId?: string; appointmentId?: string }
+    >({
+      query: (params) => ({ url: '/vitals', params: cleanParams(params) }),
+      transformResponse: pageOf<Vitals>,
+      providesTags: [{ type: 'Vitals', id: 'LIST' }],
+    }),
+    listPregnanciesPaged: build.query<
+      Paged<PregnancyRecord>,
+      PageArgs & { patientId?: string; status?: string }
+    >({
+      query: (params) => ({ url: '/pregnancies', params: cleanParams(params) }),
+      transformResponse: pageOf<PregnancyRecord>,
+      providesTags: [{ type: 'Pregnancy', id: 'LIST' }],
+    }),
+    listBabiesPaged: build.query<Paged<Baby>, PageArgs & { motherPatientId?: string }>({
+      query: (params) => ({ url: '/babies', params: cleanParams(params) }),
+      transformResponse: pageOf<Baby>,
+      providesTags: [{ type: 'Baby', id: 'LIST' }],
+    }),
+    listPaymentsPaged: build.query<
+      Paged<Payment>,
+      PageArgs & { patientId?: string; appointmentId?: string; status?: string }
+    >({
+      query: (params) => ({ url: '/payments', params: cleanParams(params) }),
+      transformResponse: pageOf<Payment>,
+      providesTags: [{ type: 'Payment', id: 'LIST' }],
+    }),
+
+    // ── Paged superadmin (cross-tenant) lists ─────────────────────────────────
+    // Same three params plus `hospitalId`, so the platform screens filter by
+    // hospital on the server instead of downloading every tenant to filter here.
+    getSuperadminPatientsPaged: build.query<
+      Paged<Patient>,
+      PageArgs & { hospitalId?: string; withStats?: boolean }
+    >({
+      query: (params) => ({ url: '/superadmin/patients', params: cleanParams(params) }),
+      transformResponse: pageOf<Patient>,
+      providesTags: [{ type: 'Patient', id: 'LIST' }],
+    }),
+    getSuperadminDoctorsPaged: build.query<Paged<Doctor>, PageArgs & { hospitalId?: string }>({
+      query: (params) => ({ url: '/superadmin/doctors', params: cleanParams(params) }),
+      transformResponse: pageOf<Doctor>,
+      providesTags: [{ type: 'Doctor', id: 'LIST' }],
+    }),
+    getSuperadminAppointmentsPaged: build.query<
+      Paged<Appointment>,
+      PageArgs & { hospitalId?: string; status?: string }
+    >({
+      query: (params) => ({ url: '/superadmin/appointments', params: cleanParams(params) }),
+      transformResponse: pageOf<Appointment>,
+      providesTags: [{ type: 'Appointment', id: 'LIST' }],
+    }),
+    getSuperadminDepartmentsPaged: build.query<
+      Paged<Department>,
+      PageArgs & { hospitalId?: string }
+    >({
+      query: (params) => ({ url: '/superadmin/departments', params: cleanParams(params) }),
+      transformResponse: pageOf<Department>,
+      providesTags: [{ type: 'Department', id: 'LIST' }],
+    }),
+    getSuperadminUsersPaged: build.query<
+      Paged<User>,
+      PageArgs & { hospitalId?: string; role?: string }
+    >({
+      query: (params) => ({ url: '/superadmin/users', params: cleanParams(params) }),
+      transformResponse: pageOf<User>,
+      providesTags: [{ type: 'User', id: 'LIST' }],
     }),
     getAppointmentStats: build.query<AppointmentStats, void>({
       query: () => '/appointments/stats',
@@ -590,9 +699,15 @@ export const api = createApi({
     // patient, who may not read other people's bookings.
     getDoctorAvailability: build.query<
       { doctorId: string; date: string; taken: string[]; blocks: ScheduleBlock[] },
-      { doctorId: string; date: string }
+      // hospitalId names the tenant the doctor belongs to — needed when a
+      // superadmin, who has no hospital of their own, reschedules for one.
+      { doctorId: string; date: string; hospitalId?: string }
     >({
-      query: ({ doctorId, date }) => ({ url: `/doctors/${doctorId}/availability`, params: { date } }),
+      query: ({ doctorId, date, hospitalId }) => ({
+        url: `/doctors/${doctorId}/availability`,
+        params: { date },
+        headers: hospitalId ? { 'X-Hospital-Id': hospitalId } : undefined,
+      }),
       providesTags: [{ type: 'Appointment', id: 'LIST' }, { type: 'ScheduleBlock', id: 'LIST' }],
     }),
     getDoctorAppointments: build.query<Appointment[], string>({
@@ -925,6 +1040,16 @@ export const {
   useGetSuperadminAppointmentsQuery,
   useGetSuperadminDepartmentsQuery,
   useGetSuperadminUsersQuery,
+  useGetSuperadminPatientsPagedQuery,
+  useLazyGetSuperadminPatientsPagedQuery,
+  useGetSuperadminDoctorsPagedQuery,
+  useLazyGetSuperadminDoctorsPagedQuery,
+  useGetSuperadminAppointmentsPagedQuery,
+  useLazyGetSuperadminAppointmentsPagedQuery,
+  useGetSuperadminDepartmentsPagedQuery,
+  useLazyGetSuperadminDepartmentsPagedQuery,
+  useGetSuperadminUsersPagedQuery,
+  useLazyGetSuperadminUsersPagedQuery,
   useListRolesQuery,
   useListAssignableRolesQuery,
   useListPermissionsQuery,
@@ -948,6 +1073,7 @@ export const {
   useUpdateAppointmentMutation,
   useListPatientsQuery,
   useListPatientsPagedQuery,
+  useLazyListPatientsPagedQuery,
   useGetPatientQuery,
   useGetPatientByUserQuery,
   useUpdatePatientMutation,
@@ -958,23 +1084,35 @@ export const {
   useGetPatientPrescriptionsQuery,
   useGetPatientVitalsQuery,
   useListDoctorsQuery,
+  useListDoctorsPagedQuery,
+  useLazyListDoctorsPagedQuery,
   useGetDoctorQuery,
   useGetDoctorByUserQuery,
   useGetDoctorAppointmentsQuery,
   useGetDoctorAvailabilityQuery,
   useListDepartmentsQuery,
+  useListDepartmentsPagedQuery,
+  useLazyListDepartmentsPagedQuery,
   useCreateDepartmentMutation,
   useUpdateDepartmentMutation,
   useDeleteDepartmentMutation,
   useListMedicalRecordsQuery,
   useCreateMedicalRecordMutation,
   useListPrescriptionsQuery,
+  useListPrescriptionsPagedQuery,
+  useLazyListPrescriptionsPagedQuery,
   useCreatePrescriptionMutation,
   useListPaymentsQuery,
+  useListPaymentsPagedQuery,
+  useLazyListPaymentsPagedQuery,
   useCreatePaymentMutation,
   useListVitalsQuery,
+  useListVitalsPagedQuery,
+  useLazyListVitalsPagedQuery,
   useCreateVitalsMutation,
   useListUsersQuery,
+  useListUsersPagedQuery,
+  useLazyListUsersPagedQuery,
   useCreateUserMutation,
   useUpdateOwnAccountMutation,
   useUpdateUserMutation,
@@ -983,21 +1121,27 @@ export const {
   useDeleteDoctorMutation,
   useDeleteAppointmentMutation,
   useListMedicinesQuery,
+  useListMedicinesPagedQuery,
+  useLazyListMedicinesPagedQuery,
   useCreateMedicineMutation,
   useUpdateMedicineMutation,
   useDeleteMedicineMutation,
   useListLabTestsQuery,
+  useListLabTestsPagedQuery,
+  useLazyListLabTestsPagedQuery,
   useCreateLabTestMutation,
   useUpdateLabTestMutation,
   useDeleteLabTestMutation,
   useListTestOrdersQuery,
   useListTestOrdersPagedQuery,
+  useLazyListTestOrdersPagedQuery,
   useGetTestOrderQuery,
   useCreateTestOrderMutation,
   useUpdateTestOrderMutation,
   useDeleteTestOrderMutation,
   useReviewTestOrderMutation,
   useListTestResultsQuery,
+  useLazyListTestResultsQuery,
   useUpsertTestResultMutation,
   useListScheduleBlocksQuery,
   useCreateScheduleBlockMutation,
@@ -1007,11 +1151,15 @@ export const {
   useBookVideoSlotMutation,
   useDeleteVideoSlotMutation,
   useListPregnanciesQuery,
+  useListPregnanciesPagedQuery,
+  useLazyListPregnanciesPagedQuery,
   useCreatePregnancyMutation,
   useUpdatePregnancyMutation,
   useListAncVisitsQuery,
   useCreateAncVisitMutation,
   useListBabiesQuery,
+  useListBabiesPagedQuery,
+  useLazyListBabiesPagedQuery,
   useCreateBabyMutation,
   useListGrowthQuery,
   useAddGrowthMutation,

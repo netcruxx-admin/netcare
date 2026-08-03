@@ -1,41 +1,53 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useMemo, useState } from 'react';
 import { Stethoscope, Search } from 'lucide-react';
 import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
 import { ExportButton } from '@/components/ExportButton';
-import { useListDoctorsQuery, useListDepartmentsQuery } from '@/store/api';
+import { TablePagination } from '@/components/TablePagination';
+import { useServerTable } from '@/hooks/useServerTable';
+import type { Doctor } from '@/lib/types';
+import {
+  useLazyListDoctorsPagedQuery,
+  useListDoctorsPagedQuery,
+  useListDepartmentsQuery,
+} from '@/store/api';
+
+const exportRow = (d: Doctor) => [
+  d.user?.name ?? '—',
+  d.user?.email ?? '—',
+  d.specialization,
+  d.qualification,
+  d.experienceYears,
+  d.consultationFee,
+  d.verificationStatus ?? 'verified',
+];
 
 export function AdminDoctors({ session }: RoleViewProps) {
-  const router = useRouter();
-  const [query, setQuery] = useState('');
   const [specFilter, setSpecFilter] = useState('all');
+  const table = useServerTable({ filterKey: specFilter });
 
-
-  const { data: doctors = [] } = useListDoctorsQuery();
+  const listArgs = {
+    q: table.q.trim() || undefined,
+    specialization: specFilter === 'all' ? undefined : specFilter,
+  };
+  const { data: doctorPage } = useListDoctorsPagedQuery({
+    ...listArgs,
+    limit: table.limit,
+    offset: table.offset,
+  });
+  const filtered = doctorPage?.items ?? [];
+  const totalDoctors = doctorPage?.total ?? 0;
+  const [fetchAllForExport] = useLazyListDoctorsPagedQuery();
   const { data: departments = [] } = useListDepartmentsQuery();
 
+  // Options come from the department catalog, not from the doctors on screen:
+  // a filter built from one page would only ever offer that page's values.
   const specializations = useMemo(
-    () => [...new Set(doctors.map((d) => d.specialization).filter(Boolean))].sort(),
-    [doctors],
+    () => [...new Set(departments.map((d) => d.name).filter(Boolean))].sort(),
+    [departments],
   );
-
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return doctors
-      .filter((d) => specFilter === 'all' || d.specialization === specFilter)
-      .filter((d) => {
-        if (!q) return true;
-        return (
-          (d.user?.name ?? '').toLowerCase().includes(q) ||
-          (d.user?.email ?? '').toLowerCase().includes(q) ||
-          d.specialization.toLowerCase().includes(q) ||
-          d.qualification.toLowerCase().includes(q)
-        );
-      });
-  }, [doctors, query, specFilter]);
 
   return (
     <DashboardShell
@@ -48,8 +60,8 @@ export function AdminDoctors({ session }: RoleViewProps) {
         <div className="relative flex-1 min-w-[220px] max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
           <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            value={table.search}
+            onChange={(e) => table.setSearch(e.target.value)}
             placeholder="Search name, email, specialization…"
             className="w-full pl-9 pr-3 py-2 bg-white rounded-lg shadow text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
           />
@@ -65,24 +77,20 @@ export function AdminDoctors({ session }: RoleViewProps) {
         <ExportButton
           filename="doctors"
           headers={['Name', 'Email', 'Specialization', 'Qualification', 'Experience (yrs)', 'Fee', 'Status']}
-          rows={filtered.map((d) => [
-            d.user?.name ?? '—',
-            d.user?.email ?? '—',
-            d.specialization,
-            d.qualification,
-            d.experienceYears,
-            d.consultationFee,
-            d.verificationStatus ?? 'verified',
-          ])}
+          rows={filtered.map(exportRow)}
+          getRows={async () => {
+            const all = await fetchAllForExport(listArgs).unwrap();
+            return all.items.map(exportRow);
+          }}
         />
       </div>
 
       <div className="bg-white rounded-lg shadow">
         <div className="px-6 py-4 border-b">
-          <h3 className="text-lg font-semibold text-slate-900">Doctors ({filtered.length})</h3>
+          <h3 className="text-lg font-semibold text-slate-900">Doctors ({totalDoctors})</h3>
         </div>
 
-        {doctors.length === 0 ? (
+        {filtered.length === 0 ? (
           <div className="text-center py-16">
             <Stethoscope className="w-16 h-16 text-slate-300 mx-auto mb-4" />
             <p className="text-slate-600">No doctors found</p>
@@ -125,13 +133,15 @@ export function AdminDoctors({ session }: RoleViewProps) {
                 ))}
               </tbody>
             </table>
+            <TablePagination
+              page={table.page}
+              pageSize={table.pageSize}
+              total={totalDoctors}
+              onPageChange={table.setPage}
+            />
           </div>
         )}
       </div>
-
-      {departments.length === 0 && (
-        <p className="text-xs text-slate-400 mt-2">Departments loaded: {departments.length}</p>
-      )}
     </DashboardShell>
   );
 }

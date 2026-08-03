@@ -10,7 +10,7 @@ import {
   useDeleteTestOrderMutation,
   useListLabTestsQuery,
   useListTestOrdersPagedQuery,
-  useListTestResultsQuery,
+  useLazyListTestResultsQuery,
   useUpdateTestOrderMutation,
   useUpsertTestResultMutation,
 } from '@/store/api';
@@ -73,7 +73,7 @@ function LabOrdersInner({ session }: RoleViewProps) {
   useEffect(() => {
     setPage(1);
   }, [debouncedQuery, statusFilter]);
-  const { data: results = [] } = useListTestResultsQuery();
+  const [fetchResults] = useLazyListTestResultsQuery();
   const { data: tests = [] } = useListLabTestsQuery();
   const [updateTestOrder] = useUpdateTestOrderMutation();
   const [upsertTestResult] = useUpsertTestResultMutation();
@@ -84,22 +84,12 @@ function LabOrdersInner({ session }: RoleViewProps) {
     setTimeout(() => setToast(''), 2500);
   };
 
-  const lookups = useMemo(() => {
-    const testById = new Map(tests.map((t) => [t.id, t]));
-    const resultsByOrder = new Map<string, TestResult[]>();
-    results.forEach((r) => {
-      const list = resultsByOrder.get(r.orderId) ?? [];
-      list.push(r);
-      resultsByOrder.set(r.orderId, list);
-    });
-    return { testById, resultsByOrder };
-  }, [tests, results]);
+  const testById = useMemo(() => new Map(tests.map((t) => [t.id, t])), [tests]);
 
-  const buildDraft = (order: TestOrder): DraftTest[] => {
-    const existingResults = lookups.resultsByOrder.get(order.id) ?? [];
+  const buildDraft = (order: TestOrder, existingResults: TestResult[]): DraftTest[] => {
     return order.items.map((item) => {
       const existing = existingResults.find((r) => r.testId === item.testId);
-      const template = lookups.testById.get(item.testId)?.parameters;
+      const template = testById.get(item.testId)?.parameters;
       if (existing) {
         return {
           testId: item.testId,
@@ -128,8 +118,12 @@ function LabOrdersInner({ session }: RoleViewProps) {
     });
   };
 
-  const openResults = (order: TestOrder) => {
-    setDraft(buildDraft(order));
+  // Results are fetched for the one order being edited. Holding every result in
+  // the hospital in memory was the last unbounded list on this screen, and all
+  // the table needed from it — "has a report" — now arrives on the order.
+  const openResults = async (order: TestOrder) => {
+    const existing = await fetchResults({ orderId: order.id }).unwrap().catch(() => []);
+    setDraft(buildDraft(order, existing));
     setResultsOrder(order);
   };
 
@@ -137,10 +131,10 @@ function LabOrdersInner({ session }: RoleViewProps) {
   useEffect(() => {
     if (openParam && orders.length && !resultsOrder) {
       const order = orders.find((o) => o.id === openParam);
-      if (order) openResults(order);
+      if (order) void openResults(order);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [openParam, orders, lookups]);
+  }, [openParam, orders]);
 
   const advance = async (order: TestOrder) => {
     const next = nextLabStatus(order.status);
@@ -223,13 +217,13 @@ function LabOrdersInner({ session }: RoleViewProps) {
         // patient in the hospital to name twenty rows.
         patient: o.patientName || 'Patient',
         tests: o.items.map((i) => i.name).join(', '),
-        hasResults: (lookups.resultsByOrder.get(o.id)?.length ?? 0) > 0,
+        hasResults: o.hasResults ?? false,
       }))
       .sort((a, b) => {
         if (a.order.priority !== b.order.priority) return a.order.priority === 'urgent' ? -1 : 1;
         return a.order.orderedAt < b.order.orderedAt ? 1 : -1;
       });
-  }, [orders, lookups]);
+  }, [orders]);
 
   return (
     <DashboardShell role={session.user.role} userName={session.user.name} title="Test Orders" subtitle="Process orders and publish results">

@@ -6,7 +6,6 @@ read any patient's records by putting their id in the URL — tenant scoping alo
 does not stop one patient reading another's chart.
 """
 
-from datetime import date as date_module
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
@@ -25,7 +24,7 @@ from ..authz import (
 )
 from ..database import get_db
 from ..tenancy import get_tenant_id, scoped
-from ..utils import attach_users, paginate
+from ..utils import ListQuery, attach_users, attach_visit_stats, list_params, paginate
 
 router = APIRouter(prefix="/patients", tags=["patients"])
 
@@ -75,17 +74,30 @@ def _visible_patient_or_404(
 
 
 def _sub_resource(
-    db: Session, user: models.User, model, patient_id: str, tenant_id: str, scope: str | None
+    db: Session,
+    user: models.User,
+    model,
+    patient_id: str,
+    tenant_id: str,
+    scope: str | None,
+    response: Response | None = None,
+    params: ListQuery | None = None,
 ):
     """Rows of `model` for one patient, narrowed to what the caller may see.
 
     With scope "own" the caller must be a party to the row — the patient it
     belongs to, or the doctor on it — so passing someone else's patient id in
     the URL returns nothing instead of their records.
+
+    Paged like every other collection when the caller asks; one patient's own
+    history is small, so the default stays "everything".
     """
     query = scoped(db, model, tenant_id).filter(model.patient_id == patient_id)
     if scope == SCOPE_OWN:
         query = query.filter(own_record_filter(db, user, model))
+    query = query.order_by(model.id)
+    if response is not None and params is not None:
+        return paginate(query, response, params.limit, params.offset).all()
     return query.all()
 
 
@@ -117,6 +129,8 @@ def list_patients(
                 func.lower(models.User.email).like(like),
                 func.lower(models.User.phone).like(like),
                 func.lower(models.Patient.phone).like(like),
+                func.lower(models.Patient.gender).like(like),
+                func.lower(models.Patient.blood_group).like(like),
             )
         )
     # Stable order, so page 2 cannot repeat or skip a row from page 1.
@@ -127,44 +141,7 @@ def list_patients(
 
     if with_stats:
         # Visit counts and last/next visit dates, aggregated for this page only.
-        # The patients table shows them per row, and deriving them client-side
-        # means downloading every appointment in the hospital to count them.
-        ids = [p.id for p in rows]
-        if ids:
-            today = date_module.today().isoformat()
-            agg = dict(
-                db.query(models.Appointment.patient_id, func.count())
-                .filter(
-                    models.Appointment.patient_id.in_(ids),
-                    models.Appointment.status == "completed",
-                )
-                .group_by(models.Appointment.patient_id)
-                .all()
-            )
-            last = dict(
-                db.query(models.Appointment.patient_id, func.max(models.Appointment.date))
-                .filter(
-                    models.Appointment.patient_id.in_(ids),
-                    models.Appointment.status != "cancelled",
-                    models.Appointment.date <= today,
-                )
-                .group_by(models.Appointment.patient_id)
-                .all()
-            )
-            nxt = dict(
-                db.query(models.Appointment.patient_id, func.min(models.Appointment.date))
-                .filter(
-                    models.Appointment.patient_id.in_(ids),
-                    models.Appointment.status == "scheduled",
-                    models.Appointment.date >= today,
-                )
-                .group_by(models.Appointment.patient_id)
-                .all()
-            )
-            for item in out:
-                item.visit_count = agg.get(item.id, 0)
-                item.last_visit = last.get(item.id)
-                item.next_visit = nxt.get(item.id)
+        attach_visit_stats(db, out)
     return out
 
 
@@ -225,12 +202,14 @@ def update_patient(
 @router.get("/{patient_id}/appointments", response_model=list[schemas.AppointmentOut])
 def patient_appointments(
     patient_id: str,
+    response: Response,
+    params: ListQuery = Depends(list_params),
     db: Session = Depends(get_db),
     user: models.User = Depends(get_current_user),
     scope: str = Depends(require_permission("appointments.read")),
     tenant_id: str = Depends(get_tenant_id),
 ):
-    return _sub_resource(db, user, models.Appointment, patient_id, tenant_id, scope)
+    return _sub_resource(db, user, models.Appointment, patient_id, tenant_id, scope, response, params)
 
 
 @router.get(
@@ -238,17 +217,21 @@ def patient_appointments(
 )
 def patient_medical_records(
     patient_id: str,
+    response: Response,
+    params: ListQuery = Depends(list_params),
     db: Session = Depends(get_db),
     user: models.User = Depends(get_current_user),
     scope: str = Depends(require_permission("medical_records.read")),
     tenant_id: str = Depends(get_tenant_id),
 ):
-    return _sub_resource(db, user, models.MedicalRecord, patient_id, tenant_id, scope)
+    return _sub_resource(db, user, models.MedicalRecord, patient_id, tenant_id, scope, response, params)
 
 
 @router.get("/{patient_id}/payments", response_model=list[schemas.PaymentOut])
 def patient_payments(
     patient_id: str,
+    response: Response,
+    params: ListQuery = Depends(list_params),
     db: Session = Depends(get_db),
     user: models.User = Depends(get_current_user),
     scope: str = Depends(require_permission("payments.read")),
@@ -260,7 +243,8 @@ def patient_payments(
     )
     if scope == SCOPE_OWN and caller_patient_id(db, user) != patient_id:
         return []
-    return query.all()
+    query = query.order_by(models.Payment.created_at.desc(), models.Payment.id)
+    return paginate(query, response, params.limit, params.offset).all()
 
 
 @router.get(
@@ -268,12 +252,14 @@ def patient_payments(
 )
 def patient_prescriptions(
     patient_id: str,
+    response: Response,
+    params: ListQuery = Depends(list_params),
     db: Session = Depends(get_db),
     user: models.User = Depends(get_current_user),
     scope: str = Depends(require_permission("prescriptions.read")),
     tenant_id: str = Depends(get_tenant_id),
 ):
-    return _sub_resource(db, user, models.Prescription, patient_id, tenant_id, scope)
+    return _sub_resource(db, user, models.Prescription, patient_id, tenant_id, scope, response, params)
 
 
 @router.delete("/{patient_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -295,9 +281,11 @@ def delete_patient(
 @router.get("/{patient_id}/vitals", response_model=list[schemas.VitalsOut])
 def patient_vitals(
     patient_id: str,
+    response: Response,
+    params: ListQuery = Depends(list_params),
     db: Session = Depends(get_db),
     user: models.User = Depends(get_current_user),
     scope: str = Depends(require_permission("vitals.read")),
     tenant_id: str = Depends(get_tenant_id),
 ):
-    return _sub_resource(db, user, models.Vitals, patient_id, tenant_id, scope)
+    return _sub_resource(db, user, models.Vitals, patient_id, tenant_id, scope, response, params)

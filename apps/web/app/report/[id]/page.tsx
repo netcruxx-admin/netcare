@@ -26,14 +26,10 @@ export default function LabReportPage() {
   const { data: order, isLoading, isError } = useGetTestOrderQuery(orderId, {
     skip: !orderId || !session,
   });
-  const { data: allResults = [] } = useListTestResultsQuery(undefined, { skip: !order });
+  const { data: results = [] } = useListTestResultsQuery({ orderId }, { skip: !order });
   const { data: patient } = useGetPatientQuery(order?.patientId ?? '', { skip: !order });
   const { data: doctor } = useGetDoctorQuery(order?.doctorId ?? '', { skip: !order });
 
-  const results = useMemo(
-    () => allResults.filter((r) => r.orderId === orderId),
-    [allResults, orderId],
-  );
   const patientUser = patient?.user ?? null;
   const doctorUser = doctor?.user ?? null;
 

@@ -63,38 +63,120 @@ do **not** inherit this: input stays strict.
 
 ### Pagination, search and filtering
 
-Three list endpoints — `/patients`, `/appointments`, `/test-orders` — accept:
+**Every collection endpoint** — all 35 of them, including the sub-resources and
+the cross-tenant `/superadmin/*` lists — accepts the same three params, from one
+shared `list_params` dependency so the convention cannot drift:
 
 | Param | Meaning |
 |---|---|
-| `limit` | Page size. Omit for everything. Capped at `MAX_PAGE_SIZE` (200). |
-| `offset` | Rows to skip. |
-| `q` | Free-text search, applied **server-side** (see below). |
+| `q` | Free-text search, case-insensitive substring, applied **server-side** |
+| `limit` | Page size. Omit for everything. Capped at `MAX_PAGE_SIZE` (200) |
+| `offset` | Rows to skip |
 
-Every response sets **`X-Total-Count`**: the number of rows matching the filters
-across the whole result, ignoring the page. It is listed in the CORS
-`expose_headers`, or the browser would hide it from JS.
+Every response sets **`X-Total-Count`**: rows matching the filters across the
+whole result, ignoring the page. It is in the CORS `expose_headers`, or the
+browser would hide it from JS.
 
-`limit` defaults to *unlimited*, and that is deliberate. Several screens use
-these lists as lookup tables rather than tables — resolving an id to a name — and
-a default page size would drop names from the UI rather than page them. So
-pagination is opt-in per caller: screens rendering a long table pass a limit,
-screens building a map do not.
+`limit` defaults to *unlimited*, deliberately. Many screens use these lists as
+lookup tables rather than tables — resolving an id to a name — and a default page
+size would drop names from the UI rather than page them. Pagination is opt-in per
+caller: screens rendering a long table pass a limit, screens building a map do
+not. It also means adding all of this changed no existing response.
 
 Search and filtering run on the server for the same reason paging does: once a
 page is 50 of 10,000 rows, filtering what already arrived would search one page
-and present it as the whole result.
+and present it as the whole result. Where the searchable text lives on another
+table, `q` reaches through the join — `/doctors?q=` and `/users?q=` match the
+linked user's name and email, not just the doctor row.
 
-To keep a paginated table from having to fetch every patient just to render
-names, the list responses carry their own display fields:
+**Search is never a way around a permission.** `q` narrows a query that has
+already been tenant-scoped and scope-filtered, so a patient searching the whole
+tenant still sees only their own records, and one hospital cannot find another's
+rows by name.
+
+#### Filters by endpoint
+
+| Endpoint | Filters (beyond `q` / `limit` / `offset`) |
+|---|---|
+| `/patients` | `withStats` |
+| `/doctors` | `specialization`, `verificationStatus` |
+| `/users` | `role` |
+| `/appointments` | `patientId`, `doctorId`, `status`†, `departmentId`, `date` |
+| `/test-orders` | `patientId`, `doctorId`, `appointmentId`, `status`† |
+| `/test-results` | `orderId`† |
+| `/vitals`, `/medical-records` | `patientId`, `appointmentId` |
+| `/prescriptions` | `patientId`, `appointmentId`, `doctorId` |
+| `/payments` | `patientId`, `appointmentId`, `status` |
+| `/medicines`, `/lab-tests` | `category` |
+| `/permissions` | `resource`, `module` |
+| `/hospitals` | `status`, `category` |
+| `/schedule-blocks` | `doctorId`, `date`, `type` |
+| `/video-slots` | `doctorId`, `date`, `status` |
+| `/pregnancies` | `patientId`, `status` |
+| `/anc-visits` | `pregnancyId` |
+| `/babies` | `motherPatientId` |
+| `/superadmin/*` | `hospitalId`, `withStats` (patients) (+ `status` on appointments, `role` on users) |
+
+Endpoints not listed take only the three shared params.
+
+† **Comma-separated.** `?status=completed,reviewed` matches either; so does
+`?orderId=ord-1,ord-2`. This exists because screens that mean a *set* were
+otherwise fetching everything and discarding rows client-side — the reports
+screen wants exactly the two published states, the vitals screen wants anything
+but cancelled, and a detail page wants the results for the handful of orders it
+is showing.
+
+#### Server-resolved display fields
+
+A paginated table cannot fetch every patient in the hospital just to turn an id
+into a name — that would undo the paging it just gained. So the server answers
+the question on the row:
 
 | Response | Added fields |
 |---|---|
-| `AppointmentOut` | `patientName`, `patientPhone`, `doctorName` |
-| `TestOrderOut` | `patientName` |
+| `AppointmentOut` | `patientName`, `patientPhone`, `doctorName`, `hasVitals` |
+| `TestOrderOut` | `patientName`, `hasResults`, `abnormal`, `reportedAt`, `reportedBy` |
+| `PrescriptionOut`, `VitalsOut` | `patientName` |
+| `PregnancyOut` | `patientName`, `visitCount`, `latestVisit` |
+| `BabyOut` | `motherName` |
 | `PatientOut` | `visitCount`, `lastVisit`, `nextVisit` — only with `?withStats=true` |
 
-These are resolved in two batched queries per page, never per row.
+All resolved in batched queries over the rows on the page, never per row. The
+same rule drives which ones exist: each replaced a screen that was downloading a
+whole table to derive one column. `hasVitals` replaced fetching every vitals
+row; `abnormal` and `hasResults` replaced fetching every lab result;
+`latestVisit` replaced fetching every antenatal visit.
+
+Where the searchable text lives on the joined row, `q` follows the same joins —
+searching `/prescriptions`, `/vitals`, `/pregnancies` or `/babies` by the
+patient's (or mother's) name works, because that is the name the screen shows.
+
+#### How the frontend consumes it
+
+| File | Role |
+|---|---|
+| `store/api.ts` | `*Paged` endpoint per collection. Same URL as the unpaged hook; `transformResponse` reads `X-Total-Count` into `{ items, total }` |
+| `hooks/useServerTable.ts` | Owns `search` / `q` / `page` for one table, and **resets to page 1 whenever the result set changes** |
+| `hooks/useDebounced.ts` | Holds the search box back 300 ms, so a word is one request rather than one per letter |
+| `components/TablePagination.tsx` | The pager. `total` is the server's count, not the rows on screen |
+| `components/ExportButton.tsx` | `getRows` refetches the whole filtered set on click, so "Export CSV" does not silently export 20 of 5,000 |
+
+Every table screen passes its filters to `useServerTable` as `filterKey`. That is
+the one rule worth stating: **changing a filter must reset the page.** Staying on
+page 4 of a result that now has one page shows an empty table and reads as a
+broken filter. It happens in the hook rather than in each screen's `onChange`,
+where it is easy to forget on the fifth filter.
+
+**21 screens** are server-paged. 19 use `useServerTable`: platform patients /
+doctors / appointments / departments / users; hospital patients, users, doctors,
+medicines, tests; doctor and nurse appointments; doctor lab orders, lab reports,
+test catalog; prescriptions; vitals; pregnancies; newborns. Two — `AdminAppointments`
+and the lab's `LabOrders` — were converted before the hook existed and still hold
+the equivalent state inline; they behave the same, they just duplicate it.
+
+The unpaged hooks remain, and should: pickers, modals and `RoleModal`-style
+lookups want the whole (small) list, and `/roles` is a six-row catalog that would
+gain nothing from a pager.
 
 ---
 
@@ -102,6 +184,9 @@ These are resolved in two batched queries per page, never per row.
 
 Legend: **PUBLIC** = no auth. **(auth only)** = any signed-in user, no specific
 permission.
+
+Every `GET` returning a list also accepts `q` / `limit` / `offset` and sets
+`X-Total-Count` — see §1 for the per-endpoint filters. Not repeated per row.
 
 ### Auth
 
@@ -159,7 +244,6 @@ self-service can never widen your own access.
 | Method | Path | Permission | Called by |
 |---|---|---|---|
 | GET | `/patients` | `patients.read` | `/dashboard/patients` (paged), `/book`, `/vitals`, `/prescriptions`, `/reports`, `/schedule`, `/pregnancies`, `/babies`, `/completed`, `/video-consults` |
-| | ↳ params: `q`, `withStats`, `limit`, `offset` | | searches name / email / phone |
 | GET | `/patients/by-user/{userId}` | `patients.read` | `/dashboard/medical-history`, `/babies`, `/pregnancies`, `/book`, `/video-consults` |
 | GET | `/patients/{id}` | `patients.read` | `/patient/[id]`, `/consult/[id]`, `/appointment/[id]`, `/report/[id]` |
 | PUT | `/patients/{id}` | `patients.manage`, `profile.manage` | `/dashboard/patients`, `/dashboard/profile` |
@@ -196,7 +280,6 @@ handing over the records.
 | Method | Path | Permission | Called by |
 |---|---|---|---|
 | GET | `/appointments` | `appointments.read` | `/dashboard/appointments` (paged), `/dashboard`, `/completed`, `/schedule`, `/vitals`, `/video-consults` |
-| | ↳ params: `q`, `status`, `departmentId`, `date`, `patientId`, `doctorId`, `limit`, `offset` | | `q` searches patient name/phone and doctor name |
 | GET | `/appointments/stats` | `appointments.read` | `/dashboard/appointments` (summary tiles) |
 | POST | `/appointments` | `appointments.create` | `/dashboard/book`, `/video-consults` |
 | GET | `/appointments/{id}` | `appointments.read` | `/appointment/[id]`, `/consult/[id]` |
@@ -245,7 +328,6 @@ or time moves. Facts about what happened are the server's to write.
 | PUT | `/lab-tests/{id}` | `lab_tests.manage` | `/dashboard/tests` |
 | DELETE | `/lab-tests/{id}` | `lab_tests.manage` | `/dashboard/tests` |
 | GET | `/test-orders` | `lab_orders.read` | `/dashboard/lab-orders` (paged), `/reports`, `/dashboard`, `/patient/[id]`, `/appointment/[id]` |
-| | ↳ params: `q`, `status`, `patientId`, `doctorId`, `appointmentId`, `limit`, `offset` | | `q` searches order id, patient name, test names |
 | POST | `/test-orders` | `lab_orders.create` | `/dashboard/appointments` |
 | GET | `/test-orders/{id}` | `lab_orders.read` | `/report/[id]` |
 | PUT | `/test-orders/{id}` | `lab_orders.process` | `/dashboard/lab-orders` |
@@ -425,10 +507,10 @@ there is no video transport behind them.
 
 7. **Token refresh / revocation** — 7-day JWT in `localStorage`, no logout invalidation.
 8. **Rate limiting** on `/auth/login` — no lockout, no throttle.
-9. **Remaining unbounded lists** — `/vitals`, `/prescriptions`, `/medical-records`,
-   `/payments`, `/video-slots`, `/pregnancies`, `/babies` still return everything.
-   They grow more slowly than the three that were paginated, but the same
-   `paginate()` helper applies when they need it.
+9. **Dashboard tiles still aggregate client-side** — the six `home/*` overview
+   screens fetch whole collections to count them. Every *table* screen now pages
+   and searches on the server (see below), but the tiles need `/stats`-style
+   endpoints of their own; `GET /appointments/stats` is the pattern to copy.
 
 ### Implemented but never called
 
@@ -440,7 +522,7 @@ No backend work needed; these are missing UI, not missing endpoints.
 | `PUT /pregnancies/{id}` | pregnancy edit |
 | `DELETE /hospitals/{id}` | hospital delete |
 | `GET /doctors/{id}/appointments` | superseded by `/appointments?doctorId=` |
-| `GET /patients` (unpaged) | still used by 18 screens as a lookup table; the three big tables no longer call it |
+| `GET /patients` (unpaged) | still used by the pickers, modals and dashboard tiles as a lookup table; no table screen calls it any more |
 | `GET /hospitals/{id}`, `GET /roles/{code}`, `GET /babies/{id}`, `GET /pregnancies/{id}`, `PUT /superadmin/patients/{id}` | detail reads the UI gets from list endpoints |
 
 ---

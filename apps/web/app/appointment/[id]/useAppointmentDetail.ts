@@ -57,7 +57,13 @@ export function useAppointmentDetail() {
   const { data: medicalRecords = [] } = useListMedicalRecordsQuery({ appointmentId }, { skip: !ready });
   const { data: vitals = [] } = useListVitalsQuery({ appointmentId }, { skip: !ready });
   const { data: orders = [] } = useListTestOrdersQuery({ appointmentId }, { skip: !ready });
-  const { data: allResults = [] } = useListTestResultsQuery(undefined, { skip: !ready });
+  // Only the results belonging to this appointment's orders — the endpoint
+  // takes a comma-separated list, so it stays one request.
+  const orderIds = orders.map((o) => o.id).join(',');
+  const { data: allResults = [] } = useListTestResultsQuery(
+    { orderId: orderIds },
+    { skip: !ready || !orderIds },
+  );
 
   const [updateAppointment] = useUpdateAppointmentMutation();
   const [deleteAppointment] = useDeleteAppointmentMutation();

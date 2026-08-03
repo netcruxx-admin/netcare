@@ -12,11 +12,13 @@ import { FormField } from '@/components/form/FormField';
 import { AddUserModal } from '@/components/superadmin/AddUserModal';
 import { HospitalBadge } from '@/components/superadmin/HospitalBadge';
 import { ActionIcon } from '@/components/ActionIcon';
+import { TablePagination } from '@/components/TablePagination';
+import { useServerTable } from '@/hooks/useServerTable';
 import { apiError } from '@/lib/apiError';
 import { hasPermission } from '@/lib/auth';
 import type { User } from '@/lib/types';
 import {
-  useGetSuperadminUsersQuery,
+  useGetSuperadminUsersPagedQuery,
   useListHospitalsQuery,
   useListAssignableRolesQuery,
   useUpdateUserMutation,
@@ -42,10 +44,20 @@ export function PlatformUsers({ session }: RoleViewProps) {
   const [editing, setEditing] = useState<User | null>(null);
   const [deleting, setDeleting] = useState<User | null>(null);
   const [saveError, setSaveError] = useState('');
-  const [query, setQuery] = useState('');
   const [roleFilter, setRoleFilter] = useState('all');
 
-  const { data: allUsers = [], isLoading, refetch } = useGetSuperadminUsersQuery();
+  // Both filters go to the API, so the page count and the "(filtered)" total
+  // describe the whole result rather than whatever arrived first.
+  const table = useServerTable({ filterKey: `${selectedHospitalId}|${roleFilter}` });
+  const { data: userPage, isLoading, refetch } = useGetSuperadminUsersPagedQuery({
+    q: table.q.trim() || undefined,
+    hospitalId: selectedHospitalId || undefined,
+    role: roleFilter === 'all' ? undefined : roleFilter,
+    limit: table.limit,
+    offset: table.offset,
+  });
+  const users = userPage?.items ?? [];
+  const totalUsers = userPage?.total ?? 0;
   const { data: hospitals = [] } = useListHospitalsQuery();
   const { data: assignableRoles = EMPTY_ROLES } = useListAssignableRolesQuery();
   const [updateUser] = useUpdateUserMutation();
@@ -71,14 +83,6 @@ export function PlatformUsers({ session }: RoleViewProps) {
       }),
     [roleOptions],
   );
-
-  const users = allUsers
-    .filter((u) => !selectedHospitalId || u.hospitalId === selectedHospitalId)
-    .filter((u) => roleFilter === 'all' || u.role === roleFilter)
-    .filter((u) => {
-      const q = query.trim().toLowerCase();
-      return !q || u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q) || (u.phone ?? '').toLowerCase().includes(q);
-    });
 
   const showHospital = !selectedHospitalId;
 
@@ -112,8 +116,8 @@ export function PlatformUsers({ session }: RoleViewProps) {
         <div className="relative flex-1 min-w-[200px] max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
           <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            value={table.search}
+            onChange={(e) => table.setSearch(e.target.value)}
             placeholder="Search name, email or phone…"
             className="w-full pl-9 pr-3 py-2 bg-white rounded-lg shadow text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
           />
@@ -133,8 +137,8 @@ export function PlatformUsers({ session }: RoleViewProps) {
       <div className="bg-white rounded-xl border border-slate-100 shadow-sm">
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
           <p className="text-sm text-slate-500">
-            {users.length} user{users.length !== 1 ? 's' : ''}
-            {(selectedHospitalId || query || roleFilter !== 'all') && <span className="text-slate-400"> (filtered)</span>}
+            {totalUsers} user{totalUsers !== 1 ? 's' : ''}
+            {(selectedHospitalId || table.search || roleFilter !== 'all') && <span className="text-slate-400"> (filtered)</span>}
           </p>
           {hasPermission(session, 'users.manage') && (
             <button
@@ -203,6 +207,12 @@ export function PlatformUsers({ session }: RoleViewProps) {
                 })}
               </tbody>
             </table>
+            <TablePagination
+              page={table.page}
+              pageSize={table.pageSize}
+              total={totalUsers}
+              onPageChange={table.setPage}
+            />
           </div>
         )}
       </div>

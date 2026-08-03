@@ -2,14 +2,14 @@
 
 import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Baby as BabyIcon, Plus, X, Syringe, LineChart as LineChartIcon, CheckCircle2, AlertTriangle } from 'lucide-react';
+import { Baby as BabyIcon, Plus, X, Search, Syringe, LineChart as LineChartIcon, CheckCircle2, AlertTriangle } from 'lucide-react';
 import type { Baby, Immunization } from '@/lib/types';
 import { apiError } from '@/lib/apiError';
 import {
   useAddGrowthMutation,
   useCreateBabyMutation,
   useCreateImmunizationMutation,
-  useListBabiesQuery,
+  useListBabiesPagedQuery,
   useListGrowthQuery,
   useListImmunizationsQuery,
   useListPatientsQuery,
@@ -17,6 +17,8 @@ import {
 } from '@/store/api';
 import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
+import { TablePagination } from '@/components/TablePagination';
+import { useServerTable } from '@/hooks/useServerTable';
 import { ageDisplay, scheduleForDob, immStatus } from '@/lib/baby';
 
 const today = () => new Date().toISOString().split('T')[0];
@@ -27,20 +29,32 @@ export function DoctorNewborns({ session }: RoleViewProps) {
   const [growthFor, setGrowthFor] = useState<Baby | null>(null);
   const [immFor, setImmFor] = useState<Baby | null>(null);
 
-  const { data: babies = [] } = useListBabiesQuery();
-  const { data: patients = [] } = useListPatientsQuery();
-  // Fetched once for the whole list rather than per baby card.
+  const table = useServerTable();
 
-  const motherName = useMemo(
-    () => new Map(patients.map((p) => [p.id, p.user?.name ?? p.id])),
-    [patients],
-  );
+  // The mother's name arrives on the record, so this screen no longer holds
+  // every patient in the hospital in memory to label a card.
+  const { data: babyPage } = useListBabiesPagedQuery({
+    q: table.q.trim() || undefined,
+    limit: table.limit,
+    offset: table.offset,
+  });
+  const babies = babyPage?.items ?? [];
+  const totalBabies = babyPage?.total ?? 0;
 
   return (
     <DashboardShell role={session.user.role} userName={session.user.name} title="Newborns" subtitle="Growth tracking & immunisations">
       <div className="space-y-4">
-        <div className="flex justify-end">
-          <button onClick={() => setShowRegister(true)} className="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-cyan-500 to-brand-teal text-white text-sm font-semibold px-4 py-2 shadow hover:opacity-95">
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="relative flex-1 min-w-[220px] max-w-md">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <input
+              value={table.search}
+              onChange={(e) => table.setSearch(e.target.value)}
+              placeholder="Search baby or mother…"
+              className="w-full pl-9 pr-3 py-2 bg-white rounded-lg shadow text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
+            />
+          </div>
+          <button onClick={() => setShowRegister(true)} className="ml-auto inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-cyan-500 to-brand-teal text-white text-sm font-semibold px-4 py-2 shadow hover:opacity-95">
             <Plus className="w-4 h-4" /> Register newborn
           </button>
         </div>
@@ -56,11 +70,21 @@ export function DoctorNewborns({ session }: RoleViewProps) {
               <BabyCard
                 key={b.id}
                 baby={b}
-                motherName={motherName.get(b.motherPatientId) ?? '—'}
+                motherName={b.motherName || '—'}
                 onGrowth={() => setGrowthFor(b)}
                 onImmunisations={() => setImmFor(b)}
               />
             ))}
+          </div>
+        )}
+        {totalBabies > 0 && (
+          <div className="bg-white rounded-lg shadow">
+            <TablePagination
+              page={table.page}
+              pageSize={table.pageSize}
+              total={totalBabies}
+              onPageChange={table.setPage}
+            />
           </div>
         )}
       </div>

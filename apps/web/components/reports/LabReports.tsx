@@ -1,53 +1,49 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import Link from 'next/link';
 import { Search, FileBarChart, AlertTriangle } from 'lucide-react';
-import type { TestResult } from '@/lib/types';
-import {
-  useListPatientsQuery,
-  useListTestOrdersQuery,
-  useListTestResultsQuery,
-} from '@/store/api';
+import type { TestOrder } from '@/lib/types';
+import { useLazyListTestOrdersPagedQuery, useListTestOrdersPagedQuery } from '@/store/api';
 import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
 import { ExportButton } from '@/components/ExportButton';
-import { ORDER_STATUS_LABEL, ORDER_STATUS_STYLE, isAbnormal } from '@/lib/lab';
+import { TablePagination } from '@/components/TablePagination';
+import { useServerTable } from '@/hooks/useServerTable';
+import { ORDER_STATUS_LABEL, ORDER_STATUS_STYLE } from '@/lib/lab';
+
+/** A published report is an order in one of these two states. */
+const PUBLISHED = 'completed,reviewed';
+
+const toRow = (o: TestOrder) => ({
+  order: o,
+  // Name, abnormal flag and reporting details all arrive on the order, so this
+  // screen no longer downloads every patient and every result to derive them.
+  patient: o.patientName || 'Patient',
+  tests: o.items.map((i) => i.name).join(', '),
+  abnormal: o.abnormal ?? false,
+  reportedBy: o.reportedBy || '—',
+  reportedAt: o.reportedAt?.split('T')[0] || '—',
+});
+
+const exportRow = (r: ReturnType<typeof toRow>) => [
+  r.order.id, r.patient, r.tests, r.reportedAt, r.reportedBy, r.order.status,
+  r.abnormal ? 'Yes' : 'No',
+];
 
 export function LabReports({ session }: RoleViewProps) {
-  const [query, setQuery] = useState('');
+  const table = useServerTable();
 
-  const { data: orders = [] } = useListTestOrdersQuery();
-  const { data: results = [] } = useListTestResultsQuery();
-  const { data: patients = [] } = useListPatientsQuery();
+  const listArgs = { q: table.q.trim() || undefined, status: PUBLISHED };
+  const { data: orderPage } = useListTestOrdersPagedQuery({
+    ...listArgs,
+    limit: table.limit,
+    offset: table.offset,
+  });
+  const totalReports = orderPage?.total ?? 0;
+  const [fetchAllForExport] = useLazyListTestOrdersPagedQuery();
 
-  const rows = useMemo(() => {
-    const patientName = (id: string) =>
-      patients.find((p) => p.id === id)?.user?.name ?? 'Patient';
-    const resultsByOrder = new Map<string, TestResult[]>();
-    results.forEach((r) => {
-      const list = resultsByOrder.get(r.orderId) ?? [];
-      list.push(r);
-      resultsByOrder.set(r.orderId, list);
-    });
-
-    const q = query.trim().toLowerCase();
-    return orders
-      .filter((o) => o.status === 'completed' || o.status === 'reviewed')
-      .map((o) => {
-        const res = resultsByOrder.get(o.id) ?? [];
-        return {
-          order: o,
-          patient: patientName(o.patientId),
-          tests: o.items.map((i) => i.name).join(', '),
-          abnormal: res.some((r) => r.parameters.some((p) => isAbnormal(p.flag))),
-          reportedBy: res[0]?.reportedBy ?? '—',
-          reportedAt: res[0]?.reportedAt?.split('T')[0] ?? '—',
-        };
-      })
-      .filter((r) => !q || r.patient.toLowerCase().includes(q) || r.tests.toLowerCase().includes(q))
-      .sort((a, b) => (a.reportedAt < b.reportedAt ? 1 : -1));
-  }, [orders, results, patients, query]);
+  const rows = useMemo(() => (orderPage?.items ?? []).map(toRow), [orderPage]);
 
   return (
     <DashboardShell role={session.user.role} userName={session.user.name} title="Reports" subtitle="Published lab reports">
@@ -56,8 +52,8 @@ export function LabReports({ session }: RoleViewProps) {
           <div className="relative flex-1 min-w-[220px] max-w-md">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
             <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
+              value={table.search}
+              onChange={(e) => table.setSearch(e.target.value)}
               placeholder="Search patient or test…"
               className="w-full pl-9 pr-3 py-2 bg-white rounded-lg shadow text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
             />
@@ -65,13 +61,17 @@ export function LabReports({ session }: RoleViewProps) {
           <ExportButton
             filename="published-reports"
             headers={['Order', 'Patient', 'Tests', 'Reported', 'Reported By', 'Status', 'Abnormal']}
-            rows={rows.map((r) => [r.order.id, r.patient, r.tests, r.reportedAt, r.reportedBy, r.order.status, r.abnormal ? 'Yes' : 'No'])}
+            rows={rows.map(exportRow)}
+            getRows={async () => {
+              const all = await fetchAllForExport(listArgs).unwrap();
+              return all.items.map(toRow).map(exportRow);
+            }}
           />
         </div>
 
         <div className="bg-white rounded-lg shadow">
           <div className="px-6 py-4 border-b">
-            <h3 className="font-semibold text-slate-900">Published Reports ({rows.length})</h3>
+            <h3 className="font-semibold text-slate-900">Published Reports ({totalReports})</h3>
           </div>
           {rows.length === 0 ? (
             <div className="text-center py-16">
@@ -117,6 +117,12 @@ export function LabReports({ session }: RoleViewProps) {
                   ))}
                 </tbody>
               </table>
+              <TablePagination
+                page={table.page}
+                pageSize={table.pageSize}
+                total={totalReports}
+                onPageChange={table.setPage}
+              />
             </div>
           )}
         </div>

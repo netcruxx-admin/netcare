@@ -1,6 +1,6 @@
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.orm import Session
 
 from .. import models, schemas
@@ -8,15 +8,18 @@ from ..auth import get_current_user
 from ..authz import SCOPE_OWN, own_record_filter, require_permission
 from ..database import get_db
 from ..tenancy import get_tenant_id, scoped
-from ..utils import new_id, now_iso
+from ..utils import ListQuery, list_params, new_id, now_iso, paginate, text_search
 
 router = APIRouter(prefix="/payments", tags=["payments"])
 
 
 @router.get("", response_model=list[schemas.PaymentOut])
 def list_payments(
+    response: Response,
     patient_id: Optional[str] = Query(default=None, alias="patientId"),
     appointment_id: Optional[str] = Query(default=None, alias="appointmentId"),
+    status_filter: Optional[str] = Query(default=None, alias="status"),
+    params: ListQuery = Depends(list_params),
     db: Session = Depends(get_db),
     user: models.User = Depends(get_current_user),
     scope: str = Depends(require_permission("payments.read")),
@@ -32,7 +35,11 @@ def list_payments(
     # else's id narrows the result to nothing rather than exposing their records.
     if scope == SCOPE_OWN:
         query = query.filter(own_record_filter(db, user, models.Payment))
-    return query.all()
+    if status_filter:
+        query = query.filter(models.Payment.status == status_filter)
+    query = text_search(query, [models.Payment.payment_method, models.Payment.id], params.q)
+    query = query.order_by(models.Payment.created_at.desc(), models.Payment.id)
+    return paginate(query, response, params.limit, params.offset).all()
 
 
 @router.post("", response_model=schemas.PaymentOut, status_code=status.HTTP_201_CREATED)

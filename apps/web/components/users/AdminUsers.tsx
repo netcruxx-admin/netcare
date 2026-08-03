@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Formik, Form } from 'formik';
 import * as Yup from 'yup';
 import { Plus, X, AlertTriangle, Search } from 'lucide-react';
@@ -9,12 +9,15 @@ import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
 import { FormField } from '@/components/form/FormField';
 import { ExportButton } from '@/components/ExportButton';
+import { TablePagination } from '@/components/TablePagination';
+import { useServerTable } from '@/hooks/useServerTable';
 import { apiError } from '@/lib/apiError';
 import {
   useCreateUserMutation,
   useDeleteUserMutation,
+  useLazyListUsersPagedQuery,
   useListAssignableRolesQuery,
-  useListUsersQuery,
+  useListUsersPagedQuery,
   useUpdateUserMutation,
 } from '@/store/api';
 import type { RoleOption } from '@/store/api';
@@ -38,8 +41,8 @@ export function AdminUsers({ session }: RoleViewProps) {
   const [editing, setEditing] = useState<User | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [deleting, setDeleting] = useState<User | null>(null);
-  const [query, setQuery] = useState('');
   const [roleFilter, setRoleFilter] = useState<string>('all');
+  const table = useServerTable({ filterKey: roleFilter });
 
   // Role options come from the backend catalog, so a role a superadmin adds is
   // assignable here without a code change.
@@ -49,19 +52,24 @@ export function AdminUsers({ session }: RoleViewProps) {
     [assignableRoles],
   );
 
-  // Server-side: the list is tenant-scoped and gated by users.read.
-  const { data: users = [], isLoading, error } = useListUsersQuery();
+  // Server-side throughout: the list is tenant-scoped, gated by users.read, and
+  // searched, filtered and paged by the API.
+  const listArgs = {
+    q: table.q.trim() || undefined,
+    role: roleFilter === 'all' ? undefined : roleFilter,
+  };
+  const { data: userPage, isLoading, error } = useListUsersPagedQuery({
+    ...listArgs,
+    limit: table.limit,
+    offset: table.offset,
+  });
+  const filtered = userPage?.items ?? [];
+  const totalUsers = userPage?.total ?? 0;
+  const [fetchAllForExport] = useLazyListUsersPagedQuery();
   const [createUser] = useCreateUserMutation();
   const [updateUser] = useUpdateUserMutation();
   const [deleteUser] = useDeleteUserMutation();
   const [saveError, setSaveError] = useState('');
-
-  const filtered = users
-    .filter((u) => roleFilter === 'all' || u.role === roleFilter)
-    .filter((u) => {
-      const q = query.trim().toLowerCase();
-      return !q || u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q) || (u.phone ?? '').toLowerCase().includes(q);
-    });
 
   const userSchema = useMemo(
     () =>
@@ -136,8 +144,8 @@ export function AdminUsers({ session }: RoleViewProps) {
         <div className="relative flex-1 min-w-[220px] max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
           <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            value={table.search}
+            onChange={(e) => table.setSearch(e.target.value)}
             placeholder="Search name, email or phone…"
             className="w-full pl-9 pr-3 py-2 bg-white rounded-lg shadow text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
           />
@@ -156,12 +164,17 @@ export function AdminUsers({ session }: RoleViewProps) {
           filename="users"
           headers={['Name', 'Email', 'Phone', 'Role']}
           rows={filtered.map((u) => [u.name, u.email, u.phone ?? '', u.role])}
+          // The whole filtered set, not the page on screen.
+          getRows={async () => {
+            const all = await fetchAllForExport(listArgs).unwrap();
+            return all.items.map((u) => [u.name, u.email, u.phone ?? '', u.role]);
+          }}
         />
       </div>
 
       <div className="bg-white rounded-lg shadow">
         <div className="flex justify-between items-center px-6 py-4 border-b">
-          <h3 className="text-lg font-semibold text-slate-900">Users ({filtered.length})</h3>
+          <h3 className="text-lg font-semibold text-slate-900">Users ({totalUsers})</h3>
           <button
             onClick={openAdd}
             className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg hover:shadow-lg transition"
@@ -232,6 +245,12 @@ export function AdminUsers({ session }: RoleViewProps) {
               })}
             </tbody>
           </table>
+          <TablePagination
+            page={table.page}
+            pageSize={table.pageSize}
+            total={totalUsers}
+            onPageChange={table.setPage}
+          />
         </div>
       </div>
 

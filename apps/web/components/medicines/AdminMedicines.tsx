@@ -11,12 +11,15 @@ import { apiError } from '@/lib/apiError';
 import {
   useCreateMedicineMutation,
   useDeleteMedicineMutation,
-  useListMedicinesQuery,
+  useLazyListMedicinesPagedQuery,
+  useListMedicinesPagedQuery,
   useUpdateMedicineMutation,
 } from '@/store/api';
 import type { RoleViewProps } from '@/components/RoleView';
 import { FormField } from '@/components/form/FormField';
 import { ExportButton } from '@/components/ExportButton';
+import { TablePagination } from '@/components/TablePagination';
+import { useServerTable } from '@/hooks/useServerTable';
 
 
 const CATEGORIES = ['Prenatal', 'Supplement', 'Vitamin', 'Antibiotic', 'Analgesic', 'Antacid', 'Antiemetic', 'Other'];
@@ -49,21 +52,25 @@ export function AdminMedicines({ session }: RoleViewProps) {
   const [editing, setEditing] = useState<Medicine | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [deleting, setDeleting] = useState<Medicine | null>(null);
-  const [query, setQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
+  const table = useServerTable({ filterKey: categoryFilter });
 
-  const { data: medicines = [], isLoading } = useListMedicinesQuery();
+  const listArgs = {
+    q: table.q.trim() || undefined,
+    category: categoryFilter === 'all' ? undefined : categoryFilter,
+  };
+  const { data: medicinePage, isLoading } = useListMedicinesPagedQuery({
+    ...listArgs,
+    limit: table.limit,
+    offset: table.offset,
+  });
+  const filtered = medicinePage?.items ?? [];
+  const totalMedicines = medicinePage?.total ?? 0;
+  const [fetchAllForExport] = useLazyListMedicinesPagedQuery();
   const [createMedicine] = useCreateMedicineMutation();
   const [updateMedicine] = useUpdateMedicineMutation();
   const [deleteMedicine] = useDeleteMedicineMutation();
   const [saveError, setSaveError] = useState('');
-
-  const filtered = medicines
-    .filter((m) => categoryFilter === 'all' || m.category === categoryFilter)
-    .filter((m) => {
-      const q = query.trim().toLowerCase();
-      return !q || m.name.toLowerCase().includes(q) || m.category.toLowerCase().includes(q);
-    });
 
   const openAdd = () => {
     setEditing(null);
@@ -102,8 +109,8 @@ export function AdminMedicines({ session }: RoleViewProps) {
         <div className="relative flex-1 min-w-[220px] max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
           <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            value={table.search}
+            onChange={(e) => table.setSearch(e.target.value)}
             placeholder="Search medicine…"
             className="w-full pl-9 pr-3 py-2 bg-white rounded-lg shadow text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
           />
@@ -120,12 +127,16 @@ export function AdminMedicines({ session }: RoleViewProps) {
           filename="medicines"
           headers={['Name', 'Category', 'Form', 'Strength', 'Price', 'Stock']}
           rows={filtered.map((m) => [m.name, m.category, m.form, m.strength, m.price, m.stock])}
+          getRows={async () => {
+            const all = await fetchAllForExport(listArgs).unwrap();
+            return all.items.map((m) => [m.name, m.category, m.form, m.strength, m.price, m.stock]);
+          }}
         />
       </div>
 
       <div className="bg-white rounded-lg shadow">
         <div className="flex justify-between items-center px-6 py-4 border-b">
-          <h3 className="text-lg font-semibold text-slate-900">Medicines ({filtered.length})</h3>
+          <h3 className="text-lg font-semibold text-slate-900">Medicines ({totalMedicines})</h3>
           <button
             onClick={openAdd}
             className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg hover:shadow-lg transition"
@@ -135,7 +146,7 @@ export function AdminMedicines({ session }: RoleViewProps) {
           </button>
         </div>
 
-        {medicines.length === 0 ? (
+        {!isLoading && filtered.length === 0 ? (
           <div className="text-center py-16">
             <Pill className="w-16 h-16 text-slate-300 mx-auto mb-4" />
             <p className="text-slate-600 mb-6">No medicines yet</p>
@@ -186,6 +197,12 @@ export function AdminMedicines({ session }: RoleViewProps) {
                 ))}
               </tbody>
             </table>
+            <TablePagination
+              page={table.page}
+              pageSize={table.pageSize}
+              total={totalMedicines}
+              onPageChange={table.setPage}
+            />
           </div>
         )}
       </div>

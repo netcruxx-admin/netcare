@@ -12,11 +12,13 @@ import { FormField } from '@/components/form/FormField';
 import { AddDoctorModal } from '@/components/superadmin/AddDoctorModal';
 import { HospitalBadge } from '@/components/superadmin/HospitalBadge';
 import { ActionIcon } from '@/components/ActionIcon';
+import { TablePagination } from '@/components/TablePagination';
+import { useServerTable } from '@/hooks/useServerTable';
 import { apiError } from '@/lib/apiError';
 import { hasPermission } from '@/lib/auth';
 import type { Doctor } from '@/lib/types';
 import {
-  useGetSuperadminDoctorsQuery,
+  useGetSuperadminDoctorsPagedQuery,
   useListHospitalsQuery,
   useUpdateDoctorMutation,
   useDeleteDoctorMutation,
@@ -40,22 +42,20 @@ export function PlatformDoctors({ session }: RoleViewProps) {
   const [editing, setEditing] = useState<Doctor | null>(null);
   const [deleting, setDeleting] = useState<Doctor | null>(null);
   const [saveError, setSaveError] = useState('');
-  const [query, setQuery] = useState('');
 
-  const { data: allDoctors = [], isLoading, refetch } = useGetSuperadminDoctorsQuery();
+  // Hospital filter, search and paging are all the API's job.
+  const table = useServerTable({ filterKey: selectedHospitalId });
+  const { data: doctorPage, isLoading, refetch } = useGetSuperadminDoctorsPagedQuery({
+    q: table.q.trim() || undefined,
+    hospitalId: selectedHospitalId || undefined,
+    limit: table.limit,
+    offset: table.offset,
+  });
+  const doctors = doctorPage?.items ?? [];
+  const totalDoctors = doctorPage?.total ?? 0;
   const { data: hospitals = [] } = useListHospitalsQuery();
   const [updateDoctor] = useUpdateDoctorMutation();
   const [deleteDoctor] = useDeleteDoctorMutation();
-
-  const doctors = allDoctors
-    .filter((d) => !selectedHospitalId || d.hospitalId === selectedHospitalId)
-    .filter((d) => {
-      const q = query.trim().toLowerCase();
-      return !q
-        || (d.user?.name ?? '').toLowerCase().includes(q)
-        || (d.user?.email ?? '').toLowerCase().includes(q)
-        || (d.specialization ?? '').toLowerCase().includes(q);
-    });
 
   const showHospital = !selectedHospitalId;
 
@@ -89,8 +89,8 @@ export function PlatformDoctors({ session }: RoleViewProps) {
         <div className="relative max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
           <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            value={table.search}
+            onChange={(e) => table.setSearch(e.target.value)}
             placeholder="Search by name, email or specialization…"
             className="w-full pl-9 pr-3 py-2 bg-white rounded-lg shadow text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
           />
@@ -100,8 +100,8 @@ export function PlatformDoctors({ session }: RoleViewProps) {
       <div className="bg-white rounded-xl border border-slate-100 shadow-sm">
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
           <p className="text-sm text-slate-500">
-            {doctors.length} doctor{doctors.length !== 1 ? 's' : ''}
-            {(selectedHospitalId || query) && <span className="text-slate-400"> (filtered)</span>}
+            {totalDoctors} doctor{totalDoctors !== 1 ? 's' : ''}
+            {(selectedHospitalId || table.search) && <span className="text-slate-400"> (filtered)</span>}
           </p>
           {hasPermission(session, 'doctors.manage') && (
             <button
@@ -154,6 +154,12 @@ export function PlatformDoctors({ session }: RoleViewProps) {
                 ))}
               </tbody>
             </table>
+            <TablePagination
+              page={table.page}
+              pageSize={table.pageSize}
+              total={totalDoctors}
+              onPageChange={table.setPage}
+            />
           </div>
         )}
       </div>

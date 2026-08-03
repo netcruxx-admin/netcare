@@ -1,8 +1,8 @@
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
-from sqlalchemy import func, or_
-from sqlalchemy.orm import Session, aliased
+from sqlalchemy import func
+from sqlalchemy.orm import Session
 
 from .. import models, schemas
 from ..auth import get_current_user
@@ -15,7 +15,15 @@ from ..authz import (
 )
 from ..database import get_db
 from ..tenancy import get_tenant_id, scoped
-from ..utils import new_id, now_iso, doctor_display, paginate, patient_display
+from ..utils import (
+    appointment_name_search,
+    appointments_with_vitals,
+    doctor_display,
+    new_id,
+    now_iso,
+    paginate,
+    patient_display,
+)
 
 router = APIRouter(prefix="/appointments", tags=["appointments"])
 
@@ -46,34 +54,16 @@ def list_appointments(
     if scope == SCOPE_OWN:
         query = query.filter(own_record_filter(db, user, models.Appointment))
     if status_filter:
-        query = query.filter(models.Appointment.status == status_filter)
+        # Comma-separated, so a screen that means "anything but cancelled" can
+        # say so instead of fetching everything and dropping rows client-side.
+        wanted = [s.strip() for s in status_filter.split(",") if s.strip()]
+        query = query.filter(models.Appointment.status.in_(wanted))
     if department_id:
         query = query.filter(models.Appointment.department_id == department_id)
     if date:
         query = query.filter(models.Appointment.date == date)
-    if q:
-        # Matches the patient's name/phone or the doctor's name. Outer joins so
-        # an appointment whose patient or doctor row is missing still appears
-        # rather than silently vanishing from the list.
-        like = f"%{q.strip().lower()}%"
-        pat_user = aliased(models.User)
-        doc_user = aliased(models.User)
-        query = (
-            query.outerjoin(
-                models.Patient, models.Patient.id == models.Appointment.patient_id
-            )
-            .outerjoin(pat_user, pat_user.id == models.Patient.user_id)
-            .outerjoin(models.Doctor, models.Doctor.id == models.Appointment.doctor_id)
-            .outerjoin(doc_user, doc_user.id == models.Doctor.user_id)
-            .filter(
-                or_(
-                    func.lower(pat_user.name).like(like),
-                    func.lower(pat_user.phone).like(like),
-                    func.lower(models.Patient.phone).like(like),
-                    func.lower(doc_user.name).like(like),
-                )
-            )
-        )
+    # Matches the patient's name/phone or the doctor's name.
+    query = appointment_name_search(query, q)
     # Newest first, then id to break ties — a stable order across pages.
     query = query.order_by(models.Appointment.date.desc(), models.Appointment.id)
     rows = paginate(query, response, limit, offset).all()
@@ -82,11 +72,15 @@ def list_appointments(
     # never has to pull the full patient and doctor lists to render a table.
     patients = patient_display(db, (r.patient_id for r in rows))
     doctors = doctor_display(db, (r.doctor_id for r in rows))
+    # The nurse's list shows whether vitals have been recorded; one query over
+    # the page, rather than the client fetching every vitals row to find out.
+    with_vitals = appointments_with_vitals(db, (r.id for r in rows))
     out = []
     for row in rows:
         item = schemas.AppointmentOut.model_validate(row)
         item.patient_name, item.patient_phone = patients.get(row.patient_id, ("", ""))
         item.doctor_name = doctors.get(row.doctor_id, "")
+        item.has_vitals = row.id in with_vitals
         out.append(item)
     return out
 

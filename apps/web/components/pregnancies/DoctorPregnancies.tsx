@@ -2,19 +2,20 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Baby, Plus, X, AlertTriangle } from 'lucide-react';
+import { Baby, Plus, X, AlertTriangle, Search } from 'lucide-react';
 import type { PregnancyRecord } from '@/lib/types';
 import { apiError } from '@/lib/apiError';
 import {
   useCreateAncVisitMutation,
   useGetDoctorByUserQuery,
   useCreatePregnancyMutation,
-  useListAncVisitsQuery,
   useListPatientsQuery,
-  useListPregnanciesQuery,
+  useListPregnanciesPagedQuery,
 } from '@/store/api';
 import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
+import { TablePagination } from '@/components/TablePagination';
+import { useServerTable } from '@/hooks/useServerTable';
 import { eddFromLmp, evaluateRisks, formatGA, gestationalAge, trimester } from '@/lib/anc';
 
 const today = () => new Date().toISOString().split('T')[0];
@@ -23,18 +24,22 @@ export function DoctorPregnancies({ session }: RoleViewProps) {
   const router = useRouter();
   const [showNew, setShowNew] = useState(false);
   const [visitFor, setVisitFor] = useState<PregnancyRecord | null>(null);
+  const [statusFilter, setStatusFilter] = useState('all');
+  const table = useServerTable({ filterKey: statusFilter });
 
-  const { data: records = [] } = useListPregnanciesQuery();
-  const { data: patients = [] } = useListPatientsQuery();
-  // Fetched once for the whole list rather than per card.
-  const { data: allVisits = [] } = useListAncVisitsQuery();
+  // The mother's name, the visit count and the newest visit's readings all
+  // arrive on the record, so this screen no longer holds every patient and
+  // every antenatal visit in the hospital in memory.
+  const { data: pregnancyPage } = useListPregnanciesPagedQuery({
+    q: table.q.trim() || undefined,
+    status: statusFilter === 'all' ? undefined : statusFilter,
+    limit: table.limit,
+    offset: table.offset,
+  });
+  const records = pregnancyPage?.items ?? [];
+  const totalRecords = pregnancyPage?.total ?? 0;
   const { data: doctor } = useGetDoctorByUserQuery(session.user.id);
   const doctorId = doctor?.id ?? '';
-
-  const patientName = useMemo(
-    () => new Map(patients.map((p) => [p.id, p.user?.name ?? p.id])),
-    [patients],
-  );
 
   return (
     <DashboardShell
@@ -44,10 +49,29 @@ export function DoctorPregnancies({ session }: RoleViewProps) {
       subtitle="Antenatal records for your maternity patients"
     >
       <div className="space-y-4">
-        <div className="flex justify-end">
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="relative flex-1 min-w-[220px] max-w-md">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <input
+              value={table.search}
+              onChange={(e) => table.setSearch(e.target.value)}
+              placeholder="Search patient, blood group or notes…"
+              className="w-full pl-9 pr-3 py-2 bg-white rounded-lg shadow text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
+            />
+          </div>
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="bg-white rounded-lg shadow px-3 py-2 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-cyan-500"
+          >
+            <option value="all">All statuses</option>
+            <option value="active">Active</option>
+            <option value="delivered">Delivered</option>
+            <option value="closed">Closed</option>
+          </select>
           <button
             onClick={() => setShowNew(true)}
-            className="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-cyan-500 to-brand-teal text-white text-sm font-semibold px-4 py-2 shadow hover:opacity-95"
+            className="ml-auto inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-cyan-500 to-brand-teal text-white text-sm font-semibold px-4 py-2 shadow hover:opacity-95"
           >
             <Plus className="w-4 h-4" /> New pregnancy record
           </button>
@@ -62,13 +86,13 @@ export function DoctorPregnancies({ session }: RoleViewProps) {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {records.map((r) => {
               const ga = gestationalAge(r.lmp);
-              const visits = allVisits.filter((v) => v.pregnancyId === r.id);
-              const risks = evaluateRisks(r, visits[visits.length - 1]);
+              const visitCount = r.visitCount ?? 0;
+              const risks = evaluateRisks(r, r.latestVisit ?? undefined);
               return (
                 <div key={r.id} className="rounded-xl border border-slate-200 bg-white p-4">
                   <div className="flex items-start justify-between">
                     <div>
-                      <p className="font-semibold text-slate-900">{patientName.get(r.patientId) ?? r.patientId}</p>
+                      <p className="font-semibold text-slate-900">{r.patientName || r.patientId}</p>
                       <p className="text-xs text-slate-500 mt-0.5">
                         {formatGA(ga)} · Trimester {trimester(ga.weeks)} · G{r.gravida}P{r.para}
                       </p>
@@ -79,7 +103,7 @@ export function DoctorPregnancies({ session }: RoleViewProps) {
                   </div>
                   <div className="mt-3 text-xs text-slate-500 space-y-0.5">
                     <p>EDD: {new Date(r.edd + 'T00:00:00').toLocaleDateString('en-IN')}</p>
-                    <p>{visits.length} antenatal visit{visits.length === 1 ? '' : 's'}</p>
+                    <p>{visitCount} antenatal visit{visitCount === 1 ? '' : 's'}</p>
                   </div>
                   {risks.length > 0 && (
                     <div className="mt-2 flex items-center gap-1 text-xs text-amber-700">
@@ -96,6 +120,16 @@ export function DoctorPregnancies({ session }: RoleViewProps) {
                 </div>
               );
             })}
+          </div>
+        )}
+        {totalRecords > 0 && (
+          <div className="bg-white rounded-lg shadow">
+            <TablePagination
+              page={table.page}
+              pageSize={table.pageSize}
+              total={totalRecords}
+              onPageChange={table.setPage}
+            />
           </div>
         )}
       </div>

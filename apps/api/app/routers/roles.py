@@ -9,13 +9,14 @@ role for a new user gets the list from their own user-management endpoints.
 import re
 from typing import get_args
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy.orm import Session
 
 from .. import models, schemas
 from ..auth import get_current_user
 from ..authz import SCOPE_ALL, SCOPE_OWN, require_permission
 from ..database import get_db
+from ..utils import ListQuery, list_params, paginate, text_search
 
 router = APIRouter(prefix="/roles", tags=["roles"])
 
@@ -109,20 +110,25 @@ def _get_or_404(db: Session, code: str) -> models.Role:
 
 @router.get("", response_model=list[schemas.RoleOut])
 def list_roles(
+    response: Response,
+    params: ListQuery = Depends(list_params),
     db: Session = Depends(get_db),
     _: str = Depends(require_permission("roles.manage")),
 ):
-    roles = (
-        db.query(models.Role)
-        .order_by(models.Role.sort_order, models.Role.code)
-        .all()
+    query = db.query(models.Role)
+    query = text_search(
+        query, [models.Role.code, models.Role.label, models.Role.description], params.q
     )
+    query = query.order_by(models.Role.sort_order, models.Role.code)
+    roles = paginate(query, response, params.limit, params.offset).all()
     return [_to_out(db, r) for r in roles]
 
 
 # Declared before /{code} so the literal path wins the route match.
 @router.get("/assignable", response_model=list[schemas.RoleOptionOut])
 def list_assignable_roles(
+    response: Response,
+    params: ListQuery = Depends(list_params),
     db: Session = Depends(get_db),
     _: str = Depends(require_permission("users.manage")),
 ):
@@ -132,12 +138,10 @@ def list_assignable_roles(
     platform roles (no tenant may mint a superadmin) and exposes only what a
     dropdown needs.
     """
-    roles = (
-        db.query(models.Role)
-        .filter(models.Role.is_platform.is_(False))
-        .order_by(models.Role.sort_order, models.Role.code)
-        .all()
-    )
+    query = db.query(models.Role).filter(models.Role.is_platform.is_(False))
+    query = text_search(query, [models.Role.code, models.Role.label], params.q)
+    query = query.order_by(models.Role.sort_order, models.Role.code)
+    roles = paginate(query, response, params.limit, params.offset).all()
     return [
         schemas.RoleOptionOut(
             code=r.code,

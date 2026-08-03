@@ -1,3 +1,5 @@
+from typing import Optional
+
 """Staff provisioning — creating accounts for people who work at a hospital.
 
 Split out from /auth/register deliberately. Registration is public, so it may
@@ -6,7 +8,7 @@ nurse would inherit that role's access to other people's records. Staff accounts
 are therefore created here, by someone who already holds `users.manage`.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.orm import Session
 
 from .. import models, schemas
@@ -14,7 +16,7 @@ from ..auth import get_current_user, hash_password
 from ..authz import SCOPE_OWN, require_permission
 from ..database import get_db
 from ..tenancy import get_tenant_id, scoped
-from ..utils import new_id, now_iso
+from ..utils import ListQuery, list_params, new_id, now_iso, paginate, text_search
 
 router = APIRouter(prefix="/users", tags=["users"])
 
@@ -30,6 +32,9 @@ def _get_or_404(db: Session, user_id: str, tenant_id: str) -> models.User:
 
 @router.get("", response_model=list[schemas.UserOut])
 def list_users(
+    response: Response,
+    role: Optional[str] = Query(default=None),
+    params: ListQuery = Depends(list_params),
     db: Session = Depends(get_db),
     scope: str = Depends(require_permission("users.read")),
     tenant_id: str = Depends(get_tenant_id),
@@ -39,7 +44,13 @@ def list_users(
         # Nobody is granted this today, but the narrow reading must be the safe
         # one if someone ever is.
         query = query.filter(models.User.id == models.User.id)
-    return query.all()
+    if role:
+        query = query.filter(models.User.role == role)
+    query = text_search(
+        query, [models.User.name, models.User.email, models.User.phone], params.q
+    )
+    query = query.order_by(models.User.name, models.User.id)
+    return paginate(query, response, params.limit, params.offset).all()
 
 
 @router.put("/me", response_model=schemas.UserOut)

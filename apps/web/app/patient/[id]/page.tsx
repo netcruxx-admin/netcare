@@ -71,7 +71,12 @@ export default function PatientDetailPage() {
   const { data: rawVitals = [] } = useGetPatientVitalsQuery(patientId, { skip: !patient });
   const { data: rawPrescriptions = [] } = useGetPatientPrescriptionsQuery(patientId, { skip: !patient });
   const { data: rawOrders = [] } = useListTestOrdersQuery({ patientId }, { skip: !patient });
-  const { data: allResults = [] } = useListTestResultsQuery(undefined, { skip: !patient });
+  // Only this patient's orders' results, in one request.
+  const orderIds = rawOrders.map((o) => o.id).join(',');
+  const { data: allResults = [] } = useListTestResultsQuery(
+    { orderId: orderIds },
+    { skip: !patient || !orderIds },
+  );
   const { data: doctors = [] } = useListDoctorsQuery(undefined, { skip: !patient });
   const { data: departments = [] } = useListDepartmentsQuery(undefined, { skip: !patient });
 

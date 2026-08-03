@@ -1,22 +1,21 @@
 'use client';
 
-import { useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { Search, FlaskConical } from 'lucide-react';
-import type { LabTest } from '@/lib/types';
 import { DashboardShell } from '@/components/DashboardShell';
-import { useListLabTestsQuery } from '@/store/api';
+import { useListLabTestsPagedQuery } from '@/store/api';
 import type { RoleViewProps } from '@/components/RoleView';
+import { TablePagination } from '@/components/TablePagination';
+import { useServerTable } from '@/hooks/useServerTable';
 
 export function LabCatalog({ session }: RoleViewProps) {
-  const router = useRouter();
-  const { data: tests = [], isLoading } = useListLabTestsQuery();
-  const [query, setQuery] = useState('');
-
-  const rows = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return tests.filter((t) => !q || t.name.toLowerCase().includes(q) || t.category.toLowerCase().includes(q));
-  }, [tests, query]);
+  const table = useServerTable();
+  const { data: testPage } = useListLabTestsPagedQuery({
+    q: table.q.trim() || undefined,
+    limit: table.limit,
+    offset: table.offset,
+  });
+  const rows = testPage?.items ?? [];
+  const totalTests = testPage?.total ?? 0;
 
   return (
     <DashboardShell role={session.user.role} userName={session.user.name} title="Test Catalog" subtitle="Available tests and result templates">
@@ -24,8 +23,8 @@ export function LabCatalog({ session }: RoleViewProps) {
         <div className="relative max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
           <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            value={table.search}
+            onChange={(e) => table.setSearch(e.target.value)}
             placeholder="Search test or category…"
             className="w-full pl-9 pr-3 py-2 bg-white rounded-lg shadow text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
           />
@@ -33,7 +32,7 @@ export function LabCatalog({ session }: RoleViewProps) {
 
         <div className="bg-white rounded-lg shadow">
           <div className="px-6 py-4 border-b">
-            <h3 className="font-semibold text-slate-900">Tests ({rows.length})</h3>
+            <h3 className="font-semibold text-slate-900">Tests ({totalTests})</h3>
           </div>
           {rows.length === 0 ? (
             <div className="text-center py-16">
@@ -66,6 +65,12 @@ export function LabCatalog({ session }: RoleViewProps) {
                   ))}
                 </tbody>
               </table>
+              <TablePagination
+                page={table.page}
+                pageSize={table.pageSize}
+                total={totalTests}
+                onPageChange={table.setPage}
+              />
             </div>
           )}
         </div>

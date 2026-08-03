@@ -1,9 +1,12 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from typing import Optional
+
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.orm import Session
 
 from .. import models, schemas
 from ..authz import require_permission
 from ..database import get_db
+from ..utils import ListQuery, list_params, paginate, text_search
 from ..provisioning import provision_hospital
 from ..tenancy import resolve_public_tenant
 
@@ -29,10 +32,25 @@ def current_hospital(
 
 @router.get("", response_model=list[schemas.HospitalOut])
 def list_hospitals(
+    response: Response,
+    status_filter: Optional[str] = Query(default=None, alias="status"),
+    category: Optional[str] = Query(default=None),
+    params: ListQuery = Depends(list_params),
     db: Session = Depends(get_db),
     _: str = Depends(require_permission("hospitals.manage")),
 ):
-    return db.query(models.Hospital).all()
+    query = db.query(models.Hospital)
+    if status_filter:
+        query = query.filter(models.Hospital.status == status_filter)
+    if category:
+        query = query.filter(models.Hospital.category == category)
+    query = text_search(
+        query,
+        [models.Hospital.name, models.Hospital.subdomain, models.Hospital.tagline],
+        params.q,
+    )
+    query = query.order_by(models.Hospital.name)
+    return paginate(query, response, params.limit, params.offset).all()
 
 
 @router.post("", response_model=schemas.HospitalOut, status_code=status.HTTP_201_CREATED)

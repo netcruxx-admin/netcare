@@ -16,14 +16,16 @@ import { ActionIcon } from '@/components/ActionIcon';
 import { FormField } from '@/components/form/FormField';
 import { FollowUpModal } from '@/components/FollowUpModal';
 import { Calendar } from '@/components/ui/calendar';
+import { TablePagination } from '@/components/TablePagination';
+import { useServerTable } from '@/hooks/useServerTable';
 import { apiError } from '@/lib/apiError';
 import { hasPermission } from '@/lib/auth';
 import type { Appointment, Department, Doctor } from '@/lib/types';
 import {
-  useGetSuperadminAppointmentsQuery,
-  useGetSuperadminPatientsQuery,
-  useGetSuperadminDoctorsQuery,
-  useGetSuperadminDepartmentsQuery,
+  useGetSuperadminAppointmentsPagedQuery,
+  useGetSuperadminDoctorsPagedQuery,
+  useGetSuperadminDepartmentsPagedQuery,
+  useGetDoctorAvailabilityQuery,
   useListHospitalsQuery,
   useUpdateAppointmentMutation,
   useDeleteAppointmentMutation,
@@ -113,60 +115,71 @@ export function PlatformAppointments({ session }: RoleViewProps) {
   const [addingVitals, setAddingVitals] = useState<Appointment | null>(null);
   const [deleting, setDeleting] = useState<Appointment | null>(null);
   const [error, setError] = useState('');
-  const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
 
-  const { data: allAppointments = [], isLoading, refetch } = useGetSuperadminAppointmentsQuery();
-  const { data: allPatients = [] } = useGetSuperadminPatientsQuery();
-  const { data: allDoctors = [] } = useGetSuperadminDoctorsQuery();
-  const { data: allDepartments = [] } = useGetSuperadminDepartmentsQuery();
+  // Hospital, status, search and paging are all applied by the API. Patient and
+  // doctor names arrive resolved on each row, so this screen no longer pulls
+  // every patient and doctor on the platform to turn two ids into two names.
+  const table = useServerTable({ filterKey: `${selectedHospitalId}|${statusFilter}` });
+  const { data: appointmentPage, isLoading, refetch } = useGetSuperadminAppointmentsPagedQuery({
+    q: table.q.trim() || undefined,
+    hospitalId: selectedHospitalId || undefined,
+    status: statusFilter === 'all' ? undefined : statusFilter,
+    limit: table.limit,
+    offset: table.offset,
+  });
+  const appointments = appointmentPage?.items ?? [];
+  const totalAppointments = appointmentPage?.total ?? 0;
   const { data: hospitals = [] } = useListHospitalsQuery();
   const [updateAppointment] = useUpdateAppointmentMutation();
   const [deleteAppointment] = useDeleteAppointmentMutation();
   const [createVitals] = useCreateVitalsMutation();
 
-  const patientById = useMemo(() => new Map(allPatients.map((p) => [p.id, p])), [allPatients]);
-  const doctorById = useMemo(() => new Map(allDoctors.map((d) => [d.id, d])), [allDoctors]);
+  const patientName = (a: Appointment) => a.patientName || '—';
+  const doctorName = (a: Appointment) => (a.doctorName ? `Dr. ${a.doctorName}` : '—');
 
-  const patientName = (id: string) => patientById.get(id)?.user?.name ?? '—';
-  const doctorName = (id: string) => {
-    const name = doctorById.get(id)?.user?.name;
-    return name ? `Dr. ${name}` : '—';
-  };
+  // The edit and reschedule modals need the hospital's doctors and departments.
+  // Fetched only while a modal is open, and only for that appointment's
+  // hospital — not the platform-wide lists this screen used to hold.
+  const editingHospitalId = editing?.hospitalId ?? rescheduling?.hospitalId ?? '';
+  const { data: hospitalDoctors } = useGetSuperadminDoctorsPagedQuery(
+    { hospitalId: editingHospitalId },
+    { skip: !editingHospitalId },
+  );
+  const { data: hospitalDepartments } = useGetSuperadminDepartmentsPagedQuery(
+    { hospitalId: editingHospitalId },
+    { skip: !editingHospitalId },
+  );
+  const modalDoctors = useMemo(() => hospitalDoctors?.items ?? [], [hospitalDoctors]);
+  const modalDepartments = useMemo(() => hospitalDepartments?.items ?? [], [hospitalDepartments]);
 
-  // Doctors filtered to the same hospital as the appointment being edited
-  const doctorOptions = useMemo(() => {
-    const hid = editing?.hospitalId ?? rescheduling?.hospitalId;
-    return allDoctors
-      .filter((d) => !hid || d.hospitalId === hid)
-      .map((d) => ({ value: d.id, label: `Dr. ${d.user?.name ?? 'Doctor'} — ${d.specialization}` }));
-  }, [allDoctors, editing, rescheduling]);
-
-  const appointments = useMemo(() => allAppointments
-    .filter((a) => !selectedHospitalId || a.hospitalId === selectedHospitalId)
-    .filter((a) => statusFilter === 'all' || a.status === statusFilter)
-    .filter((a) => {
-      const q = query.trim().toLowerCase();
-      if (!q) return true;
-      return patientName(a.patientId).toLowerCase().includes(q)
-        || doctorName(a.doctorId).toLowerCase().includes(q)
-        || a.status.toLowerCase().includes(q);
-    }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [allAppointments, selectedHospitalId, statusFilter, query, patientById, doctorById],
+  const doctorOptions = useMemo(
+    () =>
+      modalDoctors.map((d) => ({
+        value: d.id,
+        label: `Dr. ${d.user?.name ?? 'Doctor'} — ${d.specialization}`,
+      })),
+    [modalDoctors],
   );
 
   const showHospital = !selectedHospitalId;
 
-  // Booked slots for the appointment being rescheduled
-  const reBooked = useMemo(() => {
-    if (!rescheduling || !reDate) return new Set<string>();
-    return new Set(
-      allAppointments
-        .filter((a) => a.doctorId === rescheduling.doctorId && a.date === reDate && a.status === 'scheduled' && a.id !== rescheduling.id)
-        .map((a) => a.time),
-    );
-  }, [allAppointments, rescheduling, reDate]);
+  // Which slots the doctor already has taken on that date. Asked of the API
+  // rather than derived from a page of appointments, which would miss conflicts
+  // that happen to be on another page.
+  const { data: availability } = useGetDoctorAvailabilityQuery(
+    { doctorId: rescheduling?.doctorId ?? '', date: reDate, hospitalId: rescheduling?.hospitalId },
+    { skip: !rescheduling || !reDate },
+  );
+  const reBooked = useMemo(
+    () =>
+      new Set(
+        (availability?.taken ?? []).filter(
+          (time) => !(rescheduling && reDate === rescheduling.date && time === rescheduling.time),
+        ),
+      ),
+    [availability, rescheduling, reDate],
+  );
 
   const openReschedule = (a: Appointment) => {
     setReDate(a.date);
@@ -217,9 +230,9 @@ export function PlatformAppointments({ session }: RoleViewProps) {
         <div className="relative flex-1 min-w-[200px] max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
           <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search by patient name, doctor name or status…"
+            value={table.search}
+            onChange={(e) => table.setSearch(e.target.value)}
+            placeholder="Search by patient name, phone or doctor name…"
             className="w-full pl-9 pr-3 py-2 bg-white rounded-lg shadow text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
           />
         </div>
@@ -238,8 +251,8 @@ export function PlatformAppointments({ session }: RoleViewProps) {
       <div className="bg-white rounded-xl border border-slate-100 shadow-sm">
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
           <p className="text-sm text-slate-500">
-            {appointments.length} appointment{appointments.length !== 1 ? 's' : ''}
-            {(selectedHospitalId || query || statusFilter !== 'all') && <span className="text-slate-400"> (filtered)</span>}
+            {totalAppointments} appointment{totalAppointments !== 1 ? 's' : ''}
+            {(selectedHospitalId || table.search || statusFilter !== 'all') && <span className="text-slate-400"> (filtered)</span>}
           </p>
           {hasPermission(session, 'appointments.create') && (
             <button
@@ -279,8 +292,8 @@ export function PlatformAppointments({ session }: RoleViewProps) {
                     )}
                     <td className="py-3 px-6 text-slate-900 text-sm">{a.date}</td>
                     <td className="py-3 px-6 text-slate-600 text-sm">{a.time}</td>
-                    <td className="py-3 px-6 text-slate-600 text-sm">{patientName(a.patientId)}</td>
-                    <td className="py-3 px-6 text-slate-600 text-sm">{doctorName(a.doctorId)}</td>
+                    <td className="py-3 px-6 text-slate-600 text-sm">{patientName(a)}</td>
+                    <td className="py-3 px-6 text-slate-600 text-sm">{doctorName(a)}</td>
                     <td className="py-3 px-6">
                       <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${STATUS_STYLES[a.status] ?? 'bg-slate-100 text-slate-600'}`}>
                         {a.status}
@@ -301,6 +314,12 @@ export function PlatformAppointments({ session }: RoleViewProps) {
                 ))}
               </tbody>
             </table>
+            <TablePagination
+              page={table.page}
+              pageSize={table.pageSize}
+              total={totalAppointments}
+              onPageChange={table.setPage}
+            />
           </div>
         )}
       </div>
@@ -325,7 +344,7 @@ export function PlatformAppointments({ session }: RoleViewProps) {
                     hospitalId: editing.hospitalId,
                     body: {
                       doctorId: values.doctorId,
-                      departmentId: departmentForDoctor(allDepartments, allDoctors, values.doctorId),
+                      departmentId: departmentForDoctor(modalDepartments, modalDoctors, values.doctorId),
                       status: values.status as Appointment['status'],
                       reason: values.reason,
                     },

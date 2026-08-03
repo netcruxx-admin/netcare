@@ -1,6 +1,6 @@
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.orm import Session
 
 from .. import models, schemas
@@ -8,14 +8,18 @@ from ..auth import get_current_user
 from ..authz import require_permission
 from ..database import get_db
 from ..tenancy import get_tenant_id, scoped
-from ..utils import new_id, now_iso
+from ..utils import ListQuery, list_params, new_id, now_iso, paginate, text_search
 
 router = APIRouter(prefix="/schedule-blocks", tags=["schedule"])
 
 
 @router.get("", response_model=list[schemas.ScheduleBlockOut])
 def list_schedule_blocks(
+    response: Response,
     doctor_id: Optional[str] = Query(default=None, alias="doctorId"),
+    date: Optional[str] = Query(default=None, alias="date"),
+    block_type: Optional[str] = Query(default=None, alias="type"),
+    params: ListQuery = Depends(list_params),
     db: Session = Depends(get_db),
     scope: str = Depends(require_permission("schedule.read")),
     tenant_id: str = Depends(get_tenant_id),
@@ -23,7 +27,13 @@ def list_schedule_blocks(
     query = scoped(db, models.ScheduleBlock, tenant_id)
     if doctor_id:
         query = query.filter(models.ScheduleBlock.doctor_id == doctor_id)
-    return query.all()
+    if date:
+        query = query.filter(models.ScheduleBlock.date == date)
+    if block_type:
+        query = query.filter(models.ScheduleBlock.type == block_type)
+    query = text_search(query, [models.ScheduleBlock.note, models.ScheduleBlock.type], params.q)
+    query = query.order_by(models.ScheduleBlock.date.desc(), models.ScheduleBlock.id)
+    return paginate(query, response, params.limit, params.offset).all()
 
 
 @router.post(

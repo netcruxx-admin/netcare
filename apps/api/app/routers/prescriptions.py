@@ -1,6 +1,6 @@
 from typing import Optional
 
-from fastapi import APIRouter, Depends, status, Query
+from fastapi import APIRouter, Depends, Query, Response, status
 from sqlalchemy.orm import Session
 
 from .. import models, schemas
@@ -8,16 +8,26 @@ from ..auth import get_current_user
 from ..authz import SCOPE_OWN, own_record_filter, require_permission
 from ..database import get_db
 from ..tenancy import get_tenant_id, scoped
-from ..utils import new_id, now_iso
+from ..utils import (
+    ListQuery,
+    attach_patient_names,
+    list_params,
+    new_id,
+    now_iso,
+    paginate,
+    patient_name_search,
+)
 
 router = APIRouter(prefix="/prescriptions", tags=["prescriptions"])
 
 
 @router.get("", response_model=list[schemas.PrescriptionOut])
 def list_prescriptions(
+    response: Response,
     patient_id: Optional[str] = Query(default=None, alias="patientId"),
     appointment_id: Optional[str] = Query(default=None, alias="appointmentId"),
     doctor_id: Optional[str] = Query(default=None, alias="doctorId"),
+    params: ListQuery = Depends(list_params),
     db: Session = Depends(get_db),
     user: models.User = Depends(get_current_user),
     scope: str = Depends(require_permission("prescriptions.read")),
@@ -35,7 +45,22 @@ def list_prescriptions(
     # else's id narrows the result to nothing rather than exposing their records.
     if scope == SCOPE_OWN:
         query = query.filter(own_record_filter(db, user, models.Prescription))
-    return query.all()
+    # The table shows the patient's name next to the medicine, so both have to
+    # be searchable — the name reached through the patient join.
+    query = patient_name_search(
+        query,
+        models.Prescription,
+        params.q,
+        models.Prescription.medicine_name,
+        models.Prescription.dosage,
+        models.Prescription.frequency,
+        models.Prescription.instructions,
+    )
+    query = query.order_by(models.Prescription.created_at.desc(), models.Prescription.id)
+    rows = paginate(query, response, params.limit, params.offset).all()
+    out = [schemas.PrescriptionOut.model_validate(row) for row in rows]
+    attach_patient_names(db, out)
+    return out
 
 
 @router.post("", response_model=schemas.PrescriptionOut, status_code=status.HTTP_201_CREATED)

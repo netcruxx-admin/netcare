@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from typing import Optional
+
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.orm import Session
 
 from .. import models, schemas
@@ -12,7 +14,7 @@ from ..authz import (
 )
 from ..database import get_db
 from ..tenancy import get_tenant_id, scoped
-from ..utils import attach_users
+from ..utils import ListQuery, attach_users, list_params, paginate, text_search
 
 router = APIRouter(prefix="/doctors", tags=["doctors"])
 
@@ -27,6 +29,10 @@ def _with_user(db: Session, doctor: models.Doctor) -> schemas.DoctorOut:
 
 @router.get("", response_model=list[schemas.DoctorOut])
 def list_doctors(
+    response: Response,
+    specialization: Optional[str] = Query(default=None),
+    verification_status: Optional[str] = Query(default=None, alias="verificationStatus"),
+    params: ListQuery = Depends(list_params),
     db: Session = Depends(get_db),
     user: models.User = Depends(get_current_user),
     scope: str = Depends(require_permission("doctors.read")),
@@ -35,6 +41,27 @@ def list_doctors(
     query = scoped(db, models.Doctor, tenant_id)
     if scope == SCOPE_OWN:
         query = query.filter(models.Doctor.user_id == user.id)
+    if specialization:
+        query = query.filter(models.Doctor.specialization == specialization)
+    if verification_status:
+        query = query.filter(models.Doctor.verification_status == verification_status)
+    if params.q:
+        # A doctor's name and email live on the linked user row, so the search
+        # has to reach through the join rather than only the doctor record.
+        query = query.outerjoin(models.User, models.User.id == models.Doctor.user_id)
+        query = text_search(
+            query,
+            [
+                models.User.name,
+                models.User.email,
+                models.Doctor.specialization,
+                models.Doctor.qualification,
+                models.Doctor.license_number,
+            ],
+            params.q,
+        )
+    query = query.order_by(models.Doctor.id)
+    query = paginate(query, response, params.limit, params.offset)
     return attach_users(db, query.all(), schemas.DoctorOut, schemas.UserOut)
 
 
@@ -89,6 +116,8 @@ def get_doctor(
 @router.get("/{doctor_id}/appointments", response_model=list[schemas.AppointmentOut])
 def doctor_appointments(
     doctor_id: str,
+    response: Response,
+    params: ListQuery = Depends(list_params),
     db: Session = Depends(get_db),
     user: models.User = Depends(get_current_user),
     scope: str = Depends(require_permission("appointments.read")),
@@ -99,7 +128,8 @@ def doctor_appointments(
     )
     if scope == SCOPE_OWN:
         query = query.filter(own_record_filter(db, user, models.Appointment))
-    return query.all()
+    query = query.order_by(models.Appointment.date.desc(), models.Appointment.id)
+    return paginate(query, response, params.limit, params.offset).all()
 
 
 @router.put("/{doctor_id}", response_model=schemas.DoctorOut)

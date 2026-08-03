@@ -3,29 +3,56 @@
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { Search, ClipboardList, AlertTriangle } from 'lucide-react';
-import type { TestOrder, TestResult, Patient, User } from '@/lib/types';
+import type { TestOrder } from '@/lib/types';
 import { apiError } from '@/lib/apiError';
 import {
-  useListPatientsQuery,
-  useListTestOrdersQuery,
-  useListTestResultsQuery,
+  useLazyListTestOrdersPagedQuery,
+  useListTestOrdersPagedQuery,
   useReviewTestOrderMutation,
 } from '@/store/api';
 import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
 import { ExportButton } from '@/components/ExportButton';
-import { ORDER_STATUS_LABEL, ORDER_STATUS_STYLE, isAbnormal } from '@/lib/lab';
+import { TablePagination } from '@/components/TablePagination';
+import { useServerTable } from '@/hooks/useServerTable';
+import { ORDER_STATUS_LABEL, ORDER_STATUS_STYLE } from '@/lib/lab';
+
+/**
+ * `patientName`, `hasResults` and `abnormal` all arrive on the order. This
+ * screen used to fetch every patient and every test result in the hospital to
+ * work out the same three things.
+ */
+const toRow = (o: TestOrder) => ({
+  order: o,
+  patient: o.patientName || 'Patient',
+  tests: o.items.map((i) => i.name).join(', '),
+  hasResults: o.hasResults ?? false,
+  abnormal: o.abnormal ?? false,
+});
+
+const exportRow = (r: ReturnType<typeof toRow>) => [
+  r.order.id, r.patient, r.tests, r.order.status, r.abnormal ? 'Yes' : 'No',
+];
 
 export function DoctorLabOrders({ session }: RoleViewProps) {
-  const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [toast, setToast] = useState('');
   const [error, setError] = useState('');
+  const table = useServerTable({ filterKey: statusFilter });
 
-  // Orders and results arrive already narrowed to this doctor's own work.
-  const { data: orders = [] } = useListTestOrdersQuery();
-  const { data: results = [] } = useListTestResultsQuery();
-  const { data: patients = [] } = useListPatientsQuery();
+  // Already narrowed to this doctor's own work by the API, and searched,
+  // filtered, sorted and paged there too.
+  const listArgs = {
+    q: table.q.trim() || undefined,
+    status: statusFilter === 'all' ? undefined : statusFilter,
+  };
+  const { data: orderPage } = useListTestOrdersPagedQuery({
+    ...listArgs,
+    limit: table.limit,
+    offset: table.offset,
+  });
+  const totalOrders = orderPage?.total ?? 0;
+  const [fetchAllForExport] = useLazyListTestOrdersPagedQuery();
   const [reviewTestOrder] = useReviewTestOrderMutation();
 
   const markReviewed = async (id: string) => {
@@ -39,33 +66,7 @@ export function DoctorLabOrders({ session }: RoleViewProps) {
     }
   };
 
-  const rows = useMemo(() => {
-    const patientById = new Map(patients.map((p) => [p.id, p]));
-    const patientName = (id: string) => patientById.get(id)?.user?.name ?? 'Patient';
-    const resultsByOrder = new Map<string, TestResult[]>();
-    results.forEach((r) => {
-      const list = resultsByOrder.get(r.orderId) ?? [];
-      list.push(r);
-      resultsByOrder.set(r.orderId, list);
-    });
-
-    const q = query.trim().toLowerCase();
-    return orders
-      .map((o) => {
-        const res = resultsByOrder.get(o.id) ?? [];
-        const abnormal = res.some((r) => r.parameters.some((p) => isAbnormal(p.flag)));
-        return {
-          order: o,
-          patient: patientName(o.patientId),
-          tests: o.items.map((i) => i.name).join(', '),
-          hasResults: res.length > 0,
-          abnormal,
-        };
-      })
-      .filter((r) => statusFilter === 'all' || r.order.status === statusFilter)
-      .filter((r) => !q || r.patient.toLowerCase().includes(q) || r.tests.toLowerCase().includes(q))
-      .sort((a, b) => (a.order.orderedAt < b.order.orderedAt ? 1 : -1));
-  }, [orders, results, patients, query, statusFilter]);
+  const rows = useMemo(() => (orderPage?.items ?? []).map(toRow), [orderPage]);
 
   return (
     <DashboardShell role={session.user.role} userName={session.user.name} title="Lab Orders" subtitle="Tests you have ordered and their reports">
@@ -74,8 +75,8 @@ export function DoctorLabOrders({ session }: RoleViewProps) {
           <div className="relative flex-1 min-w-[220px] max-w-md">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
             <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
+              value={table.search}
+              onChange={(e) => table.setSearch(e.target.value)}
               placeholder="Search patient or test…"
               className="w-full pl-9 pr-3 py-2 bg-white rounded-lg shadow text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
             />
@@ -95,13 +96,17 @@ export function DoctorLabOrders({ session }: RoleViewProps) {
           <ExportButton
             filename="my-lab-orders"
             headers={['Order', 'Patient', 'Tests', 'Status', 'Abnormal']}
-            rows={rows.map((r) => [r.order.id, r.patient, r.tests, r.order.status, r.abnormal ? 'Yes' : 'No'])}
+            rows={rows.map(exportRow)}
+            getRows={async () => {
+              const all = await fetchAllForExport(listArgs).unwrap();
+              return all.items.map(toRow).map(exportRow);
+            }}
           />
         </div>
 
         <div className="bg-white rounded-lg shadow">
           <div className="px-6 py-4 border-b">
-            <h3 className="font-semibold text-slate-900">Orders ({rows.length})</h3>
+            <h3 className="font-semibold text-slate-900">Orders ({totalOrders})</h3>
           </div>
           {rows.length === 0 ? (
             <div className="text-center py-16">
@@ -155,6 +160,12 @@ export function DoctorLabOrders({ session }: RoleViewProps) {
                   ))}
                 </tbody>
               </table>
+              <TablePagination
+                page={table.page}
+                pageSize={table.pageSize}
+                total={totalOrders}
+                onPageChange={table.setPage}
+              />
             </div>
           )}
         </div>
