@@ -25,20 +25,9 @@ export function RoleView({
   viewsByScope,
   fallback,
 }: {
-  /** Route being rendered — the key the route table is consulted by. */
   path: string;
-  /** Role code → view. A role absent here falls back to `viewsByScope`. */
   views: Record<string, ComponentType<RoleViewProps>>;
-  /**
-   * View to use for a role that has no entry in `views` — chosen by the scope
-   * the route's permission was granted at. A superadmin-created role holding
-   * `patients.read` at scope `all` wants the whole-hospital screen; one holding
-   * it at `own` wants the personal one. Opt-in per page: without it, an unknown
-   * role gets the notice below rather than a screen built for someone else.
-   */
   viewsByScope?: Partial<Record<'own' | 'all', ComponentType<RoleViewProps>>>;
-  /** Last resort when neither map matches — used by routes with no permission
-   *  to key a scope off, such as the landing page. */
   fallback?: ComponentType<RoleViewProps>;
 }) {
   const session = useDashboardGuard(path);
@@ -63,7 +52,7 @@ export function RoleView({
         <div className="bg-white rounded-xl border border-slate-100 shadow-sm py-16 px-6 text-center">
           <p className="text-slate-900 font-medium mb-1">Nothing to show here yet.</p>
           <p className="text-sm text-slate-500">
-            The “{session.role?.label ?? session.user.role}” role has access to this
+            The "{session.role?.label ?? session.user.role}" role has access to this
             page but no view has been built for it.
           </p>
         </div>

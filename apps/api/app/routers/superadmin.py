@@ -125,7 +125,7 @@ def all_appointments(
     return out
 
 
-@router.get("/departments")
+@router.get("/departments", response_model=list[schemas.DepartmentOut])
 def all_departments(
     response: Response,
     hospital_id: Optional[str] = Query(default=None, alias="hospitalId"),

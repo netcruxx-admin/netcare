@@ -6,6 +6,8 @@ import { Building2, Users, UserRound, Stethoscope, CalendarDays, LayoutDashboard
 import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
 import { OnboardHospitalWizard } from '@/components/hospitals/OnboardHospitalWizard';
+// import { OnboardHospitalModal } from '@/components/OnboardHospitalModal';
+import { hasPermission } from '@/lib/auth';
 import { useGetSuperadminOverviewQuery, useListHospitalsQuery } from '@/store/api';
 
 export function PlatformOverview({ session }: RoleViewProps) {
@@ -61,12 +63,14 @@ export function PlatformOverview({ session }: RoleViewProps) {
             <h2 className="font-semibold text-slate-900">
               Hospitals {selectedHospitalId && <span className="text-sm font-normal text-slate-400">(filtered)</span>}
             </h2>
-            <button
-              onClick={() => setModalOpen(true)}
-              className="flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg text-sm font-medium hover:shadow-lg transition"
-            >
-              <Plus className="w-4 h-4" /> Onboard Hospital
-            </button>
+            {hasPermission(session, 'hospitals.manage') && (
+              <button
+                onClick={() => setModalOpen(true)}
+                className="flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg text-sm font-medium hover:shadow-lg transition"
+              >
+                <Plus className="w-4 h-4" /> Onboard Hospital
+              </button>
+            )}
           </div>
           {isLoading ? (
             <div className="py-12 text-center text-slate-400 text-sm">Loading…</div>

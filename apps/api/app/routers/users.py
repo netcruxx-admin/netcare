@@ -230,5 +230,8 @@ def delete_user(
     # anyway once the user is missing, but leaving live rows behind pointing at
     # a deleted account makes the session table lie about who is signed in.
     sessions.revoke_all_for_user(db, user.id, reason=sessions.REVOKED_USER_DELETED)
+    # Remove any clinical profile linked to this user so no orphaned rows remain.
+    db.query(models.Doctor).filter(models.Doctor.user_id == user_id).delete()
+    db.query(models.Patient).filter(models.Patient.user_id == user_id).delete()
     db.delete(user)
     db.commit()

@@ -140,7 +140,7 @@ export function AddUserModal({
           }}
         >
           {({ isSubmitting, status }) => (
-            <Form className="px-6 py-5 space-y-4">
+            <Form className="px-6 py-5 space-y-4" autoComplete="off">
               {/* Hospital selector — superadmin only, create only */}
               {isSuperadmin && !isEditing && (
                 preselectedHospitalId ? (
@@ -184,7 +184,7 @@ export function AddUserModal({
                 </div>
                 {!isEditing && (
                   <div className="col-span-2">
-                    <FormField name="password" label="Password" type="password" placeholder="Minimum 6 characters" required />
+                    <FormField name="password" label="Password" type="password" placeholder="Minimum 6 characters" autoComplete="new-password" required />
                   </div>
                 )}
               </div>
