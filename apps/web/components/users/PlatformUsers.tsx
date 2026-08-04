@@ -2,23 +2,21 @@
 
 import { useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Users, Plus, AlertTriangle, Search, Pencil, Trash2 } from 'lucide-react';
-import { toast } from 'sonner';
+import { Users, Plus, Search, Pencil, Trash2 } from 'lucide-react';
 import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
 import { AddUserModal } from '@/components/superadmin/AddUserModal';
+import { DeleteUserModal } from '@/components/users/DeleteUserModal';
 import { HospitalBadge } from '@/components/superadmin/HospitalBadge';
 import { ActionIcon } from '@/components/ActionIcon';
 import { TablePagination } from '@/components/TablePagination';
 import { useServerTable } from '@/hooks/useServerTable';
-import { apiError } from '@/lib/apiError';
 import { hasPermission } from '@/lib/auth';
 import type { User } from '@/lib/types';
 import {
   useGetSuperadminUsersPagedQuery,
   useListHospitalsQuery,
   useListAssignableRolesQuery,
-  useDeleteUserMutation,
 } from '@/store/api';
 import type { RoleOption } from '@/store/api';
 
@@ -39,11 +37,8 @@ export function PlatformUsers({ session }: RoleViewProps) {
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<User | null>(null);
   const [deleting, setDeleting] = useState<User | null>(null);
-  const [deleteError, setDeleteError] = useState('');
   const [roleFilter, setRoleFilter] = useState('all');
 
-  // Both filters go to the API, so the page count and the "(filtered)" total
-  // describe the whole result rather than whatever arrived first.
   const table = useServerTable({ filterKey: `${selectedHospitalId}|${roleFilter}` });
   const { data: userPage, isLoading, refetch } = useGetSuperadminUsersPagedQuery({
     q: table.q.trim() || undefined,
@@ -56,7 +51,6 @@ export function PlatformUsers({ session }: RoleViewProps) {
   const totalUsers = userPage?.total ?? 0;
   const { data: hospitals = [] } = useListHospitalsQuery();
   const { data: assignableRoles = EMPTY_ROLES } = useListAssignableRolesQuery();
-  const [deleteUser] = useDeleteUserMutation();
 
   const roleOptions = useMemo(
     () => assignableRoles.map((r) => ({ value: r.code, label: r.label })),
@@ -64,19 +58,7 @@ export function PlatformUsers({ session }: RoleViewProps) {
   );
 
   const showHospital = !selectedHospitalId;
-
-  const confirmDelete = async () => {
-    if (!deleting) return;
-    setDeleteError('');
-    try {
-      await deleteUser({ id: deleting.id, hospitalId: deleting.hospitalId ?? undefined }).unwrap();
-      setDeleting(null);
-      refetch();
-      toast.success('User deleted');
-    } catch (err) {
-      setDeleteError(apiError(err, 'Failed to delete user'));
-    }
-  };
+  const canManage = hasPermission(session, 'users.manage');
 
   return (
     <DashboardShell
@@ -114,7 +96,7 @@ export function PlatformUsers({ session }: RoleViewProps) {
             {totalUsers} user{totalUsers !== 1 ? 's' : ''}
             {(selectedHospitalId || table.search || roleFilter !== 'all') && <span className="text-slate-400"> (filtered)</span>}
           </p>
-          {hasPermission(session, 'users.manage') && (
+          {canManage && (
             <button
               onClick={() => { setEditing(null); setModalOpen(true); }}
               className="flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg text-sm font-medium hover:shadow-lg transition"
@@ -166,8 +148,8 @@ export function PlatformUsers({ session }: RoleViewProps) {
                       <td className="py-3 px-6 text-slate-500 text-sm">{u.createdAt ? new Date(u.createdAt).toLocaleDateString() : '—'}</td>
                       <td className="py-3 px-6 text-right">
                         <div className="flex items-center justify-end gap-1">
-                          {hasPermission(session, 'users.manage') && <ActionIcon icon={Pencil} label="Edit" onClick={() => { setEditing(u); setModalOpen(true); }} />}
-                          {hasPermission(session, 'users.manage') && (isSelf ? (
+                          {canManage && <ActionIcon icon={Pencil} label="Edit" onClick={() => { setEditing(u); setModalOpen(true); }} />}
+                          {canManage && (isSelf ? (
                             <span className="p-2 text-slate-300 cursor-not-allowed" title="Cannot delete yourself">
                               <Trash2 className="w-4 h-4" />
                             </span>
@@ -191,7 +173,6 @@ export function PlatformUsers({ session }: RoleViewProps) {
         )}
       </div>
 
-      {/* Add / Edit modal — superadmin mode: hospitals prop enables hospital selector */}
       <AddUserModal
         open={modalOpen}
         onClose={() => { setModalOpen(false); setEditing(null); }}
@@ -200,38 +181,12 @@ export function PlatformUsers({ session }: RoleViewProps) {
         preselectedHospitalId={selectedHospitalId}
         hospitals={hospitals}
       />
-
-      {/* Delete confirmation modal */}
-      {deleting && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg shadow-2xl max-w-md w-full p-6">
-            <div className="flex items-start gap-4">
-              <div className="w-11 h-11 rounded-full bg-red-100 flex items-center justify-center shrink-0">
-                <AlertTriangle className="w-6 h-6 text-red-600" />
-              </div>
-              <div className="min-w-0">
-                <h3 className="text-lg font-bold text-slate-900">Delete User</h3>
-                <p className="text-slate-600 mt-1 text-sm">
-                  Are you sure you want to delete{' '}
-                  <span className="font-semibold text-slate-900">{deleting.name}</span>? Any linked
-                  doctor or patient profile is removed too. This cannot be undone.
-                </p>
-              </div>
-            </div>
-            {deleteError && (
-              <p className="mt-3 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{deleteError}</p>
-            )}
-            <div className="flex gap-3 mt-4">
-              <button onClick={() => { setDeleting(null); setDeleteError(''); }} className="flex-1 px-4 py-2 bg-slate-200 text-slate-700 rounded hover:bg-slate-300 transition">
-                Cancel
-              </button>
-              <button onClick={confirmDelete} className="flex-1 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 font-semibold transition">
-                Delete
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <DeleteUserModal
+        user={deleting}
+        onClose={() => setDeleting(null)}
+        onSuccess={refetch}
+        hospitalId={deleting?.hospitalId ?? undefined}
+      />
     </DashboardShell>
   );
 }

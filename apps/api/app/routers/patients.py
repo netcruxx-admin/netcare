@@ -17,6 +17,7 @@ from ..auth import get_current_user
 from ..authz import (
     SCOPE_OWN,
     caller_patient_id,
+    effective_permissions,
     own_patients_filter,
     own_record_filter,
     require_any_permission,
@@ -114,7 +115,12 @@ def list_patients(
     tenant_id: str = Depends(get_tenant_id),
 ):
     query = scoped(db, models.Patient, tenant_id)
-    if scope == SCOPE_OWN:
+    # A user who can create patients (patients.manage) must be able to see the
+    # patients they just registered, even if no appointment exists yet.
+    # own_patients_filter only includes patients with existing appointments,
+    # so we only apply it when the caller lacks patients.manage.
+    can_manage = "patients.manage" in effective_permissions(db, user)
+    if scope == SCOPE_OWN and not can_manage:
         query = query.filter(own_patients_filter(db, user))
     if q:
         # Search has to run here rather than in the client: once a page is only

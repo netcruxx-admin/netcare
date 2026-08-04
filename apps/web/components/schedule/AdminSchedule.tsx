@@ -5,7 +5,9 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ChevronLeft, ChevronRight, RefreshCw, Ban, X } from 'lucide-react';
 import type { ScheduleBlock } from '@/lib/types';
+import { toast } from 'sonner';
 import { apiError } from '@/lib/apiError';
+import { hasPermission } from '@/lib/auth';
 import {
   useDeleteScheduleBlockMutation,
   useListAppointmentsQuery,
@@ -70,7 +72,8 @@ const BREAK = new Set(['12:00 PM', '12:30 PM', '01:00 PM', '01:30 PM']);
 export function AdminSchedule({ session }: RoleViewProps) {
   const [date, setDate] = useState(toDateStr(new Date()));
   const [blockOpen, setBlockOpen] = useState(false);
-  const [error, setError] = useState('');
+
+  const canManageBlocks = hasPermission(session, 'schedule.read');
 
   const { data: allDoctors = [] } = useListDoctorsQuery();
   const { data: allPatients = [] } = useListPatientsQuery();
@@ -120,11 +123,10 @@ export function AdminSchedule({ session }: RoleViewProps) {
 
   const doctorOptions = doctors.map((d) => ({ value: d.id, label: `${d.name} — ${d.specialization}` }));
   const removeBlock = async (id: string) => {
-    setError('');
     try {
       await deleteScheduleBlock(id).unwrap();
     } catch (err) {
-      setError(apiError(err, 'Could not remove the block'));
+      toast.error(apiError(err, 'Could not remove the block'));
     }
   };
 
@@ -158,12 +160,14 @@ export function AdminSchedule({ session }: RoleViewProps) {
             >
               Next <ChevronRight className="w-4 h-4" />
             </button>
-            <button
-              onClick={() => setBlockOpen(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-300 text-slate-700 rounded-lg text-sm font-semibold hover:bg-slate-50 transition"
-            >
-              <Ban className="w-4 h-4" /> Add Block
-            </button>
+            {canManageBlocks && (
+              <button
+                onClick={() => setBlockOpen(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-300 text-slate-700 rounded-lg text-sm font-semibold hover:bg-slate-50 transition"
+              >
+                <Ban className="w-4 h-4" /> Add Block
+              </button>
+            )}
             <button
               onClick={() => {
                 refetchAppointments();
@@ -208,6 +212,10 @@ export function AdminSchedule({ session }: RoleViewProps) {
                     const cell = cellMap.get(`${d.id}|${min}`);
                     const label = minToLabel(min);
                     const block = blockAtMinute(blocksByDoctor.get(d.id) ?? [], min);
+                    const now = new Date();
+                    const todayStr = toDateStr(now);
+                    const nowMin = now.getHours() * 60 + now.getMinutes();
+                    const isPast = date < todayStr || (date === todayStr && min <= nowMin);
                     return (
                       <td key={d.id} className="border-l border-slate-100 align-top p-0">
                         {cell ? (
@@ -219,16 +227,18 @@ export function AdminSchedule({ session }: RoleViewProps) {
                           <div className={`group relative h-full border-l-4 px-4 py-3 ${BLOCK_CELL_STYLE[block.type]}`}>
                             <p className="font-semibold text-sm">{BLOCK_LABEL[block.type]}</p>
                             {block.note && <p className="text-xs opacity-80">{block.note}</p>}
-                            <button
-                              onClick={() => removeBlock(block.id)}
-                              className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 p-0.5 rounded hover:bg-white/60 transition"
-                              title="Remove block"
-                              aria-label="Remove block"
-                            >
-                              <X className="w-3.5 h-3.5" />
-                            </button>
+                            {canManageBlocks && (
+                              <button
+                                onClick={() => removeBlock(block.id)}
+                                className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 p-0.5 rounded hover:bg-white/60 transition"
+                                title="Remove block"
+                                aria-label="Remove block"
+                              >
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                            )}
                           </div>
-                        ) : BOOKABLE.has(label) ? (
+                        ) : BOOKABLE.has(label) && !isPast ? (
                           <Link
                             href={`/dashboard/book?doctor=${d.id}&date=${date}&time=${encodeURIComponent(label)}`}
                             className="group block px-4 py-3 text-center text-emerald-600 hover:bg-emerald-50 transition"
@@ -238,9 +248,9 @@ export function AdminSchedule({ session }: RoleViewProps) {
                             <span className="hidden group-hover:inline font-medium">+ Book</span>
                           </Link>
                         ) : BREAK.has(label) ? (
-                          <div className="px-4 py-3 text-center text-slate-400 text-sm bg-slate-50">Break</div>
+                          <div className="px-4 py-3 text-center text-slate-400 text-sm bg-slate-50 cursor-not-allowed">Break</div>
                         ) : (
-                          <div className="px-4 py-3 text-center text-slate-300 text-sm bg-slate-50">—</div>
+                          <div className="px-4 py-3 text-center text-slate-300 text-sm bg-slate-50 cursor-not-allowed">—</div>
                         )}
                       </td>
                     );
@@ -271,7 +281,7 @@ export function AdminSchedule({ session }: RoleViewProps) {
         </div>
       </div>
 
-      {blockOpen && (
+      {blockOpen && canManageBlocks && (
         <BlockModal
           doctorOptions={doctorOptions}
           defaultDate={date}

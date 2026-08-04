@@ -2,43 +2,22 @@
 
 import { useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Formik, Form } from 'formik';
-import * as Yup from 'yup';
-import { UserRound, Plus, X, AlertTriangle, Search, Pencil, Trash2 } from 'lucide-react';
-import { toast } from 'sonner';
+import { UserRound, Plus, Search, Pencil, Trash2 } from 'lucide-react';
 import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
-import { FormField } from '@/components/form/FormField';
 import { AddPatientModal } from '@/components/superadmin/AddPatientModal';
+import { EditPatientModal } from '@/components/patients/EditPatientModal';
+import { DeletePatientModal } from '@/components/patients/DeletePatientModal';
 import { HospitalBadge } from '@/components/superadmin/HospitalBadge';
 import { ActionIcon } from '@/components/ActionIcon';
 import { TablePagination } from '@/components/TablePagination';
 import { useServerTable } from '@/hooks/useServerTable';
-import { apiError } from '@/lib/apiError';
 import { hasPermission } from '@/lib/auth';
 import type { Patient } from '@/lib/types';
 import {
   useGetSuperadminPatientsPagedQuery,
   useListHospitalsQuery,
-  useUpdatePatientMutation,
-  useDeletePatientMutation,
 } from '@/store/api';
-
-const GENDER_OPTIONS = [
-  { value: 'male', label: 'Male' },
-  { value: 'female', label: 'Female' },
-  { value: 'other', label: 'Other' },
-];
-
-const editSchema = Yup.object({
-  gender: Yup.string(),
-  bloodGroup: Yup.string().max(10, 'Too long'),
-  dateOfBirth: Yup.string(),
-  emergencyContact: Yup.string().max(100, 'Too long'),
-  emergencyPhone: Yup.string().max(20, 'Too long'),
-  allergies: Yup.string().max(300, 'Too long'),
-  chronicDiseases: Yup.string().max(300, 'Too long'),
-});
 
 export function PlatformPatients({ session }: RoleViewProps) {
   const searchParams = useSearchParams();
@@ -47,7 +26,6 @@ export function PlatformPatients({ session }: RoleViewProps) {
   const [addModalOpen, setAddModalOpen] = useState(false);
   const [editing, setEditing] = useState<Patient | null>(null);
   const [deleting, setDeleting] = useState<Patient | null>(null);
-  const [saveError, setSaveError] = useState('');
 
   // The hospital filter, the search and the paging are all applied by the API.
   // This screen spans every tenant on the platform, so it is the one that most
@@ -63,24 +41,8 @@ export function PlatformPatients({ session }: RoleViewProps) {
   const patients = patientPage?.items ?? [];
   const totalPatients = patientPage?.total ?? 0;
   const { data: hospitals = [] } = useListHospitalsQuery();
-  const [updatePatient] = useUpdatePatientMutation();
-  const [deletePatient] = useDeletePatientMutation();
 
   const showHospital = !selectedHospitalId;
-
-  const confirmDelete = async () => {
-    if (!deleting) return;
-    setSaveError('');
-    try {
-      await deletePatient({ id: deleting.id, hospitalId: deleting.hospitalId }).unwrap();
-      refetch();
-      setDeleting(null);
-      toast.success('Patient deleted');
-    } catch (err) {
-      setSaveError(apiError(err, 'Failed to delete patient'));
-      setDeleting(null);
-    }
-  };
 
   return (
     <DashboardShell
@@ -89,10 +51,6 @@ export function PlatformPatients({ session }: RoleViewProps) {
       title="All Patients"
       subtitle={selectedHospitalId ? 'Filtered by selected hospital' : 'Across every hospital on the platform'}
     >
-      {saveError && (
-        <p className="mb-4 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{saveError}</p>
-      )}
-
       {/* Search toolbar */}
       <div className="mb-4">
         <div className="relative max-w-md">
@@ -175,111 +133,25 @@ export function PlatformPatients({ session }: RoleViewProps) {
         )}
       </div>
 
-      {/* Add modal */}
       <AddPatientModal
         open={addModalOpen}
         onClose={() => setAddModalOpen(false)}
-        onSuccess={() => { refetch(); setAddModalOpen(false); }}
+        onSuccess={refetch}
         preselectedHospitalId={selectedHospitalId}
         hospitals={hospitals}
       />
-
-      {/* Edit modal */}
-      {editing && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg shadow-2xl max-w-lg w-full max-h-[90vh] flex flex-col">
-            <div className="flex justify-between items-center px-6 py-4 border-b border-slate-100 shrink-0">
-              <div>
-                <h3 className="text-lg font-bold text-slate-900">Edit Patient</h3>
-                <p className="text-xs text-slate-400">{editing.user?.name}</p>
-              </div>
-              <button onClick={() => setEditing(null)} className="text-slate-500 hover:text-slate-900">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <Formik
-              initialValues={{
-                gender: (editing.gender ?? '').toLowerCase(),
-                bloodGroup: editing.bloodGroup ?? '',
-                dateOfBirth: editing.dateOfBirth ?? '',
-                emergencyContact: editing.emergencyContact ?? '',
-                emergencyPhone: editing.emergencyPhone ?? '',
-                allergies: editing.allergies ?? '',
-                chronicDiseases: editing.chronicDiseases ?? '',
-              }}
-              validationSchema={editSchema}
-              onSubmit={async (values, { setSubmitting }) => {
-                setSaveError('');
-                try {
-                  await updatePatient({ id: editing.id, body: values, hospitalId: editing.hospitalId }).unwrap();
-                  refetch();
-                  setEditing(null);
-                  toast.success('Patient updated');
-                } catch (err) {
-                  setSaveError(apiError(err, 'Failed to save patient'));
-                } finally {
-                  setSubmitting(false);
-                }
-              }}
-            >
-              {({ isSubmitting }) => (
-                <Form className="flex flex-col flex-1 min-h-0">
-                  <div className="px-6 py-5 space-y-4 overflow-y-auto flex-1">
-                    <div className="grid grid-cols-2 gap-4">
-                      <FormField name="gender" label="Gender" as="select" options={GENDER_OPTIONS} placeholder="Select gender" />
-                      <FormField name="bloodGroup" label="Blood Group" placeholder="e.g. O+" />
-                    </div>
-                    <FormField name="dateOfBirth" label="Date of Birth" type="date" />
-                    <div className="grid grid-cols-2 gap-4">
-                      <FormField name="emergencyContact" label="Emergency Contact" placeholder="Contact name" />
-                      <FormField name="emergencyPhone" label="Emergency Phone" placeholder="+91 98765 43210" />
-                    </div>
-                    <FormField name="allergies" label="Allergies" as="textarea" placeholder="Known allergies" />
-                    <FormField name="chronicDiseases" label="Chronic Diseases" as="textarea" placeholder="Chronic conditions" />
-                  </div>
-                  <div className="flex gap-3 px-6 py-4 border-t border-slate-100 shrink-0">
-                    <button type="button" onClick={() => setEditing(null)} className="flex-1 px-4 py-2 bg-slate-200 text-slate-700 rounded hover:bg-slate-300 transition">
-                      Cancel
-                    </button>
-                    <button type="submit" disabled={isSubmitting} className="flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded hover:shadow-lg font-semibold transition disabled:opacity-50">
-                      {isSubmitting ? 'Saving…' : 'Save Changes'}
-                    </button>
-                  </div>
-                </Form>
-              )}
-            </Formik>
-          </div>
-        </div>
-      )}
-
-      {/* Delete confirmation modal */}
-      {deleting && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg shadow-2xl max-w-md w-full p-6">
-            <div className="flex items-start gap-4">
-              <div className="w-11 h-11 rounded-full bg-red-100 flex items-center justify-center shrink-0">
-                <AlertTriangle className="w-6 h-6 text-red-600" />
-              </div>
-              <div className="min-w-0">
-                <h3 className="text-lg font-bold text-slate-900">Delete Patient</h3>
-                <p className="text-slate-600 mt-1 text-sm">
-                  Are you sure you want to delete{' '}
-                  <span className="font-semibold text-slate-900">{deleting.user?.name ?? 'this patient'}</span>?
-                  Their account, medical records, and appointments will be permanently removed. This cannot be undone.
-                </p>
-              </div>
-            </div>
-            <div className="flex gap-3 mt-6">
-              <button onClick={() => setDeleting(null)} className="flex-1 px-4 py-2 bg-slate-200 text-slate-700 rounded hover:bg-slate-300 transition">
-                Cancel
-              </button>
-              <button onClick={confirmDelete} className="flex-1 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 font-semibold transition">
-                Delete
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <EditPatientModal
+        patient={editing}
+        onClose={() => setEditing(null)}
+        onSuccess={refetch}
+        hospitalId={editing?.hospitalId}
+      />
+      <DeletePatientModal
+        patient={deleting}
+        onClose={() => setDeleting(null)}
+        onSuccess={refetch}
+        hospitalId={deleting?.hospitalId}
+      />
     </DashboardShell>
   );
 }

@@ -4,7 +4,7 @@ import { RoleView } from '@/components/RoleView';
 import { AdminBook } from '@/components/book/AdminBook';
 import { PatientBook } from '@/components/book/PatientBook';
 import { SuperadminBook } from '@/components/book/SuperadminBook';
-import { adminRole, patientRole, superadminRole } from '@/lib/roles';
+import { adminRole, doctorRole, patientRole, superadminRole } from '@/lib/roles';
 
 export default function BookPage() {
   return (
@@ -13,6 +13,7 @@ export default function BookPage() {
       views={{
         [superadminRole]: SuperadminBook,
         [adminRole]: AdminBook,
+        [doctorRole]: AdminBook,
         [patientRole]: PatientBook,
       }}
     />

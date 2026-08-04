@@ -1,13 +1,15 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { Formik, Form } from 'formik';
 import * as Yup from 'yup';
-import { Plus, X, Pill, AlertTriangle, Search } from 'lucide-react';
+import { Plus, X, Pill, AlertTriangle, Search, Pencil, Trash2 } from 'lucide-react';
+import { toast } from 'sonner';
 import type { Medicine } from '@/lib/types';
 import { DashboardShell } from '@/components/DashboardShell';
+import { ActionIcon } from '@/components/ActionIcon';
 import { apiError } from '@/lib/apiError';
+import { hasPermission } from '@/lib/auth';
 import {
   useCreateMedicineMutation,
   useDeleteMedicineMutation,
@@ -20,7 +22,6 @@ import { FormField } from '@/components/form/FormField';
 import { ExportButton } from '@/components/ExportButton';
 import { TablePagination } from '@/components/TablePagination';
 import { useServerTable } from '@/hooks/useServerTable';
-
 
 const CATEGORIES = ['Prenatal', 'Supplement', 'Vitamin', 'Antibiotic', 'Analgesic', 'Antacid', 'Antiemetic', 'Other'];
 const FORMS = ['Tablet', 'Capsule', 'Syrup', 'Injection', 'Ointment', 'Drops'];
@@ -47,12 +48,13 @@ const categoryOptions = CATEGORIES.map((c) => ({ value: c, label: c }));
 const formOptions = FORMS.map((f) => ({ value: f, label: f }));
 
 export function AdminMedicines({ session }: RoleViewProps) {
-  const router = useRouter();
-
   const [editing, setEditing] = useState<Medicine | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [deleting, setDeleting] = useState<Medicine | null>(null);
   const [categoryFilter, setCategoryFilter] = useState('all');
+
+  const canManage = hasPermission(session, 'medicines.manage');
+
   const table = useServerTable({ filterKey: categoryFilter });
 
   const listArgs = {
@@ -69,30 +71,22 @@ export function AdminMedicines({ session }: RoleViewProps) {
   const [fetchAllForExport] = useLazyListMedicinesPagedQuery();
   const [createMedicine] = useCreateMedicineMutation();
   const [updateMedicine] = useUpdateMedicineMutation();
-  const [deleteMedicine] = useDeleteMedicineMutation();
-  const [saveError, setSaveError] = useState('');
+  const [deleteMedicine, { isLoading: isDeleting }] = useDeleteMedicineMutation();
 
-  const openAdd = () => {
-    setEditing(null);
-    setModalOpen(true);
-  };
-  const openEdit = (m: Medicine) => {
-    setEditing(m);
-    setModalOpen(true);
-  };
-  const closeModal = () => {
-    setModalOpen(false);
-    setEditing(null);
-  };
+  const openAdd = () => { setEditing(null); setModalOpen(true); };
+  const openEdit = (m: Medicine) => { setEditing(m); setModalOpen(true); };
+  const closeModal = () => { setModalOpen(false); setEditing(null); };
+
   const confirmDelete = async () => {
     if (!deleting) return;
-    setSaveError('');
     try {
       await deleteMedicine(deleting.id).unwrap();
+      toast.success('Medicine deleted');
+      setDeleting(null);
     } catch (err) {
-      setSaveError(apiError(err, 'Failed to delete medicine'));
+      toast.error(apiError(err, 'Failed to delete medicine'));
+      setDeleting(null);
     }
-    setDeleting(null);
   };
 
   const stockBadge = (stock: number) =>
@@ -101,7 +95,6 @@ export function AdminMedicines({ session }: RoleViewProps) {
       : stock < 50
       ? 'bg-amber-100 text-amber-700'
       : 'bg-green-100 text-green-700';
-
 
   return (
     <DashboardShell role={session.user.role} userName={session.user.name} title="Medicines" subtitle="Pharmacy catalog">
@@ -137,26 +130,30 @@ export function AdminMedicines({ session }: RoleViewProps) {
       <div className="bg-white rounded-lg shadow">
         <div className="flex justify-between items-center px-6 py-4 border-b">
           <h3 className="text-lg font-semibold text-slate-900">Medicines ({totalMedicines})</h3>
-          <button
-            onClick={openAdd}
-            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg hover:shadow-lg transition"
-          >
-            <Plus className="w-4 h-4" />
-            Add Medicine
-          </button>
+          {canManage && (
+            <button
+              onClick={openAdd}
+              className="flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg text-sm font-medium hover:shadow-lg transition"
+            >
+              <Plus className="w-4 h-4" />
+              Add Medicine
+            </button>
+          )}
         </div>
 
         {!isLoading && filtered.length === 0 ? (
           <div className="text-center py-16">
             <Pill className="w-16 h-16 text-slate-300 mx-auto mb-4" />
             <p className="text-slate-600 mb-6">No medicines yet</p>
-            <button
-              onClick={openAdd}
-              className="inline-flex items-center gap-2 px-6 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg hover:shadow-lg transition"
-            >
-              <Plus className="w-4 h-4" />
-              Add Medicine
-            </button>
+            {canManage && (
+              <button
+                onClick={openAdd}
+                className="inline-flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg text-sm font-medium hover:shadow-lg transition"
+              >
+                <Plus className="w-4 h-4" />
+                Add Medicine
+              </button>
+            )}
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -169,7 +166,9 @@ export function AdminMedicines({ session }: RoleViewProps) {
                   <th className="text-left py-3 px-6 font-semibold text-slate-900">Strength</th>
                   <th className="text-left py-3 px-6 font-semibold text-slate-900">Price</th>
                   <th className="text-left py-3 px-6 font-semibold text-slate-900">Stock</th>
-                  <th className="text-right py-3 px-6 font-semibold text-slate-900">Actions</th>
+                  {canManage && (
+                    <th className="text-right py-3 px-6 font-semibold text-slate-900">Actions</th>
+                  )}
                 </tr>
               </thead>
               <tbody>
@@ -185,14 +184,14 @@ export function AdminMedicines({ session }: RoleViewProps) {
                         {m.stock}
                       </span>
                     </td>
-                    <td className="py-3 px-6 text-right">
-                      <button onClick={() => openEdit(m)} className="text-cyan-600 hover:text-cyan-700 font-semibold text-sm mr-4">
-                        Edit
-                      </button>
-                      <button onClick={() => setDeleting(m)} className="text-red-600 hover:text-red-700 font-semibold text-sm">
-                        Delete
-                      </button>
-                    </td>
+                    {canManage && (
+                      <td className="py-3 px-6 text-right">
+                        <div className="flex items-center justify-end gap-1">
+                          <ActionIcon icon={Pencil} label="Edit" onClick={() => openEdit(m)} />
+                          <ActionIcon icon={Trash2} label="Delete" tone="danger" onClick={() => setDeleting(m)} />
+                        </div>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
@@ -227,7 +226,7 @@ export function AdminMedicines({ session }: RoleViewProps) {
                 stock: editing ? String(editing.stock) : '',
               }}
               validationSchema={medicineSchema}
-              onSubmit={async (values, { setSubmitting }) => {
+              onSubmit={async (values, { setSubmitting, setStatus }) => {
                 const payload = {
                   name: values.name.trim(),
                   category: values.category,
@@ -236,45 +235,58 @@ export function AdminMedicines({ session }: RoleViewProps) {
                   price: Number(values.price),
                   stock: Number(values.stock),
                 };
-                setSaveError('');
+                setStatus('');
                 try {
                   if (editing) {
                     await updateMedicine({ id: editing.id, body: payload }).unwrap();
+                    toast.success('Medicine updated');
                   } else {
-                  await createMedicine(payload).unwrap();
+                    await createMedicine(payload).unwrap();
+                    toast.success('Medicine added');
                   }
                   closeModal();
                 } catch (err) {
-                  setSaveError(apiError(err, 'Failed to save medicine'));
+                  setStatus(apiError(err, 'Failed to save medicine'));
                 } finally {
                   setSubmitting(false);
                 }
               }}
             >
-              <Form className="grid sm:grid-cols-2 gap-4">
-                <div className="sm:col-span-2">
-                  <FormField name="name" label="Name" placeholder="e.g. Folic Acid" autoFocus required />
-                </div>
-                <FormField name="category" label="Category" as="select" placeholder="Select category" options={categoryOptions} required />
-                <FormField name="form" label="Form" as="select" placeholder="Select form" options={formOptions} required />
-                <FormField name="strength" label="Strength / Pack" placeholder="e.g. 500 mg" />
-                <FormField name="price" label="Price (₹)" type="number" min="0" placeholder="0" required />
-                <FormField name="stock" label="Stock (units)" type="number" min="0" placeholder="0" required />
-                <div className="sm:col-span-2 flex gap-3 pt-2">
-                  <button type="button" onClick={closeModal} className="flex-1 px-4 py-2 bg-slate-200 text-slate-700 rounded hover:bg-slate-300 transition">
-                    Cancel
-                  </button>
-                  <button type="submit" className="flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded hover:shadow-lg font-semibold transition">
-                    {editing ? 'Save Changes' : 'Add Medicine'}
-                  </button>
-                </div>
-              </Form>
+              {({ isSubmitting, status }) => (
+                <Form className="grid sm:grid-cols-2 gap-4">
+                  <div className="sm:col-span-2">
+                    <FormField name="name" label="Name" placeholder="e.g. Folic Acid" autoFocus required />
+                  </div>
+                  <FormField name="category" label="Category" as="select" placeholder="Select category" options={categoryOptions} required />
+                  <FormField name="form" label="Form" as="select" placeholder="Select form" options={formOptions} required />
+                  <FormField name="strength" label="Strength / Pack" placeholder="e.g. 500 mg" />
+                  <FormField name="price" label="Price (₹)" type="number" min="0" placeholder="0" required />
+                  <FormField name="stock" label="Stock (units)" type="number" min="0" placeholder="0" required />
+                  {status && (
+                    <p className="sm:col-span-2 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+                      {status}
+                    </p>
+                  )}
+                  <div className="sm:col-span-2 flex gap-3 pt-2">
+                    <button type="button" onClick={closeModal} className="flex-1 px-4 py-2 bg-slate-200 text-slate-700 rounded hover:bg-slate-300 transition">
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={isSubmitting}
+                      className="flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded hover:shadow-lg font-semibold transition disabled:opacity-50"
+                    >
+                      {isSubmitting ? 'Saving…' : editing ? 'Save Changes' : 'Add Medicine'}
+                    </button>
+                  </div>
+                </Form>
+              )}
             </Formik>
           </div>
         </div>
       )}
 
-      {/* Delete confirmation modal */}
+      {/* Delete confirmation */}
       {deleting && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-lg shadow-2xl max-w-md w-full p-6">
@@ -290,11 +302,19 @@ export function AdminMedicines({ session }: RoleViewProps) {
               </div>
             </div>
             <div className="flex gap-3 mt-6">
-              <button onClick={() => setDeleting(null)} className="flex-1 px-4 py-2 bg-slate-200 text-slate-700 rounded hover:bg-slate-300 transition">
+              <button
+                onClick={() => setDeleting(null)}
+                disabled={isDeleting}
+                className="flex-1 px-4 py-2 bg-slate-200 text-slate-700 rounded hover:bg-slate-300 transition disabled:opacity-50"
+              >
                 Cancel
               </button>
-              <button onClick={confirmDelete} className="flex-1 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 font-semibold transition">
-                Delete
+              <button
+                onClick={confirmDelete}
+                disabled={isDeleting}
+                className="flex-1 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 font-semibold transition disabled:opacity-50"
+              >
+                {isDeleting ? 'Deleting…' : 'Delete'}
               </button>
             </div>
           </div>

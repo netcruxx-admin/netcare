@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Video, Plus, X, CalendarPlus, Clock, UserRound } from 'lucide-react';
+import { toast } from 'sonner';
 import type { Appointment, VideoSlot } from '@/lib/types';
 import { apiError } from '@/lib/apiError';
 import {
@@ -33,7 +34,6 @@ export function DoctorVideoConsults({ session }: RoleViewProps) {
   const { data: patients = [] } = useListPatientsQuery();
   const [createVideoSlot] = useCreateVideoSlotMutation();
   const [deleteVideoSlot] = useDeleteVideoSlotMutation();
-  const [error, setError] = useState('');
 
   const appts = allAppointments.filter((a) => a.mode === 'video' && a.status === 'scheduled');
 
@@ -45,6 +45,18 @@ export function DoctorVideoConsults({ session }: RoleViewProps) {
   // Times already published for the selected date (can't double-add).
   const takenForDate = new Set(slots.filter((s) => s.date === date).map((s) => s.time));
 
+  const timeToMin = (t: string) => {
+    const m = t.match(/(\d{1,2}):(\d{2})\s*(AM|PM)/i);
+    if (!m) return 0;
+    let h = Number(m[1]);
+    const mm = Number(m[2]);
+    if (m[3].toUpperCase() === 'PM' && h !== 12) h += 12;
+    if (m[3].toUpperCase() === 'AM' && h === 12) h = 0;
+    return h * 60 + mm;
+  };
+  const nowMin = new Date().getHours() * 60 + new Date().getMinutes();
+  const isToday = date === todayStr();
+
   const toggle = (t: string) => {
     setPicked((prev) => {
       const next = new Set(prev);
@@ -55,30 +67,29 @@ export function DoctorVideoConsults({ session }: RoleViewProps) {
 
   const publish = async () => {
     if (!date || picked.size === 0) return;
-    setError('');
     try {
-      // Published one at a time; the list tag invalidates once they all land.
       for (const time of picked) {
         await createVideoSlot({ doctorId, date, time, status: 'open' }).unwrap();
       }
       setPicked(new Set());
+      toast.success('Slots published');
     } catch (err) {
-      setError(apiError(err, 'Could not publish those slots'));
+      toast.error(apiError(err, 'Could not publish those slots'));
     }
   };
 
   const removeSlot = async (id: string) => {
-    setError('');
     try {
       await deleteVideoSlot(id).unwrap();
     } catch (err) {
-      setError(apiError(err, 'Could not remove the slot'));
+      toast.error(apiError(err, 'Could not remove the slot'));
     }
   };
 
-  // Group slots by date for display.
+  // Group slots by date for display — past dates are hidden.
+  const today = todayStr();
   const byDate = slots.reduce<Record<string, VideoSlot[]>>((acc, s) => {
-    (acc[s.date] ??= []).push(s);
+    if (s.date >= today) (acc[s.date] ??= []).push(s);
     return acc;
   }, {});
   const dates = Object.keys(byDate).sort();
@@ -113,20 +124,24 @@ export function DoctorVideoConsults({ session }: RoleViewProps) {
           <div className="flex flex-wrap gap-2">
             {GRID_SLOTS.map((t) => {
               const taken = takenForDate.has(t);
+              const past = isToday && timeToMin(t) <= nowMin;
+              const disabled = taken || past;
               const on = picked.has(t);
               return (
                 <button
                   key={t}
-                  disabled={taken}
+                  disabled={disabled}
                   onClick={() => toggle(t)}
                   className={`px-3 py-1.5 rounded-lg text-sm border transition ${
                     taken
-                      ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed'
+                      ? 'bg-cyan-50 text-cyan-500 border-cyan-200 cursor-not-allowed'
+                      : past
+                      ? 'bg-slate-50 text-slate-300 border-slate-100 cursor-not-allowed line-through'
                       : on
                       ? 'bg-cyan-500 text-white border-cyan-500'
                       : 'bg-white text-slate-700 border-slate-300 hover:border-cyan-400'
                   }`}
-                  title={taken ? 'Already published' : ''}
+                  title={taken ? 'Already published' : past ? 'Time has passed' : ''}
                 >
                   {t}
                 </button>

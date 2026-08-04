@@ -1,10 +1,10 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Formik, Form } from 'formik';
 import * as Yup from 'yup';
+import { toast } from 'sonner';
 import {
   Search,
   CalendarDays,
@@ -25,6 +25,7 @@ import {
 import type { LucideIcon } from 'lucide-react';
 import type { Appointment, Department, Doctor } from '@/lib/types';
 import { apiError } from '@/lib/apiError';
+import { hasPermission } from '@/lib/auth';
 import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
 import { FormField } from '@/components/form/FormField';
@@ -57,7 +58,6 @@ import {
 
 const PAGE_SIZE = 20;
 
-// ---- slot helpers (shared behaviour with the booking form) ----
 function toDateStr(d: Date) {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, '0');
@@ -88,9 +88,6 @@ function slotStatus(slot: string, date: string, booked: Set<string>, blocked: Se
   if (booked.has(slot)) return 'booked';
   return 'available';
 }
-// An admin already holds every appointment in the hospital, so the taken slots
-// can be read straight off the list rather than asked for separately. The
-// appointment being moved is excluded — its own slot is not a conflict.
 function bookedSlotsForDoctor(
   appointments: Appointment[],
   doctorId: string,
@@ -157,15 +154,15 @@ function buildPageItems(current: number, total: number): (number | 'ellipsis')[]
 }
 
 export function AdminAppointments({ session }: RoleViewProps) {
-  // Blocks come from the API; blockedSlotSet is a pure calculation over them.
   const { data: scheduleBlocks = [] } = useListScheduleBlocksQuery();
-  const router = useRouter();
 
   const { data: departments = [] } = useListDepartmentsQuery();
   const { data: doctors = [] } = useListDoctorsQuery();
   const [updateAppointment] = useUpdateAppointmentMutation();
-  const [deleteAppointment] = useDeleteAppointmentMutation();
+  const [deleteAppointment, { isLoading: isDeleting }] = useDeleteAppointmentMutation();
   const [createVitals] = useCreateVitalsMutation();
+
+  const canManage = hasPermission(session, 'appointments.manage');
 
   const [status, setStatus] = useState<'all' | Appointment['status']>('all');
   const [deptId, setDeptId] = useState('all');
@@ -173,9 +170,6 @@ export function AdminAppointments({ session }: RoleViewProps) {
   const [date, setDate] = useState('');
   const [page, setPage] = useState(1);
 
-  // Filtering and paging both happen server-side: once the table shows one page
-  // of many, filtering what already arrived would search a single page and
-  // present it as the whole result.
   const debouncedQuery = useDebounced(query);
   const listArgs = {
     q: debouncedQuery.trim() || undefined,
@@ -190,27 +184,18 @@ export function AdminAppointments({ session }: RoleViewProps) {
   });
   const appointments = page_?.items ?? [];
   const totalRows = page_?.total ?? 0;
-  // Tiles summarise everything the caller can see, not the rows on screen.
   const { data: stats = { total: 0, scheduled: 0, completed: 0, cancelled: 0, rescheduled: 0 } } =
     useGetAppointmentStatsQuery();
-  // Export pulls the whole filtered set, not just the visible page.
   const [fetchAllForExport] = useLazyListAppointmentsPagedQuery();
 
-  // Action modals (each holds the target appointment)
   const [editing, setEditing] = useState<Appointment | null>(null);
   const [followUp, setFollowUp] = useState<Appointment | null>(null);
   const [rescheduling, setRescheduling] = useState<Appointment | null>(null);
   const [reDate, setReDate] = useState('');
   const [reTime, setReTime] = useState('');
+  const [reSaving, setReSaving] = useState(false);
   const [addingVitals, setAddingVitals] = useState<Appointment | null>(null);
   const [deleting, setDeleting] = useState<Appointment | null>(null);
-  const [toast, setToast] = useState('');
-  const [error, setError] = useState('');
-
-  const flash = (msg: string) => {
-    setToast(msg);
-    setTimeout(() => setToast(''), 2500);
-  };
 
   useEffect(() => {
     setPage(1);
@@ -231,8 +216,6 @@ export function AdminAppointments({ session }: RoleViewProps) {
       date: a.date,
       time: a.time,
       status: a.status,
-      // Resolved by the API, so this table no longer downloads every patient in
-      // the hospital just to turn an id into a name.
       patient: a.patientName || '—',
       phone: a.patientPhone || '—',
       doctor: a.doctorName ? `Dr. ${a.doctorName}` : doctorName(a.doctorId),
@@ -242,13 +225,10 @@ export function AdminAppointments({ session }: RoleViewProps) {
     [departments, doctorName],
   );
 
-  // Already filtered, sorted and paged by the server.
   const rows = useMemo(() => appointments.map(toRow), [appointments, toRow]);
-
   const totalPages = Math.max(1, Math.ceil(totalRows / PAGE_SIZE));
-  const pageRows = rows; // the server already returned exactly this page
+  const pageRows = rows;
   const pageItems = buildPageItems(page, totalPages);
-
 
   const doctorOptions = doctors.map((d) => ({
     value: d.id,
@@ -260,29 +240,31 @@ export function AdminAppointments({ session }: RoleViewProps) {
     setReTime(a.time);
     setRescheduling(a);
   };
+
   const saveReschedule = async () => {
     if (!rescheduling || !reDate || !reTime) return;
-    setError('');
+    setReSaving(true);
     try {
       await updateAppointment({
         id: rescheduling.id,
-        // The server marks it rescheduled off the date/time change itself.
         body: { date: reDate, time: reTime },
       }).unwrap();
       setRescheduling(null);
-      flash('Appointment rescheduled');
+      toast.success('Appointment rescheduled');
     } catch (err) {
-      setError(apiError(err, 'Could not reschedule the appointment'));
+      toast.error(apiError(err, 'Could not reschedule the appointment'));
+    } finally {
+      setReSaving(false);
     }
   };
+
   const confirmDelete = async () => {
     if (!deleting) return;
-    setError('');
     try {
       await deleteAppointment({ id: deleting.id }).unwrap();
-      flash('Appointment deleted');
+      toast.success('Appointment deleted');
     } catch (err) {
-      setError(apiError(err, 'Could not delete the appointment'));
+      toast.error(apiError(err, 'Could not delete the appointment'));
     }
     setDeleting(null);
   };
@@ -302,10 +284,6 @@ export function AdminAppointments({ session }: RoleViewProps) {
       subtitle="All appointments across the hospital"
     >
       <div className="space-y-6">
-        {error && (
-          <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm text-red-700">{error}</div>
-        )}
-
         {/* Stat cards */}
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
           {(
@@ -383,7 +361,6 @@ export function AdminAppointments({ session }: RoleViewProps) {
               filename="appointments"
               headers={['Patient', 'Phone', 'Date', 'Time', 'Doctor', 'Department', 'Status']}
               rows={rows.map((r) => [r.patient, r.phone, r.date, r.time, r.doctor, r.dept, r.status])}
-              // Export the whole filtered set, not just the page on screen.
               getRows={async () => {
                 const all = await fetchAllForExport(listArgs).unwrap();
                 return all.items
@@ -391,12 +368,14 @@ export function AdminAppointments({ session }: RoleViewProps) {
                   .map((r) => [r.patient, r.phone, r.date, r.time, r.doctor, r.dept, r.status]);
               }}
             />
-            <Link
-              href="/dashboard/book"
-              className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg text-sm font-semibold hover:shadow-lg transition"
-            >
-              <Plus className="w-4 h-4" /> New Appointment
-            </Link>
+            {canManage && (
+              <Link
+                href="/dashboard/book"
+                className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg text-sm font-semibold hover:shadow-lg transition"
+              >
+                <Plus className="w-4 h-4" /> New Appointment
+              </Link>
+            )}
           </div>
         </div>
 
@@ -450,11 +429,15 @@ export function AdminAppointments({ session }: RoleViewProps) {
                         <td className="py-3 px-6">
                           <div className="flex items-center justify-end gap-1">
                             <ActionIcon icon={Eye} label="View" href={`/appointment/${r.id}`} />
-                            <ActionIcon icon={Pencil} label="Edit" onClick={() => setEditing(r.appt)} />
-                            <ActionIcon icon={CalendarClock} label="Reschedule" onClick={() => openReschedule(r.appt)} />
-                            <ActionIcon icon={CalendarPlus} label="Schedule Follow-Up" onClick={() => setFollowUp(r.appt)} />
-                            <ActionIcon icon={Activity} label="Add Vitals" onClick={() => setAddingVitals(r.appt)} />
-                            <ActionIcon icon={Trash2} label="Delete" tone="danger" onClick={() => setDeleting(r.appt)} />
+                            {canManage && (
+                              <>
+                                <ActionIcon icon={Pencil} label="Edit" onClick={() => setEditing(r.appt)} />
+                                <ActionIcon icon={CalendarClock} label="Reschedule" onClick={() => openReschedule(r.appt)} />
+                                <ActionIcon icon={CalendarPlus} label="Schedule Follow-Up" onClick={() => setFollowUp(r.appt)} />
+                                <ActionIcon icon={Activity} label="Add Vitals" onClick={() => setAddingVitals(r.appt)} />
+                                <ActionIcon icon={Trash2} label="Delete" tone="danger" onClick={() => setDeleting(r.appt)} />
+                              </>
+                            )}
                           </div>
                         </td>
                       </tr>
@@ -516,8 +499,8 @@ export function AdminAppointments({ session }: RoleViewProps) {
             <Formik
               initialValues={{ doctorId: editing.doctorId, status: editing.status, reason: editing.reason }}
               validationSchema={editSchema}
-              onSubmit={async (values) => {
-                setError('');
+              onSubmit={async (values, { setSubmitting, setStatus }) => {
+                setStatus('');
                 try {
                   await updateAppointment({
                     id: editing.id,
@@ -529,25 +512,36 @@ export function AdminAppointments({ session }: RoleViewProps) {
                     },
                   }).unwrap();
                   setEditing(null);
-                  flash('Appointment updated');
+                  toast.success('Appointment updated');
                 } catch (err) {
-                  setError(apiError(err, 'Could not update the appointment'));
+                  setStatus(apiError(err, 'Could not update the appointment'));
+                } finally {
+                  setSubmitting(false);
                 }
               }}
             >
-              <Form className="space-y-4">
-                <FormField name="doctorId" label="Doctor" as="select" placeholder="Select a doctor" options={doctorOptions} required />
-                <FormField name="status" label="Status" as="select" placeholder="Select status" options={statusOptions} required />
-                <FormField name="reason" label="Reason" as="textarea" placeholder="Reason for visit" rows={3} />
-                <div className="flex gap-3 pt-2">
-                  <button type="button" onClick={() => setEditing(null)} className="flex-1 px-4 py-2 bg-slate-200 text-slate-700 rounded hover:bg-slate-300 transition">
-                    Cancel
-                  </button>
-                  <button type="submit" className="flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded hover:shadow-lg font-semibold transition">
-                    Save Changes
-                  </button>
-                </div>
-              </Form>
+              {({ isSubmitting, status }) => (
+                <Form className="space-y-4">
+                  <FormField name="doctorId" label="Doctor" as="select" placeholder="Select a doctor" options={doctorOptions} required />
+                  <FormField name="status" label="Status" as="select" placeholder="Select status" options={statusOptions} required />
+                  <FormField name="reason" label="Reason" as="textarea" placeholder="Reason for visit" rows={3} />
+                  {status && (
+                    <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{status}</p>
+                  )}
+                  <div className="flex gap-3 pt-2">
+                    <button type="button" onClick={() => setEditing(null)} className="flex-1 px-4 py-2 bg-slate-200 text-slate-700 rounded hover:bg-slate-300 transition">
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={isSubmitting}
+                      className="flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded hover:shadow-lg font-semibold transition disabled:opacity-50"
+                    >
+                      {isSubmitting ? 'Saving…' : 'Save Changes'}
+                    </button>
+                  </div>
+                </Form>
+              )}
             </Formik>
           </div>
         </div>
@@ -601,15 +595,15 @@ export function AdminAppointments({ session }: RoleViewProps) {
               </div>
             </div>
             <div className="flex gap-3 mt-6">
-              <button onClick={() => setRescheduling(null)} className="flex-1 px-4 py-2 bg-slate-200 text-slate-700 rounded hover:bg-slate-300 transition">
+              <button onClick={() => setRescheduling(null)} disabled={reSaving} className="flex-1 px-4 py-2 bg-slate-200 text-slate-700 rounded hover:bg-slate-300 transition disabled:opacity-50">
                 Cancel
               </button>
               <button
                 onClick={saveReschedule}
-                disabled={!reDate || !reTime}
+                disabled={!reDate || !reTime || reSaving}
                 className="flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded hover:shadow-lg font-semibold transition disabled:opacity-50"
               >
-                Reschedule
+                {reSaving ? 'Saving…' : 'Reschedule'}
               </button>
             </div>
           </div>
@@ -629,8 +623,8 @@ export function AdminAppointments({ session }: RoleViewProps) {
             <Formik
               initialValues={{ temperature: '', bloodPressure: '', heartRate: '', respiratoryRate: '', weight: '', height: '', notes: '' }}
               validationSchema={vitalsSchema}
-              onSubmit={async (values) => {
-                setError('');
+              onSubmit={async (values, { setSubmitting, setStatus }) => {
+                setStatus('');
                 try {
                   await createVitals({
                     appointmentId: addingVitals.id,
@@ -645,31 +639,42 @@ export function AdminAppointments({ session }: RoleViewProps) {
                     notes: values.notes,
                   }).unwrap();
                   setAddingVitals(null);
-                  flash('Vitals recorded');
+                  toast.success('Vitals recorded');
                 } catch (err) {
-                  setError(apiError(err, 'Could not record the vitals'));
+                  setStatus(apiError(err, 'Could not record the vitals'));
+                } finally {
+                  setSubmitting(false);
                 }
               }}
             >
-              <Form className="grid grid-cols-2 gap-4">
-                <FormField name="temperature" label="Temperature (°C)" type="number" placeholder="36.8" />
-                <FormField name="bloodPressure" label="Blood Pressure" placeholder="120/80" />
-                <FormField name="heartRate" label="Heart Rate (bpm)" type="number" placeholder="78" />
-                <FormField name="respiratoryRate" label="Respiratory Rate (/min)" type="number" placeholder="16" />
-                <FormField name="weight" label="Weight (kg)" type="number" placeholder="68" />
-                <FormField name="height" label="Height (cm)" type="number" placeholder="165" />
-                <div className="col-span-2">
-                  <FormField name="notes" label="Notes" as="textarea" placeholder="Any observations" rows={2} />
-                </div>
-                <div className="col-span-2 flex gap-3 pt-2">
-                  <button type="button" onClick={() => setAddingVitals(null)} className="flex-1 px-4 py-2 bg-slate-200 text-slate-700 rounded hover:bg-slate-300 transition">
-                    Cancel
-                  </button>
-                  <button type="submit" className="flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded hover:shadow-lg font-semibold transition">
-                    Save Vitals
-                  </button>
-                </div>
-              </Form>
+              {({ isSubmitting, status }) => (
+                <Form className="grid grid-cols-2 gap-4">
+                  <FormField name="temperature" label="Temperature (°C)" type="number" placeholder="36.8" />
+                  <FormField name="bloodPressure" label="Blood Pressure" placeholder="120/80" />
+                  <FormField name="heartRate" label="Heart Rate (bpm)" type="number" placeholder="78" />
+                  <FormField name="respiratoryRate" label="Respiratory Rate (/min)" type="number" placeholder="16" />
+                  <FormField name="weight" label="Weight (kg)" type="number" placeholder="68" />
+                  <FormField name="height" label="Height (cm)" type="number" placeholder="165" />
+                  <div className="col-span-2">
+                    <FormField name="notes" label="Notes" as="textarea" placeholder="Any observations" rows={2} />
+                  </div>
+                  {status && (
+                    <p className="col-span-2 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{status}</p>
+                  )}
+                  <div className="col-span-2 flex gap-3 pt-2">
+                    <button type="button" onClick={() => setAddingVitals(null)} className="flex-1 px-4 py-2 bg-slate-200 text-slate-700 rounded hover:bg-slate-300 transition">
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={isSubmitting}
+                      className="flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded hover:shadow-lg font-semibold transition disabled:opacity-50"
+                    >
+                      {isSubmitting ? 'Saving…' : 'Save Vitals'}
+                    </button>
+                  </div>
+                </Form>
+              )}
             </Formik>
           </div>
         </div>
@@ -691,11 +696,11 @@ export function AdminAppointments({ session }: RoleViewProps) {
               </div>
             </div>
             <div className="flex gap-3 mt-6">
-              <button onClick={() => setDeleting(null)} className="flex-1 px-4 py-2 bg-slate-200 text-slate-700 rounded hover:bg-slate-300 transition">
+              <button onClick={() => setDeleting(null)} disabled={isDeleting} className="flex-1 px-4 py-2 bg-slate-200 text-slate-700 rounded hover:bg-slate-300 transition disabled:opacity-50">
                 Cancel
               </button>
-              <button onClick={confirmDelete} className="flex-1 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 font-semibold transition">
-                Delete
+              <button onClick={confirmDelete} disabled={isDeleting} className="flex-1 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 font-semibold transition disabled:opacity-50">
+                {isDeleting ? 'Deleting…' : 'Delete'}
               </button>
             </div>
           </div>
@@ -707,15 +712,8 @@ export function AdminAppointments({ session }: RoleViewProps) {
         <FollowUpModal
           appointment={followUp}
           onClose={() => setFollowUp(null)}
-          onCreated={(msg) => { setFollowUp(null); flash(msg); }}
+          onCreated={(msg) => { setFollowUp(null); toast.success(msg); }}
         />
-      )}
-
-      {/* Toast */}
-      {toast && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-slate-900 text-white text-sm px-4 py-2 rounded-lg shadow-lg">
-          {toast}
-        </div>
       )}
     </DashboardShell>
   );

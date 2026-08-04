@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 from .. import models, schemas
 from ..auth import get_current_user, hash_password
 from .. import sessions
-from ..authz import SCOPE_OWN, require_permission
+from ..authz import SCOPE_OWN, require_any_permission, require_permission
 from ..database import get_db
 from ..tenancy import get_tenant_id, scoped
 from ..utils import ListQuery, list_params, new_id, now_iso, paginate, text_search
@@ -89,9 +89,22 @@ def update_own_account(
 def create_user(
     body: schemas.UserCreate,
     db: Session = Depends(get_db),
-    _: str = Depends(require_permission("users.manage")),
+    held: dict = Depends(require_any_permission("users.manage", "patients.manage", "doctors.manage")),
     tenant_id: str = Depends(get_tenant_id),
 ):
+    # Without users.manage, narrower permissions only allow their own role type:
+    # patients.manage → patient accounts only; doctors.manage → doctor accounts only.
+    if "users.manage" not in held:
+        allowed: set[str] = set()
+        if "patients.manage" in held:
+            allowed.add("patient")
+        if "doctors.manage" in held:
+            allowed.add("doctor")
+        if body.role not in allowed:
+            raise HTTPException(
+                status.HTTP_403_FORBIDDEN,
+                "You do not have permission to create this account type",
+            )
     role = db.get(models.Role, body.role)
     if role is None:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Unknown role")

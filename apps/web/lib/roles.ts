@@ -308,7 +308,7 @@ export const dashboardRoutes: DashboardRoute[] = [
     label: 'Tests',
     icon: FlaskConical,
     viewRoles: [adminRole, labRole],
-    permission: 'lab_tests.manage',
+    permission: 'lab_tests.read',
     labelByRole: { [labRole]: 'Test Catalog' },
     module: 'lab',
   },
@@ -326,10 +326,8 @@ export const dashboardRoutes: DashboardRoute[] = [
     path: '/dashboard/profile',
     label: 'Profile',
     icon: User,
-    viewRoles: [...clinicalRoles, patientRole],
+    viewRoles: [...clinicalRoles, labRole, patientRole],
     permission: 'profile.manage',
-    // The forms here edit a doctor/nurse/patient record. A role with none of
-    // those has nothing to edit yet — PUT /users/me exists but has no screen.
     viewRolesOnly: true,
   },
 
@@ -346,7 +344,7 @@ export const dashboardRoutes: DashboardRoute[] = [
     label: 'Medicines',
     icon: Pill,
     viewRoles: [adminRole],
-    permission: 'medicines.manage',
+    permission: 'medicines.read',
     module: 'pharmacy',
   },
   { path: '/dashboard/users', label: 'Users', icon: Users, viewRoles: [superadminRole, adminRole], permission: 'users.read' },

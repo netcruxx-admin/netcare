@@ -1,7 +1,6 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ChevronLeft, ChevronRight, CalendarRange, Ban, X } from 'lucide-react';
 import type { ScheduleBlock } from '@/lib/types';
@@ -45,6 +44,12 @@ const minToLabel = (min: number) => {
 const GRID_MINS: number[] = [];
 for (let m = 9 * 60; m <= 17 * 60; m += 30) GRID_MINS.push(m);
 const BREAK = new Set([12 * 60, 12 * 60 + 30, 13 * 60]);
+
+// Slots that can be booked (excludes break window)
+const BOOKABLE = new Set([
+  9 * 60, 9 * 60 + 30, 10 * 60, 10 * 60 + 30, 11 * 60, 11 * 60 + 30,
+  13 * 60 + 30, 14 * 60, 14 * 60 + 30, 15 * 60, 15 * 60 + 30, 16 * 60, 16 * 60 + 30,
+]);
 
 // Monday of the week containing `d`.
 function weekStart(d: Date) {
@@ -162,6 +167,10 @@ export function DoctorSchedule({ session }: RoleViewProps) {
                   {model.days.map((d) => {
                     const cell = model.cellMap.get(`${d.dateStr}|${min}`);
                     const block = blockAtMinute(model.blocksByDay.get(d.dateStr) ?? [], min);
+                    const now = new Date();
+                    const todayStr = toDateStr(now);
+                    const nowMin = now.getHours() * 60 + now.getMinutes();
+                    const isPast = d.dateStr < todayStr || (d.dateStr === todayStr && min <= nowMin);
                     return (
                       <td key={d.dateStr} className="border-l border-slate-100 align-top p-0">
                         {cell ? (
@@ -190,9 +199,18 @@ export function DoctorSchedule({ session }: RoleViewProps) {
                             </button>
                           </div>
                         ) : BREAK.has(min) ? (
-                          <div className="px-3 py-3 text-center text-slate-300 text-xs bg-slate-50">Break</div>
+                          <div className="px-3 py-3 text-center text-slate-300 text-xs bg-slate-50 cursor-not-allowed">Break</div>
+                        ) : BOOKABLE.has(min) && !isPast ? (
+                          <Link
+                            href={`/dashboard/book?doctor=${model.doctorId}&date=${d.dateStr}&time=${encodeURIComponent(minToLabel(min))}`}
+                            className="group block px-3 py-3 text-center text-emerald-600 hover:bg-emerald-50 transition text-xs"
+                            title="Book this slot"
+                          >
+                            <span className="group-hover:hidden">·</span>
+                            <span className="hidden group-hover:inline font-medium text-sm">+ Book</span>
+                          </Link>
                         ) : (
-                          <div className="px-3 py-3 text-center text-slate-200 text-xs">·</div>
+                          <div className="px-3 py-3 text-center text-slate-200 text-xs cursor-not-allowed">·</div>
                         )}
                       </td>
                     );

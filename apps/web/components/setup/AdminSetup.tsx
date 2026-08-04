@@ -8,6 +8,7 @@ import {
   useDeleteDepartmentMutation,
   useListDepartmentsQuery,
 } from '@/store/api';
+import { hasPermission } from '@/lib/auth';
 import { useActiveHospital } from '@/hooks/useActiveHospital';
 import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
@@ -34,6 +35,7 @@ export function AdminSetup({ session }: RoleViewProps) {
   // only by the platform (hospitals.manage), so this screen reports them rather
   // than pretending a hospital admin can switch them.
   const hospital = useActiveHospital();
+  const canManageDepts = hasPermission(session, 'departments.manage');
   const activeId = hospital.category as HospitalCategoryId;
   const [selectedId, setSelectedId] = useState<HospitalCategoryId>('maternity');
   const [applyDepartments, setApplyDepartments] = useState(true);
@@ -213,42 +215,44 @@ export function AdminSetup({ session }: RoleViewProps) {
           </div>
         </section>
 
-        {/* Apply bar */}
-        <section className="sticky bottom-0 bg-slate-50 -mx-4 px-4 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8 py-4 border-t border-slate-200">
-          {error && (
-            <p className="mb-3 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
-              {error}
+        {/* Apply bar — only shown to users who can manage departments */}
+        {canManageDepts && (
+          <section className="sticky bottom-0 bg-slate-50 -mx-4 px-4 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8 py-4 border-t border-slate-200">
+            {error && (
+              <p className="mb-3 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+                {error}
+              </p>
+            )}
+            {applied && (
+              <p className="mb-3 text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2">
+                {applied}
+              </p>
+            )}
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <label className="flex items-center gap-2 text-sm text-slate-600">
+                <input
+                  type="checkbox"
+                  checked={applyDepartments}
+                  onChange={(e) => setApplyDepartments(e.target.checked)}
+                  className="rounded border-slate-300 text-cyan-600 focus:ring-cyan-500"
+                />
+                Replace my departments with the {selected.label} template
+              </label>
+              <button
+                onClick={handleApply}
+                disabled={!applyDepartments || busy}
+                className="inline-flex items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-cyan-500 to-brand-teal text-white text-sm font-semibold px-5 py-2.5 shadow hover:opacity-95 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                {busy ? 'Applying…' : 'Apply department template'}
+              </button>
+            </div>
+            <p className="text-xs text-amber-600 mt-2">
+              This deletes your current departments and recreates them from the
+              template. Your hospital&apos;s category and enabled features are set by
+              the platform and are not changed here.
             </p>
-          )}
-          {applied && (
-            <p className="mb-3 text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2">
-              {applied}
-            </p>
-          )}
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-            <label className="flex items-center gap-2 text-sm text-slate-600">
-              <input
-                type="checkbox"
-                checked={applyDepartments}
-                onChange={(e) => setApplyDepartments(e.target.checked)}
-                className="rounded border-slate-300 text-cyan-600 focus:ring-cyan-500"
-              />
-              Replace my departments with the {selected.label} template
-            </label>
-            <button
-              onClick={handleApply}
-              disabled={!applyDepartments || busy}
-              className="inline-flex items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-cyan-500 to-brand-teal text-white text-sm font-semibold px-5 py-2.5 shadow hover:opacity-95 disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              {busy ? 'Applying…' : 'Apply department template'}
-            </button>
-          </div>
-          <p className="text-xs text-amber-600 mt-2">
-            This deletes your current departments and recreates them from the
-            template. Your hospital&apos;s category and enabled features are set by
-            the platform and are not changed here.
-          </p>
-        </section>
+          </section>
+        )}
       </div>
     </DashboardShell>
   );

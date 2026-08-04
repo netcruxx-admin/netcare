@@ -9,6 +9,7 @@
 // wrong data and could only ever hide the UI, not the records.
 import { useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
+import { toast } from 'sonner';
 import { authStorage } from '@/lib/auth';
 import { apiError } from '@/lib/apiError';
 import {
@@ -35,13 +36,6 @@ export function useAppointmentDetail() {
 
   const [session] = useState(() => authStorage.getSession());
   const [confirmAction, setConfirmAction] = useState<ConfirmAction>(null);
-  const [toast, setToast] = useState('');
-  const [error, setError] = useState('');
-
-  const flash = (msg: string) => {
-    setToast(msg);
-    setTimeout(() => setToast(''), 2500);
-  };
 
   const {
     data: appointment,
@@ -86,14 +80,13 @@ export function useAppointmentDetail() {
   };
 
   const runConfirm = async () => {
-    setError('');
     try {
       if (confirmAction === 'complete') {
         await updateAppointment({ id: appointmentId, body: { status: 'completed' } }).unwrap();
-        flash('Appointment marked complete');
+        toast.success('Appointment marked complete');
       } else if (confirmAction === 'cancel') {
         await updateAppointment({ id: appointmentId, body: { status: 'cancelled' } }).unwrap();
-        flash('Appointment cancelled');
+        toast.success('Appointment cancelled');
       } else if (confirmAction === 'delete') {
         await deleteAppointment({ id: appointmentId }).unwrap();
         setConfirmAction(null);
@@ -101,7 +94,7 @@ export function useAppointmentDetail() {
         return;
       }
     } catch (err) {
-      setError(apiError(err, 'Could not update the appointment'));
+      toast.error(apiError(err, 'Could not update the appointment'));
     }
     setConfirmAction(null);
   };
@@ -137,17 +130,11 @@ export function useAppointmentDetail() {
     appointmentId,
     session,
     loading: loadingAppointment,
-    error:
-      error ||
-      (appointmentError
-        ? 'This appointment is not available to you.'
-        : ''),
+    error: appointmentError ? 'This appointment is not available to you.' : '',
     details,
     confirmAction,
     setConfirmAction,
     runConfirm,
-    toast,
-    flash,
     // Mutations invalidate their cache tags, so the page refreshes itself.
     refreshAppointment: () => {},
     reloadDetails: () => {},

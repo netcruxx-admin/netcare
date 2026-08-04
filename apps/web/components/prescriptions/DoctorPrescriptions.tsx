@@ -2,7 +2,8 @@
 
 import { useMemo } from 'react';
 import Link from 'next/link';
-import { Search, Pill } from 'lucide-react';
+import { ActionIcon } from '@/components/ActionIcon';
+import { Search, Pill, Eye } from 'lucide-react';
 import type { Prescription } from '@/lib/types';
 import { useLazyListPrescriptionsPagedQuery, useListPrescriptionsPagedQuery } from '@/store/api';
 import { DashboardShell } from '@/components/DashboardShell';
@@ -101,8 +102,8 @@ export function DoctorPrescriptions({ session }: RoleViewProps) {
                       <td className="py-3 px-6 text-slate-600">{r.frequency}</td>
                       <td className="py-3 px-6 text-slate-600">{r.duration}</td>
                       <td className="py-3 px-6 text-right">
-                        <Link href={`/appointment/${r.appointmentId}`} className="text-cyan-600 hover:text-cyan-700 font-semibold text-sm">
-                          View
+                        <Link href={`/appointment/${r.appointmentId}`}>
+                          <ActionIcon icon={Eye} label="View appointment" />
                         </Link>
                       </td>
                     </tr>

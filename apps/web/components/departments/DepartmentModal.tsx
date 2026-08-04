@@ -6,6 +6,7 @@ import * as Yup from 'yup';
 import { X } from 'lucide-react';
 import { toast } from 'sonner';
 import { FormField } from '@/components/form/FormField';
+import { apiError } from '@/lib/apiError';
 import { superadminPost } from '@/lib/superadminFetch';
 import {
   useCreateDepartmentMutation,
@@ -135,7 +136,7 @@ export function DepartmentModal({
               onSuccess();
               handleClose();
             } catch (err) {
-              toast.error(err instanceof Error ? err.message : 'Failed to save department');
+              toast.error(apiError(err, 'Failed to save department'));
             } finally {
               setSubmitting(false);
             }

@@ -2,7 +2,8 @@
 
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
-import { Search, ClipboardList, AlertTriangle } from 'lucide-react';
+import { Search, ClipboardList, AlertTriangle, Eye } from 'lucide-react';
+import { toast } from 'sonner';
 import type { TestOrder } from '@/lib/types';
 import { apiError } from '@/lib/apiError';
 import {
@@ -10,6 +11,7 @@ import {
   useListTestOrdersPagedQuery,
   useReviewTestOrderMutation,
 } from '@/store/api';
+import { ActionIcon } from '@/components/ActionIcon';
 import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
 import { ExportButton } from '@/components/ExportButton';
@@ -36,8 +38,6 @@ const exportRow = (r: ReturnType<typeof toRow>) => [
 
 export function DoctorLabOrders({ session }: RoleViewProps) {
   const [statusFilter, setStatusFilter] = useState('all');
-  const [toast, setToast] = useState('');
-  const [error, setError] = useState('');
   const table = useServerTable({ filterKey: statusFilter });
 
   // Already narrowed to this doctor's own work by the API, and searched,
@@ -53,16 +53,14 @@ export function DoctorLabOrders({ session }: RoleViewProps) {
   });
   const totalOrders = orderPage?.total ?? 0;
   const [fetchAllForExport] = useLazyListTestOrdersPagedQuery();
-  const [reviewTestOrder] = useReviewTestOrderMutation();
+  const [reviewTestOrder, { isLoading: isReviewing }] = useReviewTestOrderMutation();
 
   const markReviewed = async (id: string) => {
-    setError('');
     try {
       await reviewTestOrder(id).unwrap();
-      setToast('Report reviewed');
-      setTimeout(() => setToast(''), 2500);
+      toast.success('Report marked as reviewed');
     } catch (err) {
-      setError(apiError(err, 'Could not mark the report reviewed'));
+      toast.error(apiError(err, 'Could not mark the report reviewed'));
     }
   };
 
@@ -145,16 +143,22 @@ export function DoctorLabOrders({ session }: RoleViewProps) {
                         </span>
                       </td>
                       <td className="py-3 px-6 text-right whitespace-nowrap">
-                        {r.hasResults && (
-                          <Link href={`/report/${r.order.id}`} className="text-cyan-600 hover:text-cyan-700 font-semibold text-sm mr-4">
-                            View Report
-                          </Link>
-                        )}
-                        {r.order.status === 'completed' && (
-                          <button onClick={() => markReviewed(r.order.id)} className="text-purple-600 hover:text-purple-700 font-semibold text-sm">
-                            Mark Reviewed
-                          </button>
-                        )}
+                        <div className="flex items-center justify-end gap-2">
+                          {r.hasResults && (
+                            <Link href={`/report/${r.order.id}`}>
+                              <ActionIcon icon={Eye} label="View report" />
+                            </Link>
+                          )}
+                          {r.order.status === 'completed' && (
+                            <button
+                              onClick={() => markReviewed(r.order.id)}
+                              disabled={isReviewing}
+                              className="text-purple-600 hover:text-purple-700 font-semibold text-sm disabled:opacity-50"
+                            >
+                              {isReviewing ? 'Saving…' : 'Mark Reviewed'}
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -171,11 +175,6 @@ export function DoctorLabOrders({ session }: RoleViewProps) {
         </div>
       </div>
 
-      {toast && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-slate-900 text-white text-sm px-4 py-2 rounded-lg shadow-lg">
-          {toast}
-        </div>
-      )}
     </DashboardShell>
   );
 }

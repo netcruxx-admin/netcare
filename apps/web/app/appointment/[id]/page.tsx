@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, CalendarPlus, Video } from 'lucide-react';
 import Image from 'next/image';
+import { toast } from 'sonner';
 import { FollowUpModal } from '@/components/FollowUpModal';
 import { useAppointmentDetail } from './useAppointmentDetail';
 import { ActionsToolbar } from './components/ActionsToolbar';
@@ -45,8 +46,6 @@ export default function AppointmentDetailPage() {
     confirmAction,
     setConfirmAction,
     runConfirm,
-    toast,
-    flash,
     refreshAppointment,
     reloadDetails,
     doctorName,
@@ -66,7 +65,7 @@ export default function AppointmentDetailPage() {
   const afterSave = (msg: string) => {
     reloadDetails();
     closeModal();
-    flash(msg);
+    toast.success(msg);
   };
 
   if (loading) {
@@ -259,17 +258,11 @@ export default function AppointmentDetailPage() {
           onClose={closeModal}
           onCreated={(msg) => {
             closeModal();
-            flash(msg);
+            toast.success(msg);
           }}
         />
       )}
 
-      {/* Toast */}
-      {toast && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-slate-900 text-white text-sm px-4 py-2 rounded-lg shadow-lg">
-          {toast}
-        </div>
-      )}
     </div>
   );
 }

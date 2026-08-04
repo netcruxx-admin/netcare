@@ -1,25 +1,25 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { Plus, AlertTriangle, Search } from 'lucide-react';
-import { apiError } from '@/lib/apiError';
-import type { User } from '@/lib/types';
+import { Users, Plus, Search, Pencil, Trash2 } from 'lucide-react';
 import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
 import { AddUserModal } from '@/components/superadmin/AddUserModal';
+import { DeleteUserModal } from '@/components/users/DeleteUserModal';
+import { ActionIcon } from '@/components/ActionIcon';
 import { ExportButton } from '@/components/ExportButton';
 import { TablePagination } from '@/components/TablePagination';
 import { useServerTable } from '@/hooks/useServerTable';
+import { hasPermission } from '@/lib/auth';
+import type { User } from '@/lib/types';
 import {
-  useDeleteUserMutation,
   useLazyListUsersPagedQuery,
   useListAssignableRolesQuery,
   useListUsersPagedQuery,
 } from '@/store/api';
 import type { RoleOption } from '@/store/api';
 
-// Badge colours for the roles that ship with the product. Roles added to the
-// catalog later get the neutral fallback rather than an undefined class.
+// Badge colours for the roles that ship with the product.
 const roleStyle: Record<string, string> = {
   patient: 'bg-cyan-100 text-cyan-700',
   doctor: 'bg-green-100 text-green-700',
@@ -29,8 +29,6 @@ const roleStyle: Record<string, string> = {
 };
 const FALLBACK_ROLE_STYLE = 'bg-slate-100 text-slate-700';
 
-// Stable empty default so the query's fallback doesn't change identity each
-// render (it feeds a useMemo dependency below).
 const EMPTY_ROLES: RoleOption[] = [];
 
 export function AdminUsers({ session }: RoleViewProps) {
@@ -38,23 +36,22 @@ export function AdminUsers({ session }: RoleViewProps) {
   const [modalOpen, setModalOpen] = useState(false);
   const [deleting, setDeleting] = useState<User | null>(null);
   const [roleFilter, setRoleFilter] = useState<string>('all');
+
+  const canManage = hasPermission(session, 'users.manage');
+
   const table = useServerTable({ filterKey: roleFilter });
 
-  // Role options come from the backend catalog, so a role a superadmin adds is
-  // assignable here without a code change.
   const { data: assignableRoles = EMPTY_ROLES } = useListAssignableRolesQuery();
   const roleOptions = useMemo(
     () => assignableRoles.map((r) => ({ value: r.code, label: r.label })),
     [assignableRoles],
   );
 
-  // Server-side throughout: the list is tenant-scoped, gated by users.read, and
-  // searched, filtered and paged by the API.
   const listArgs = {
     q: table.q.trim() || undefined,
     role: roleFilter === 'all' ? undefined : roleFilter,
   };
-  const { data: userPage, isLoading, error } = useListUsersPagedQuery({
+  const { data: userPage, isLoading, error, refetch } = useListUsersPagedQuery({
     ...listArgs,
     limit: table.limit,
     offset: table.offset,
@@ -62,24 +59,10 @@ export function AdminUsers({ session }: RoleViewProps) {
   const filtered = userPage?.items ?? [];
   const totalUsers = userPage?.total ?? 0;
   const [fetchAllForExport] = useLazyListUsersPagedQuery();
-  const [deleteUser] = useDeleteUserMutation();
-  const [deleteError, setDeleteError] = useState('');
 
   const openAdd = () => { setEditing(null); setModalOpen(true); };
   const openEdit = (user: User) => { setEditing(user); setModalOpen(true); };
   const closeModal = () => { setModalOpen(false); setEditing(null); };
-
-  const confirmDelete = async () => {
-    if (!deleting) return;
-    setDeleteError('');
-    try {
-      await deleteUser({ id: deleting.id }).unwrap();
-      setDeleting(null);
-    } catch (err) {
-      setDeleteError(apiError(err, 'Failed to delete user'));
-    }
-  };
-
 
   return (
     <DashboardShell
@@ -118,7 +101,6 @@ export function AdminUsers({ session }: RoleViewProps) {
           filename="users"
           headers={['Name', 'Email', 'Phone', 'Role']}
           rows={filtered.map((u) => [u.name, u.email, u.phone ?? '', u.role])}
-          // The whole filtered set, not the page on screen.
           getRows={async () => {
             const all = await fetchAllForExport(listArgs).unwrap();
             return all.items.map((u) => [u.name, u.email, u.phone ?? '', u.role]);
@@ -129,13 +111,15 @@ export function AdminUsers({ session }: RoleViewProps) {
       <div className="bg-white rounded-lg shadow">
         <div className="flex justify-between items-center px-6 py-4 border-b">
           <h3 className="text-lg font-semibold text-slate-900">Users ({totalUsers})</h3>
-          <button
-            onClick={openAdd}
-            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg hover:shadow-lg transition"
-          >
-            <Plus className="w-4 h-4" />
-            Add User
-          </button>
+          {canManage && (
+            <button
+              onClick={openAdd}
+              className="flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg text-sm font-medium hover:shadow-lg transition"
+            >
+              <Plus className="w-4 h-4" />
+              Add User
+            </button>
+          )}
         </div>
         <div className="overflow-x-auto">
           <table className="w-full">
@@ -145,18 +129,23 @@ export function AdminUsers({ session }: RoleViewProps) {
                 <th className="text-left py-3 px-6 font-semibold text-slate-900">Email</th>
                 <th className="text-left py-3 px-6 font-semibold text-slate-900">Phone</th>
                 <th className="text-left py-3 px-6 font-semibold text-slate-900">Role</th>
-                <th className="text-right py-3 px-6 font-semibold text-slate-900">Actions</th>
+                {canManage && (
+                  <th className="text-right py-3 px-6 font-semibold text-slate-900">Actions</th>
+                )}
               </tr>
             </thead>
             <tbody>
               {isLoading && (
                 <tr>
-                  <td colSpan={5} className="py-10 text-center text-slate-400 text-sm">Loading…</td>
+                  <td colSpan={canManage ? 5 : 4} className="py-10 text-center text-slate-400 text-sm">Loading…</td>
                 </tr>
               )}
               {!isLoading && filtered.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="py-10 text-center text-slate-500 text-sm">No users found.</td>
+                  <td colSpan={canManage ? 5 : 4} className="py-10 text-center">
+                    <Users className="w-12 h-12 text-slate-300 mx-auto mb-2" />
+                    <p className="text-slate-500 text-sm">No users found.</p>
+                  </td>
                 </tr>
               )}
               {filtered.map((user) => {
@@ -174,26 +163,20 @@ export function AdminUsers({ session }: RoleViewProps) {
                         {user.role}
                       </span>
                     </td>
-                    <td className="py-3 px-6 text-right">
-                      <button
-                        onClick={() => openEdit(user)}
-                        className="text-cyan-600 hover:text-cyan-700 font-semibold text-sm mr-4"
-                      >
-                        Edit
-                      </button>
-                      {isSelf ? (
-                        <button className="text-slate-400 cursor-not-allowed font-semibold text-sm" disabled>
-                          Delete
-                        </button>
-                      ) : (
-                        <button
-                          onClick={() => setDeleting(user)}
-                          className="text-red-600 hover:text-red-700 font-semibold text-sm"
-                        >
-                          Delete
-                        </button>
-                      )}
-                    </td>
+                    {canManage && (
+                      <td className="py-3 px-6 text-right">
+                        <div className="flex items-center justify-end gap-1">
+                          <ActionIcon icon={Pencil} label="Edit" onClick={() => openEdit(user)} />
+                          {isSelf ? (
+                            <span className="p-2 text-slate-300 cursor-not-allowed" title="Cannot delete yourself">
+                              <Trash2 className="w-4 h-4" />
+                            </span>
+                          ) : (
+                            <ActionIcon icon={Trash2} label="Delete" tone="danger" onClick={() => setDeleting(user)} />
+                          )}
+                        </div>
+                      </td>
+                    )}
                   </tr>
                 );
               })}
@@ -208,52 +191,17 @@ export function AdminUsers({ session }: RoleViewProps) {
         </div>
       </div>
 
-      {/* Add / Edit modal — same component used by the platform (superadmin) screen,
-          no hospitals prop = admin mode (no hospital selector, uses tenant-scoped mutations) */}
       <AddUserModal
         open={modalOpen}
         onClose={closeModal}
-        onSuccess={() => { closeModal(); }}
+        onSuccess={() => { refetch(); closeModal(); }}
         editing={editing}
       />
-
-      {/* Delete confirmation modal */}
-      {deleting && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg shadow-2xl max-w-md w-full p-6">
-            <div className="flex items-start gap-4">
-              <div className="w-11 h-11 rounded-full bg-red-100 flex items-center justify-center shrink-0">
-                <AlertTriangle className="w-6 h-6 text-red-600" />
-              </div>
-              <div className="min-w-0">
-                <h3 className="text-lg font-bold text-slate-900">Delete User</h3>
-                <p className="text-slate-600 mt-1 text-sm">
-                  Are you sure you want to delete{' '}
-                  <span className="font-semibold text-slate-900">{deleting.name}</span>? Any linked
-                  doctor or patient profile is removed too. This cannot be undone.
-                </p>
-              </div>
-            </div>
-            {deleteError && (
-              <p className="mt-3 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{deleteError}</p>
-            )}
-            <div className="flex gap-3 mt-4">
-              <button
-                onClick={() => { setDeleting(null); setDeleteError(''); }}
-                className="flex-1 px-4 py-2 bg-slate-200 text-slate-700 rounded hover:bg-slate-300 transition"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={confirmDelete}
-                className="flex-1 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 font-semibold transition"
-              >
-                Delete
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <DeleteUserModal
+        user={deleting}
+        onClose={() => setDeleting(null)}
+        onSuccess={refetch}
+      />
     </DashboardShell>
   );
 }

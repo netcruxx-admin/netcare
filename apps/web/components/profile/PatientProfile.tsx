@@ -1,349 +1,335 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import { AlertCircle, CheckCircle, ChevronRight } from 'lucide-react';
+import { useState } from 'react';
+import { Formik, Form, useFormikContext } from 'formik';
+import * as Yup from 'yup';
+import { ChevronRight, Loader2 } from 'lucide-react';
+import { toast } from 'sonner';
 import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
-import { homePathForSession } from '@/lib/roles';
+import {
+  useGetPatientByUserQuery,
+  useUpdatePatientMutation,
+  useUpdateOwnAccountMutation,
+} from '@/store/api';
+import { FormField } from '@/components/form/FormField';
 import { ConsentSettings } from './ConsentSettings';
 
-/** The patient's own profile: a four-step wizard, unrelated to the staff form. */
-export function PatientProfile({ session }: RoleViewProps) {
-  const router = useRouter();
+interface FormValues {
+  name: string;
+  email: string;
+  dateOfBirth: string;
+  gender: string;
+  phone: string;
+  emergencyContact: string;
+  emergencyPhone: string;
+  bloodGroup: string;
+  allergies: string;
+  chronicDiseases: string;
+  insuranceProvider: string;
+  insuranceNumber: string;
+}
+
+const schema = Yup.object({
+  name: Yup.string().trim().required('Name is required'),
+  email: Yup.string().trim().email('Enter a valid email').required('Email is required'),
+  dateOfBirth: Yup.string(),
+  gender: Yup.string(),
+  phone: Yup.string().test('phone', 'Enter a valid phone number', (v) =>
+    !v || /^[+]?[\d\s().-]{7,20}$/.test(v),
+  ),
+  emergencyContact: Yup.string(),
+  emergencyPhone: Yup.string().test('emergencyPhone', 'Enter a valid phone number', (v) =>
+    !v || /^[+]?[\d\s().-]{7,20}$/.test(v),
+  ),
+  bloodGroup: Yup.string(),
+  allergies: Yup.string(),
+  chronicDiseases: Yup.string(),
+  insuranceProvider: Yup.string(),
+  insuranceNumber: Yup.string(),
+});
+
+// Fields that belong to each step — used to scope Next-button validation.
+const STEP_FIELDS: Record<number, (keyof FormValues)[]> = {
+  1: ['name', 'email', 'dateOfBirth', 'gender'],
+  2: ['phone', 'emergencyContact', 'emergencyPhone'],
+  3: ['bloodGroup', 'allergies', 'chronicDiseases'],
+  4: ['insuranceProvider', 'insuranceNumber'],
+};
+
+const steps = [
+  { number: 1, title: 'Personal Info' },
+  { number: 2, title: 'Contact Details' },
+  { number: 3, title: 'Medical Info' },
+  { number: 4, title: 'Insurance' },
+];
+
+const genderOptions = [
+  { value: 'Male', label: 'Male' },
+  { value: 'Female', label: 'Female' },
+  { value: 'Other', label: 'Other' },
+];
+
+const bloodGroupOptions = ['O+', 'O-', 'A+', 'A-', 'B+', 'B-', 'AB+', 'AB-'].map((v) => ({
+  value: v,
+  label: v,
+}));
+
+/** Inner component so it can use both useFormikContext and its own useState. */
+function WizardContent({ isSaving }: { isSaving: boolean }) {
+  const { setFieldTouched, validateForm, isSubmitting } = useFormikContext<FormValues>();
   const [currentStep, setCurrentStep] = useState(1);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState(false);
 
-  const [personalInfo, setPersonalInfo] = useState({
-    dateOfBirth: '',
-    gender: '',
-  });
-
-  const [contactInfo, setContactInfo] = useState({
-    phone: '',
-    emergencyContact: '',
-    emergencyPhone: '',
-  });
-
-  const [medicalInfo, setMedicalInfo] = useState({
-    bloodGroup: '',
-    allergies: '',
-    chronicDiseases: '',
-  });
-
-  const [insuranceInfo, setInsuranceInfo] = useState({
-    provider: '',
-    number: '',
-  });
-
-  // Prefill the phone we already know about; access is handled by the route.
-  useEffect(() => {
-    const existingPhone = session.patient?.phone || session.user.phone || '';
-    if (existingPhone) {
-      setContactInfo((prev) => ({ ...prev, phone: existingPhone }));
-    }
-  }, [session]);
-
-  const handleNext = () => {
-    if (currentStep < 4) {
-      setCurrentStep(currentStep + 1);
-    }
+  const handleNext = async () => {
+    const fields = STEP_FIELDS[currentStep];
+    // Touch every field in this step so errors become visible.
+    fields.forEach((f) => setFieldTouched(f, true));
+    const errs = await validateForm();
+    const hasErrors = fields.some((f) => !!errs[f]);
+    if (!hasErrors) setCurrentStep((s) => s + 1);
   };
 
-  const handlePrevious = () => {
-    if (currentStep > 1) {
-      setCurrentStep(currentStep - 1);
-    }
+  return (
+    <>
+      {/* Progress Steps */}
+      <div className="flex justify-between items-center">
+        {steps.map((step, idx) => (
+          <div key={step.number} className="flex items-center flex-1">
+            <button
+              type="button"
+              onClick={() => setCurrentStep(step.number)}
+              className={`w-10 h-10 rounded-full flex items-center justify-center font-bold transition ${
+                step.number <= currentStep
+                  ? 'bg-gradient-to-r from-cyan-500 to-brand-teal text-white'
+                  : 'bg-slate-200 text-slate-600'
+              }`}
+            >
+              {step.number}
+            </button>
+            {idx < steps.length - 1 && (
+              <div
+                className={`flex-1 h-1 mx-2 ${
+                  step.number < currentStep
+                    ? 'bg-gradient-to-r from-cyan-500 to-brand-teal'
+                    : 'bg-slate-200'
+                }`}
+              />
+            )}
+          </div>
+        ))}
+      </div>
+
+      {/* Step 1: Personal Info */}
+      {currentStep === 1 && (
+        <div className="space-y-4">
+          <h3 className="text-lg font-semibold text-slate-900">Personal Information</h3>
+          <FormField name="name" label="Full Name" placeholder="e.g. Rahul Sharma" required />
+          <FormField name="email" label="Email" type="email" placeholder="you@example.com" required />
+          <FormField name="dateOfBirth" label="Date of Birth" type="date" />
+          <FormField
+            name="gender"
+            label="Gender"
+            as="select"
+            placeholder="Select Gender"
+            options={genderOptions}
+          />
+        </div>
+      )}
+
+      {/* Step 2: Contact Details */}
+      {currentStep === 2 && (
+        <div className="space-y-4">
+          <h3 className="text-lg font-semibold text-slate-900">Contact Details</h3>
+          <FormField name="phone" label="Phone Number" type="tel" placeholder="+91 98765 43210" />
+          <FormField
+            name="emergencyContact"
+            label="Emergency Contact Name"
+            placeholder="e.g. Priya Sharma"
+          />
+          <FormField
+            name="emergencyPhone"
+            label="Emergency Contact Phone"
+            type="tel"
+            placeholder="+91 98765 43210"
+          />
+        </div>
+      )}
+
+      {/* Step 3: Medical Info */}
+      {currentStep === 3 && (
+        <div className="space-y-4">
+          <h3 className="text-lg font-semibold text-slate-900">Medical Information</h3>
+          <FormField
+            name="bloodGroup"
+            label="Blood Group"
+            as="select"
+            placeholder="Select Blood Group"
+            options={bloodGroupOptions}
+          />
+          <FormField
+            name="allergies"
+            label="Allergies"
+            placeholder="e.g., Penicillin, Pollen"
+          />
+          <FormField
+            name="chronicDiseases"
+            label="Chronic Diseases"
+            placeholder="e.g., Diabetes, Hypertension"
+          />
+        </div>
+      )}
+
+      {/* Step 4: Insurance */}
+      {currentStep === 4 && (
+        <div className="space-y-4">
+          <h3 className="text-lg font-semibold text-slate-900">Insurance Information</h3>
+          <FormField
+            name="insuranceProvider"
+            label="Insurance Provider"
+            placeholder="e.g., Star Health"
+          />
+          <FormField
+            name="insuranceNumber"
+            label="Insurance Number"
+            placeholder="e.g., SH123456"
+          />
+          <div className="bg-cyan-50 border border-cyan-200 rounded-lg p-4">
+            <p className="text-sm text-cyan-800">
+              Insurance information is optional but helps with billing and coverage verification.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Navigation */}
+      <div className="flex gap-4 pt-6">
+        {currentStep > 1 && (
+          <button
+            type="button"
+            onClick={() => setCurrentStep((s) => s - 1)}
+            className="flex-1 px-6 py-2 border-2 border-slate-300 text-slate-700 font-semibold rounded-lg hover:bg-slate-50 transition"
+          >
+            Previous
+          </button>
+        )}
+        {currentStep < 4 ? (
+          <button
+            type="button"
+            onClick={handleNext}
+            className="flex-1 px-6 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white font-semibold rounded-lg hover:shadow-lg transition flex items-center justify-center gap-2"
+          >
+            Next <ChevronRight className="w-5 h-5" />
+          </button>
+        ) : (
+          <button
+            type="submit"
+            disabled={isSubmitting || isSaving}
+            className="flex-1 px-6 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white font-semibold rounded-lg hover:shadow-lg transition disabled:opacity-50"
+          >
+            {isSubmitting || isSaving ? 'Saving…' : 'Save Profile'}
+          </button>
+        )}
+      </div>
+    </>
+  );
+}
+
+export function PatientProfile({ session }: RoleViewProps) {
+  const { data: patient, isLoading } = useGetPatientByUserQuery(session.user.id);
+  const [updatePatient, { isLoading: isSavingPatient }] = useUpdatePatientMutation();
+  const [updateOwnAccount, { isLoading: isSavingAccount }] = useUpdateOwnAccountMutation();
+  const isSaving = isSavingPatient || isSavingAccount;
+
+  const normalizeGender = (g: string) =>
+    g ? g.charAt(0).toUpperCase() + g.slice(1).toLowerCase() : '';
+
+  const initialValues: FormValues = {
+    name: session.user.name ?? '',
+    email: session.user.email ?? '',
+    dateOfBirth: patient?.dateOfBirth ?? '',
+    gender: normalizeGender(patient?.gender ?? ''),
+    phone: patient?.phone || session.user.phone || '',
+    emergencyContact: patient?.emergencyContact ?? '',
+    emergencyPhone: patient?.emergencyPhone ?? '',
+    bloodGroup: patient?.bloodGroup ?? '',
+    allergies: patient?.allergies ?? '',
+    chronicDiseases: patient?.chronicDiseases ?? '',
+    insuranceProvider: patient?.insuranceProvider ?? '',
+    insuranceNumber: patient?.insuranceNumber ?? '',
   };
 
-  const handleComplete = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-    setLoading(true);
-
-    try {
-      // In a real app, save this data to backend
-      // For now, just show success and redirect
-      setSuccess(true);
-      setTimeout(() => {
-        router.push(homePathForSession(session));
-      }, 2000);
-    } catch (err) {
-      setError('Failed to save profile. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const steps = [
-    { number: 1, title: 'Personal Info' },
-    { number: 2, title: 'Contact Details' },
-    { number: 3, title: 'Medical Info' },
-    { number: 4, title: 'Insurance' },
-  ];
+  if (isLoading) {
+    return (
+      <DashboardShell
+        role={session.user.role}
+        userName={session.user.name}
+        title="Profile"
+        subtitle="Your health profile"
+      >
+        <div className="flex items-center justify-center py-16">
+          <Loader2 className="w-8 h-8 animate-spin text-cyan-500" />
+        </div>
+      </DashboardShell>
+    );
+  }
 
   return (
     <DashboardShell
       role={session.user.role}
       userName={session.user.name}
       title="Profile"
-      subtitle="Complete and manage your information"
+      subtitle="Manage your health information"
     >
-      <div className="max-w-2xl mx-auto">
+      <div className="max-w-2xl mx-auto space-y-6">
         <div className="w-full bg-white rounded-lg shadow-xl p-8 space-y-8">
           <div className="text-center">
-            <h2 className="text-3xl font-bold text-slate-900">Complete Your Profile</h2>
-            <p className="text-slate-600 mt-2">Fill in your information to get started</p>
+            <h2 className="text-3xl font-bold text-slate-900">Your Profile</h2>
+            <p className="text-slate-600 mt-2">Keep your health information up to date</p>
           </div>
 
-          {/* Progress Steps */}
-          <div className="flex justify-between items-center">
-            {steps.map((step, idx) => (
-              <div key={step.number} className="flex items-center flex-1">
-                <div
-                  className={`w-10 h-10 rounded-full flex items-center justify-center font-bold ${
-                    step.number <= currentStep
-                      ? 'bg-gradient-to-r from-cyan-500 to-brand-teal text-white'
-                      : 'bg-slate-200 text-slate-600'
-                  }`}
-                >
-                  {step.number}
-                </div>
-                {idx < steps.length - 1 && (
-                  <div
-                    className={`flex-1 h-1 mx-2 ${
-                      step.number < currentStep ? 'bg-gradient-to-r from-cyan-500 to-brand-teal' : 'bg-slate-200'
-                    }`}
-                  />
-                )}
-              </div>
-            ))}
-          </div>
-
-          {error && (
-            <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-start gap-3">
-              <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
-              <p className="text-red-700">{error}</p>
-            </div>
-          )}
-
-          {success && (
-            <div className="bg-green-50 border border-green-200 rounded-lg p-4 flex items-start gap-3">
-              <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
-              <p className="text-green-700">Profile completed! Redirecting to dashboard...</p>
-            </div>
-          )}
-
-          <form onSubmit={handleComplete} className="space-y-6">
-            {/* Step 1: Personal Info */}
-            {currentStep === 1 && (
-              <div className="space-y-4">
-                <h3 className="text-lg font-semibold text-slate-900">Personal Information</h3>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">Date of Birth</label>
-                  <input
-                    type="date"
-                    value={personalInfo.dateOfBirth}
-                    onChange={(e) =>
-                      setPersonalInfo((prev) => ({ ...prev, dateOfBirth: e.target.value }))
-                    }
-                    className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">Gender</label>
-                  <select
-                    value={personalInfo.gender}
-                    onChange={(e) =>
-                      setPersonalInfo((prev) => ({ ...prev, gender: e.target.value }))
-                    }
-                    className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
-                    required
-                  >
-                    <option value="">Select Gender</option>
-                    <option value="Male">Male</option>
-                    <option value="Female">Female</option>
-                    <option value="Other">Other</option>
-                  </select>
-                </div>
-              </div>
-            )}
-
-            {/* Step 2: Contact Details */}
-            {currentStep === 2 && (
-              <div className="space-y-4">
-                <h3 className="text-lg font-semibold text-slate-900">Contact Details</h3>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">Phone Number</label>
-                  <input
-                    type="tel"
-                    value={contactInfo.phone}
-                    onChange={(e) =>
-                      setContactInfo((prev) => ({ ...prev, phone: e.target.value }))
-                    }
-                    placeholder="+1-234-567-8900"
-                    className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">
-                    Emergency Contact Name
-                  </label>
-                  <input
-                    type="text"
-                    value={contactInfo.emergencyContact}
-                    onChange={(e) =>
-                      setContactInfo((prev) => ({ ...prev, emergencyContact: e.target.value }))
-                    }
-                    className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">
-                    Emergency Contact Phone
-                  </label>
-                  <input
-                    type="tel"
-                    value={contactInfo.emergencyPhone}
-                    onChange={(e) =>
-                      setContactInfo((prev) => ({ ...prev, emergencyPhone: e.target.value }))
-                    }
-                    placeholder="+1-234-567-8900"
-                    className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
-                    required
-                  />
-                </div>
-              </div>
-            )}
-
-            {/* Step 3: Medical Info */}
-            {currentStep === 3 && (
-              <div className="space-y-4">
-                <h3 className="text-lg font-semibold text-slate-900">Medical Information</h3>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">Blood Group</label>
-                  <select
-                    value={medicalInfo.bloodGroup}
-                    onChange={(e) =>
-                      setMedicalInfo((prev) => ({ ...prev, bloodGroup: e.target.value }))
-                    }
-                    className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
-                    required
-                  >
-                    <option value="">Select Blood Group</option>
-                    <option value="O+">O+</option>
-                    <option value="O-">O-</option>
-                    <option value="A+">A+</option>
-                    <option value="A-">A-</option>
-                    <option value="B+">B+</option>
-                    <option value="B-">B-</option>
-                    <option value="AB+">AB+</option>
-                    <option value="AB-">AB-</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">Allergies</label>
-                  <input
-                    type="text"
-                    value={medicalInfo.allergies}
-                    onChange={(e) =>
-                      setMedicalInfo((prev) => ({ ...prev, allergies: e.target.value }))
-                    }
-                    placeholder="e.g., Penicillin, Pollen"
-                    className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">Chronic Diseases</label>
-                  <input
-                    type="text"
-                    value={medicalInfo.chronicDiseases}
-                    onChange={(e) =>
-                      setMedicalInfo((prev) => ({ ...prev, chronicDiseases: e.target.value }))
-                    }
-                    placeholder="e.g., Diabetes, Hypertension"
-                    className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
-                  />
-                </div>
-              </div>
-            )}
-
-            {/* Step 4: Insurance */}
-            {currentStep === 4 && (
-              <div className="space-y-4">
-                <h3 className="text-lg font-semibold text-slate-900">Insurance Information</h3>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">Insurance Provider</label>
-                  <input
-                    type="text"
-                    value={insuranceInfo.provider}
-                    onChange={(e) =>
-                      setInsuranceInfo((prev) => ({ ...prev, provider: e.target.value }))
-                    }
-                    placeholder="e.g., HealthCare Plus"
-                    className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">Insurance Number</label>
-                  <input
-                    type="text"
-                    value={insuranceInfo.number}
-                    onChange={(e) =>
-                      setInsuranceInfo((prev) => ({ ...prev, number: e.target.value }))
-                    }
-                    placeholder="e.g., HC123456"
-                    className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
-                  />
-                </div>
-                <div className="bg-cyan-50 border border-cyan-200 rounded-lg p-4">
-                  <p className="text-sm text-cyan-800">
-                    Insurance information is optional but helps with billing and coverage verification.
-                  </p>
-                </div>
-              </div>
-            )}
-
-            {/* Buttons */}
-            <div className="flex gap-4 pt-6">
-              {currentStep > 1 && (
-                <button
-                  type="button"
-                  onClick={handlePrevious}
-                  className="flex-1 px-6 py-2 border-2 border-slate-300 text-slate-700 font-semibold rounded-lg hover:bg-slate-50 transition"
-                >
-                  Previous
-                </button>
-              )}
-              {currentStep < 4 ? (
-                <button
-                  type="button"
-                  onClick={handleNext}
-                  className="flex-1 px-6 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white font-semibold rounded-lg hover:shadow-lg transition flex items-center justify-center gap-2"
-                >
-                  Next <ChevronRight className="w-5 h-5" />
-                </button>
-              ) : (
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="flex-1 px-6 py-2 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {loading ? 'Saving...' : 'Complete Profile'}
-                </button>
-              )}
-            </div>
-          </form>
+          <Formik
+            initialValues={initialValues}
+            enableReinitialize
+            validationSchema={schema}
+            onSubmit={async (values, { setSubmitting }) => {
+              if (!patient) return;
+              try {
+                await Promise.all([
+                  updatePatient({
+                    id: patient.id,
+                    body: {
+                      dateOfBirth: values.dateOfBirth || undefined,
+                      gender: values.gender || undefined,
+                      bloodGroup: values.bloodGroup || undefined,
+                      allergies: values.allergies || undefined,
+                      chronicDiseases: values.chronicDiseases || undefined,
+                      emergencyContact: values.emergencyContact || undefined,
+                      emergencyPhone: values.emergencyPhone || undefined,
+                      insuranceProvider: values.insuranceProvider || undefined,
+                      insuranceNumber: values.insuranceNumber || undefined,
+                    },
+                  }).unwrap(),
+                  updateOwnAccount({
+                    name: values.name.trim() || undefined,
+                    email: values.email.trim() || undefined,
+                    phone: values.phone.trim() || undefined,
+                  }).unwrap(),
+                ]);
+                toast.success('Profile updated');
+              } catch {
+                toast.error('Could not save your profile. Please try again.');
+              } finally {
+                setSubmitting(false);
+              }
+            }}
+          >
+            <Form className="space-y-6">
+              <WizardContent isSaving={isSaving} />
+            </Form>
+          </Formik>
         </div>
 
-        {/* Below the wizard rather than inside it: consent is not a step you
-            complete once, it is a setting you come back to. Putting it behind
-            "Next" would make withdrawal harder than granting was. */}
+        {/* Consent is a persistent setting, not a one-time setup step. */}
         <ConsentSettings />
       </div>
     </DashboardShell>

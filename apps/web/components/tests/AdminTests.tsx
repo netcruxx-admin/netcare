@@ -1,13 +1,15 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { Formik, Form } from 'formik';
 import * as Yup from 'yup';
-import { Plus, X, FlaskConical, AlertTriangle, Search } from 'lucide-react';
+import { Plus, X, FlaskConical, AlertTriangle, Search, Pencil, Trash2 } from 'lucide-react';
+import { toast } from 'sonner';
 import type { LabTest } from '@/lib/types';
 import { DashboardShell } from '@/components/DashboardShell';
+import { ActionIcon } from '@/components/ActionIcon';
 import { apiError } from '@/lib/apiError';
+import { hasPermission } from '@/lib/auth';
 import {
   useCreateLabTestMutation,
   useDeleteLabTestMutation,
@@ -20,7 +22,6 @@ import { FormField } from '@/components/form/FormField';
 import { ExportButton } from '@/components/ExportButton';
 import { TablePagination } from '@/components/TablePagination';
 import { useServerTable } from '@/hooks/useServerTable';
-
 
 const CATEGORIES = ['Blood Test', 'Imaging', 'Urine Test', 'Cardiac', 'Prenatal Screening', 'Other'];
 const SAMPLE_TYPES = ['Blood', 'Urine', 'Swab', 'Imaging', 'None'];
@@ -41,12 +42,13 @@ const categoryOptions = CATEGORIES.map((c) => ({ value: c, label: c }));
 const sampleOptions = SAMPLE_TYPES.map((s) => ({ value: s, label: s }));
 
 export function AdminTests({ session }: RoleViewProps) {
-  const router = useRouter();
-
   const [editing, setEditing] = useState<LabTest | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [deleting, setDeleting] = useState<LabTest | null>(null);
   const [categoryFilter, setCategoryFilter] = useState('all');
+
+  const canManage = hasPermission(session, 'lab_tests.manage');
+
   const table = useServerTable({ filterKey: categoryFilter });
 
   const listArgs = {
@@ -63,32 +65,23 @@ export function AdminTests({ session }: RoleViewProps) {
   const [fetchAllForExport] = useLazyListLabTestsPagedQuery();
   const [createLabTest] = useCreateLabTestMutation();
   const [updateLabTest] = useUpdateLabTestMutation();
-  const [deleteLabTest] = useDeleteLabTestMutation();
-  const [saveError, setSaveError] = useState('');
+  const [deleteLabTest, { isLoading: isDeleting }] = useDeleteLabTestMutation();
 
-  const openAdd = () => {
-    setEditing(null);
-    setModalOpen(true);
-  };
-  const openEdit = (t: LabTest) => {
-    setEditing(t);
-    setModalOpen(true);
-  };
-  const closeModal = () => {
-    setModalOpen(false);
-    setEditing(null);
-  };
+  const openAdd = () => { setEditing(null); setModalOpen(true); };
+  const openEdit = (t: LabTest) => { setEditing(t); setModalOpen(true); };
+  const closeModal = () => { setModalOpen(false); setEditing(null); };
+
   const confirmDelete = async () => {
     if (!deleting) return;
-    setSaveError('');
     try {
       await deleteLabTest(deleting.id).unwrap();
+      toast.success('Test deleted');
       setDeleting(null);
     } catch (err) {
-      setSaveError(apiError(err, 'Failed to delete test'));
+      toast.error(apiError(err, 'Failed to delete test'));
+      setDeleting(null);
     }
   };
-
 
   return (
     <DashboardShell role={session.user.role} userName={session.user.name} title="Tests" subtitle="Diagnostic tests available">
@@ -124,26 +117,30 @@ export function AdminTests({ session }: RoleViewProps) {
       <div className="bg-white rounded-lg shadow">
         <div className="flex justify-between items-center px-6 py-4 border-b">
           <h3 className="text-lg font-semibold text-slate-900">Tests ({totalTests})</h3>
-          <button
-            onClick={openAdd}
-            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg hover:shadow-lg transition"
-          >
-            <Plus className="w-4 h-4" />
-            Add Test
-          </button>
+          {canManage && (
+            <button
+              onClick={openAdd}
+              className="flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg text-sm font-medium hover:shadow-lg transition"
+            >
+              <Plus className="w-4 h-4" />
+              Add Test
+            </button>
+          )}
         </div>
 
         {!isLoading && filtered.length === 0 ? (
           <div className="text-center py-16">
             <FlaskConical className="w-16 h-16 text-slate-300 mx-auto mb-4" />
             <p className="text-slate-600 mb-6">No tests yet</p>
-            <button
-              onClick={openAdd}
-              className="inline-flex items-center gap-2 px-6 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg hover:shadow-lg transition"
-            >
-              <Plus className="w-4 h-4" />
-              Add Test
-            </button>
+            {canManage && (
+              <button
+                onClick={openAdd}
+                className="inline-flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg text-sm font-medium hover:shadow-lg transition"
+              >
+                <Plus className="w-4 h-4" />
+                Add Test
+              </button>
+            )}
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -155,7 +152,9 @@ export function AdminTests({ session }: RoleViewProps) {
                   <th className="text-left py-3 px-6 font-semibold text-slate-900">Sample</th>
                   <th className="text-left py-3 px-6 font-semibold text-slate-900">Price</th>
                   <th className="text-left py-3 px-6 font-semibold text-slate-900">Turnaround</th>
-                  <th className="text-right py-3 px-6 font-semibold text-slate-900">Actions</th>
+                  {canManage && (
+                    <th className="text-right py-3 px-6 font-semibold text-slate-900">Actions</th>
+                  )}
                 </tr>
               </thead>
               <tbody>
@@ -166,14 +165,14 @@ export function AdminTests({ session }: RoleViewProps) {
                     <td className="py-3 px-6 text-slate-600">{t.sampleType}</td>
                     <td className="py-3 px-6 text-slate-600">₹{t.price}</td>
                     <td className="py-3 px-6 text-slate-600">{t.turnaroundTime || '—'}</td>
-                    <td className="py-3 px-6 text-right">
-                      <button onClick={() => openEdit(t)} className="text-cyan-600 hover:text-cyan-700 font-semibold text-sm mr-4">
-                        Edit
-                      </button>
-                      <button onClick={() => setDeleting(t)} className="text-red-600 hover:text-red-700 font-semibold text-sm">
-                        Delete
-                      </button>
-                    </td>
+                    {canManage && (
+                      <td className="py-3 px-6 text-right">
+                        <div className="flex items-center justify-end gap-1">
+                          <ActionIcon icon={Pencil} label="Edit" onClick={() => openEdit(t)} />
+                          <ActionIcon icon={Trash2} label="Delete" tone="danger" onClick={() => setDeleting(t)} />
+                        </div>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
@@ -207,7 +206,7 @@ export function AdminTests({ session }: RoleViewProps) {
                 turnaroundTime: editing?.turnaroundTime ?? '',
               }}
               validationSchema={testSchema}
-              onSubmit={async (values, { setSubmitting }) => {
+              onSubmit={async (values, { setSubmitting, setStatus }) => {
                 const payload = {
                   name: values.name.trim(),
                   category: values.category,
@@ -215,44 +214,57 @@ export function AdminTests({ session }: RoleViewProps) {
                   price: Number(values.price),
                   turnaroundTime: values.turnaroundTime.trim(),
                 };
-                setSaveError('');
+                setStatus('');
                 try {
                   if (editing) {
                     await updateLabTest({ id: editing.id, body: payload }).unwrap();
+                    toast.success('Test updated');
                   } else {
                     await createLabTest(payload).unwrap();
+                    toast.success('Test added');
                   }
                   closeModal();
                 } catch (err) {
-                  setSaveError(apiError(err, 'Failed to save test'));
+                  setStatus(apiError(err, 'Failed to save test'));
                 } finally {
                   setSubmitting(false);
                 }
               }}
             >
-              <Form className="grid sm:grid-cols-2 gap-4">
-                <div className="sm:col-span-2">
-                  <FormField name="name" label="Test Name" placeholder="e.g. Complete Blood Count (CBC)" autoFocus required />
-                </div>
-                <FormField name="category" label="Category" as="select" placeholder="Select category" options={categoryOptions} required />
-                <FormField name="sampleType" label="Sample Type" as="select" placeholder="Select sample" options={sampleOptions} required />
-                <FormField name="price" label="Price (₹)" type="number" min="0" placeholder="0" required />
-                <FormField name="turnaroundTime" label="Turnaround Time" placeholder="e.g. Same day" />
-                <div className="sm:col-span-2 flex gap-3 pt-2">
-                  <button type="button" onClick={closeModal} className="flex-1 px-4 py-2 bg-slate-200 text-slate-700 rounded hover:bg-slate-300 transition">
-                    Cancel
-                  </button>
-                  <button type="submit" className="flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded hover:shadow-lg font-semibold transition">
-                    {editing ? 'Save Changes' : 'Add Test'}
-                  </button>
-                </div>
-              </Form>
+              {({ isSubmitting, status }) => (
+                <Form className="grid sm:grid-cols-2 gap-4">
+                  <div className="sm:col-span-2">
+                    <FormField name="name" label="Test Name" placeholder="e.g. Complete Blood Count (CBC)" autoFocus required />
+                  </div>
+                  <FormField name="category" label="Category" as="select" placeholder="Select category" options={categoryOptions} required />
+                  <FormField name="sampleType" label="Sample Type" as="select" placeholder="Select sample" options={sampleOptions} required />
+                  <FormField name="price" label="Price (₹)" type="number" min="0" placeholder="0" required />
+                  <FormField name="turnaroundTime" label="Turnaround Time" placeholder="e.g. Same day" />
+                  {status && (
+                    <p className="sm:col-span-2 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+                      {status}
+                    </p>
+                  )}
+                  <div className="sm:col-span-2 flex gap-3 pt-2">
+                    <button type="button" onClick={closeModal} className="flex-1 px-4 py-2 bg-slate-200 text-slate-700 rounded hover:bg-slate-300 transition">
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={isSubmitting}
+                      className="flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded hover:shadow-lg font-semibold transition disabled:opacity-50"
+                    >
+                      {isSubmitting ? 'Saving…' : editing ? 'Save Changes' : 'Add Test'}
+                    </button>
+                  </div>
+                </Form>
+              )}
             </Formik>
           </div>
         </div>
       )}
 
-      {/* Delete confirmation modal */}
+      {/* Delete confirmation */}
       {deleting && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-lg shadow-2xl max-w-md w-full p-6">
@@ -268,11 +280,19 @@ export function AdminTests({ session }: RoleViewProps) {
               </div>
             </div>
             <div className="flex gap-3 mt-6">
-              <button onClick={() => setDeleting(null)} className="flex-1 px-4 py-2 bg-slate-200 text-slate-700 rounded hover:bg-slate-300 transition">
+              <button
+                onClick={() => setDeleting(null)}
+                disabled={isDeleting}
+                className="flex-1 px-4 py-2 bg-slate-200 text-slate-700 rounded hover:bg-slate-300 transition disabled:opacity-50"
+              >
                 Cancel
               </button>
-              <button onClick={confirmDelete} className="flex-1 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 font-semibold transition">
-                Delete
+              <button
+                onClick={confirmDelete}
+                disabled={isDeleting}
+                className="flex-1 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 font-semibold transition disabled:opacity-50"
+              >
+                {isDeleting ? 'Deleting…' : 'Delete'}
               </button>
             </div>
           </div>

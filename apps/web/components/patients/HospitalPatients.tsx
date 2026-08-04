@@ -1,12 +1,17 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import Link from 'next/link';
-import { Search, UserRound } from 'lucide-react';
+import { Search, UserRound, UserPlus, Pencil, Trash2, Eye } from 'lucide-react';
 import { DashboardShell } from '@/components/DashboardShell';
 import { ExportButton } from '@/components/ExportButton';
 import { TablePagination } from '@/components/TablePagination';
+import { ActionIcon } from '@/components/ActionIcon';
 import { useServerTable } from '@/hooks/useServerTable';
+import { AddPatientModal } from '@/components/superadmin/AddPatientModal';
+import { EditPatientModal } from '@/components/patients/EditPatientModal';
+import { DeletePatientModal } from '@/components/patients/DeletePatientModal';
+import { hasPermission } from '@/lib/auth';
 import type { RoleViewProps } from '@/components/RoleView';
 import type { Patient } from '@/lib/types';
 import { adminRole, doctorRole, nurseRole } from '@/lib/roles';
@@ -24,13 +29,6 @@ import {
  * below rather than by branching through the markup.
  */
 
-function toDateStr(date: Date) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-}
-const todayStr = toDateStr(new Date());
 
 interface PatientRow {
   patientId: string;
@@ -45,6 +43,8 @@ interface PatientRow {
   appointments: number;
   lastVisit: string | null;
   nextVisit: string | null;
+  /** Original Patient object, used by the admin Actions column. */
+  _raw: Patient;
 }
 
 interface Column {
@@ -79,11 +79,8 @@ const detailsColumn: Column = {
   header: 'Actions',
   align: 'right',
   render: (row) => (
-    <Link
-      href={`/patient/${row.patientId}`}
-      className="text-cyan-600 hover:text-cyan-700 font-semibold text-sm"
-    >
-      View Details
+    <Link href={`/patient/${row.patientId}`}>
+      <ActionIcon icon={Eye} label="View" />
     </Link>
   ),
 };
@@ -162,6 +159,7 @@ function toRow(patient: Patient): PatientRow {
     appointments: patient.visitCount ?? 0,
     lastVisit: patient.lastVisit ?? null,
     nextVisit: patient.nextVisit ?? null,
+    _raw: patient,
   };
 }
 
@@ -169,6 +167,12 @@ export function HospitalPatients({ session }: RoleViewProps) {
   const role = session.user.role;
   const view = viewByRole[role] ?? viewByRole[nurseRole];
   const table = useServerTable();
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [editing, setEditing] = useState<Patient | null>(null);
+  const [deleting, setDeleting] = useState<Patient | null>(null);
+
+  // const canManage = role === adminRole && hasPermission(session, 'patients.manage');
+  const canManage = hasPermission(session, 'patients.manage');
 
   // No appointments fetch here any more: a doctor's `patients.read` grant is
   // already scoped to the patients they treat, and the visit columns arrive
@@ -177,7 +181,7 @@ export function HospitalPatients({ session }: RoleViewProps) {
   // the page (withStats) rather than being derived from every appointment in
   // the hospital.
   const listArgs = { q: table.q.trim() || undefined, withStats: true };
-  const { data: patientPage } = useListPatientsPagedQuery({
+  const { data: patientPage, refetch } = useListPatientsPagedQuery({
     ...listArgs,
     limit: table.limit,
     offset: table.offset,
@@ -185,6 +189,28 @@ export function HospitalPatients({ session }: RoleViewProps) {
   const patients = patientPage?.items ?? [];
   const totalPatients = patientPage?.total ?? 0;
   const [fetchAllForExport] = useLazyListPatientsPagedQuery();
+
+  // Admin actions column is defined here (inside the component) so it can
+  // reference setEditing / setDeleting without prop-drilling through viewByRole.
+  const adminActionsColumn: Column = {
+    header: 'Actions',
+    align: 'right',
+    render: (row) => (
+      <div className="flex items-center justify-end gap-1">
+        <Link href={`/patient/${row.patientId}`}>
+          <ActionIcon icon={Eye} label="View" />
+        </Link>
+        <ActionIcon icon={Pencil} label="Edit" onClick={() => setEditing(row._raw)} />
+        <ActionIcon icon={Trash2} label="Delete" tone="danger" onClick={() => setDeleting(row._raw)} />
+      </div>
+    ),
+  };
+
+  // When the caller can manage patients, replace detailsColumn with the combined
+  // adminActionsColumn (View + Edit + Delete) to avoid a duplicate Actions column.
+  const columns = canManage
+    ? [...view.columns.filter((c) => c.header !== 'Actions'), adminActionsColumn]
+    : view.columns;
 
   const rows = useMemo(() => patients.map(toRow).sort(view.sort), [patients, view]);
 
@@ -206,23 +232,33 @@ export function HospitalPatients({ session }: RoleViewProps) {
               className="w-full pl-9 pr-3 py-2 bg-white rounded-lg shadow text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
             />
           </div>
-          {view.exportHeaders && view.exportRow && (
-            <ExportButton
-              filename="patients"
-              headers={view.exportHeaders}
-              rows={rows.map(view.exportRow)}
-              // The table shows one page; the export means every matching row.
-              getRows={async () => {
-                const all = await fetchAllForExport(listArgs).unwrap();
-                return all.items.map(toRow).sort(view.sort).map(view.exportRow!);
-              }}
-            />
-          )}
+          <div className="flex items-center gap-2">
+            {view.exportHeaders && view.exportRow && (
+              <ExportButton
+                filename="patients"
+                headers={view.exportHeaders}
+                rows={rows.map(view.exportRow)}
+                getRows={async () => {
+                  const all = await fetchAllForExport(listArgs).unwrap();
+                  return all.items.map(toRow).sort(view.sort).map(view.exportRow!);
+                }}
+              />
+            )}
+          </div>
         </div>
 
         <div className="bg-white rounded-lg shadow">
-          <div className="px-6 py-4 border-b">
+          <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
             <h3 className="font-semibold text-slate-900">Patients ({totalPatients})</h3>
+            {canManage && (
+              <button
+                onClick={() => setShowAddModal(true)}
+                className="flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg text-sm font-medium hover:shadow-lg transition"
+              >
+                <UserPlus className="w-4 h-4" />
+                Add Patient
+              </button>
+            )}
           </div>
           {rows.length === 0 ? (
             <div className="text-center py-16">
@@ -234,7 +270,7 @@ export function HospitalPatients({ session }: RoleViewProps) {
               <table className="w-full">
                 <thead>
                   <tr className="border-b bg-slate-50">
-                    {view.columns.map((column) => (
+                    {columns.map((column) => (
                       <th
                         key={column.header}
                         className={`py-3 px-6 font-semibold text-slate-900 ${
@@ -249,7 +285,7 @@ export function HospitalPatients({ session }: RoleViewProps) {
                 <tbody>
                   {rows.map((row) => (
                     <tr key={row.patientId} className="border-b hover:bg-slate-50">
-                      {view.columns.map((column) => (
+                      {columns.map((column) => (
                         <td
                           key={column.header}
                           className={`py-3 px-6 text-slate-600 ${
@@ -273,6 +309,22 @@ export function HospitalPatients({ session }: RoleViewProps) {
           )}
         </div>
       </div>
+
+      <AddPatientModal
+        open={showAddModal}
+        onClose={() => setShowAddModal(false)}
+        onSuccess={refetch}
+      />
+      <EditPatientModal
+        patient={editing}
+        onClose={() => setEditing(null)}
+        onSuccess={refetch}
+      />
+      <DeletePatientModal
+        patient={deleting}
+        onClose={() => setDeleting(null)}
+        onSuccess={refetch}
+      />
     </DashboardShell>
   );
 }

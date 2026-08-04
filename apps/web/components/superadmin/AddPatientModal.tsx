@@ -4,6 +4,8 @@ import { useState } from 'react';
 import { X } from 'lucide-react';
 import { toast } from 'sonner';
 import { superadminPost } from '@/lib/superadminFetch';
+import { useCreateUserMutation } from '@/store/api';
+import { apiError } from '@/lib/apiError';
 import { patientRole } from '@/lib/roles';
 import type { HospitalInfo } from '@/store/api';
 
@@ -14,11 +16,13 @@ interface Props {
   open: boolean;
   onClose: () => void;
   onSuccess: () => void;
-  preselectedHospitalId: string;
-  hospitals: HospitalInfo[];
+  // Superadmin-only: pass hospitals to enable hospital selector
+  hospitals?: HospitalInfo[];
+  preselectedHospitalId?: string;
 }
 
-export function AddPatientModal({ open, onClose, onSuccess, preselectedHospitalId, hospitals }: Props) {
+export function AddPatientModal({ open, onClose, onSuccess, preselectedHospitalId = '', hospitals }: Props) {
+  const isSuperadmin = hospitals !== undefined;
   const [hospitalId, setHospitalId] = useState(preselectedHospitalId);
   const [form, setForm] = useState({
     name: '', email: '', password: 'password123', phone: '',
@@ -26,6 +30,7 @@ export function AddPatientModal({ open, onClose, onSuccess, preselectedHospitalI
   });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [createUser] = useCreateUserMutation();
 
   if (!open) return null;
 
@@ -39,22 +44,27 @@ export function AddPatientModal({ open, onClose, onSuccess, preselectedHospitalI
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!hospitalId) { setError('Please select a hospital'); return; }
+    if (isSuperadmin && !hospitalId) { setError('Please select a hospital'); return; }
     if (!form.name.trim() || !form.email.trim()) { setError('Name and email are required'); return; }
     setLoading(true); setError('');
+    const body = {
+      name: form.name.trim(), email: form.email.trim(),
+      password: form.password, role: patientRole,
+      phone: form.phone.trim() || undefined,
+      gender: form.gender || undefined,
+      bloodGroup: form.bloodGroup || undefined,
+      dateOfBirth: form.dateOfBirth || undefined,
+    };
     try {
-      await superadminPost('/users', hospitalId, {
-        name: form.name.trim(), email: form.email.trim(),
-        password: form.password, role: patientRole,
-        phone: form.phone.trim() || undefined,
-        gender: form.gender || undefined,
-        bloodGroup: form.bloodGroup || undefined,
-        dateOfBirth: form.dateOfBirth || undefined,
-      });
+      if (isSuperadmin) {
+        await superadminPost('/users', hospitalId, body);
+      } else {
+        await createUser(body).unwrap();
+      }
       toast.success('Patient added successfully');
       onSuccess(); handleClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to add patient');
+      setError(apiError(err, 'Failed to add patient'));
     } finally {
       setLoading(false);
     }
@@ -68,18 +78,21 @@ export function AddPatientModal({ open, onClose, onSuccess, preselectedHospitalI
           <button onClick={handleClose} className="text-slate-400 hover:text-slate-900 p-1"><X className="w-5 h-5" /></button>
         </div>
         <form onSubmit={handleSubmit} className="px-6 py-5 space-y-4">
-          {!preselectedHospitalId ? (
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Hospital <span className="text-red-500">*</span></label>
-              <select value={hospitalId} onChange={(e) => setHospitalId(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-cyan-500">
-                <option value="">Select a hospital…</option>
-                {hospitals.map((h) => <option key={h.id} value={h.id}>{h.name}</option>)}
-              </select>
-            </div>
-          ) : (
-            <div className="bg-slate-50 rounded-lg px-3 py-2 text-sm text-slate-600">
-              Hospital: <span className="font-medium text-slate-900">{hospitals.find(h => h.id === preselectedHospitalId)?.name}</span>
-            </div>
+          {/* Hospital selector — superadmin only */}
+          {isSuperadmin && (
+            preselectedHospitalId ? (
+              <div className="bg-slate-50 rounded-lg px-3 py-2 text-sm text-slate-600">
+                Hospital: <span className="font-medium text-slate-900">{hospitals!.find(h => h.id === preselectedHospitalId)?.name}</span>
+              </div>
+            ) : (
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Hospital <span className="text-red-500">*</span></label>
+                <select value={hospitalId} onChange={(e) => setHospitalId(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-cyan-500">
+                  <option value="">Select a hospital…</option>
+                  {hospitals!.map((h) => <option key={h.id} value={h.id}>{h.name}</option>)}
+                </select>
+              </div>
+            )
           )}
 
           <div className="grid grid-cols-2 gap-4">

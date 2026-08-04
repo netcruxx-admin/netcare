@@ -29,6 +29,7 @@ export function PatientVideoConsult({ session }: RoleViewProps) {
   const [confirm, setConfirm] = useState<VideoSlot | null>(null);
   const [bookedApptId, setBookedApptId] = useState('');
   const [error, setError] = useState('');
+  const [booking, setBooking] = useState(false);
 
   const { data: patient } = useGetPatientByUserQuery(session.user.id);
   const patientId = patient?.id ?? '';
@@ -59,8 +60,7 @@ export function PatientVideoConsult({ session }: RoleViewProps) {
 
   const deptForDoctor = (spec: string) =>
     departments.find((d) => d.name === spec || spec.includes(d.name.split(' ')[0]))?.id ??
-    departments[0]?.id ??
-    'dept-1';
+    departments[0]?.id;
 
   const book = async (slot: VideoSlot) => {
     setError('');
@@ -74,6 +74,7 @@ export function PatientVideoConsult({ session }: RoleViewProps) {
       return;
     }
 
+    setBooking(true);
     try {
       const appointment = await createAppointment({
         patientId,
@@ -94,6 +95,8 @@ export function PatientVideoConsult({ session }: RoleViewProps) {
       setBookedApptId(appointment.id);
     } catch (err) {
       setError(apiError(err, 'Could not book that slot'));
+    } finally {
+      setBooking(false);
     }
   };
 
@@ -224,9 +227,10 @@ export function PatientVideoConsult({ session }: RoleViewProps) {
             {error && <p className="mt-4 text-sm text-red-600">{error}</p>}
             <button
               onClick={() => book(confirm)}
-              className="mt-5 w-full py-2.5 rounded-lg bg-gradient-to-r from-cyan-500 to-brand-teal text-white font-semibold text-sm"
+              disabled={booking}
+              className="mt-5 w-full py-2.5 rounded-lg bg-gradient-to-r from-cyan-500 to-brand-teal text-white font-semibold text-sm disabled:opacity-50"
             >
-              Confirm booking
+              {booking ? 'Booking…' : 'Confirm booking'}
             </button>
             <p className="text-xs text-slate-400 text-center mt-2">Payment is collected as pending; pay from Payments.</p>
           </div>

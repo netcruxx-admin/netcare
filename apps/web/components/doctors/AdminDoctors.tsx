@@ -1,12 +1,17 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { Stethoscope, Search } from 'lucide-react';
+import { Stethoscope, Search, UserPlus, Pencil, Trash2 } from 'lucide-react';
 import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
 import { ExportButton } from '@/components/ExportButton';
 import { TablePagination } from '@/components/TablePagination';
+import { ActionIcon } from '@/components/ActionIcon';
 import { useServerTable } from '@/hooks/useServerTable';
+import { AddDoctorModal } from '@/components/superadmin/AddDoctorModal';
+import { EditDoctorModal } from '@/components/doctors/EditDoctorModal';
+import { DeleteDoctorModal } from '@/components/doctors/DeleteDoctorModal';
+import { hasPermission } from '@/lib/auth';
 import type { Doctor } from '@/lib/types';
 import {
   useLazyListDoctorsPagedQuery,
@@ -26,13 +31,19 @@ const exportRow = (d: Doctor) => [
 
 export function AdminDoctors({ session }: RoleViewProps) {
   const [specFilter, setSpecFilter] = useState('all');
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [editing, setEditing] = useState<Doctor | null>(null);
+  const [deleting, setDeleting] = useState<Doctor | null>(null);
+
+  const canManage = hasPermission(session, 'doctors.manage');
+
   const table = useServerTable({ filterKey: specFilter });
 
   const listArgs = {
     q: table.q.trim() || undefined,
     specialization: specFilter === 'all' ? undefined : specFilter,
   };
-  const { data: doctorPage } = useListDoctorsPagedQuery({
+  const { data: doctorPage, refetch } = useListDoctorsPagedQuery({
     ...listArgs,
     limit: table.limit,
     offset: table.offset,
@@ -86,8 +97,17 @@ export function AdminDoctors({ session }: RoleViewProps) {
       </div>
 
       <div className="bg-white rounded-lg shadow">
-        <div className="px-6 py-4 border-b">
+        <div className="flex items-center justify-between px-6 py-4 border-b">
           <h3 className="text-lg font-semibold text-slate-900">Doctors ({totalDoctors})</h3>
+          {canManage && (
+            <button
+              onClick={() => setShowAddModal(true)}
+              className="flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg text-sm font-medium hover:shadow-lg transition"
+            >
+              <UserPlus className="w-4 h-4" />
+              Add Doctor
+            </button>
+          )}
         </div>
 
         {filtered.length === 0 ? (
@@ -107,6 +127,9 @@ export function AdminDoctors({ session }: RoleViewProps) {
                   <th className="text-left py-3 px-6 font-semibold text-slate-900">Experience</th>
                   <th className="text-left py-3 px-6 font-semibold text-slate-900">Fee</th>
                   <th className="text-left py-3 px-6 font-semibold text-slate-900">Status</th>
+                  {canManage && (
+                    <th className="text-right py-3 px-6 font-semibold text-slate-900">Actions</th>
+                  )}
                 </tr>
               </thead>
               <tbody>
@@ -129,6 +152,14 @@ export function AdminDoctors({ session }: RoleViewProps) {
                         {doctor.verificationStatus ?? 'verified'}
                       </span>
                     </td>
+                    {canManage && (
+                      <td className="py-3 px-6 text-right">
+                        <div className="flex items-center justify-end gap-1">
+                          <ActionIcon icon={Pencil} label="Edit" onClick={() => setEditing(doctor)} />
+                          <ActionIcon icon={Trash2} label="Delete" tone="danger" onClick={() => setDeleting(doctor)} />
+                        </div>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
@@ -142,6 +173,22 @@ export function AdminDoctors({ session }: RoleViewProps) {
           </div>
         )}
       </div>
+
+      <AddDoctorModal
+        open={showAddModal}
+        onClose={() => setShowAddModal(false)}
+        onSuccess={refetch}
+      />
+      <EditDoctorModal
+        doctor={editing}
+        onClose={() => setEditing(null)}
+        onSuccess={refetch}
+      />
+      <DeleteDoctorModal
+        doctor={deleting}
+        onClose={() => setDeleting(null)}
+        onSuccess={refetch}
+      />
     </DashboardShell>
   );
 }

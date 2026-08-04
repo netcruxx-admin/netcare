@@ -3,7 +3,8 @@
 import { useMemo, useState } from 'react';
 import { Formik, Form } from 'formik';
 import * as Yup from 'yup';
-import { Award, CheckCircle2, HeartPulse, Mail, Phone, Stethoscope } from 'lucide-react';
+import { Award, HeartPulse, Loader2, Mail, Phone, Stethoscope } from 'lucide-react';
+import { toast } from 'sonner';
 import { authStorage } from '@/lib/auth';
 import { apiError } from '@/lib/apiError';
 import {
@@ -59,8 +60,6 @@ export function StaffProfile({ session }: RoleViewProps) {
   const isDoctor = session.user.role === doctorRole;
 
   const [currentSession, setCurrentSession] = useState<AuthSession>(session);
-  const [toast, setToast] = useState('');
-  const [error, setError] = useState('');
 
   const { data: doctor } = useGetDoctorByUserQuery(session.user.id, { skip: !isDoctor });
   const { data: departments = [] } = useListDepartmentsQuery(undefined, { skip: !isDoctor });
@@ -84,7 +83,15 @@ export function StaffProfile({ session }: RoleViewProps) {
   const currentUser = currentSession.user;
 
   // Wait for the doctor record before offering fields that belong to it.
-  if (isDoctor && !doctor) return null;
+  if (isDoctor && !doctor) {
+    return (
+      <DashboardShell role={session.user.role} userName={session.user.name} title="Profile" subtitle="Your professional details">
+        <div className="flex items-center justify-center py-16">
+          <Loader2 className="w-8 h-8 animate-spin text-cyan-500" />
+        </div>
+      </DashboardShell>
+    );
+  }
 
   const heading = isDoctor ? `Dr. ${currentSession.user.name}` : currentSession.user.name;
 
@@ -129,7 +136,7 @@ export function StaffProfile({ session }: RoleViewProps) {
         {/* Edit form */}
         <div className="bg-white rounded-lg shadow p-6">
           <h3 className="font-semibold text-slate-900 mb-4">Edit Profile</h3>
-          <Formik
+          <Formik<{name: string; email: string; phone: string; specialization: string; qualification: string; experienceYears: string; consultationFee: string}>
             initialValues={{
               name: currentUser?.name ?? '',
               email: currentUser?.email ?? '',
@@ -141,16 +148,14 @@ export function StaffProfile({ session }: RoleViewProps) {
             }}
             enableReinitialize
             validationSchema={schema}
-            onSubmit={async (values, { setSubmitting }) => {
+            onSubmit={async (values, { setSubmitting, setStatus }) => {
               const name = values.name.trim();
               const email = values.email.trim();
               const phone = values.phone.trim();
-              setError('');
+              setStatus(undefined);
 
               try {
                 if (isDoctor && doctor) {
-                  // PUT /doctors/{id} writes both the account fields and the
-                  // professional ones, so a doctor saves this form in one call.
                   await updateDoctor({
                     id: doctor.id,
                     body: {
@@ -164,11 +169,10 @@ export function StaffProfile({ session }: RoleViewProps) {
                     },
                   }).unwrap();
                 } else {
-                  // Everyone else edits only their own account.
                   await updateOwnAccount({ name, email, phone }).unwrap();
                 }
               } catch (err) {
-                setError(apiError(err, 'Could not save your profile'));
+                setStatus(apiError(err, 'Could not save your profile'));
                 setSubmitting(false);
                 return;
               }
@@ -180,14 +184,14 @@ export function StaffProfile({ session }: RoleViewProps) {
                 authStorage.setSession(updated);
                 setCurrentSession(updated);
               }
-              setToast('Profile updated');
-              setTimeout(() => setToast(''), 2500);
+              toast.success('Profile updated');
               setSubmitting(false);
             }}
           >
+            {({ isSubmitting, status }) => (
             <Form className="grid sm:grid-cols-2 gap-4">
-              {error && (
-                <p className="sm:col-span-2 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</p>
+              {status && (
+                <p className="sm:col-span-2 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{status}</p>
               )}
               <div className="sm:col-span-2">
                 <FormField name="name" label="Full Name" placeholder="e.g. Sarah Smith" required />
@@ -216,21 +220,18 @@ export function StaffProfile({ session }: RoleViewProps) {
               <div className="sm:col-span-2 flex justify-end pt-2">
                 <button
                   type="submit"
-                  className="px-6 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg hover:shadow-lg font-semibold transition"
+                  disabled={isSubmitting}
+                  className="px-6 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg hover:shadow-lg font-semibold transition disabled:opacity-50"
                 >
-                  Save Changes
+                  {isSubmitting ? 'Saving…' : 'Save Changes'}
                 </button>
               </div>
             </Form>
+            )}
           </Formik>
         </div>
       </div>
 
-      {toast && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-slate-900 text-white text-sm px-4 py-2 rounded-lg shadow-lg flex items-center gap-2">
-          <CheckCircle2 className="w-4 h-4 text-green-400" /> {toast}
-        </div>
-      )}
     </DashboardShell>
   );
 }

@@ -7,6 +7,7 @@ import { X } from 'lucide-react';
 import { toast } from 'sonner';
 import { FormField } from '@/components/form/FormField';
 import { superadminPost } from '@/lib/superadminFetch';
+import { apiError } from '@/lib/apiError';
 import {
   useCreateUserMutation,
   useUpdateUserMutation,
@@ -130,10 +131,7 @@ export function AddUserModal({
               onSuccess();
               handleClose();
             } catch (err) {
-              const msg = err instanceof Error
-                ? err.message
-                : (err as { data?: { detail?: string } })?.data?.detail ?? 'Failed to save user';
-              setStatus(msg);
+              setStatus(apiError(err, 'Failed to save user'));
             } finally {
               setSubmitting(false);
             }

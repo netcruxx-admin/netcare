@@ -1,19 +1,22 @@
 'use client';
 
-import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Calendar, Plus, User, Clock, FileText } from 'lucide-react';
 import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
-import { useGetPatientAppointmentsQuery } from '@/store/api';
+import { useListAppointmentsQuery, useListDepartmentsQuery } from '@/store/api';
 
 export function PatientDashboard({ session }: RoleViewProps) {
   const router = useRouter();
 
+  // The patient's appointments.read scope is "own", so this returns only their
+  // appointments — doctorName and patientName are resolved server-side here,
+  // unlike the /patients/{id}/appointments sub-resource which returns raw IDs.
+  const { data: appointments = [] } = useListAppointmentsQuery();
+  const { data: departments = [] } = useListDepartmentsQuery();
 
-  const patientId = session?.patient?.id ?? '';
-  const { data: appointments = [] } = useGetPatientAppointmentsQuery(patientId, { skip: !patientId });
+  const deptName = (id: string) => departments.find((d) => d.id === id)?.name ?? id;
 
   const upcomingAppointments = appointments.filter((a) => a.status === 'scheduled');
 
@@ -79,11 +82,11 @@ export function PatientDashboard({ session }: RoleViewProps) {
                     </div>
                     <div>
                       <p className="text-slate-600 text-sm">Doctor</p>
-                      <p className="font-semibold">Dr. {apt.doctorId}</p>
+                      <p className="font-semibold">{apt.doctorName ? `Dr. ${apt.doctorName}` : 'Doctor'}</p>
                     </div>
                     <div>
                       <p className="text-slate-600 text-sm">Department</p>
-                      <p className="font-semibold">{apt.departmentId}</p>
+                      <p className="font-semibold">{deptName(apt.departmentId)}</p>
                     </div>
                     <div className="flex gap-2 justify-end">
                       <Link
