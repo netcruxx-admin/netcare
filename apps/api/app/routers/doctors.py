@@ -1,6 +1,7 @@
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from .. import models, schemas
@@ -155,12 +156,35 @@ def update_doctor(
     fields = body.model_dump(exclude_unset=True)
     # Name/email/phone live on the user row, the rest on the doctor row.
     account = db.get(models.User, doctor.user_id)
+
+    # Check email uniqueness before writing so the error is a 409, not a 500.
+    new_email = fields.get("email")
+    if new_email and account and new_email != account.email:
+        clash = (
+            db.query(models.User)
+            .filter(
+                models.User.hospital_id == tenant_id,
+                models.User.email == new_email,
+                models.User.id != account.id,
+            )
+            .first()
+        )
+        if clash:
+            raise HTTPException(status.HTTP_409_CONFLICT, "Email already registered")
+
     for field in ("name", "email", "phone"):
         if field in fields and account is not None:
             setattr(account, field, fields.pop(field))
     for field, value in fields.items():
         setattr(doctor, field, value)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Email already in use at this hospital.",
+        )
     db.refresh(doctor)
     return _with_user(db, doctor)
 

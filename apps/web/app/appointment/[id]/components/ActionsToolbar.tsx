@@ -6,6 +6,7 @@ import {
   CalendarClock,
   CalendarPlus,
   CheckCircle2,
+  FileText,
   Pencil,
   Pill,
   FlaskConical,
@@ -30,6 +31,7 @@ interface ActionsToolbarProps {
   onReschedule: () => void;
   onVitals: () => void;
   onPrescription: () => void;
+  onClinicalNotes: () => void;
   onOrderTest: () => void;
   onFollowUp: () => void;
   onConfirm: (action: ConfirmAction) => void;
@@ -51,6 +53,7 @@ export function ActionsToolbar({
   onReschedule,
   onVitals,
   onPrescription,
+  onClinicalNotes,
   onOrderTest,
   onFollowUp,
   onConfirm,
@@ -84,6 +87,9 @@ export function ActionsToolbar({
         <>
           <button onClick={onVitals} className={secondaryBtn}>
             <Activity className="w-4 h-4" /> Record Vitals
+          </button>
+          <button onClick={onClinicalNotes} className={secondaryBtn}>
+            <FileText className="w-4 h-4" /> Clinical Notes
           </button>
           <button onClick={onPrescription} className={secondaryBtn}>
             <Pill className="w-4 h-4" /> Add Prescription

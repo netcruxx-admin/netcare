@@ -5,6 +5,7 @@ import { Formik, Form, useFormikContext } from 'formik';
 import * as Yup from 'yup';
 import { ChevronRight, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { apiError } from '@/lib/apiError';
 import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
 import {
@@ -316,8 +317,8 @@ export function PatientProfile({ session }: RoleViewProps) {
                   }).unwrap(),
                 ]);
                 toast.success('Profile updated');
-              } catch {
-                toast.error('Could not save your profile. Please try again.');
+              } catch (err) {
+                toast.error(apiError(err, 'Could not save your profile. Please try again.'));
               } finally {
                 setSubmitting(false);
               }

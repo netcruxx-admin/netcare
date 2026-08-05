@@ -15,11 +15,12 @@ import { RescheduleModal } from './components/RescheduleModal';
 import { EditAppointmentModal } from './components/EditAppointmentModal';
 import { RecordVitalsModal } from './components/RecordVitalsModal';
 import { AddPrescriptionModal } from './components/AddPrescriptionModal';
+import { AddClinicalNotesModal } from './components/AddClinicalNotesModal';
 import { OrderTestModal } from './components/OrderTestModal';
 import { ConfirmActionModal } from './components/ConfirmActionModal';
 import { useActiveHospital } from '@/hooks/useActiveHospital';
 
-type OpenModal = 'reschedule' | 'edit' | 'vitals' | 'rx' | 'laborder' | 'followup' | null;
+type OpenModal = 'reschedule' | 'edit' | 'vitals' | 'rx' | 'notes' | 'laborder' | 'followup' | null;
 
 // Reused page shell for the loading / error states.
 function Chrome({ children }: { children: React.ReactNode }) {
@@ -174,6 +175,7 @@ export default function AppointmentDetailPage() {
           onReschedule={() => setModal('reschedule')}
           onVitals={() => setModal('vitals')}
           onPrescription={() => setModal('rx')}
+          onClinicalNotes={() => setModal('notes')}
           onOrderTest={() => setModal('laborder')}
           onFollowUp={() => setModal('followup')}
           onConfirm={setConfirmAction}
@@ -219,6 +221,16 @@ export default function AppointmentDetailPage() {
 
       {modal === 'vitals' && (
         <RecordVitalsModal
+          appointmentId={appointmentId}
+          patientId={appointment.patientId}
+          doctorId={appointment.doctorId}
+          onClose={closeModal}
+          onSaved={afterSave}
+        />
+      )}
+
+      {modal === 'notes' && (
+        <AddClinicalNotesModal
           appointmentId={appointmentId}
           patientId={appointment.patientId}
           doctorId={appointment.doctorId}

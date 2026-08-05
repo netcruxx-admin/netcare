@@ -7,7 +7,7 @@ import { toast } from 'sonner';
 import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
 import { OnboardHospitalWizard } from '@/components/hospitals/OnboardHospitalWizard';
-import { EditHospitalModal } from '@/components/EditHospitalModal';
+import { EditHospitalWizard } from '@/components/hospitals/EditHospitalWizard';
 import { ActionIcon } from '@/components/ActionIcon';
 import { apiError } from '@/lib/apiError';
 import { hasPermission } from '@/lib/auth';
@@ -127,13 +127,13 @@ export function PlatformHospitals({ session }: RoleViewProps) {
         onCreated={refetch}
       />
 
-      {/* Edit modal */}
+      {/* Edit wizard */}
       {editing && (
-        <EditHospitalModal
+        <EditHospitalWizard
           open={true}
           hospital={editing}
           onClose={() => setEditing(null)}
-          onSuccess={() => { refetch(); setEditing(null); }}
+          onUpdated={refetch}
         />
       )}
 

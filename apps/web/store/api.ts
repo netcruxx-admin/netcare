@@ -1376,7 +1376,12 @@ export const api = createApi({
         body,
         headers: hospitalId ? { 'X-Hospital-Id': hospitalId } : undefined,
       }),
-      invalidatesTags: [{ type: 'Vitals', id: 'LIST' }],
+      // Invalidate both Vitals and Appointments: the appointments list carries
+      // the hasVitals flag, and it won't re-fetch unless its tag is busted too.
+      invalidatesTags: [
+        { type: 'Vitals', id: 'LIST' },
+        { type: 'Appointment', id: 'LIST' },
+      ],
     }),
   }),
 });

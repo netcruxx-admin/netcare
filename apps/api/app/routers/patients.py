@@ -25,7 +25,7 @@ from ..authz import (
 )
 from ..database import get_db
 from ..tenancy import get_tenant_id, scoped
-from ..utils import ListQuery, attach_users, attach_visit_stats, list_params, paginate
+from ..utils import ListQuery, attach_users, attach_visit_stats, doctor_display, list_params, paginate
 
 router = APIRouter(prefix="/patients", tags=["patients"])
 
@@ -215,7 +215,14 @@ def patient_appointments(
     scope: str = Depends(require_permission("appointments.read")),
     tenant_id: str = Depends(get_tenant_id),
 ):
-    return _sub_resource(db, user, models.Appointment, patient_id, tenant_id, scope, response, params)
+    rows = _sub_resource(db, user, models.Appointment, patient_id, tenant_id, scope, response, params)
+    doctors = doctor_display(db, (r.doctor_id for r in rows))
+    out = []
+    for row in rows:
+        item = schemas.AppointmentOut.model_validate(row)
+        item.doctor_name = doctors.get(row.doctor_id, "")
+        out.append(item)
+    return out
 
 
 @router.get(

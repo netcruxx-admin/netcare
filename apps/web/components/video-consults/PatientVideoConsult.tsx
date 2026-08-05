@@ -49,7 +49,18 @@ export function PatientVideoConsult({ session }: RoleViewProps) {
     { doctorId: selectedDoctor, status: 'open' },
     { skip: !selectedDoctor },
   );
-  const slots = openSlots;
+
+  // Strip past slots so patients cannot book into the past.
+  const slots = useMemo(() => {
+    const now = new Date();
+    const todayStr = now.toISOString().split('T')[0];
+    const currentTime = now.toTimeString().slice(0, 5); // "HH:MM"
+    return openSlots.filter((s) => {
+      if (s.date > todayStr) return true;
+      if (s.date === todayStr) return s.time > currentTime;
+      return false;
+    });
+  }, [openSlots]);
 
   const [createAppointment] = useCreateAppointmentMutation();
   const [bookVideoSlot] = useBookVideoSlotMutation();

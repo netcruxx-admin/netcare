@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session, aliased
 
 from .. import models, schemas
 from ..auth import get_current_user
-from ..authz import SCOPE_OWN, caller_doctor_id, require_permission
+from ..authz import SCOPE_OWN, caller_doctor_id, caller_patient_id, own_record_filter, require_permission
 from ..database import get_db
 from ..tenancy import get_tenant_id, scoped
 from ..utils import (
@@ -39,10 +39,14 @@ def list_test_orders(
     limit: Optional[int] = Query(default=None, ge=1),
     offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
+    user: models.User = Depends(get_current_user),
     scope: str = Depends(require_permission("lab_orders.read")),
     tenant_id: str = Depends(get_tenant_id),
 ):
     query = scoped(db, models.TestOrder, tenant_id)
+    # Narrow to the caller's own orders (patient sees theirs; doctor sees theirs).
+    if scope == SCOPE_OWN:
+        query = query.filter(own_record_filter(db, user, models.TestOrder))
     if patient_id:
         query = query.filter(models.TestOrder.patient_id == patient_id)
     if doctor_id:
@@ -217,10 +221,23 @@ def list_test_results(
     order_id: Optional[str] = Query(default=None, alias="orderId"),
     params: ListQuery = Depends(list_params),
     db: Session = Depends(get_db),
+    user: models.User = Depends(get_current_user),
     scope: str = Depends(require_permission("lab_reports.read")),
     tenant_id: str = Depends(get_tenant_id),
 ):
     query = scoped(db, models.TestResult, tenant_id)
+    # TestResult has no patient_id, so "own" scope is enforced via the parent order.
+    if scope == SCOPE_OWN:
+        own_pid = caller_patient_id(db, user)
+        if own_pid:
+            query = query.join(
+                models.TestOrder, models.TestOrder.id == models.TestResult.order_id
+            ).filter(models.TestOrder.patient_id == own_pid)
+        else:
+            # Non-patient with own scope (e.g. doctor) — not a supported use case
+            # for this endpoint yet; return nothing rather than everything.
+            from sqlalchemy import false
+            query = query.filter(false())
     if order_id:
         # Comma-separated, so a screen showing several orders can ask for their
         # results in one request instead of fetching every result in the

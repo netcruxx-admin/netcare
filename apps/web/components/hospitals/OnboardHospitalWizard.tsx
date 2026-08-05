@@ -179,9 +179,10 @@ export function OnboardHospitalWizard({ open, onClose, onCreated }: Props) {
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-start justify-center p-4 z-50 overflow-y-auto">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl my-8">
-        <div className="flex justify-between items-center px-6 py-4 border-b border-slate-100">
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-5xl flex flex-col" style={{ maxHeight: 'calc(100vh - 2rem)' }}>
+        {/* Header — fixed */}
+        <div className="flex-shrink-0 flex justify-between items-center px-6 py-4 border-b border-slate-100">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-cyan-500 to-brand-teal flex items-center justify-center">
               <Building2 className="w-5 h-5 text-white" />
@@ -205,7 +206,9 @@ export function OnboardHospitalWizard({ open, onClose, onCreated }: Props) {
         </div>
 
         {result ? (
-          <SuccessPanel result={result} onAgain={reset} onDone={handleClose} />
+          <div className="overflow-y-auto flex-1">
+            <SuccessPanel result={result} onAgain={reset} onDone={handleClose} />
+          </div>
         ) : (
           <Formik
             initialValues={INITIAL_VALUES}
@@ -230,14 +233,21 @@ export function OnboardHospitalWizard({ open, onClose, onCreated }: Props) {
                   return;
                 }
                 setCategory(values.category);
-                setStep((s) => Math.min(s + 1, STEPS.length - 1));
+                // Defer the DOM swap by one event-loop tick so the browser
+                // finishes the current click's mouseup before the Submit button
+                // renders in the same position as the Next button.
+                setTimeout(() => setStep((s) => Math.min(s + 1, STEPS.length - 1)), 0);
               };
 
               return (
-                <Form>
-                  <Stepper current={step} onJump={setStep} />
+                <Form className="flex flex-col min-h-0 flex-1">
+                  {/* Stepper — fixed */}
+                  <div className="flex-shrink-0">
+                    <Stepper current={step} onJump={setStep} />
+                  </div>
 
-                  <div className="px-6 py-5 min-h-[380px]">
+                  {/* Scrollable step content */}
+                  <div className="flex-1 overflow-y-auto px-6 py-5">
                     <p className="text-sm text-slate-500 mb-5">{current.blurb}</p>
                     <StepBody
                       step={step}
@@ -250,13 +260,14 @@ export function OnboardHospitalWizard({ open, onClose, onCreated }: Props) {
                   </div>
 
                   {formError && (
-                    <div className="mx-6 mb-4 flex items-start gap-2 rounded-lg bg-red-50 border border-red-100 px-4 py-3">
+                    <div className="flex-shrink-0 mx-6 mb-0 flex items-start gap-2 rounded-lg bg-red-50 border border-red-100 px-4 py-3">
                       <AlertCircle className="w-4 h-4 text-red-500 mt-0.5 shrink-0" />
                       <p className="text-sm text-red-600">{formError}</p>
                     </div>
                   )}
 
-                  <div className="flex items-center justify-between gap-3 px-6 py-4 border-t border-slate-100">
+                  {/* Footer — fixed */}
+                  <div className="flex-shrink-0 flex items-center justify-between gap-3 px-6 py-4 border-t border-slate-100">
                     <button
                       type="button"
                       onClick={step === 0 ? handleClose : () => setStep((s) => s - 1)}

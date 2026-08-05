@@ -3,11 +3,12 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Clock, CalendarPlus } from 'lucide-react';
+import { Clock, CalendarPlus, Eye } from 'lucide-react';
 import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
 import { useGetPatientAppointmentsQuery } from '@/store/api';
 import type { Appointment } from '@/lib/types';
+import { ActionIcon } from '../ActionIcon';
 
 export function PatientAppointments({ session }: RoleViewProps) {
   const router = useRouter();
@@ -19,8 +20,8 @@ export function PatientAppointments({ session }: RoleViewProps) {
 
   const statusStyle = (status: Appointment['status']) =>
     status === 'completed' ? 'bg-green-100 text-green-700'
-    : status === 'cancelled' ? 'bg-red-100 text-red-700'
-    : 'bg-blue-100 text-blue-700';
+      : status === 'cancelled' ? 'bg-red-100 text-red-700'
+        : 'bg-blue-100 text-blue-700';
 
   const sorted = [...appointments]
     .filter((a) => statusFilter === 'all' || a.status === statusFilter)
@@ -77,7 +78,7 @@ export function PatientAppointments({ session }: RoleViewProps) {
                 {sorted.map((apt) => (
                   <tr key={apt.id} className="border-b hover:bg-slate-50">
                     <td className="py-3 px-6 font-medium">{apt.date} at {apt.time}</td>
-                    <td className="py-3 px-6 text-slate-600">Dr. {apt.doctorId}</td>
+                    <td className="py-3 px-6 text-slate-600">Dr. {apt.doctorName ?? apt.doctorId}</td>
                     <td className="py-3 px-6 text-slate-600">
                       {apt.reason || 'Checkup'}
                       {apt.followUpOf && (
@@ -92,9 +93,9 @@ export function PatientAppointments({ session }: RoleViewProps) {
                       </span>
                     </td>
                     <td className="py-3 px-6 text-right">
-                      <Link href={`/appointment/${apt.id}`} className="text-cyan-600 hover:text-cyan-700 font-semibold text-sm">
-                        View
-                      </Link>
+                      <div className="flex items-center justify-end gap-1">
+                        <ActionIcon icon={Eye} label="View" href={`/appointment/${apt.id}`} />
+                      </div>
                     </td>
                   </tr>
                 ))}
