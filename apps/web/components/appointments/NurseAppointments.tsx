@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react';
 import { Search, CalendarDays, Eye, HeartPulse } from 'lucide-react';
 import type { Appointment } from '@/lib/types';
+import { hasPermission } from '@/lib/auth';
 import {
   useLazyListAppointmentsPagedQuery,
   useListAppointmentsPagedQuery,
@@ -42,6 +43,7 @@ const exportRow = (r: ReturnType<typeof toRow>) => [
 ];
 
 export function NurseAppointments({ session }: RoleViewProps) {
+  const canRecordVitals = hasPermission(session, 'vitals.record');
   const [status, setStatus] = useState<'all' | Appointment['status']>('all');
   const [date, setDate] = useState<string>(todayStr);
   const table = useServerTable({ filterKey: `${status}|${date}` });
@@ -154,7 +156,7 @@ export function NurseAppointments({ session }: RoleViewProps) {
                       <td className="py-3 px-6">
                         <div className="flex items-center justify-end gap-1">
                           <ActionIcon icon={Eye} label="View appointment" href={`/appointment/${a.id}`} />
-                          {a.status !== 'cancelled' && (
+                          {canRecordVitals && a.status !== 'cancelled' && (
                             <ActionIcon
                               icon={HeartPulse}
                               label={a.hasVitals ? 'Update vitals' : 'Record vitals'}

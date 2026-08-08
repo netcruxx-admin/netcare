@@ -6,6 +6,7 @@ import { AlertCircle, CheckCircle } from 'lucide-react';
 import Image from 'next/image';
 import { useActiveHospital } from '@/hooks/useActiveHospital';
 import { useRegistration } from './useRegistration';
+import { HospitalStep } from './steps/HospitalStep';
 import { RoleStep } from './steps/RoleStep';
 import { AccountStep } from './steps/AccountStep';
 import { ConsentStep } from './steps/ConsentStep';
@@ -16,14 +17,18 @@ export default function RegisterPage() {
   const {
     step,
     userType,
+    selectedHospital,
+    isRootDomain,
     serverError,
     success,
     formik,
     wizardSteps,
     currentIndex,
     isMinor,
+    handleHospitalSelect,
     handleRoleSelect,
     backToRole,
+    backToHospital,
     goToStep,
   } = useRegistration();
 
@@ -44,10 +49,26 @@ export default function RegisterPage() {
           className={`w-full ${step === 'details' || step === 'consent' ? 'max-w-2xl' : 'max-w-md'} bg-white rounded-lg shadow-xl p-8 space-y-8`}
         >
           <FormikProvider value={formik}>
-            {step === 'role' ? (
-              <RoleStep onSelect={handleRoleSelect} />
+            {step === 'hospital' ? (
+              <HospitalStep onSelect={handleHospitalSelect} />
+            ) : step === 'role' ? (
+              <>
+                {isRootDomain && selectedHospital && (
+                  <div className="flex items-center gap-2 px-3 py-2 bg-cyan-50 border border-cyan-200 rounded-lg text-sm">
+                    <span className="text-cyan-700 font-medium truncate">{selectedHospital.name}</span>
+                    <button onClick={backToHospital} className="ml-auto text-xs text-cyan-500 hover:text-cyan-700 whitespace-nowrap">Change</button>
+                  </div>
+                )}
+                <RoleStep onSelect={handleRoleSelect} />
+              </>
             ) : (
               <>
+                {isRootDomain && selectedHospital && (
+                  <div className="flex items-center gap-2 px-3 py-2 bg-cyan-50 border border-cyan-200 rounded-lg text-sm">
+                    <span className="text-cyan-700 font-medium truncate">{selectedHospital.name}</span>
+                    <button onClick={backToHospital} className="ml-auto text-xs text-cyan-500 hover:text-cyan-700 whitespace-nowrap">Change</button>
+                  </div>
+                )}
                 <div className="text-center">
                   <h2 className="text-3xl font-bold text-slate-900">Welcome!</h2>
                   <p className="text-slate-600 mt-2">Register as a {userType}</p>

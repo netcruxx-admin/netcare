@@ -84,11 +84,7 @@ def resolve_public_tenant(
         if hospital is not None:
             return hospital.id
 
-    # An unrecognised host must not silently become the default tenant in
-    # production — that lands a typo'd subdomain on another hospital's login.
-    if settings.is_production:
-        return ""
-    return settings.default_hospital_id
+    return ""
 
 
 def get_tenant_id(

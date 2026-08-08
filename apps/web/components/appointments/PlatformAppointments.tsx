@@ -115,6 +115,7 @@ export function PlatformAppointments({ session }: RoleViewProps) {
   const [addingVitals, setAddingVitals] = useState<Appointment | null>(null);
   const [deleting, setDeleting] = useState<Appointment | null>(null);
   const [error, setError] = useState('');
+  const [vitalsError, setVitalsError] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
 
   // Hospital, status, search and paging are all applied by the API. Patient and
@@ -306,7 +307,7 @@ export function PlatformAppointments({ session }: RoleViewProps) {
                         {hasPermission(session, 'appointments.manage') && <ActionIcon icon={Pencil} label="Edit" onClick={() => setEditing(a)} />}
                         {hasPermission(session, 'appointments.manage') && <ActionIcon icon={CalendarClock} label="Reschedule" onClick={() => openReschedule(a)} />}
                         {hasPermission(session, 'appointments.manage') && <ActionIcon icon={CalendarPlus} label="Schedule Follow-Up" onClick={() => setFollowUp(a)} />}
-                        {hasPermission(session, 'appointments.manage') && <ActionIcon icon={Activity} label="Add Vitals" onClick={() => setAddingVitals(a)} />}
+                        {hasPermission(session, 'appointments.manage') && <ActionIcon icon={Activity} label="Add Vitals" onClick={() => { setVitalsError(''); setAddingVitals(a); }} />}
                         {hasPermission(session, 'appointments.manage') && <ActionIcon icon={Trash2} label="Delete" tone="danger" onClick={() => setDeleting(a)} />}
                       </div>
                     </td>
@@ -436,7 +437,7 @@ export function PlatformAppointments({ session }: RoleViewProps) {
               initialValues={{ temperature: '', bloodPressure: '', heartRate: '', respiratoryRate: '', weight: '', height: '', notes: '' }}
               validationSchema={vitalsSchema}
               onSubmit={async (values) => {
-                setError('');
+                setVitalsError('');
                 try {
                   await createVitals({
                     hospitalId: addingVitals.hospitalId,
@@ -454,7 +455,7 @@ export function PlatformAppointments({ session }: RoleViewProps) {
                   setAddingVitals(null);
                   toast.success('Vitals recorded');
                 } catch (err) {
-                  setError(apiError(err, 'Could not record the vitals'));
+                  setVitalsError(apiError(err, 'Could not record the vitals'));
                 }
               }}
             >
@@ -468,6 +469,9 @@ export function PlatformAppointments({ session }: RoleViewProps) {
                 <div className="col-span-2">
                   <FormField name="notes" label="Notes" as="textarea" placeholder="Any observations" />
                 </div>
+                {vitalsError && (
+                  <p className="col-span-2 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{vitalsError}</p>
+                )}
                 <div className="col-span-2 flex gap-3 pt-2">
                   <button type="button" onClick={() => setAddingVitals(null)} className="flex-1 px-4 py-2 bg-slate-200 text-slate-700 rounded hover:bg-slate-300 transition">Cancel</button>
                   <button type="submit" className="flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded hover:shadow-lg font-semibold transition">Save Vitals</button>

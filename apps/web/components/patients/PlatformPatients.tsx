@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { UserRound, Plus, Search, Pencil, Trash2 } from 'lucide-react';
+import { UserRound, Plus, Search, Eye, Pencil, Trash2 } from 'lucide-react';
 import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
 import { AddPatientModal } from '@/components/superadmin/AddPatientModal';
@@ -115,6 +115,7 @@ export function PlatformPatients({ session }: RoleViewProps) {
                     <td className="py-3 px-6 font-semibold text-slate-900">{p.visitCount ?? 0}</td>
                     <td className="py-3 px-6 text-right">
                       <div className="flex items-center justify-end gap-1">
+                        <ActionIcon icon={Eye} label="View" href={`/patient/${p.id}${p.hospitalId ? `?h=${p.hospitalId}` : ''}`} />
                         {hasPermission(session, 'patients.manage') && <ActionIcon icon={Pencil} label="Edit" onClick={() => setEditing(p)} />}
                         {hasPermission(session, 'patients.manage') && <ActionIcon icon={Trash2} label="Delete" tone="danger" onClick={() => setDeleting(p)} />}
                       </div>

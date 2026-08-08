@@ -8,6 +8,7 @@ import * as Yup from 'yup';
 import { Search, CalendarDays, Eye, Activity, Pill, X, CheckCircle2, FlaskConical, CalendarPlus } from 'lucide-react';
 import type { Appointment } from '@/lib/types';
 import { apiError } from '@/lib/apiError';
+import { hasPermission } from '@/lib/auth';
 import {
   useCreatePrescriptionMutation,
   useCreateTestOrderMutation,
@@ -62,6 +63,7 @@ const statusStyle = (status: Appointment['status']) =>
 
 export function DoctorAppointments({ session }: RoleViewProps) {
   const router = useRouter();
+  const canManage = hasPermission(session, 'appointments.manage');
 
   const [status, setStatus] = useState<'all' | Appointment['status']>('all');
   const [date, setDate] = useState('');
@@ -77,7 +79,10 @@ export function DoctorAppointments({ session }: RoleViewProps) {
   const [orderNote, setOrderNote] = useState('');
   const [testQuery, setTestQuery] = useState('');
   const [toast, setToast] = useState('');
-  const [error, setError] = useState('');
+  const [vitalsError, setVitalsError] = useState('');
+  const [rxError, setRxError] = useState('');
+  const [orderError, setOrderError] = useState('');
+  const [completeError, setCompleteError] = useState('');
 
   // Appointments come back already narrowed to this doctor by the `own` scope
   // on appointments.read; the doctor record is still needed to raise orders.
@@ -133,14 +138,14 @@ export function DoctorAppointments({ session }: RoleViewProps) {
 
   const confirmComplete = async () => {
     if (!completing) return;
-    setError('');
+    setCompleteError('');
     try {
       await updateAppointment({ id: completing.id, body: { status: 'completed' } }).unwrap();
       flash('Appointment marked complete');
+      setCompleting(null);
     } catch (err) {
-      setError(apiError(err, 'Could not complete the appointment'));
+      setCompleteError(apiError(err, 'Could not complete the appointment'));
     }
-    setCompleting(null);
   };
 
   const openOrder = (a: Appointment) => {
@@ -161,7 +166,7 @@ export function DoctorAppointments({ session }: RoleViewProps) {
     const items = tests
       .filter((t) => orderSel.has(t.id))
       .map((t) => ({ testId: t.id, name: t.name, price: t.price }));
-    setError('');
+    setOrderError('');
     try {
       // Status and timestamps are the server's to set; an order always starts
       // life as "ordered".
@@ -176,7 +181,7 @@ export function DoctorAppointments({ session }: RoleViewProps) {
       setOrderingTests(null);
       flash(`Ordered ${items.length} test(s)`);
     } catch (err) {
-      setError(apiError(err, 'Could not place the order'));
+      setOrderError(apiError(err, 'Could not place the order'));
     }
   };
   const orderTotal = tests.filter((t) => orderSel.has(t.id)).reduce((s, t) => s + t.price, 0);
@@ -184,10 +189,6 @@ export function DoctorAppointments({ session }: RoleViewProps) {
   return (
     <DashboardShell role={session.user.role} userName={session.user.name} title="Appointments" subtitle="Your patient appointments">
       <div className="space-y-6">
-        {error && (
-          <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm text-red-700">{error}</div>
-        )}
-
         {/* Filters */}
         <div className="flex flex-wrap items-center gap-3">
           <div className="relative flex-1 min-w-[200px]">
@@ -290,11 +291,11 @@ export function DoctorAppointments({ session }: RoleViewProps) {
                         <td className="py-3 px-6">
                           <div className="flex items-center justify-end gap-1">
                             <ActionIcon icon={Eye} label="View details" href={`/appointment/${r.id}`} />
-                            <ActionIcon icon={Activity} label="Record Vitals" onClick={() => setAddingVitals(r.appt)} />
-                            <ActionIcon icon={Pill} label="Add Prescription" onClick={() => setPrescribing(r.appt)} />
-                            <ActionIcon icon={FlaskConical} label="Order Tests" onClick={() => openOrder(r.appt)} />
-                            <ActionIcon icon={CalendarPlus} label="Schedule Follow-Up" onClick={() => setFollowUp(r.appt)} />
-                            {r.status === 'scheduled' && (
+                            {canManage && <ActionIcon icon={Activity} label="Record Vitals" onClick={() => setAddingVitals(r.appt)} />}
+                            {canManage && <ActionIcon icon={Pill} label="Add Prescription" onClick={() => setPrescribing(r.appt)} />}
+                            {canManage && <ActionIcon icon={FlaskConical} label="Order Tests" onClick={() => openOrder(r.appt)} />}
+                            {canManage && <ActionIcon icon={CalendarPlus} label="Schedule Follow-Up" onClick={() => setFollowUp(r.appt)} />}
+                            {canManage && r.status === 'scheduled' && (
                               <ActionIcon icon={CheckCircle2} label="Mark Complete" tone="success" onClick={() => setCompleting(r.appt)} />
                             )}
                           </div>
@@ -330,7 +331,7 @@ export function DoctorAppointments({ session }: RoleViewProps) {
               initialValues={{ temperature: '', bloodPressure: '', heartRate: '', respiratoryRate: '', weight: '', height: '', notes: '' }}
               validationSchema={vitalsSchema}
               onSubmit={async (values) => {
-                setError('');
+                setVitalsError('');
                 try {
                   await createVitals({
                     appointmentId: addingVitals.id,
@@ -347,7 +348,7 @@ export function DoctorAppointments({ session }: RoleViewProps) {
                   setAddingVitals(null);
                   flash('Vitals recorded');
                 } catch (err) {
-                  setError(apiError(err, 'Could not record the vitals'));
+                  setVitalsError(apiError(err, 'Could not record the vitals'));
                 }
               }}
             >
@@ -361,6 +362,9 @@ export function DoctorAppointments({ session }: RoleViewProps) {
                 <div className="col-span-2">
                   <FormField name="notes" label="Notes" as="textarea" placeholder="Any observations" rows={2} />
                 </div>
+                {vitalsError && (
+                  <p className="col-span-2 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{vitalsError}</p>
+                )}
                 <div className="col-span-2 flex gap-3 pt-2">
                   <button type="button" onClick={() => setAddingVitals(null)} className="flex-1 px-4 py-2 bg-slate-200 text-slate-700 rounded hover:bg-slate-300 transition">
                     Cancel
@@ -389,7 +393,7 @@ export function DoctorAppointments({ session }: RoleViewProps) {
               initialValues={{ medicineName: '', dosage: '', frequency: '', duration: '', instructions: '' }}
               validationSchema={rxSchema}
               onSubmit={async (values) => {
-                setError('');
+                setRxError('');
                 try {
                   await createPrescription({
                     appointmentId: prescribing.id,
@@ -404,7 +408,7 @@ export function DoctorAppointments({ session }: RoleViewProps) {
                   setPrescribing(null);
                   flash('Prescription added');
                 } catch (err) {
-                  setError(apiError(err, 'Could not save the prescription'));
+                  setRxError(apiError(err, 'Could not save the prescription'));
                 }
               }}
             >
@@ -419,6 +423,9 @@ export function DoctorAppointments({ session }: RoleViewProps) {
                 <div className="sm:col-span-2">
                   <FormField name="instructions" label="Instructions" as="textarea" placeholder="e.g. After meals" rows={2} />
                 </div>
+                {rxError && (
+                  <p className="sm:col-span-2 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{rxError}</p>
+                )}
                 <div className="sm:col-span-2 flex gap-3 pt-2">
                   <button type="button" onClick={() => setPrescribing(null)} className="flex-1 px-4 py-2 bg-slate-200 text-slate-700 rounded hover:bg-slate-300 transition">
                     Cancel
@@ -496,6 +503,9 @@ export function DoctorAppointments({ session }: RoleViewProps) {
                 placeholder="Clinical note / indication (optional)"
                 className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:border-cyan-500"
               />
+              {orderError && (
+                <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{orderError}</p>
+              )}
               <div className="flex gap-3">
                 <button onClick={() => setOrderingTests(null)} className="flex-1 px-4 py-2 bg-slate-200 text-slate-700 rounded hover:bg-slate-300 transition">
                   Cancel
@@ -528,7 +538,10 @@ export function DoctorAppointments({ session }: RoleViewProps) {
                 </p>
               </div>
             </div>
-            <div className="flex gap-3 mt-6">
+            {completeError && (
+              <p className="mt-4 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{completeError}</p>
+            )}
+            <div className="flex gap-3 mt-4">
               <button onClick={() => setCompleting(null)} className="flex-1 px-4 py-2 bg-slate-200 text-slate-700 rounded hover:bg-slate-300 transition">
                 Cancel
               </button>

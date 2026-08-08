@@ -171,7 +171,6 @@ export function HospitalPatients({ session }: RoleViewProps) {
   const [editing, setEditing] = useState<Patient | null>(null);
   const [deleting, setDeleting] = useState<Patient | null>(null);
 
-  // const canManage = role === adminRole && hasPermission(session, 'patients.manage');
   const canManage = hasPermission(session, 'patients.manage');
 
   // No appointments fetch here any more: a doctor's `patients.read` grant is

@@ -125,6 +125,18 @@ def _upper_or_empty(value: Optional[str]) -> str:
     return (value or "").strip().upper()
 
 
+class HospitalPublicOut(OutModel):
+    """Minimal hospital info for the patient self-registration picker.
+    No auth required — a patient choosing a hospital has no account yet."""
+    id: str
+    name: str
+    subdomain: str
+    category: HospitalCategory
+    tagline: str = ""
+    theme: dict = {}
+    logo_url: str = ""
+
+
 class HospitalOut(OutModel):
     id: str
     name: str

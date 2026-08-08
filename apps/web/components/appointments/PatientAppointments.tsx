@@ -1,19 +1,18 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState } from 'react';
 import Link from 'next/link';
-import { Clock, CalendarPlus, Eye } from 'lucide-react';
+import { Clock, CalendarPlus, Eye, Plus } from 'lucide-react';
 import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
 import { useGetPatientAppointmentsQuery } from '@/store/api';
 import type { Appointment } from '@/lib/types';
+import { hasPermission } from '@/lib/auth';
 import { ActionIcon } from '../ActionIcon';
 
 export function PatientAppointments({ session }: RoleViewProps) {
-  const router = useRouter();
+  const canBook = hasPermission(session, 'appointments.create');
   const [statusFilter, setStatusFilter] = useState<'all' | Appointment['status']>('all');
-
 
   const patientId = session?.patient?.id ?? '';
   const { data: appointments = [] } = useGetPatientAppointmentsQuery(patientId, { skip: !patientId });
@@ -45,6 +44,14 @@ export function PatientAppointments({ session }: RoleViewProps) {
           <option value="completed">Completed</option>
           <option value="cancelled">Cancelled</option>
         </select>
+        {canBook && (
+          <Link
+            href="/dashboard/book"
+            className="ml-auto flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg text-sm font-semibold hover:shadow-lg transition"
+          >
+            <Plus className="w-4 h-4" /> Book Appointment
+          </Link>
+        )}
       </div>
 
       <div className="bg-white rounded-lg shadow">
@@ -55,12 +62,14 @@ export function PatientAppointments({ session }: RoleViewProps) {
           <div className="text-center py-16">
             <Clock className="w-16 h-16 text-slate-300 mx-auto mb-4" />
             <p className="text-slate-600 mb-6">No appointments yet</p>
-            <Link
-              href="/dashboard/book"
-              className="inline-block px-6 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg hover:shadow-lg transition"
-            >
-              Book an Appointment
-            </Link>
+            {canBook && (
+              <Link
+                href="/dashboard/book"
+                className="inline-block px-6 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg hover:shadow-lg transition"
+              >
+                Book an Appointment
+              </Link>
+            )}
           </div>
         ) : (
           <div className="overflow-x-auto">

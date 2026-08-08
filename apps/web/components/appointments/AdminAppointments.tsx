@@ -368,7 +368,7 @@ export function AdminAppointments({ session }: RoleViewProps) {
                   .map((r) => [r.patient, r.phone, r.date, r.time, r.doctor, r.dept, r.status]);
               }}
             />
-            {canManage && (
+            {hasPermission(session, 'appointments.create') && (
               <Link
                 href="/dashboard/book"
                 className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg text-sm font-semibold hover:shadow-lg transition"

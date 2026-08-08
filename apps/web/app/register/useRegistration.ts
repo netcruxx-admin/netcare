@@ -9,7 +9,8 @@ import { useRouter } from 'next/navigation';
 import { useFormik } from 'formik';
 import { authStorage } from '@/lib/auth';
 import { resolveHomePath } from '@/lib/roles';
-import { useRegisterMutation } from '@/store/api';
+import { useRegisterMutation, type HospitalPublicInfo } from '@/store/api';
+import { currentSubdomain } from '@/lib/tenant';
 import {
   accountSchema,
   ageFromDateOfBirth,
@@ -25,7 +26,12 @@ import {
 export function useRegistration() {
   const router = useRouter();
   const [registerMutation] = useRegisterMutation();
-  const [step, setStep] = useState<Step>('role');
+  // On the root domain (no subdomain) we don't know which hospital the patient
+  // belongs to — show a picker first. On a hospital subdomain, skip straight to
+  // the role step (tenant is already resolved from the URL).
+  const isRootDomain = typeof window !== 'undefined' && currentSubdomain() === null;
+  const [step, setStep] = useState<Step>(isRootDomain ? 'hospital' : 'role');
+  const [selectedHospital, setSelectedHospital] = useState<HospitalPublicInfo | null>(null);
   const [userType, setUserType] = useState<Role | null>(null);
   const [serverError, setServerError] = useState('');
   const [success, setSuccess] = useState(false);
@@ -55,6 +61,9 @@ export function useRegistration() {
         consents: values.consents,
         guardianName: values.guardianName.trim(),
         guardianRelationship: values.guardianRelationship.trim(),
+        // On root domain the patient picked a hospital; pass it as the tenant
+        // header so the backend knows which hospital to file this account under.
+        hospitalId: selectedHospital?.id,
       }).unwrap();
 
       authStorage.setSession({
@@ -70,14 +79,22 @@ export function useRegistration() {
       setSuccess(true);
 
       setTimeout(() => {
-        // New patients go straight to their profile to finish filling it in;
-        // everyone else lands on whatever dashboard their role declares.
         const role = result.user.role;
-        router.push(
-          role === 'patient'
-            ? '/dashboard/profile'
-            : resolveHomePath(role, result.role?.homePath),
-        );
+        const path = role === 'patient'
+          ? '/dashboard/profile'
+          : resolveHomePath(role, result.role?.homePath);
+
+        // When the patient registered via root domain they picked a hospital —
+        // redirect to that hospital's subdomain. localStorage is domain-scoped
+        // so the session stored here won't be visible there; send them to the
+        // subdomain's login page with a ?registered=1 flag so it can show a
+        // "Registration successful" message and let them sign in.
+        if (selectedHospital) {
+          const { protocol, host } = window.location;
+          window.location.href = `${protocol}//${selectedHospital.subdomain}.${host}/login?registered=1`;
+        } else {
+          router.push(path);
+        }
       }, 2000);
     } catch (err: unknown) {
       const detail = (err as { data?: { detail?: string } })?.data?.detail;
@@ -117,6 +134,12 @@ export function useRegistration() {
     },
   });
 
+  const handleHospitalSelect = (hospital: HospitalPublicInfo) => {
+    setSelectedHospital(hospital);
+    setStep('role');
+    setServerError('');
+  };
+
   const handleRoleSelect = (role: Role) => {
     setUserType(role);
     setStep('account');
@@ -125,6 +148,14 @@ export function useRegistration() {
 
   const backToRole = () => {
     setStep('role');
+    setUserType(null);
+    setServerError('');
+    formik.resetForm();
+  };
+
+  const backToHospital = () => {
+    setStep('hospital');
+    setSelectedHospital(null);
     setUserType(null);
     setServerError('');
     formik.resetForm();
@@ -149,6 +180,8 @@ export function useRegistration() {
     // state
     step,
     userType,
+    selectedHospital,
+    isRootDomain,
     serverError,
     success,
     formik,
@@ -158,8 +191,10 @@ export function useRegistration() {
     isMinor,
     // actions
     doRegister,
+    handleHospitalSelect,
     handleRoleSelect,
     backToRole,
+    backToHospital,
     goToStep,
   };
 }

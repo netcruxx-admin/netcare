@@ -39,6 +39,37 @@ from ..tenancy import resolve_public_tenant
 router = APIRouter(prefix="/hospitals", tags=["hospitals"])
 
 
+@router.get("/public", response_model=list[schemas.HospitalPublicOut])
+def list_public_hospitals(db: Session = Depends(get_db)):
+    """Active, verified hospitals — for the patient self-registration picker.
+    No auth: a patient choosing which hospital to register with has no account yet."""
+    rows = (
+        db.query(models.Hospital, models.HospitalProfile)
+        .outerjoin(
+            models.HospitalProfile,
+            models.HospitalProfile.hospital_id == models.Hospital.id,
+        )
+        .filter(
+            models.Hospital.status == "active",
+            models.Hospital.onboarding_status == "verified",
+        )
+        .order_by(models.Hospital.name)
+        .all()
+    )
+    return [
+        schemas.HospitalPublicOut(
+            id=h.id,
+            name=h.name,
+            subdomain=h.subdomain,
+            category=h.category,
+            tagline=h.tagline,
+            theme=h.theme,
+            logo_url=p.logo_url if p else "",
+        )
+        for h, p in rows
+    ]
+
+
 @router.get("/current", response_model=schemas.HospitalOut)
 def current_hospital(
     db: Session = Depends(get_db),

@@ -28,11 +28,6 @@ class Settings(BaseSettings):
     login_max_failures_per_ip: int = 20
     login_failure_window_minutes: int = 15
     cors_origins: str = "http://localhost:3000"
-    # Tenant used before login when the request host carries no known subdomain
-    # (e.g. the FE talking to the API on bare localhost). Mirrors the frontend's
-    # DEFAULT_HOSPITAL_ID in lib/tenant.ts. Development only — in production an
-    # unrecognised host resolves to no tenant rather than silently to this one.
-    default_hospital_id: str = "hosp-1"
     # "development" or "production". Governs the convenience affordances that are
     # safe on a laptop and unsafe on the internet: the X-Hospital-Id override on
     # pre-login requests, the default-tenant fallback, and the *.localhost CORS

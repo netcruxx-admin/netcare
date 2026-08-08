@@ -92,7 +92,7 @@ export function PlatformDoctors({ session }: RoleViewProps) {
                   {['Name', 'Email', 'Specialization', 'Qualification', 'Experience'].map((h) => (
                     <th key={h} className="text-left py-3 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wide">{h}</th>
                   ))}
-                  <th className="text-right py-3 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wide">Actions</th>
+                  {canManage && <th className="text-right py-3 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wide">Actions</th>}
                 </tr>
               </thead>
               <tbody>
@@ -108,12 +108,14 @@ export function PlatformDoctors({ session }: RoleViewProps) {
                     <td className="py-3 px-6 text-slate-600">{d.specialization || '—'}</td>
                     <td className="py-3 px-6 text-slate-600">{d.qualification || '—'}</td>
                     <td className="py-3 px-6 text-slate-600">{d.experienceYears != null ? `${d.experienceYears} yrs` : '—'}</td>
-                    <td className="py-3 px-6 text-right">
-                      <div className="flex items-center justify-end gap-1">
-                        {canManage && <ActionIcon icon={Pencil} label="Edit" onClick={() => setEditing(d)} />}
-                        {canManage && <ActionIcon icon={Trash2} label="Delete" tone="danger" onClick={() => setDeleting(d)} />}
-                      </div>
-                    </td>
+                    {canManage && (
+                      <td className="py-3 px-6 text-right">
+                        <div className="flex items-center justify-end gap-1">
+                          <ActionIcon icon={Pencil} label="Edit" onClick={() => setEditing(d)} />
+                          <ActionIcon icon={Trash2} label="Delete" tone="danger" onClick={() => setDeleting(d)} />
+                        </div>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>

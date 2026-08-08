@@ -29,6 +29,8 @@ export function PlatformHospitals({ session }: RoleViewProps) {
     ? allHospitals.filter((h) => h.id === selectedHospitalId)
     : allHospitals;
 
+  const canManage = hasPermission(session, 'hospitals.manage');
+
   const confirmToggle = async () => {
     if (!toggling) return;
     const newStatus = toggling.status === 'active' ? 'suspended' : 'active';
@@ -56,7 +58,7 @@ export function PlatformHospitals({ session }: RoleViewProps) {
             {hospitals.length} hospital{hospitals.length !== 1 ? 's' : ''}
             {selectedHospitalId && <span className="text-slate-400"> (filtered)</span>}
           </p>
-          {hasPermission(session, 'hospitals.manage') && (
+          {canManage && (
             <button
               onClick={() => setOnboardOpen(true)}
               className="flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg text-sm font-medium hover:shadow-lg transition"
@@ -81,7 +83,7 @@ export function PlatformHospitals({ session }: RoleViewProps) {
                   {['Name', 'Subdomain', 'Category', 'Theme', 'Status', 'Created'].map((h) => (
                     <th key={h} className="text-left py-3 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wide">{h}</th>
                   ))}
-                  <th className="text-right py-3 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wide">Actions</th>
+                  {canManage && <th className="text-right py-3 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wide">Actions</th>}
                 </tr>
               </thead>
               <tbody>
@@ -102,16 +104,17 @@ export function PlatformHospitals({ session }: RoleViewProps) {
                       </span>
                     </td>
                     <td className="py-3 px-6 text-slate-500 text-sm">{new Date(h.createdAt).toLocaleDateString()}</td>
-                    <td className="py-3 px-6 text-right">
-                      <div className="flex items-center justify-end gap-1">
-                        {hasPermission(session, 'hospitals.manage') && <ActionIcon icon={Pencil} label="Edit" onClick={() => setEditing(h)} />}
-                        {hasPermission(session, 'hospitals.manage') && (
-                          h.status === 'active'
+                    {canManage && (
+                      <td className="py-3 px-6 text-right">
+                        <div className="flex items-center justify-end gap-1">
+                          <ActionIcon icon={Pencil} label="Edit" onClick={() => setEditing(h)} />
+                          {h.status === 'active'
                             ? <ActionIcon icon={Ban} label="Suspend" tone="danger" onClick={() => setToggling(h)} />
                             : <ActionIcon icon={RotateCcw} label="Reactivate" tone="success" onClick={() => setToggling(h)} />
-                        )}
-                      </div>
-                    </td>
+                          }
+                        </div>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>

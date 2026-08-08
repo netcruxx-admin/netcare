@@ -41,6 +41,7 @@ export function PlatformDepartments({ session }: RoleViewProps) {
   const [deleteDepartment] = useDeleteDepartmentMutation();
 
   const showHospital = !selectedHospitalId;
+  const canManage = hasPermission(session, 'departments.manage');
 
   const openAdd = () => { setEditing(null); setModalOpen(true); };
   const openEdit = (d: Department) => { setEditing(d); setModalOpen(true); };
@@ -85,7 +86,7 @@ export function PlatformDepartments({ session }: RoleViewProps) {
             {totalDepartments} department{totalDepartments !== 1 ? 's' : ''}
             {(selectedHospitalId || table.search) && <span className="text-slate-400"> (filtered)</span>}
           </p>
-          {hasPermission(session, 'departments.manage') && (
+          {canManage && (
             <button
               onClick={openAdd}
               className="flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg text-sm font-medium hover:shadow-lg transition"
@@ -110,7 +111,7 @@ export function PlatformDepartments({ session }: RoleViewProps) {
                   {showHospital && <th className="text-left py-3 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wide">Hospital</th>}
                   <th className="text-left py-3 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wide">Name</th>
                   <th className="text-left py-3 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wide">Description</th>
-                  <th className="text-right py-3 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wide">Actions</th>
+                  {canManage && <th className="text-right py-3 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wide">Actions</th>}
                 </tr>
               </thead>
               <tbody>
@@ -123,12 +124,14 @@ export function PlatformDepartments({ session }: RoleViewProps) {
                     )}
                     <td className="py-3 px-6 font-medium text-slate-900">{d.name}</td>
                     <td className="py-3 px-6 text-slate-600 text-sm">{d.description || '—'}</td>
-                    <td className="py-3 px-6 text-right">
-                      <div className="flex items-center justify-end gap-1">
-                        {hasPermission(session, 'departments.manage') && <ActionIcon icon={Pencil} label="Edit" onClick={() => openEdit(d)} />}
-                        {hasPermission(session, 'departments.manage') && <ActionIcon icon={Trash2} label="Delete" tone="danger" onClick={() => setDeleting(d)} />}
-                      </div>
-                    </td>
+                    {canManage && (
+                      <td className="py-3 px-6 text-right">
+                        <div className="flex items-center justify-end gap-1">
+                          <ActionIcon icon={Pencil} label="Edit" onClick={() => openEdit(d)} />
+                          <ActionIcon icon={Trash2} label="Delete" tone="danger" onClick={() => setDeleting(d)} />
+                        </div>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>

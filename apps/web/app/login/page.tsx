@@ -1,11 +1,11 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useFormik, FormikProvider } from 'formik';
 import * as Yup from 'yup';
-import { Mail, Lock, AlertCircle } from 'lucide-react';
+import { Mail, Lock, AlertCircle, CheckCircle } from 'lucide-react';
 import Image from 'next/image';
 import { authStorage } from '@/lib/auth';
 import { loginRoleTabs, resolveHomePath } from '@/lib/roles';
@@ -22,6 +22,8 @@ const loginSchema = Yup.object({
 
 export default function LoginPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const justRegistered = searchParams.get('registered') === '1';
   const isHospitalSubdomain = !!currentSubdomain();
   const { data: hospital } = useGetCurrentHospitalQuery(undefined, { skip: !isHospitalSubdomain });
   const [loginMutation, { isLoading }] = useLoginMutation();
@@ -121,6 +123,14 @@ export default function LoginPage() {
                   </button>
                 ))}
               </div>
+            </div>
+          )}
+
+          {/* Registration success banner */}
+          {justRegistered && (
+            <div className="bg-green-50 border border-green-200 rounded-xl p-4 flex items-start gap-3">
+              <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
+              <p className="text-green-700 text-sm">Account created! Sign in to access your dashboard.</p>
             </div>
           )}
 

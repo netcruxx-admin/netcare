@@ -11,7 +11,7 @@
 import * as Yup from 'yup';
 
 export type Role = 'patient';
-export type Step = 'role' | 'account' | 'details' | 'consent';
+export type Step = 'hospital' | 'role' | 'account' | 'details' | 'consent';
 
 export const BLOOD_GROUPS = ['A+', 'A-', 'B+', 'B-', 'O+', 'O-', 'AB+', 'AB-'];
 export const GENDERS = ['Female', 'Male', 'Other', 'Prefer not to say'];
@@ -19,6 +19,8 @@ export const GENDERS = ['Female', 'Male', 'Other', 'Prefer not to say'];
 const PHONE_REGEX = /^[+]?[\d\s().-]{7,20}$/;
 
 export const initialValues = {
+  // hospital picker (only used when on root domain — no subdomain)
+  hospitalId: '',
   // account
   name: '',
   email: '',

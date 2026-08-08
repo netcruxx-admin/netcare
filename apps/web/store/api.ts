@@ -51,6 +51,17 @@ export interface ApiAuthResponse {
  *  it may sign in today — a verified hospital can still be suspended. */
 export type OnboardingStatus = 'pending' | 'documents_submitted' | 'verified' | 'rejected';
 
+/** Minimal hospital info returned by GET /hospitals/public — no auth required. */
+export interface HospitalPublicInfo {
+  id: string;
+  name: string;
+  subdomain: string;
+  category: string;
+  tagline: string;
+  theme: Record<string, string>;
+  logoUrl: string;
+}
+
 export interface HospitalInfo {
   id: string;
   name: string;
@@ -639,6 +650,9 @@ export const api = createApi({
       query: () => '/hospitals/current',
       providesTags: ['Hospital'],
     }),
+    listPublicHospitals: build.query<HospitalPublicInfo[], void>({
+      query: () => '/hospitals/public',
+    }),
     listHospitals: build.query<HospitalInfo[], void>({
       query: () => '/hospitals',
       providesTags: ['Hospital'],
@@ -746,8 +760,13 @@ export const api = createApi({
     login: build.mutation<ApiAuthResponse, LoginBody>({
       query: (body) => ({ url: '/auth/login', method: 'POST', body }),
     }),
-    register: build.mutation<ApiAuthResponse, RegisterBody>({
-      query: (body) => ({ url: '/auth/register', method: 'POST', body }),
+    register: build.mutation<ApiAuthResponse, RegisterBody & { hospitalId?: string }>({
+      query: ({ hospitalId, ...body }) => ({
+        url: '/auth/register',
+        method: 'POST',
+        body,
+        headers: hospitalId ? { 'X-Hospital-Id': hospitalId } : undefined,
+      }),
     }),
     me: build.query<ApiAuthResponse, void>({
       query: () => '/auth/me',
@@ -1411,6 +1430,7 @@ export const {
   useUpdateRoleMutation,
   useDeleteRoleMutation,
   useGetCurrentHospitalQuery,
+  useListPublicHospitalsQuery,
   useListHospitalsQuery,
   useGetHospitalDetailQuery,
   useGetOnboardingMetaQuery,
