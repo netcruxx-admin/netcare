@@ -2,7 +2,7 @@
 
 import { RoleView } from '@/components/RoleView';
 import { AdminMedicines } from '@/components/medicines/AdminMedicines';
-import { adminRole } from '@/lib/roles';
+import { adminRole, pharmacistRole } from '@/lib/roles';
 
 export default function MedicinesPage() {
   return (
@@ -10,6 +10,7 @@ export default function MedicinesPage() {
       path="/dashboard/medicines"
       views={{
         [adminRole]: AdminMedicines,
+        [pharmacistRole]: AdminMedicines,
       }}
     />
   );

@@ -33,6 +33,7 @@ import {
   FlaskConical,
   HeartPulse,
   LayoutDashboard,
+  Package,
   Pill,
   Settings,
   ShieldCheck,
@@ -57,6 +58,7 @@ export const doctorRole = 'doctor';
 export const nurseRole = 'nurse';
 export const labRole = 'lab';
 export const patientRole = 'patient';
+export const pharmacistRole = 'pharmacist';
 
 /** Roles the product ships with. The backend refuses to delete these, and the
  *  Roles screen greys out their delete buttons to match. */
@@ -67,11 +69,12 @@ export const builtInRoleCodes = [
   nurseRole,
   labRole,
   patientRole,
+  pharmacistRole,
 ];
 
 /** Tabs on the login form — roles with a self-service sign-in path. Not the set
  *  of valid roles: anyone holding a runtime-created role signs in without a tab. */
-export const loginRoleTabs = [patientRole, doctorRole, adminRole, labRole, nurseRole];
+export const loginRoleTabs = [patientRole, doctorRole, adminRole, labRole, nurseRole, pharmacistRole];
 
 /** Sidebar heading per role. Falls back to a generic title for custom roles. */
 export const portalTitles: Record<string, string> = {
@@ -81,6 +84,7 @@ export const portalTitles: Record<string, string> = {
   [nurseRole]: 'Nursing Station',
   [labRole]: 'Laboratory',
   [patientRole]: 'Patient Portal',
+  [pharmacistRole]: 'Pharmacy',
 };
 export const fallbackPortalTitle = 'Dashboard';
 
@@ -264,6 +268,27 @@ export const dashboardRoutes: DashboardRoute[] = [
     permission: 'prescriptions.read',
     module: 'pharmacy',
   },
+  {
+    path: '/dashboard/medication-orders',
+    label: 'Medication Orders',
+    icon: ClipboardList,
+    viewRoles: [pharmacistRole, doctorRole, nurseRole],
+    permission: 'medication_orders.read',
+    module: 'pharmacy',
+    labelByRole: {
+      [doctorRole]: 'My Orders',
+      [nurseRole]: 'Orders to Administer',
+      [pharmacistRole]: 'Dispense Queue',
+    },
+  },
+  {
+    path: '/dashboard/inventory',
+    label: 'Inventory',
+    icon: Package,
+    viewRoles: [pharmacistRole, adminRole],
+    permission: 'inventory.read',
+    module: 'pharmacy',
+  },
   // A doctor's own finished visits. Every role holding appointments.read would
   // otherwise be offered it, and there is no version of the screen for them.
   { path: '/dashboard/completed', label: 'Completed Visits', icon: CheckCircle, viewRoles: [doctorRole], permission: 'appointments.read', viewRolesOnly: true },
@@ -343,7 +368,7 @@ export const dashboardRoutes: DashboardRoute[] = [
     path: '/dashboard/medicines',
     label: 'Medicines',
     icon: Pill,
-    viewRoles: [adminRole],
+    viewRoles: [adminRole, pharmacistRole],
     permission: 'medicines.read',
     module: 'pharmacy',
   },

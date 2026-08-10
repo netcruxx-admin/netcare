@@ -61,7 +61,7 @@ export function FormField({
   const isPassword = type === 'password';
   const left = Icon ? 'pl-10' : 'pl-3';
   const right = isPassword ? 'pr-10' : 'pr-3';
-  const base = `w-full ${left} ${right} py-2 border rounded focus:outline-none transition ${
+  const base = `w-full ${left} ${right} py-2 border rounded-lg text-sm focus:outline-none transition ${
     hasError ? 'border-red-400 focus:border-red-500' : 'border-slate-300 focus:border-cyan-500'
   }`;
 

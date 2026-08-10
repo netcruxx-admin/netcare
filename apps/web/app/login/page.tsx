@@ -45,6 +45,12 @@ export default function LoginPage() {
 
         const role = result.user.role;
 
+        // Root domain is the superadmin portal — no hospital staff belongs here.
+        if (!isHospitalSubdomain && role !== 'superadmin') {
+          setError('This portal is for platform administrators only. Please log in at your hospital\'s subdomain.');
+          return;
+        }
+
         // On a hospital subdomain, enforce that the selected tab matches the
         // account's role so a patient can't accidentally log in as a doctor tab.
         if (isHospitalSubdomain) {
@@ -100,7 +106,9 @@ export default function LoginPage() {
         <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl p-8 space-y-8 border border-cyan-100">
           <div className="text-center">
             <h2 className="text-3xl font-bold bg-gradient-to-r from-cyan-600 to-brand-teal bg-clip-text text-transparent">Sign In</h2>
-            <p className="text-slate-600 mt-2">Access your NetCare account</p>
+            <p className="text-slate-600 mt-2">
+              {isHospitalSubdomain ? `Access your ${hospitalName} account` : 'Platform administrator access'}
+            </p>
           </div>
 
           {/* Login Type Selector — only on hospital subdomains */}
@@ -158,14 +166,16 @@ export default function LoginPage() {
             </form>
           </FormikProvider>
 
-          <div className="text-center">
-            <p className="text-slate-600 text-sm">
-              Don&apos;t have an account?{' '}
-              <Link href="/register" className="text-cyan-600 font-semibold hover:text-teal-600">
-                Create one
-              </Link>
-            </p>
-          </div>
+          {isHospitalSubdomain && (
+            <div className="text-center">
+              <p className="text-slate-600 text-sm">
+                Don&apos;t have an account?{' '}
+                <Link href="/register" className="text-cyan-600 font-semibold hover:text-teal-600">
+                  Create one
+                </Link>
+              </p>
+            </div>
+          )}
         </div>
       </div>
     </div>

@@ -178,6 +178,52 @@ export interface Medicine {
   strength: string;
   price: number;
   stock: number;
+  lotNumber?: string;
+  expiryDate?: string;
+  reorderLevel?: number;
+  location?: string;
+  unit?: string;
+}
+
+export type MedicationOrderStatus = 'pending' | 'dispensed' | 'administered' | 'cancelled';
+
+export interface MedicationOrder {
+  id: string;
+  hospitalId?: string;
+  appointmentId: string;
+  patientId: string;
+  doctorId: string;
+  medicineId?: string;
+  medicineName: string;
+  dosage: string;
+  route: string;
+  frequency: string;
+  duration: string;
+  instructions: string;
+  status: MedicationOrderStatus;
+  notes: string;
+  orderedAt: string;
+  patientName?: string;
+  patientPhone?: string;
+  doctorName?: string;
+}
+
+export type InventoryMovementType = 'restock' | 'dispense' | 'expired' | 'returned' | 'adjustment';
+
+export interface InventoryMovement {
+  id: string;
+  hospitalId?: string;
+  medicineId: string;
+  movementType: InventoryMovementType;
+  quantity: number;
+  lotNumber: string;
+  expiryDate: string;
+  referenceId: string;
+  performedBy: string;
+  notes: string;
+  createdAt: string;
+  medicineName?: string;
+  performedByName?: string;
 }
 
 export interface TestParameterTemplate {

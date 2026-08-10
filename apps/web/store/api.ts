@@ -10,8 +10,10 @@ import type {
   Doctor,
   GrowthMeasurement,
   Immunization,
+  InventoryMovement,
   LabTest,
   MedicalRecord,
+  MedicationOrder,
   Medicine,
   Patient,
   Payment,
@@ -585,6 +587,8 @@ export const api = createApi({
     'Role',
     'User',
     'Medicine',
+    'MedicationOrder',
+    'InventoryMovement',
     'LabTest',
     'TestOrder',
     'TestResult',
@@ -596,6 +600,7 @@ export const api = createApi({
     'Growth',
     'Immunization',
     'Consent',
+    'Me',
   ],
 
   endpoints: (build) => ({
@@ -770,16 +775,19 @@ export const api = createApi({
     }),
     me: build.query<ApiAuthResponse, void>({
       query: () => '/auth/me',
+      providesTags: ['Me'],
     }),
     // Ends this session server-side. Clearing localStorage alone would leave a
     // live session behind on a shared machine — the token would keep working
     // for anyone who recovered it.
     logout: build.mutation<void, void>({
       query: () => ({ url: '/auth/logout', method: 'POST' }),
+      invalidatesTags: ['Me'],
     }),
     // "Sign out everywhere" — the stolen-laptop button.
     logoutAll: build.mutation<void, void>({
       query: () => ({ url: '/auth/logout-all', method: 'POST' }),
+      invalidatesTags: ['Me'],
     }),
 
     // ── Consent ──────────────────────────────────────────────────────────────
@@ -1237,6 +1245,73 @@ export const api = createApi({
       invalidatesTags: [{ type: 'Medicine', id: 'LIST' }],
     }),
 
+    // ── Medication Orders ─────────────────────────────────────────────────────
+    listMedicationOrders: build.query<
+      MedicationOrder[],
+      { patientId?: string; doctorId?: string; appointmentId?: string; status?: string; q?: string } | void
+    >({
+      query: (params) => ({ url: '/medication-orders', params: params ?? undefined }),
+      providesTags: [{ type: 'MedicationOrder', id: 'LIST' }],
+    }),
+    createMedicationOrder: build.mutation<MedicationOrder, {
+      appointmentId: string;
+      patientId: string;
+      medicineId?: string;
+      medicineName: string;
+      dosage: string;
+      route: string;
+      frequency?: string;
+      duration?: string;
+      instructions?: string;
+    }>({
+      query: (body) => ({ url: '/medication-orders', method: 'POST', body }),
+      invalidatesTags: [{ type: 'MedicationOrder', id: 'LIST' }],
+    }),
+    dispenseMedicationOrder: build.mutation<MedicationOrder, string>({
+      query: (id) => ({ url: `/medication-orders/${id}/dispense`, method: 'PATCH' }),
+      invalidatesTags: [{ type: 'MedicationOrder', id: 'LIST' }, { type: 'Medicine', id: 'LIST' }],
+    }),
+    administerMedicationOrder: build.mutation<MedicationOrder, { id: string; notes?: string; site?: string }>({
+      query: ({ id, notes, site }) => ({ url: `/medication-orders/${id}/administer`, method: 'PATCH', body: { notes, site } }),
+      invalidatesTags: [{ type: 'MedicationOrder', id: 'LIST' }],
+    }),
+    cancelMedicationOrder: build.mutation<MedicationOrder, string>({
+      query: (id) => ({ url: `/medication-orders/${id}/cancel`, method: 'PATCH' }),
+      invalidatesTags: [{ type: 'MedicationOrder', id: 'LIST' }],
+    }),
+
+    // ── Inventory ─────────────────────────────────────────────────────────────
+    listInventoryMovements: build.query<
+      InventoryMovement[],
+      { medicineId?: string; type?: string } | void
+    >({
+      query: (params) => ({ url: '/inventory/movements', params: params ?? undefined }),
+      providesTags: [{ type: 'InventoryMovement', id: 'LIST' }],
+    }),
+    listLowStock: build.query<Medicine[], void>({
+      query: () => '/inventory/low-stock',
+      providesTags: [{ type: 'Medicine', id: 'LIST' }],
+    }),
+    restockMedicine: build.mutation<InventoryMovement, {
+      medicineId: string;
+      quantity: number;
+      lotNumber?: string;
+      expiryDate?: string;
+      notes?: string;
+    }>({
+      query: (body) => ({ url: '/inventory/restock', method: 'POST', body }),
+      invalidatesTags: [{ type: 'Medicine', id: 'LIST' }, { type: 'InventoryMovement', id: 'LIST' }],
+    }),
+    adjustInventory: build.mutation<InventoryMovement, {
+      medicineId: string;
+      quantity: number;
+      movementType: string;
+      notes?: string;
+    }>({
+      query: (body) => ({ url: '/inventory/adjust', method: 'POST', body }),
+      invalidatesTags: [{ type: 'Medicine', id: 'LIST' }, { type: 'InventoryMovement', id: 'LIST' }],
+    }),
+
     // ── Lab test catalog ─────────────────────────────────────────────────────
     listLabTests: build.query<LabTest[], void>({
       query: () => '/lab-tests',
@@ -1515,6 +1590,15 @@ export const {
   useCreateMedicineMutation,
   useUpdateMedicineMutation,
   useDeleteMedicineMutation,
+  useListMedicationOrdersQuery,
+  useCreateMedicationOrderMutation,
+  useDispenseMedicationOrderMutation,
+  useAdministerMedicationOrderMutation,
+  useCancelMedicationOrderMutation,
+  useListInventoryMovementsQuery,
+  useListLowStockQuery,
+  useRestockMedicineMutation,
+  useAdjustInventoryMutation,
   useListLabTestsQuery,
   useListLabTestsPagedQuery,
   useLazyListLabTestsPagedQuery,

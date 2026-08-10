@@ -18,11 +18,12 @@ import {
   HeartPulse,
   CalendarPlus,
   AlertTriangle,
+  ClipboardList,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useDashboardGuard } from '@/hooks/useDashboardGuard';
 import { adminRole, staffRoles } from '@/lib/roles';
-import type { Appointment, Patient, User, Vitals, Prescription, TestOrder, TestResult } from '@/lib/types';
+import type { Appointment, MedicationOrder, Patient, User, Vitals, Prescription, TestOrder, TestResult } from '@/lib/types';
 import {
   useGetPatientAppointmentsQuery,
   useGetPatientPrescriptionsQuery,
@@ -30,6 +31,7 @@ import {
   useGetPatientVitalsQuery,
   useListDepartmentsQuery,
   useListDoctorsQuery,
+  useListMedicationOrdersQuery,
   useListTestOrdersQuery,
   useListTestResultsQuery,
 } from '@/store/api';
@@ -52,7 +54,8 @@ interface Model {
   vitals: Vitals[];
   prescriptions: (Prescription & { doctor: string; date: string })[];
   orders: { order: TestOrder; tests: string[]; ready: boolean; abnormal: boolean; date: string }[];
-  stats: { total: number; completed: number; upcoming: number; prescriptions: number; tests: number };
+  medicationOrders: MedicationOrder[];
+  stats: { total: number; completed: number; upcoming: number; prescriptions: number; tests: number; medOrders: number };
 }
 
 export default function PatientDetailPage() {
@@ -71,6 +74,7 @@ export default function PatientDetailPage() {
   const { data: rawVitals = [] } = useGetPatientVitalsQuery(patientId, { skip: !patient });
   const { data: rawPrescriptions = [] } = useGetPatientPrescriptionsQuery(patientId, { skip: !patient });
   const { data: rawOrders = [] } = useListTestOrdersQuery({ patientId }, { skip: !patient });
+  const { data: rawMedOrders = [] } = useListMedicationOrdersQuery({ patientId }, { skip: !patient });
   // Only this patient's orders' results, in one request.
   const orderIds = rawOrders.map((o) => o.id).join(',');
   const { data: allResults = [] } = useListTestResultsQuery(
@@ -119,6 +123,10 @@ export default function PatientDetailPage() {
       })
       .sort((a, b) => (a.order.orderedAt < b.order.orderedAt ? 1 : -1));
 
+    const medicationOrders = [...rawMedOrders].sort((a, b) =>
+      a.orderedAt < b.orderedAt ? 1 : -1,
+    );
+
     return {
       patient,
       patientUser: patient.user ?? null,
@@ -126,15 +134,17 @@ export default function PatientDetailPage() {
       vitals,
       prescriptions,
       orders,
+      medicationOrders,
       stats: {
         total: appointments.length,
         completed: appointments.filter((a) => a.status === 'completed').length,
         upcoming: appointments.filter((a) => a.status === 'scheduled' && a.date >= todayStr).length,
         prescriptions: prescriptions.length,
         tests: orders.length,
+        medOrders: medicationOrders.length,
       },
     };
-  }, [patient, rawAppointments, rawVitals, rawPrescriptions, rawOrders, allResults, doctors, departments]);
+  }, [patient, rawAppointments, rawVitals, rawPrescriptions, rawOrders, rawMedOrders, allResults, doctors, departments]);
 
   const role = session?.user.role ?? adminRole;
 
@@ -160,6 +170,7 @@ export default function PatientDetailPage() {
     { label: 'Upcoming', value: model.stats.upcoming, icon: CalendarClock, tint: 'text-blue-600 bg-blue-50' },
     { label: 'Prescriptions', value: model.stats.prescriptions, icon: Pill, tint: 'text-purple-600 bg-purple-50' },
     { label: 'Lab Tests', value: model.stats.tests, icon: FlaskConical, tint: 'text-amber-600 bg-amber-50' },
+    { label: 'Med. Orders', value: model.stats.medOrders, icon: ClipboardList, tint: 'text-teal-600 bg-teal-50' },
   ];
 
   const latest = model.vitals[0];
@@ -188,7 +199,7 @@ export default function PatientDetailPage() {
         </div>
 
         {/* Stats */}
-        <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-6 gap-4">
           {cards.map((c) => {
             const Icon = c.icon;
             return (
@@ -302,6 +313,40 @@ export default function PatientDetailPage() {
                   <td className="py-3 px-6 text-slate-600">{rx.frequency}</td>
                   <td className="py-3 px-6 text-slate-600">{rx.duration}</td>
                   <td className="py-3 px-6 text-slate-600">{rx.doctor}</td>
+                </tr>
+              ))}
+            </TableWrap>
+          )}
+        </Section>
+
+        {/* Medication Orders */}
+        <Section title="Medication Orders" icon={ClipboardList} count={model.medicationOrders.length}>
+          {model.medicationOrders.length === 0 ? (
+            <Empty text="No medication orders." />
+          ) : (
+            <TableWrap head={['Date', 'Medicine', 'Dosage', 'Route', 'Doctor', 'Status', 'Notes']}>
+              {model.medicationOrders.map((o) => (
+                <tr key={o.id} className="border-b hover:bg-slate-50">
+                  <td className="py-3 px-6 text-slate-600 whitespace-nowrap">{o.orderedAt.split('T')[0]}</td>
+                  <td className="py-3 px-6 font-medium text-slate-900">{o.medicineName}</td>
+                  <td className="py-3 px-6 text-slate-600">{o.dosage}</td>
+                  <td className="py-3 px-6">
+                    <span className={`inline-block px-2 py-0.5 rounded text-xs font-semibold ${
+                      ['IV','IM','SC'].includes(o.route)
+                        ? 'bg-orange-100 text-orange-700'
+                        : 'bg-slate-100 text-slate-600'
+                    }`}>{o.route}</span>
+                  </td>
+                  <td className="py-3 px-6 text-slate-600">{o.doctorName ?? '—'}</td>
+                  <td className="py-3 px-6">
+                    <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-semibold ${
+                      o.status === 'administered' ? 'bg-green-100 text-green-700' :
+                      o.status === 'dispensed'    ? 'bg-blue-100 text-blue-700' :
+                      o.status === 'cancelled'    ? 'bg-slate-100 text-slate-500' :
+                                                    'bg-amber-100 text-amber-700'
+                    }`}>{o.status}</span>
+                  </td>
+                  <td className="py-3 px-6 text-slate-500 max-w-xs truncate">{o.notes || '—'}</td>
                 </tr>
               ))}
             </TableWrap>

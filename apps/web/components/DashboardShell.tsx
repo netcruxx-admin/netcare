@@ -44,7 +44,11 @@ export function DashboardShell({
   const [logoutMutation] = useLogoutMutation();
   const [open, setOpen] = useState(false);
   const [cmdOpen, setCmdOpen] = useState(false);
-  const [storedGrants, setStoredGrants] = useState<PermissionGrant[] | undefined>(undefined);
+  // Read the session synchronously so the sidebar is correct on the very first
+  // render — no useEffect delay, no blank-then-populated flash.
+  const [storedGrants] = useState<PermissionGrant[] | undefined>(
+    () => authStorage.getSession()?.permissions,
+  );
 
   // Live permissions from the server. Refetched when the cached copy is older
   // than 30s or the window refocuses, so a revoked permission leaves the sidebar
@@ -93,13 +97,6 @@ export function DashboardShell({
     backgroundClip: 'text',
     color: 'transparent',
   } as React.CSSProperties;
-
-  // Load the current user (for notifications + command palette) after mount.
-  useEffect(() => {
-    const s = authStorage.getSession();
-    if (!s) return;
-    setStoredGrants(s.permissions);
-  }, []);
 
   // Cmd/Ctrl+K opens the command palette.
   useEffect(() => {
