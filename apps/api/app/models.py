@@ -573,6 +573,47 @@ class Medicine(Base):
     strength = Column(String, default="")
     price = Column(Float, default=0)
     stock = Column(Integer, default=0)
+    lot_number = Column(String, default="")
+    expiry_date = Column(String, default="")
+    reorder_level = Column(Integer, default=10)
+    location = Column(String, default="")
+    unit = Column(String, default="")
+
+
+class MedicationOrder(Base):
+    __tablename__ = "medication_orders"
+
+    id = Column(String, primary_key=True)
+    hospital_id = Column(String, ForeignKey("hospitals.id", ondelete="CASCADE"), index=True, nullable=False)
+    appointment_id = Column(String, index=True, nullable=False)
+    patient_id = Column(String, index=True, nullable=False)
+    doctor_id = Column(String, nullable=False)
+    medicine_id = Column(String, nullable=True)
+    medicine_name = Column(String, default="")
+    dosage = Column(String, default="")
+    route = Column(String, default="")
+    frequency = Column(String, default="")
+    duration = Column(String, default="")
+    instructions = Column(Text, default="")
+    status = Column(String, default="pending")
+    notes = Column(Text, default="")
+    ordered_at = Column(String, nullable=False)
+
+
+class InventoryMovement(Base):
+    __tablename__ = "inventory_movements"
+
+    id = Column(String, primary_key=True)
+    hospital_id = Column(String, ForeignKey("hospitals.id", ondelete="CASCADE"), index=True, nullable=False)
+    medicine_id = Column(String, index=True, nullable=False)
+    movement_type = Column(String, nullable=False)
+    quantity = Column(Integer, nullable=False)
+    lot_number = Column(String, default="")
+    expiry_date = Column(String, default="")
+    reference_id = Column(String, default="")
+    performed_by = Column(String, nullable=False)
+    notes = Column(Text, default="")
+    created_at = Column(String, nullable=False)
 
 
 class LabTest(Base):

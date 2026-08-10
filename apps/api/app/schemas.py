@@ -48,6 +48,8 @@ PregnancyStatus = Literal["active", "delivered", "closed"]
 BabySex = Literal["male", "female"]
 DeliveryType = Literal["normal", "c-section", "assisted"]
 ImmunizationStatus = Literal["pending", "given"]
+MedicationOrderStatus = Literal["pending", "dispensed", "administered", "cancelled"]
+InventoryMovementType = Literal["restock", "dispense", "expired", "returned", "adjustment"]
 
 
 class CamelModel(BaseModel):
@@ -1005,6 +1007,11 @@ class MedicineCreate(CamelModel):
     strength: str = ""
     price: float = 0
     stock: int = 0
+    lot_number: str = ""
+    expiry_date: str = ""
+    reorder_level: int = 10
+    location: str = ""
+    unit: str = ""
 
 
 class MedicineUpdate(CamelModel):
@@ -1014,6 +1021,11 @@ class MedicineUpdate(CamelModel):
     strength: Optional[str] = None
     price: Optional[float] = None
     stock: Optional[int] = None
+    lot_number: Optional[str] = None
+    expiry_date: Optional[str] = None
+    reorder_level: Optional[int] = None
+    location: Optional[str] = None
+    unit: Optional[str] = None
 
 
 class MedicineOut(OutModel):
@@ -1025,6 +1037,83 @@ class MedicineOut(OutModel):
     strength: str = ""
     price: float = 0
     stock: int = 0
+    lot_number: str = ""
+    expiry_date: str = ""
+    reorder_level: int = 10
+    location: str = ""
+    unit: str = ""
+
+
+# ---------- Medication orders ----------
+
+class MedicationOrderOut(OutModel):
+    id: str
+    hospital_id: Optional[str] = None
+    appointment_id: str = ""
+    patient_id: str
+    doctor_id: str
+    medicine_id: Optional[str] = None
+    medicine_name: str = ""
+    dosage: str = ""
+    route: str = ""
+    frequency: str = ""
+    duration: str = ""
+    instructions: str = ""
+    status: MedicationOrderStatus = "pending"
+    notes: str = ""
+    ordered_at: str
+    patient_name: Optional[str] = None
+    patient_phone: Optional[str] = None
+    doctor_name: Optional[str] = None
+
+
+class MedicationOrderCreate(CamelModel):
+    appointment_id: str
+    patient_id: str
+    medicine_id: Optional[str] = None
+    medicine_name: str
+    dosage: str
+    route: str
+    frequency: str = ""
+    duration: str = ""
+    instructions: str = ""
+
+
+class MedicationOrderUpdate(CamelModel):
+    status: Optional[MedicationOrderStatus] = None
+    notes: Optional[str] = None
+    site: Optional[str] = None  # Injection site e.g. "Left arm", "IV line A"
+
+
+class InventoryMovementOut(OutModel):
+    id: str
+    hospital_id: Optional[str] = None
+    medicine_id: str
+    movement_type: InventoryMovementType
+    quantity: int
+    lot_number: str = ""
+    expiry_date: str = ""
+    reference_id: str = ""
+    performed_by: str
+    notes: str = ""
+    created_at: str
+    medicine_name: Optional[str] = None
+    performed_by_name: Optional[str] = None
+
+
+class RestockBody(CamelModel):
+    medicine_id: str
+    quantity: int
+    lot_number: str = ""
+    expiry_date: str = ""
+    notes: str = ""
+
+
+class InventoryAdjustBody(CamelModel):
+    medicine_id: str
+    quantity: int
+    movement_type: InventoryMovementType
+    notes: str = ""
 
 
 # ---------- Lab test (diagnostics catalog) ----------
