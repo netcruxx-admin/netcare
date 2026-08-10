@@ -13,6 +13,7 @@ import {
 } from '@/store/api';
 import { ORDER_STATUS_LABEL, FLAG_STYLE, FLAG_LABEL, isAbnormal } from '@/lib/lab';
 import { useActiveHospital } from '@/hooks/useActiveHospital';
+import { fmtDate } from '@/lib/date';
 
 export default function LabReportPage() {
   const router = useRouter();
@@ -49,7 +50,7 @@ export default function LabReportPage() {
     );
   }
 
-  const reportedAt = results[0]?.reportedAt ? new Date(results[0].reportedAt).toLocaleString() : '—';
+  const reportedAt = results[0]?.reportedAt ? fmtDate(results[0].reportedAt) : '—';
   const reportedBy = results[0]?.reportedBy ?? '—';
 
   return (
@@ -81,8 +82,8 @@ export default function LabReportPage() {
         <div className="grid sm:grid-cols-2 gap-x-8 gap-y-2 px-8 py-5 border-b text-sm">
           <Field label="Patient" value={patientUser?.name ?? '—'} />
           <Field label="Referred by" value={doctorUser ? `Dr. ${doctorUser.name}` : '—'} />
-          <Field label="Gender / DOB" value={`${patient?.gender || '—'} · ${patient?.dateOfBirth || '—'}`} />
-          <Field label="Ordered on" value={order.orderedAt.split('T')[0]} />
+          <Field label="Gender / DOB" value={`${patient?.gender || '—'} · ${fmtDate(patient?.dateOfBirth)}`} />
+          <Field label="Ordered on" value={fmtDate(order.orderedAt)} />
           <Field label="Phone" value={patient?.phone || '—'} />
           <Field label="Status" value={ORDER_STATUS_LABEL[order.status]} />
           {order.clinicalNote && (

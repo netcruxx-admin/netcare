@@ -14,13 +14,7 @@ import {
 import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
 
-function toDateStr(d: Date) {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
-}
-const todayStr = toDateStr(new Date());
+const todayStr = new Date().toISOString().split('T')[0];
 
 export function NurseDashboard({ session }: RoleViewProps) {
 

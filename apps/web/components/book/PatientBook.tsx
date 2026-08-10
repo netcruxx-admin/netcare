@@ -7,6 +7,7 @@ import * as Yup from 'yup';
 import { CheckCircle, AlertCircle } from 'lucide-react';
 import type { Appointment, Department, Doctor, ScheduleBlock } from '@/lib/types';
 import { apiError } from '@/lib/apiError';
+import { fmtDate } from '@/lib/date';
 import {
   useCreateAppointmentMutation,
   useGetDoctorAvailabilityQuery,
@@ -42,6 +43,9 @@ function slotToMinutes(slot: string) {
 
 const today = toDateStr(new Date());
 
+// TODO (Phase 3): derive SLOTS and BREAK_SLOTS from hospital_profiles.slot_length
+// and hospital_profiles.operational_config instead of hardcoding here.
+// For now these match the demo hospital's default working hours (9am–4:30pm, 30-min slots).
 const SLOTS = [
   '09:00 AM', '09:30 AM', '10:00 AM', '10:30 AM', '11:00 AM', '11:30 AM',
   '12:00 PM', '01:00 PM', '02:00 PM', '02:30 PM', '03:00 PM', '03:30 PM',
@@ -455,7 +459,9 @@ export function PatientBook({ session }: RoleViewProps) {
                           )}
                           <div className="flex justify-between">
                             <span className="text-slate-600">Date:</span>
-                            <span className="font-semibold">{values.date}</span>
+                            <span className="font-semibold">
+                              {fmtDate(values.date)}
+                            </span>
                           </div>
                           <div className="flex justify-between">
                             <span className="text-slate-600">Time:</span>
@@ -463,7 +469,24 @@ export function PatientBook({ session }: RoleViewProps) {
                           </div>
                           <div className="border-t pt-2 flex justify-between">
                             <span className="font-semibold text-slate-900">Consultation Fee:</span>
-                            <span className="font-semibold text-cyan-600">₹500</span>
+                            <span className="font-semibold text-cyan-600">
+                              {(() => {
+                                // If a slot is chosen, show the exact assigned doctor's fee.
+                                if (values.time && values.date) {
+                                  const docId = pickLeastBusy(values.time, values.date, deptDoctors, allAv);
+                                  const fee = doctors.find((d) => d.id === docId)?.consultationFee;
+                                  return fee != null ? `₹${fee}` : '—';
+                                }
+                                // Otherwise show the range of fees in this department.
+                                const fees = deptDoctors
+                                  .map((d) => d.consultationFee)
+                                  .filter((f): f is number => f != null);
+                                if (fees.length === 0) return '—';
+                                const min = Math.min(...fees);
+                                const max = Math.max(...fees);
+                                return min === max ? `₹${min}` : `₹${min}–₹${max}`;
+                              })()}
+                            </span>
                           </div>
                         </div>
                       </div>

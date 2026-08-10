@@ -11,6 +11,7 @@ import { EditHospitalWizard } from '@/components/hospitals/EditHospitalWizard';
 import { ActionIcon } from '@/components/ActionIcon';
 import { apiError } from '@/lib/apiError';
 import { hasPermission } from '@/lib/auth';
+import { fmtDate } from '@/lib/date';
 import { useListHospitalsQuery, useUpdateHospitalMutation } from '@/store/api';
 import type { HospitalInfo } from '@/store/api';
 
@@ -103,7 +104,7 @@ export function PlatformHospitals({ session }: RoleViewProps) {
                         {h.status}
                       </span>
                     </td>
-                    <td className="py-3 px-6 text-slate-500 text-sm">{new Date(h.createdAt).toLocaleDateString()}</td>
+                    <td className="py-3 px-6 text-slate-500 text-sm">{fmtDate(h.createdAt)}</td>
                     {canManage && (
                       <td className="py-3 px-6 text-right">
                         <div className="flex items-center justify-end gap-1">

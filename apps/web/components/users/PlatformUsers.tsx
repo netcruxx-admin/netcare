@@ -12,6 +12,7 @@ import { ActionIcon } from '@/components/ActionIcon';
 import { TablePagination } from '@/components/TablePagination';
 import { useServerTable } from '@/hooks/useServerTable';
 import { hasPermission } from '@/lib/auth';
+import { fmtDate } from '@/lib/date';
 import type { User } from '@/lib/types';
 import {
   useGetSuperadminUsersPagedQuery,
@@ -145,7 +146,7 @@ export function PlatformUsers({ session }: RoleViewProps) {
                         </span>
                       </td>
                       <td className="py-3 px-6 text-slate-600 text-sm">{u.phone ?? '—'}</td>
-                      <td className="py-3 px-6 text-slate-500 text-sm">{u.createdAt ? new Date(u.createdAt).toLocaleDateString() : '—'}</td>
+                      <td className="py-3 px-6 text-slate-500 text-sm">{fmtDate(u.createdAt)}</td>
                       <td className="py-3 px-6 text-right">
                         <div className="flex items-center justify-end gap-1">
                           {canManage && <ActionIcon icon={Pencil} label="Edit" onClick={() => { setEditing(u); setModalOpen(true); }} />}

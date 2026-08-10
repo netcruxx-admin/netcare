@@ -41,6 +41,7 @@ import {
   useListPatientsQuery,
 } from '@/store/api';
 import type { Appointment } from '@/lib/types';
+import { fmtDate } from '@/lib/date';
 
 interface Kpi {
   label: string;
@@ -414,7 +415,7 @@ export function AdminOverview({ session }: RoleViewProps) {
                 <tbody>
                   {data.upcoming.map((a) => (
                     <tr key={a.id} className="border-b hover:bg-slate-50">
-                      <td className="py-3 px-6 font-medium">{a.date} at {a.time}</td>
+                      <td className="py-3 px-6 font-medium">{fmtDate(a.date)} at {a.time}</td>
                       <td className="py-3 px-6 text-slate-600">{a.patient}</td>
                       <td className="py-3 px-6 text-slate-600">{a.doctor}</td>
                       <td className="py-3 px-6 text-slate-600">{a.dept}</td>

@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { CheckCircle, Eye } from 'lucide-react';
 import { useLazyListAppointmentsPagedQuery, useListAppointmentsPagedQuery } from '@/store/api';
+import { fmtDate } from '@/lib/date';
 import { DashboardShell } from '@/components/DashboardShell';
 import { ActionIcon } from '@/components/ActionIcon';
 import { TablePagination } from '@/components/TablePagination';
@@ -36,10 +37,10 @@ export function DoctorCompleted({ session }: RoleViewProps) {
           <ExportButton
             filename="completed-visits"
             headers={['Date', 'Time', 'Patient', 'Reason']}
-            rows={appointments.map((a) => [a.date, a.time, a.patientName ?? 'Patient', a.reason || 'Checkup'])}
+            rows={appointments.map((a) => [fmtDate(a.date), a.time, a.patientName ?? 'Patient', a.reason || '—'])}
             getRows={async () => {
               const all = await fetchAllForExport(listArgs).unwrap();
-              return all.items.map((a) => [a.date, a.time, a.patientName ?? 'Patient', a.reason || 'Checkup']);
+              return all.items.map((a) => [fmtDate(a.date), a.time, a.patientName ?? 'Patient', a.reason || '—']);
             }}
           />
         </div>
@@ -68,9 +69,9 @@ export function DoctorCompleted({ session }: RoleViewProps) {
                 <tbody>
                   {appointments.map((apt) => (
                     <tr key={apt.id} className="border-b hover:bg-slate-50">
-                      <td className="py-3 px-6 font-medium">{apt.date} at {apt.time}</td>
+                      <td className="py-3 px-6 font-medium">{fmtDate(apt.date)} at {apt.time}</td>
                       <td className="py-3 px-6 text-slate-600">{apt.patientName ?? 'Patient'}</td>
-                      <td className="py-3 px-6 text-slate-600">{apt.reason || 'Checkup'}</td>
+                      <td className="py-3 px-6 text-slate-600">{apt.reason || '—'}</td>
                       <td className="py-3 px-6 text-right">
                         <Link href={`/appointment/${apt.id}`}>
                           <ActionIcon icon={Eye} label="View appointment" />

@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { CalendarPlus, Clock, ArrowRight } from 'lucide-react';
 import type { Appointment } from '@/lib/types';
 import { useListAppointmentsQuery, useListDoctorsQuery } from '@/store/api';
+import { fmtDate } from '@/lib/date';
 import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
 import { Calendar } from '@/components/ui/calendar';
@@ -49,7 +50,12 @@ export function PatientSchedule({ session }: RoleViewProps) {
   }, [doctors]);
 
   const active = appts.filter((a) => a.status !== 'cancelled');
-  const bookedDays = useMemo(() => active.map((a) => new Date(`${a.date}T00:00:00`)), [appts]);
+  // Only highlight days with scheduled (upcoming) appointments — completed past
+  // appointments are history, not something the patient needs flagged on the calendar.
+  const scheduledDays = useMemo(
+    () => appts.filter((a) => a.status === 'scheduled').map((a) => new Date(`${a.date}T00:00:00`)),
+    [appts],
+  );
 
   const selectedStr = toDateStr(selected);
   const dayAppts = active
@@ -76,7 +82,7 @@ export function PatientSchedule({ session }: RoleViewProps) {
             mode="single"
             selected={selected}
             onSelect={(d) => d && setSelected(d)}
-            modifiers={{ booked: bookedDays }}
+            modifiers={{ booked: scheduledDays }}
             modifiersClassNames={{ booked: 'bg-cyan-100 text-cyan-800 font-bold rounded-md' }}
             className="[--cell-size:2.6rem] rounded-lg border border-slate-200 w-full"
           />
@@ -129,7 +135,7 @@ export function PatientSchedule({ session }: RoleViewProps) {
                   <li key={a.id} className="px-6 py-3 hover:bg-slate-50 flex items-center justify-between gap-3">
                     <button onClick={() => setSelected(new Date(`${a.date}T00:00:00`))} className="min-w-0 text-left">
                       <p className="font-medium text-slate-900 truncate">{doctorName(a.doctorId)}</p>
-                      <p className="text-xs text-slate-500">{a.date} at {a.time}</p>
+                      <p className="text-xs text-slate-500">{fmtDate(a.date)} at {a.time}</p>
                     </button>
                     <Link href={`/appointment/${a.id}`} className="text-cyan-600 hover:text-cyan-700 text-sm font-semibold shrink-0">View</Link>
                   </li>

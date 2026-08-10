@@ -58,7 +58,7 @@ export function EditPatientModal({ patient, onClose, onSuccess, hospitalId }: Pr
         </div>
         <Formik
           initialValues={{
-            gender: (patient.gender ?? '').toLowerCase(),
+            gender: patient.gender ?? '',
             bloodGroup: patient.bloodGroup ?? '',
             dateOfBirth: patient.dateOfBirth ?? '',
             emergencyContact: patient.emergencyContact ?? '',

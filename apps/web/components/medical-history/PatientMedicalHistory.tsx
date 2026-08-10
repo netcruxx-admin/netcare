@@ -11,6 +11,7 @@ import {
 import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
 import { ORDER_STATUS_LABEL, ORDER_STATUS_STYLE } from '@/lib/lab';
+import { fmtDate } from '@/lib/date';
 
 export function PatientMedicalHistory({ session }: RoleViewProps) {
   const { data: patient } = useGetPatientByUserQuery(session.user.id);
@@ -73,7 +74,7 @@ export function PatientMedicalHistory({ session }: RoleViewProps) {
                   )}
                 </div>
                 <span className="text-xs text-slate-400 whitespace-nowrap flex items-center gap-1">
-                  <Calendar className="w-3 h-3" /> {rx.createdAt.split('T')[0]}
+                  <Calendar className="w-3 h-3" /> {fmtDate(rx.createdAt)}
                 </span>
               </div>
             </div>
@@ -109,7 +110,7 @@ export function PatientMedicalHistory({ session }: RoleViewProps) {
                     {ORDER_STATUS_LABEL[order.status]}
                   </span>
                   <span className="text-xs text-slate-400 flex items-center gap-1">
-                    <Calendar className="w-3 h-3" /> {order.orderedAt.split('T')[0]}
+                    <Calendar className="w-3 h-3" /> {fmtDate(order.orderedAt)}
                   </span>
                 </div>
               </div>
@@ -134,7 +135,7 @@ export function PatientMedicalHistory({ session }: RoleViewProps) {
           {sorted.records.map((record) => (
             <div key={record.id} className="border border-slate-200 rounded-lg p-4">
               <div className="flex items-center gap-1.5 text-xs text-slate-400 mb-3">
-                <Calendar className="w-3.5 h-3.5" /> {record.createdAt.split('T')[0]}
+                <Calendar className="w-3.5 h-3.5" /> {fmtDate(record.createdAt)}
               </div>
               {record.diagnosis?.trim() && (
                 <div className="mb-2">

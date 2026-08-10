@@ -11,13 +11,14 @@ import type { RoleViewProps } from '@/components/RoleView';
 import { ExportButton } from '@/components/ExportButton';
 import { TablePagination } from '@/components/TablePagination';
 import { useServerTable } from '@/hooks/useServerTable';
+import { fmtDate } from '@/lib/date';
 
 const toRow = (rx: Prescription) => ({
   ...rx,
   // Resolved by the API — this screen no longer fetches every patient the
   // doctor treats just to put a name beside a medicine.
   patient: rx.patientName || 'Patient',
-  date: rx.createdAt.split('T')[0],
+  date: fmtDate(rx.createdAt),
 });
 
 const exportRow = (r: ReturnType<typeof toRow>) => [

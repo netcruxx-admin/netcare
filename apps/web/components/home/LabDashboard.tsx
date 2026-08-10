@@ -2,7 +2,7 @@
 
 import { useMemo } from 'react';
 import Link from 'next/link';
-import { Inbox, FlaskConical, CheckCircle2, AlertTriangle, ArrowRight } from 'lucide-react';
+import { Inbox, FlaskConical, CheckCircle2, AlertTriangle, ArrowRight, Loader2 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useListPatientsQuery, useListTestOrdersQuery } from '@/store/api';
 import { DashboardShell } from '@/components/DashboardShell';
@@ -30,13 +30,21 @@ export function LabDashboard({ session }: RoleViewProps) {
       .map((o) => ({ ...o, patient: patientName(o.patientId), tests: o.items.length }))
       .sort((a, b) => {
         if (a.priority !== b.priority) return a.priority === 'urgent' ? -1 : 1;
-        return a.orderedAt < b.orderedAt ? -1 : 1;
+        return a.orderedAt < b.orderedAt ? 1 : -1;
       });
 
     return { kpis, queue };
   }, [orders, patients]);
 
-  if (isLoading) return null;
+  if (isLoading) {
+    return (
+      <DashboardShell role={session.user.role} userName={session.user.name} title="Laboratory" subtitle="Test processing overview">
+        <div className="flex items-center justify-center py-24">
+          <Loader2 className="w-8 h-8 animate-spin text-cyan-500" />
+        </div>
+      </DashboardShell>
+    );
+  }
 
   const cards: { label: string; value: number; icon: LucideIcon; tint: string }[] = [
     { label: 'New Orders', value: model.kpis.newOrders, icon: Inbox, tint: 'text-slate-600 bg-slate-100' },
@@ -101,7 +109,11 @@ export function LabDashboard({ session }: RoleViewProps) {
                 <tbody>
                   {model.queue.slice(0, 8).map((o) => (
                     <tr key={o.id} className="border-b hover:bg-slate-50">
-                      <td className="py-3 px-6 font-mono text-xs text-slate-500">{o.id}</td>
+                      <td className="py-3 px-6">
+                        <Link href={`/dashboard/lab-orders?open=${o.id}`} className="font-mono text-xs text-cyan-600 hover:text-cyan-700 hover:underline">
+                          {o.id}
+                        </Link>
+                      </td>
                       <td className="py-3 px-6 font-medium text-slate-900">{o.patient}</td>
                       <td className="py-3 px-6 text-slate-600">{o.tests}</td>
                       <td className="py-3 px-6">

@@ -19,6 +19,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { TablePagination } from '@/components/TablePagination';
 import { useServerTable } from '@/hooks/useServerTable';
 import { apiError } from '@/lib/apiError';
+import { fmtDate } from '@/lib/date';
 import { hasPermission } from '@/lib/auth';
 import type { Appointment, Department, Doctor } from '@/lib/types';
 import {
@@ -79,6 +80,16 @@ const SLOTS = [
 ];
 const BREAK_SLOTS = new Set(['12:00 PM', '01:00 PM']);
 const todayStr = toDateStr(new Date());
+
+function DateBadge({ date }: { date: string }) {
+  if (date === todayStr) {
+    return <span className="inline-block px-2 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-700">Today</span>;
+  }
+  if (date < todayStr) {
+    return <span className="inline-block px-2 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-700">Past</span>;
+  }
+  return <span className="inline-block px-2 py-0.5 rounded-full text-xs font-semibold bg-yellow-100 text-yellow-700">Upcoming</span>;
+}
 
 function slotToMinutes(slot: string) {
   const [t, mer] = slot.split(' ');
@@ -291,7 +302,12 @@ export function PlatformAppointments({ session }: RoleViewProps) {
                         <HospitalBadge hospitalId={a.hospitalId} hospitals={hospitals} />
                       </td>
                     )}
-                    <td className="py-3 px-6 text-slate-900 text-sm">{a.date}</td>
+                    <td className="py-3 px-6 text-slate-900 text-sm whitespace-nowrap">
+                      <div className="flex items-center gap-2">
+                        <DateBadge date={a.date} />
+                        <span>{fmtDate(a.date)}</span>
+                      </div>
+                    </td>
                     <td className="py-3 px-6 text-slate-600 text-sm">{a.time}</td>
                     <td className="py-3 px-6 text-slate-600 text-sm">{patientName(a)}</td>
                     <td className="py-3 px-6 text-slate-600 text-sm">{doctorName(a)}</td>

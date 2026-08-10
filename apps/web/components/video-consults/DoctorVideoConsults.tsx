@@ -17,6 +17,7 @@ import {
 import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
 import { GRID_SLOTS } from '@/lib/schedule';
+import { fmtDate } from '@/lib/date';
 
 const todayStr = () => new Date().toISOString().split('T')[0];
 
@@ -170,10 +171,10 @@ export function DoctorVideoConsults({ session }: RoleViewProps) {
                 <div key={a.id} className="rounded-xl border border-slate-200 bg-white p-4 flex items-center justify-between">
                   <div>
                     <p className="font-medium text-slate-900 flex items-center gap-2">
-                      <UserRound className="w-4 h-4 text-slate-400" /> {patientName.get(a.patientId) ?? a.patientId}
+                      <UserRound className="w-4 h-4 text-slate-400" /> {patientName.get(a.patientId) ?? 'Patient'}
                     </p>
                     <p className="text-xs text-slate-500 mt-1 flex items-center gap-1">
-                      <Clock className="w-3.5 h-3.5" /> {a.date} · {a.time}
+                      <Clock className="w-3.5 h-3.5" /> {fmtDate(a.date)} · {a.time}
                     </p>
                   </div>
                   <button

@@ -6,7 +6,9 @@ import Link from 'next/link';
 import { Formik, Form } from 'formik';
 import * as Yup from 'yup';
 import { Search, CalendarDays, Eye, Activity, Pill, X, CheckCircle2, FlaskConical, CalendarPlus } from 'lucide-react';
+
 import type { Appointment } from '@/lib/types';
+import { fmtDate } from '@/lib/date';
 import { apiError } from '@/lib/apiError';
 import { hasPermission } from '@/lib/auth';
 import {
@@ -60,6 +62,18 @@ const statusStyle = (status: Appointment['status']) =>
     : status === 'cancelled'
     ? 'bg-red-100 text-red-700'
     : 'bg-blue-100 text-blue-700';
+
+const todayStr = new Date().toISOString().split('T')[0];
+
+function DateBadge({ date }: { date: string }) {
+  if (date === todayStr) {
+    return <span className="inline-block px-2 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-700">Today</span>;
+  }
+  if (date < todayStr) {
+    return <span className="inline-block px-2 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-700">Past</span>;
+  }
+  return <span className="inline-block px-2 py-0.5 rounded-full text-xs font-semibold bg-yellow-100 text-yellow-700">Upcoming</span>;
+}
 
 export function DoctorAppointments({ session }: RoleViewProps) {
   const router = useRouter();
@@ -274,7 +288,12 @@ export function DoctorAppointments({ session }: RoleViewProps) {
                           <p className="font-medium text-slate-900">{r.patient}</p>
                           <p className="text-xs text-slate-500">{r.phone}</p>
                         </td>
-                        <td className="py-3 px-6 text-slate-600 whitespace-nowrap">{r.date} at {r.time}</td>
+                        <td className="py-3 px-6 text-slate-600 whitespace-nowrap">
+                          <div className="flex items-center gap-2">
+                            <DateBadge date={r.date} />
+                            <span>{fmtDate(r.date)} at {r.time}</span>
+                          </div>
+                        </td>
                         <td className="py-3 px-6 text-slate-600">
                           {r.reason}
                           {r.appt.followUpOf && (
@@ -534,7 +553,7 @@ export function DoctorAppointments({ session }: RoleViewProps) {
               <div className="min-w-0">
                 <h3 className="text-lg font-bold text-slate-900">Mark as Complete</h3>
                 <p className="text-slate-600 mt-1 text-sm">
-                  Mark the appointment on <span className="font-semibold text-slate-900">{completing.date} at {completing.time}</span> as completed?
+                  Mark the appointment on <span className="font-semibold text-slate-900">{fmtDate(completing.date)} at {completing.time}</span> as completed?
                 </p>
               </div>
             </div>

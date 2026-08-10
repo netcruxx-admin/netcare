@@ -17,14 +17,19 @@ import type { RoleViewProps } from '@/components/RoleView';
 import { FormField } from '@/components/form/FormField';
 import { TablePagination } from '@/components/TablePagination';
 import { useServerTable } from '@/hooks/useServerTable';
+import { fmtDate } from '@/lib/date';
 
-function toDateStr(d: Date) {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
+const todayStr = new Date().toISOString().split('T')[0];
+
+function DateBadge({ date }: { date: string }) {
+  if (date === todayStr) {
+    return <span className="inline-block px-2 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-700">Today</span>;
+  }
+  if (date < todayStr) {
+    return <span className="inline-block px-2 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-700">Past</span>;
+  }
+  return <span className="inline-block px-2 py-0.5 rounded-full text-xs font-semibold bg-yellow-100 text-yellow-700">Upcoming</span>;
 }
-const todayStr = toDateStr(new Date());
 
 const numOpt = Yup.number()
   .transform((v, orig) => (orig === '' ? undefined : v))
@@ -148,8 +153,11 @@ function NurseVitalsInner({ session }: RoleViewProps) {
                 <tbody>
                   {rows.map((a) => (
                     <tr key={a.id} className="border-b hover:bg-slate-50">
-                      <td className="py-3 px-6">
-                        <p className="font-medium text-slate-900">{a.date}</p>
+                      <td className="py-3 px-6 whitespace-nowrap">
+                        <div className="flex items-center gap-2 mb-0.5">
+                          <DateBadge date={a.date} />
+                          <p className="font-medium text-slate-900">{fmtDate(a.date)}</p>
+                        </div>
                         <p className="text-xs text-slate-500">{a.time}</p>
                       </td>
                       <td className="py-3 px-6 text-slate-700">{a.patient}</td>
@@ -192,7 +200,7 @@ function NurseVitalsInner({ session }: RoleViewProps) {
               <div>
                 <h3 className="font-semibold text-slate-900">Record Vitals</h3>
                 <p className="text-xs text-slate-500">
-                  {recording.patient} · {recording.date} {recording.time}
+                  {recording.patient} · {fmtDate(recording.date)} at {recording.time}
                 </p>
               </div>
               <button onClick={() => setRecording(null)} className="text-slate-400 hover:text-slate-700" aria-label="Close">
@@ -237,6 +245,11 @@ function NurseVitalsInner({ session }: RoleViewProps) {
                 <div className="col-span-2">
                   <FormField name="notes" label="Notes" as="textarea" placeholder="Any observations" rows={2} />
                 </div>
+                {error && (
+                  <div className="col-span-2 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+                    {error}
+                  </div>
+                )}
                 <div className="col-span-2 flex gap-3 pt-2">
                   <button type="button" onClick={() => setRecording(null)} className="flex-1 px-4 py-2 bg-slate-200 text-slate-700 rounded hover:bg-slate-300 transition">
                     Cancel

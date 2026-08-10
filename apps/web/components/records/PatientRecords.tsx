@@ -1,16 +1,12 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { Pill, Activity, FileText } from 'lucide-react';
+import { fmtDate } from '@/lib/date';
 import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
 import { useGetPatientPrescriptionsQuery, useGetPatientVitalsQuery } from '@/store/api';
 
 export function PatientRecords({ session }: RoleViewProps) {
-  const router = useRouter();
-
-
   const patientId = session?.patient?.id ?? '';
   const { data: prescriptions = [] } = useGetPatientPrescriptionsQuery(patientId, { skip: !patientId });
   const { data: vitals = [] } = useGetPatientVitalsQuery(patientId, { skip: !patientId });
@@ -40,7 +36,7 @@ export function PatientRecords({ session }: RoleViewProps) {
                 <div key={rx.id} className="bg-white rounded-lg shadow p-6">
                   <div className="flex items-center justify-between mb-4">
                     <h4 className="font-semibold text-slate-900">{rx.medicineName}</h4>
-                    <span className="text-xs text-slate-400">{new Date(rx.createdAt).toLocaleDateString()}</span>
+                    <span className="text-xs text-slate-400">{fmtDate(rx.createdAt)}</span>
                   </div>
                   <div className="grid md:grid-cols-4 gap-4 text-sm">
                     <div><p className="text-slate-500">Dosage</p><p className="font-medium">{rx.dosage}</p></div>
@@ -71,7 +67,7 @@ export function PatientRecords({ session }: RoleViewProps) {
                 <div key={v.id} className="bg-white rounded-lg shadow p-6">
                   <div className="flex items-center justify-between mb-4">
                     <h4 className="font-semibold text-slate-900">Vitals Record</h4>
-                    <span className="text-xs text-slate-400">{new Date(v.createdAt).toLocaleDateString()}</span>
+                    <span className="text-xs text-slate-400">{fmtDate(v.createdAt)}</span>
                   </div>
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
                     <div><p className="text-slate-500">Temperature</p><p className="font-medium">{v.temperature}°C</p></div>

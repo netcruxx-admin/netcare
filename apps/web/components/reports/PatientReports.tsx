@@ -2,22 +2,25 @@
 
 import { useMemo } from 'react';
 import Link from 'next/link';
-import { FileBarChart, FlaskConical, AlertTriangle } from 'lucide-react';
+import { FileBarChart, FlaskConical, AlertTriangle, RefreshCw } from 'lucide-react';
 import type { TestResult } from '@/lib/types';
 import {
   useListDoctorsQuery,
   useListTestOrdersQuery,
   useListTestResultsQuery,
 } from '@/store/api';
+import { fmtDate } from '@/lib/date';
 import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
 import { ORDER_STATUS_LABEL, ORDER_STATUS_STYLE, isAbnormal } from '@/lib/lab';
 
 export function PatientReports({ session }: RoleViewProps) {
   // All three are already narrowed to this patient by the API's "own" scope.
-  const { data: orders = [] } = useListTestOrdersQuery();
-  const { data: results = [] } = useListTestResultsQuery();
+  const { data: orders = [], refetch: refetchOrders, isFetching: fetchingOrders } = useListTestOrdersQuery();
+  const { data: results = [], refetch: refetchResults } = useListTestResultsQuery();
   const { data: doctors = [] } = useListDoctorsQuery();
+
+  const refresh = () => { refetchOrders(); refetchResults(); };
 
   const rows = useMemo(() => {
     const doctorName = (id: string) => {
@@ -40,7 +43,7 @@ export function PatientReports({ session }: RoleViewProps) {
           tests: o.items.map((i) => i.name),
           ready: o.status === 'completed' || o.status === 'reviewed',
           abnormal: res.some((r) => r.parameters.some((p) => isAbnormal(p.flag))),
-          date: o.orderedAt.split('T')[0],
+          date: fmtDate(o.orderedAt),
         };
       })
       .sort((a, b) => (a.order.orderedAt < b.order.orderedAt ? 1 : -1));
@@ -49,6 +52,18 @@ export function PatientReports({ session }: RoleViewProps) {
   return (
     <DashboardShell role={session.user.role} userName={session.user.name} title="Test Reports" subtitle="Your lab tests and results">
       <div className="space-y-4">
+        {rows.some((r) => !r.ready) && (
+          <div className="flex items-center justify-end">
+            <button
+              onClick={refresh}
+              disabled={fetchingOrders}
+              className="inline-flex items-center gap-2 text-sm text-slate-500 hover:text-cyan-600 disabled:opacity-50 transition"
+            >
+              <RefreshCw className={`w-4 h-4 ${fetchingOrders ? 'animate-spin' : ''}`} />
+              {fetchingOrders ? 'Checking…' : 'Check for updates'}
+            </button>
+          </div>
+        )}
         {rows.length === 0 ? (
           <div className="bg-white rounded-lg shadow text-center py-16">
             <FileBarChart className="w-16 h-16 text-slate-300 mx-auto mb-4" />

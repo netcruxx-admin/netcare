@@ -66,9 +66,9 @@ const steps = [
 ];
 
 const genderOptions = [
-  { value: 'Male', label: 'Male' },
-  { value: 'Female', label: 'Female' },
-  { value: 'Other', label: 'Other' },
+  { value: 'male', label: 'Male' },
+  { value: 'female', label: 'Female' },
+  { value: 'other', label: 'Other' },
 ];
 
 const bloodGroupOptions = ['O+', 'O-', 'A+', 'A-', 'B+', 'B-', 'AB+', 'AB-'].map((v) => ({
@@ -215,6 +215,7 @@ function WizardContent({ isSaving }: { isSaving: boolean }) {
         )}
         {currentStep < 4 ? (
           <button
+            key="next"
             type="button"
             onClick={handleNext}
             className="flex-1 px-6 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white font-semibold rounded-lg hover:shadow-lg transition flex items-center justify-center gap-2"
@@ -223,6 +224,7 @@ function WizardContent({ isSaving }: { isSaving: boolean }) {
           </button>
         ) : (
           <button
+            key="submit"
             type="submit"
             disabled={isSubmitting || isSaving}
             className="flex-1 px-6 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white font-semibold rounded-lg hover:shadow-lg transition disabled:opacity-50"

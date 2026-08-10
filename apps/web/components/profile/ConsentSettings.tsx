@@ -9,6 +9,7 @@ import {
   useWithdrawConsentMutation,
 } from '@/store/api';
 import { apiError } from '@/lib/apiError';
+import { fmtDate } from '@/lib/date';
 
 // What you have agreed to, and the switch to take it back.
 //
@@ -112,7 +113,7 @@ export function ConsentSettings() {
                 </p>
                 {consent && (
                   <p className="mt-1 text-xs text-slate-400">
-                    Agreed {new Date(consent.grantedAt).toLocaleDateString()}
+                    Agreed {fmtDate(consent.grantedAt)}
                     {consent.guardianName
                       ? ` by ${consent.guardianName}${
                           consent.guardianRelationship

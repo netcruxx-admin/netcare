@@ -14,14 +14,19 @@ import { ExportButton } from '@/components/ExportButton';
 import { ActionIcon } from '@/components/ActionIcon';
 import { TablePagination } from '@/components/TablePagination';
 import { useServerTable } from '@/hooks/useServerTable';
+import { fmtDate } from '@/lib/date';
 
-function toDateStr(d: Date) {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
+const todayStr = new Date().toISOString().split('T')[0];
+
+function DateBadge({ date }: { date: string }) {
+  if (date === todayStr) {
+    return <span className="inline-block px-2 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-700">Today</span>;
+  }
+  if (date < todayStr) {
+    return <span className="inline-block px-2 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-700">Past</span>;
+  }
+  return <span className="inline-block px-2 py-0.5 rounded-full text-xs font-semibold bg-yellow-100 text-yellow-700">Upcoming</span>;
 }
-const todayStr = toDateStr(new Date());
 
 const STATUS_STYLE: Record<Appointment['status'], string> = {
   scheduled: 'bg-blue-100 text-blue-700',
@@ -135,8 +140,11 @@ export function NurseAppointments({ session }: RoleViewProps) {
                 <tbody>
                   {rows.map((a) => (
                     <tr key={a.id} className="border-b hover:bg-slate-50">
-                      <td className="py-3 px-6">
-                        <p className="font-medium text-slate-900">{a.date}</p>
+                      <td className="py-3 px-6 whitespace-nowrap">
+                        <div className="flex items-center gap-2 mb-0.5">
+                          <DateBadge date={a.date} />
+                          <p className="font-medium text-slate-900">{fmtDate(a.date)}</p>
+                        </div>
                         <p className="text-xs text-slate-500">{a.time}</p>
                       </td>
                       <td className="py-3 px-6 text-slate-700">{a.patient}</td>

@@ -34,6 +34,7 @@ import { ActionIcon } from '@/components/ActionIcon';
 import { ExportButton } from '@/components/ExportButton';
 import { useDebounced } from '@/hooks/useDebounced';
 import { blockedSlotSet } from '@/lib/schedule';
+import { fmtDate } from '@/lib/date';
 import {
   useCreateVitalsMutation,
   useDeleteAppointmentMutation,
@@ -72,6 +73,17 @@ function slotToMinutes(slot: string) {
   return h * 60 + m;
 }
 const todayStr = toDateStr(new Date());
+
+function DateBadge({ date }: { date: string }) {
+  if (date === todayStr) {
+    return <span className="inline-block px-2 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-700">Today</span>;
+  }
+  if (date < todayStr) {
+    return <span className="inline-block px-2 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-700">Past</span>;
+  }
+  return <span className="inline-block px-2 py-0.5 rounded-full text-xs font-semibold bg-yellow-100 text-yellow-700">Upcoming</span>;
+}
+
 const SLOTS = [
   '09:00 AM', '09:30 AM', '10:00 AM', '10:30 AM', '11:00 AM', '11:30 AM',
   '12:00 PM', '01:00 PM', '02:00 PM', '02:30 PM', '03:00 PM', '03:30 PM',
@@ -412,12 +424,15 @@ export function AdminAppointments({ session }: RoleViewProps) {
                           <p className="text-xs text-slate-500">{r.phone}</p>
                         </td>
                         <td className="py-3 px-6 text-slate-600 whitespace-nowrap">
-                          {r.date} at {r.time}
-                          {r.appt.followUpOf && (
-                            <span className="ml-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-cyan-100 text-cyan-700 align-middle">
-                              <CalendarPlus className="w-3 h-3" /> Follow-up
-                            </span>
-                          )}
+                          <div className="flex items-center gap-2">
+                            <DateBadge date={r.date} />
+                            <span>{fmtDate(r.date)} at {r.time}</span>
+                            {r.appt.followUpOf && (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-cyan-100 text-cyan-700">
+                                <CalendarPlus className="w-3 h-3" /> Follow-up
+                              </span>
+                            )}
+                          </div>
                         </td>
                         <td className="py-3 px-6 text-slate-600">{r.doctor}</td>
                         <td className="py-3 px-6 text-slate-600">{r.dept}</td>
@@ -691,7 +706,7 @@ export function AdminAppointments({ session }: RoleViewProps) {
               <div className="min-w-0">
                 <h3 className="text-lg font-bold text-slate-900">Delete Appointment</h3>
                 <p className="text-slate-600 mt-1 text-sm">
-                  Delete the appointment on <span className="font-semibold text-slate-900">{deleting.date} at {deleting.time}</span>? This cannot be undone.
+                  Delete the appointment on <span className="font-semibold text-slate-900">{fmtDate(deleting.date)} at {deleting.time}</span>? This cannot be undone.
                 </p>
               </div>
             </div>

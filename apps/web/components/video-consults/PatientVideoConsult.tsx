@@ -51,13 +51,24 @@ export function PatientVideoConsult({ session }: RoleViewProps) {
   );
 
   // Strip past slots so patients cannot book into the past.
+  // Convert both times to minutes since midnight for a robust numeric comparison
+  // rather than relying on string ordering, which breaks for non-zero-padded hours.
   const slots = useMemo(() => {
     const now = new Date();
     const todayStr = now.toISOString().split('T')[0];
-    const currentTime = now.toTimeString().slice(0, 5); // "HH:MM"
+    const nowMinutes = now.getHours() * 60 + now.getMinutes();
+    const toMinutes = (t: string) => {
+      const match = t.match(/(\d{1,2}):(\d{2})\s*(AM|PM)/i);
+      if (!match) return 0;
+      let h = Number(match[1]);
+      const m = Number(match[2]);
+      if (/pm/i.test(match[3]) && h !== 12) h += 12;
+      if (/am/i.test(match[3]) && h === 12) h = 0;
+      return h * 60 + m;
+    };
     return openSlots.filter((s) => {
       if (s.date > todayStr) return true;
-      if (s.date === todayStr) return s.time > currentTime;
+      if (s.date === todayStr) return toMinutes(s.time) > nowMinutes;
       return false;
     });
   }, [openSlots]);
@@ -203,7 +214,7 @@ export function PatientVideoConsult({ session }: RoleViewProps) {
                       .map((s) => (
                         <button
                           key={s.id}
-                          onClick={() => setConfirm(s)}
+                          onClick={() => { setError(''); setConfirm(s); }}
                           className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm border border-slate-300 text-slate-700 hover:border-cyan-500 hover:bg-cyan-50 transition"
                         >
                           <Clock className="w-3.5 h-3.5 text-slate-400" /> {s.time}
@@ -220,9 +231,9 @@ export function PatientVideoConsult({ session }: RoleViewProps) {
       {/* Confirm modal */}
       {confirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/40" onClick={() => setConfirm(null)} />
+          <div className="absolute inset-0 bg-black/40" onClick={() => { setConfirm(null); setError(''); }} />
           <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-sm p-6">
-            <button onClick={() => setConfirm(null)} className="absolute right-4 top-4 text-slate-400 hover:text-slate-700">
+            <button onClick={() => { setConfirm(null); setError(''); }} className="absolute right-4 top-4 text-slate-400 hover:text-slate-700">
               <X className="w-5 h-5" />
             </button>
             <div className="w-12 h-12 rounded-full bg-cyan-100 flex items-center justify-center mb-3">

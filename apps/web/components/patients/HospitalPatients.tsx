@@ -15,6 +15,7 @@ import { hasPermission } from '@/lib/auth';
 import type { RoleViewProps } from '@/components/RoleView';
 import type { Patient } from '@/lib/types';
 import { adminRole, doctorRole, nurseRole } from '@/lib/roles';
+import { fmtDate } from '@/lib/date';
 import {
   useListPatientsPagedQuery,
   useLazyListPatientsPagedQuery,
@@ -62,14 +63,17 @@ const nameWithPhoneColumn: Column = {
     </>
   ),
 };
-const genderColumn: Column = { header: 'Gender', render: (row) => row.gender };
+const genderColumn: Column = {
+  header: 'Gender',
+  render: (row) => row.gender ? row.gender.charAt(0).toUpperCase() + row.gender.slice(1) : '—',
+};
 const bloodGroupColumn: Column = { header: 'Blood Group', render: (row) => row.bloodGroup };
 const nextVisitColumn: Column = {
   header: 'Next Visit',
   render: (row) =>
     row.nextVisit ? (
       <span className="inline-block px-2.5 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-700">
-        {row.nextVisit}
+        {fmtDate(row.nextVisit)}
       </span>
     ) : (
       <span className="text-slate-400 text-sm">—</span>
@@ -128,7 +132,7 @@ const viewByRole: Record<
       nameWithPhoneColumn,
       genderColumn,
       { header: 'Visits', render: (row) => row.visits },
-      { header: 'Last Visit', render: (row) => row.lastVisit ?? '—' },
+      { header: 'Last Visit', render: (row) => fmtDate(row.lastVisit) },
       nextVisitColumn,
       detailsColumn,
     ],
@@ -152,7 +156,7 @@ function toRow(patient: Patient): PatientRow {
     name: patient.user?.name ?? 'Patient',
     email: patient.user?.email ?? '—',
     phone: patient.phone || patient.user?.phone || '—',
-    gender: patient.gender || '—',
+    gender: patient.gender || '',
     bloodGroup: patient.bloodGroup || '—',
     // Aggregated by the API for this page (withStats).
     visits: patient.visitCount ?? 0,

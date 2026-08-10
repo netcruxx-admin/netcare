@@ -2,7 +2,8 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { Clock, CalendarPlus, Eye, Plus } from 'lucide-react';
+import { Clock, CalendarPlus, Eye, Plus, Loader2 } from 'lucide-react';
+import { fmtDate } from '@/lib/date';
 import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
 import { useGetPatientAppointmentsQuery } from '@/store/api';
@@ -10,12 +11,24 @@ import type { Appointment } from '@/lib/types';
 import { hasPermission } from '@/lib/auth';
 import { ActionIcon } from '../ActionIcon';
 
+const todayStr = new Date().toISOString().split('T')[0];
+
+function DateBadge({ date }: { date: string }) {
+  if (date === todayStr) {
+    return <span className="inline-block px-2 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-700">Today</span>;
+  }
+  if (date < todayStr) {
+    return <span className="inline-block px-2 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-700">Past</span>;
+  }
+  return <span className="inline-block px-2 py-0.5 rounded-full text-xs font-semibold bg-yellow-100 text-yellow-700">Upcoming</span>;
+}
+
 export function PatientAppointments({ session }: RoleViewProps) {
   const canBook = hasPermission(session, 'appointments.create');
   const [statusFilter, setStatusFilter] = useState<'all' | Appointment['status']>('all');
 
   const patientId = session?.patient?.id ?? '';
-  const { data: appointments = [] } = useGetPatientAppointmentsQuery(patientId, { skip: !patientId });
+  const { data: appointments = [], isLoading } = useGetPatientAppointmentsQuery(patientId, { skip: !patientId });
 
   const statusStyle = (status: Appointment['status']) =>
     status === 'completed' ? 'bg-green-100 text-green-700'
@@ -58,7 +71,11 @@ export function PatientAppointments({ session }: RoleViewProps) {
         <div className="px-6 py-4 border-b">
           <h3 className="font-semibold text-slate-900">All Appointments ({sorted.length})</h3>
         </div>
-        {sorted.length === 0 ? (
+        {isLoading ? (
+          <div className="flex items-center justify-center py-16">
+            <Loader2 className="w-8 h-8 animate-spin text-cyan-500" />
+          </div>
+        ) : sorted.length === 0 ? (
           <div className="text-center py-16">
             <Clock className="w-16 h-16 text-slate-300 mx-auto mb-4" />
             <p className="text-slate-600 mb-6">No appointments yet</p>
@@ -86,10 +103,15 @@ export function PatientAppointments({ session }: RoleViewProps) {
               <tbody>
                 {sorted.map((apt) => (
                   <tr key={apt.id} className="border-b hover:bg-slate-50">
-                    <td className="py-3 px-6 font-medium">{apt.date} at {apt.time}</td>
-                    <td className="py-3 px-6 text-slate-600">Dr. {apt.doctorName ?? apt.doctorId}</td>
+                    <td className="py-3 px-6 font-medium whitespace-nowrap">
+                      <div className="flex items-center gap-2">
+                        <DateBadge date={apt.date} />
+                        <span>{fmtDate(apt.date)} at {apt.time}</span>
+                      </div>
+                    </td>
+                    <td className="py-3 px-6 text-slate-600">{apt.doctorName ? `Dr. ${apt.doctorName}` : 'Doctor'}</td>
                     <td className="py-3 px-6 text-slate-600">
-                      {apt.reason || 'Checkup'}
+                      {apt.reason || '—'}
                       {apt.followUpOf && (
                         <span className="ml-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-cyan-100 text-cyan-700">
                           <CalendarPlus className="w-3 h-3" /> Follow-up

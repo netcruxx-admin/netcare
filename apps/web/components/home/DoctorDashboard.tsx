@@ -10,6 +10,7 @@ import {
   Clock,
   ArrowRight,
   Stethoscope,
+  Loader2,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import type { Appointment, Doctor, Patient, User } from '@/lib/types';
@@ -20,6 +21,7 @@ import {
 } from '@/store/api';
 import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
+import { fmtDate } from '@/lib/date';
 
 function toDateStr(d: Date) {
   const y = d.getFullYear();
@@ -86,7 +88,15 @@ export function DoctorDashboard({ session }: RoleViewProps) {
     return { today, upcoming, recent, kpis, specialization: doctor?.specialization ?? '' };
   }, [appts, patients, doctor]);
 
-  if (isLoading) return null;
+  if (isLoading) {
+    return (
+      <DashboardShell role={session.user.role} userName={session.user.name} title="Dashboard" subtitle="Your day at a glance">
+        <div className="flex items-center justify-center py-24">
+          <Loader2 className="w-8 h-8 animate-spin text-cyan-500" />
+        </div>
+      </DashboardShell>
+    );
+  }
 
   const cards: { label: string; value: number; icon: LucideIcon; tint: string }[] = [
     { label: "Today's Appointments", value: model.kpis.today, icon: CalendarClock, tint: 'text-cyan-600 bg-cyan-50' },
@@ -187,7 +197,7 @@ export function DoctorDashboard({ session }: RoleViewProps) {
                   <li key={a.id} className="px-6 py-3 hover:bg-slate-50">
                     <Link href={`/appointment/${a.id}`} className="block">
                       <p className="font-medium text-slate-900 truncate">{a.name}</p>
-                      <p className="text-xs text-slate-500">{a.date} · {a.reason || 'Consultation'}</p>
+                      <p className="text-xs text-slate-500">{fmtDate(a.date)} · {a.reason || 'Consultation'}</p>
                     </Link>
                   </li>
                 ))}
@@ -229,7 +239,7 @@ export function DoctorDashboard({ session }: RoleViewProps) {
                         <p className="font-medium text-slate-900">{a.name}</p>
                         <p className="text-xs text-slate-500">{a.phone || '—'}</p>
                       </td>
-                      <td className="py-3 px-6 text-slate-600 whitespace-nowrap">{a.date} at {a.time}</td>
+                      <td className="py-3 px-6 text-slate-600 whitespace-nowrap">{fmtDate(a.date)} at {a.time}</td>
                       <td className="py-3 px-6 text-slate-600">{a.reason || 'Consultation'}</td>
                       <td className="py-3 px-6 text-right">
                         <Link href={`/appointment/${a.id}`} className="text-cyan-600 hover:text-cyan-700 font-semibold text-sm">

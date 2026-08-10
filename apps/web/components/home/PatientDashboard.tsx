@@ -2,10 +2,11 @@
 
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Calendar, Plus, User, Clock, FileText } from 'lucide-react';
+import { Calendar, Plus, User, Clock, FileText, Loader2 } from 'lucide-react';
 import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
 import { useListAppointmentsQuery, useListDepartmentsQuery } from '@/store/api';
+import { hasPermission } from '@/lib/auth';
 
 export function PatientDashboard({ session }: RoleViewProps) {
   const router = useRouter();
@@ -13,12 +14,13 @@ export function PatientDashboard({ session }: RoleViewProps) {
   // The patient's appointments.read scope is "own", so this returns only their
   // appointments — doctorName and patientName are resolved server-side here,
   // unlike the /patients/{id}/appointments sub-resource which returns raw IDs.
-  const { data: appointments = [] } = useListAppointmentsQuery();
+  const { data: appointments = [], isLoading } = useListAppointmentsQuery();
   const { data: departments = [] } = useListDepartmentsQuery();
 
   const deptName = (id: string) => departments.find((d) => d.id === id)?.name ?? id;
 
   const upcomingAppointments = appointments.filter((a) => a.status === 'scheduled');
+  const canBook = hasPermission(session, 'appointments.create');
 
   return (
     <DashboardShell
@@ -43,13 +45,17 @@ export function PatientDashboard({ session }: RoleViewProps) {
               </div>
             </div>
           </div>
-          <Link
-            href="/dashboard/book"
-            className="bg-green-600 hover:bg-green-700 text-white rounded-lg p-6 transition flex flex-col items-center justify-center space-y-2"
-          >
-            <Plus className="w-8 h-8" />
-            <span className="font-semibold">Book New Appointment</span>
-          </Link>
+          {canBook ? (
+            <Link
+              href="/dashboard/book"
+              className="bg-green-600 hover:bg-green-700 text-white rounded-lg p-6 transition flex flex-col items-center justify-center space-y-2"
+            >
+              <Plus className="w-8 h-8" />
+              <span className="font-semibold">Book New Appointment</span>
+            </Link>
+          ) : (
+            <div className="bg-white rounded-lg p-6 shadow" />
+          )}
         </div>
 
         {/* Upcoming Appointments */}
@@ -61,16 +67,22 @@ export function PatientDashboard({ session }: RoleViewProps) {
             </Link>
           </div>
           <div className="p-6 space-y-4">
-            {upcomingAppointments.length === 0 ? (
+            {isLoading ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="w-8 h-8 animate-spin text-cyan-500" />
+              </div>
+            ) : upcomingAppointments.length === 0 ? (
               <div className="text-center py-12">
                 <Calendar className="w-16 h-16 text-slate-300 mx-auto mb-4" />
                 <p className="text-slate-600 mb-6">No upcoming appointments</p>
-                <Link
-                  href="/dashboard/book"
-                  className="inline-block px-6 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg hover:shadow-lg transition"
-                >
-                  Book an Appointment
-                </Link>
+                {canBook && (
+                  <Link
+                    href="/dashboard/book"
+                    className="inline-block px-6 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg hover:shadow-lg transition"
+                  >
+                    Book an Appointment
+                  </Link>
+                )}
               </div>
             ) : (
               upcomingAppointments.map((apt) => (

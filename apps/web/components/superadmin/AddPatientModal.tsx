@@ -9,7 +9,11 @@ import { apiError } from '@/lib/apiError';
 import { patientRole } from '@/lib/roles';
 import type { HospitalInfo } from '@/store/api';
 
-const GENDERS = ['Male', 'Female', 'Other'];
+const GENDERS = [
+  { value: 'male', label: 'Male' },
+  { value: 'female', label: 'Female' },
+  { value: 'other', label: 'Other' },
+];
 const BLOOD_GROUPS = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
 
 interface Props {
@@ -116,7 +120,7 @@ export function AddPatientModal({ open, onClose, onSuccess, preselectedHospitalI
               <label className="block text-sm font-medium text-slate-700 mb-1">Gender</label>
               <select value={form.gender} onChange={set('gender')} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-cyan-500">
                 <option value="">Select…</option>
-                {GENDERS.map((g) => <option key={g} value={g}>{g}</option>)}
+                {GENDERS.map((g) => <option key={g.value} value={g.value}>{g.label}</option>)}
               </select>
             </div>
             <div>

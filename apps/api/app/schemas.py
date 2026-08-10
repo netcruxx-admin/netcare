@@ -670,6 +670,13 @@ class UserCreate(CamelModel):
     blood_group: Optional[str] = None
     date_of_birth: Optional[str] = None
 
+    @field_validator("gender", mode="before")
+    @classmethod
+    def _normalise_gender(cls, v: object) -> object:
+        if isinstance(v, str):
+            return v.lower()
+        return v
+
 
 class UserUpdate(CamelModel):
     """Edit an existing account. Password is re-hashed when supplied; role is
@@ -735,6 +742,13 @@ class PatientUpdate(CamelModel):
     date_of_birth: Optional[str] = None
     gender: Optional[str] = None
     blood_group: Optional[str] = None
+
+    @field_validator("gender", mode="before")
+    @classmethod
+    def _normalise_gender(cls, v: object) -> object:
+        if isinstance(v, str):
+            return v.lower()
+        return v
     allergies: Optional[str] = None
     chronic_diseases: Optional[str] = None
     emergency_contact: Optional[str] = None

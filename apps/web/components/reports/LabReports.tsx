@@ -11,6 +11,7 @@ import { ExportButton } from '@/components/ExportButton';
 import { TablePagination } from '@/components/TablePagination';
 import { useServerTable } from '@/hooks/useServerTable';
 import { ORDER_STATUS_LABEL, ORDER_STATUS_STYLE } from '@/lib/lab';
+import { fmtDate } from '@/lib/date';
 
 /** A published report is an order in one of these two states. */
 const PUBLISHED = 'completed,reviewed';
@@ -23,7 +24,7 @@ const toRow = (o: TestOrder) => ({
   tests: o.items.map((i) => i.name).join(', '),
   abnormal: o.abnormal ?? false,
   reportedBy: o.reportedBy || '—',
-  reportedAt: o.reportedAt?.split('T')[0] || '—',
+  reportedAt: fmtDate(o.reportedAt),
 });
 
 const exportRow = (r: ReturnType<typeof toRow>) => [

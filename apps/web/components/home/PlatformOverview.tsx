@@ -8,6 +8,7 @@ import type { RoleViewProps } from '@/components/RoleView';
 import { OnboardHospitalWizard } from '@/components/hospitals/OnboardHospitalWizard';
 // import { OnboardHospitalModal } from '@/components/OnboardHospitalModal';
 import { hasPermission } from '@/lib/auth';
+import { fmtDate } from '@/lib/date';
 import { useGetSuperadminOverviewQuery, useListHospitalsQuery } from '@/store/api';
 
 export function PlatformOverview({ session }: RoleViewProps) {
@@ -103,7 +104,7 @@ export function PlatformOverview({ session }: RoleViewProps) {
                           {h.status}
                         </span>
                       </td>
-                      <td className="py-3 px-6 text-slate-500 text-sm">{new Date(h.createdAt).toLocaleDateString()}</td>
+                      <td className="py-3 px-6 text-slate-500 text-sm">{fmtDate(h.createdAt)}</td>
                     </tr>
                   ))}
                 </tbody>

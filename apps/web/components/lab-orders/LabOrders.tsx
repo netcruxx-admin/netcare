@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState, Suspense } from 'react';
+import { toast } from 'sonner';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Search, ClipboardList, ClipboardEdit, FileText, Trash2, X, AlertTriangle } from 'lucide-react';
@@ -50,7 +51,6 @@ function LabOrdersInner({ session }: RoleViewProps) {
   const [query, setQuery] = useState('');
   const [page, setPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState<'all' | TestOrderStatus>('all');
-  const [toast, setToast] = useState('');
   const [error, setError] = useState('');
 
   const [resultsOrder, setResultsOrder] = useState<TestOrder | null>(null);
@@ -78,11 +78,6 @@ function LabOrdersInner({ session }: RoleViewProps) {
   const [updateTestOrder] = useUpdateTestOrderMutation();
   const [upsertTestResult] = useUpsertTestResultMutation();
   const [deleteTestOrder] = useDeleteTestOrderMutation();
-
-  const flash = (msg: string) => {
-    setToast(msg);
-    setTimeout(() => setToast(''), 2500);
-  };
 
   const testById = useMemo(() => new Map(tests.map((t) => [t.id, t])), [tests]);
 
@@ -142,7 +137,7 @@ function LabOrdersInner({ session }: RoleViewProps) {
     setError('');
     try {
       await updateTestOrder({ id: order.id, body: { status: next } }).unwrap();
-      flash(`Moved to ${ORDER_STATUS_LABEL[next]}`);
+      toast.success(`Moved to ${ORDER_STATUS_LABEL[next]}`);
     } catch (err) {
       setError(apiError(err, 'Could not update the order'));
     }
@@ -189,7 +184,7 @@ function LabOrdersInner({ session }: RoleViewProps) {
         await updateTestOrder({ id: resultsOrder.id, body: { status: newStatus } }).unwrap();
       }
       setResultsOrder(null);
-      flash(complete ? 'Results published' : 'Results saved');
+      toast.success(complete ? 'Results published' : 'Results saved');
     } catch (err) {
       setError(apiError(err, 'Could not save the results'));
     }
@@ -201,7 +196,7 @@ function LabOrdersInner({ session }: RoleViewProps) {
     try {
       await deleteTestOrder(deleting.id).unwrap();
       setDeleting(null);
-      flash('Order deleted');
+      toast.success('Order deleted');
     } catch (err) {
       setDeleting(null);
       setError(apiError(err, 'Could not delete the order'));
@@ -481,11 +476,6 @@ function LabOrdersInner({ session }: RoleViewProps) {
         </div>
       )}
 
-      {toast && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-slate-900 text-white text-sm px-4 py-2 rounded-lg shadow-lg">
-          {toast}
-        </div>
-      )}
     </DashboardShell>
   );
 }

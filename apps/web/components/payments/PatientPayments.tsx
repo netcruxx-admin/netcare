@@ -1,24 +1,22 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState } from 'react';
 import {
   CreditCard, Download, Eye, Smartphone, Building2, Wallet,
   ShieldCheck, Loader2, X,
 } from 'lucide-react';
 import type { Payment } from '@/lib/types';
+import { fmtDate } from '@/lib/date';
 import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
 import { useGetPatientPaymentsQuery } from '@/store/api';
 
 export function PatientPayments({ session }: RoleViewProps) {
-  const router = useRouter();
-  const [invoiceModal, setInvoiceModal] = useState(false);
+  const [invoicePayment, setInvoicePayment] = useState<Payment | null>(null);
   const [checkout, setCheckout] = useState<Payment | null>(null);
 
-
   const patientId = session?.patient?.id ?? '';
-  const { data: payments = [] } = useGetPatientPaymentsQuery(patientId, { skip: !patientId });
+  const { data: payments = [], isLoading, refetch } = useGetPatientPaymentsQuery(patientId, { skip: !patientId });
 
 
   const totalPaid = payments.filter((p) => p.status === 'completed').reduce((sum, p) => sum + p.amount, 0);
@@ -77,7 +75,11 @@ export function PatientPayments({ session }: RoleViewProps) {
         {/* Transaction History */}
         <div className="bg-white rounded-lg shadow p-6 space-y-4">
           <h2 className="text-lg font-semibold text-slate-900">Transaction History</h2>
-          {payments.length === 0 ? (
+          {isLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="w-8 h-8 animate-spin text-cyan-500" />
+            </div>
+          ) : payments.length === 0 ? (
             <div className="text-center py-12">
               <CreditCard className="w-16 h-16 text-slate-300 mx-auto mb-4" />
               <p className="text-slate-600">No transactions yet</p>
@@ -97,7 +99,9 @@ export function PatientPayments({ session }: RoleViewProps) {
                 <tbody>
                   {payments.map((payment) => (
                     <tr key={payment.id} className="border-b hover:bg-slate-50">
-                      <td className="py-3 px-4 text-slate-700">{payment.createdAt}</td>
+                      <td className="py-3 px-4 text-slate-700">
+                        {fmtDate(payment.createdAt)}
+                      </td>
                       <td className="py-3 px-4 text-slate-700">Appointment Consultation</td>
                       <td className="py-3 px-4 font-semibold text-slate-900">₹{payment.amount}</td>
                       <td className="py-3 px-4">
@@ -123,7 +127,7 @@ export function PatientPayments({ session }: RoleViewProps) {
                           </button>
                         )}
                         <button
-                          onClick={() => setInvoiceModal(true)}
+                          onClick={() => setInvoicePayment(payment)}
                           className="text-cyan-600 hover:text-cyan-700 font-semibold text-sm"
                         >
                           <Eye className="w-4 h-4 inline mr-1" />
@@ -149,12 +153,13 @@ export function PatientPayments({ session }: RoleViewProps) {
             onClose={() => setCheckout(null)}
             onPaid={() => {
               setCheckout(null);
+              refetch();
             }}
           />
         )}
 
         {/* Invoice Modal */}
-        {invoiceModal && (
+        {invoicePayment && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
             <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full p-8 space-y-4">
               <h2 className="text-2xl font-bold text-slate-900">Invoice</h2>
@@ -164,21 +169,31 @@ export function PatientPayments({ session }: RoleViewProps) {
                   <span className="font-semibold">{session.user.name}</span>
                 </div>
                 <div className="flex justify-between">
+                  <span>Date:</span>
+                  <span className="font-semibold">
+                    {fmtDate(invoicePayment.createdAt)}
+                  </span>
+                </div>
+                <div className="flex justify-between">
                   <span>Service:</span>
-                  <span className="font-semibold">Consultation with Doctor</span>
+                  <span className="font-semibold">Appointment Consultation</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Status:</span>
+                  <span className="font-semibold capitalize">{invoicePayment.status}</span>
                 </div>
                 <div className="flex justify-between">
                   <span>Amount:</span>
-                  <span className="font-semibold">₹500</span>
+                  <span className="font-semibold">₹{invoicePayment.amount}</span>
                 </div>
                 <div className="flex justify-between border-t pt-4">
                   <span className="font-semibold">Total:</span>
-                  <span className="font-bold text-lg">₹500</span>
+                  <span className="font-bold text-lg">₹{invoicePayment.amount}</span>
                 </div>
               </div>
               <div className="flex gap-3 pt-6">
                 <button
-                  onClick={() => setInvoiceModal(false)}
+                  onClick={() => setInvoicePayment(null)}
                   className="flex-1 px-6 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition"
                 >
                   Close
@@ -219,7 +234,9 @@ function CheckoutModal({
 
   const pay = () => {
     setProcessing(true);
-    // Simulate a payment-gateway round trip.
+    // TODO (Phase 3): replace with real Razorpay/payment-gateway integration.
+    // The form fields above (UPI ID, card number, etc.) are UI scaffolding only —
+    // their values are intentionally unused until the gateway is wired up.
     setTimeout(onPaid, 1600);
   };
 
