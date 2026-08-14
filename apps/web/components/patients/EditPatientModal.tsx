@@ -5,6 +5,7 @@ import { Formik, Form } from 'formik';
 import * as Yup from 'yup';
 import { toast } from 'sonner';
 import { FormField } from '@/components/form/FormField';
+import { PhoneField, toPhoneDigits, withPrefix } from '@/components/form/PhoneField';
 import { apiError } from '@/lib/apiError';
 import { useUpdatePatientMutation } from '@/store/api';
 import type { Patient } from '@/lib/types';
@@ -25,7 +26,7 @@ const editSchema = Yup.object({
   bloodGroup: Yup.string().max(10, 'Too long'),
   dateOfBirth: Yup.string(),
   emergencyContact: Yup.string().max(100, 'Too long'),
-  emergencyPhone: Yup.string().max(20, 'Too long'),
+  emergencyPhone: Yup.string().test('phone', 'Enter a valid 10-digit mobile number', (v) => !v || /^\d{10}$/.test(v)),
   allergies: Yup.string().max(300, 'Too long'),
   chronicDiseases: Yup.string().max(300, 'Too long'),
 });
@@ -58,11 +59,11 @@ export function EditPatientModal({ patient, onClose, onSuccess, hospitalId }: Pr
         </div>
         <Formik
           initialValues={{
-            gender: patient.gender ?? '',
+            gender: (patient.gender ?? '').toLowerCase(),
             bloodGroup: patient.bloodGroup ?? '',
             dateOfBirth: patient.dateOfBirth ?? '',
             emergencyContact: patient.emergencyContact ?? '',
-            emergencyPhone: patient.emergencyPhone ?? '',
+            emergencyPhone: toPhoneDigits(patient.emergencyPhone ?? ''),
             allergies: patient.allergies ?? '',
             chronicDiseases: patient.chronicDiseases ?? '',
           }}
@@ -70,7 +71,11 @@ export function EditPatientModal({ patient, onClose, onSuccess, hospitalId }: Pr
           onSubmit={async (values, { setSubmitting, setStatus }) => {
             setStatus('');
             try {
-              await updatePatient({ id: patient.id, body: values, hospitalId }).unwrap();
+              await updatePatient({
+                id: patient.id,
+                body: { ...values, emergencyPhone: withPrefix(values.emergencyPhone) },
+                hospitalId,
+              }).unwrap();
               toast.success('Patient updated');
               onSuccess();
               onClose();
@@ -103,7 +108,7 @@ export function EditPatientModal({ patient, onClose, onSuccess, hospitalId }: Pr
                 <FormField name="dateOfBirth" label="Date of Birth" type="date" />
                 <div className="grid grid-cols-2 gap-4">
                   <FormField name="emergencyContact" label="Emergency Contact" placeholder="Contact name" />
-                  <FormField name="emergencyPhone" label="Emergency Phone" placeholder="+91 98765 43210" />
+                  <PhoneField name="emergencyPhone" label="Emergency Phone" />
                 </div>
                 <FormField name="allergies" label="Allergies" as="textarea" placeholder="Known allergies" />
                 <FormField name="chronicDiseases" label="Chronic Diseases" as="textarea" placeholder="Chronic conditions" />

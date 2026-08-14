@@ -643,6 +643,12 @@ class RegisterRequest(CamelModel):
     gender: Optional[str] = None
     blood_group: Optional[str] = None
     date_of_birth: Optional[str] = None
+    allergies: Optional[str] = None
+    chronic_diseases: Optional[str] = None
+    emergency_contact: Optional[str] = None
+    emergency_phone: Optional[str] = None
+    insurance_provider: Optional[str] = None
+    insurance_number: Optional[str] = None
     # Purposes the person ticked on the notice. Every required purpose must be
     # present or the sign-up is refused — an account cannot exist before there
     # is a lawful basis for the data it is about to hold. Codes come from
@@ -651,6 +657,13 @@ class RegisterRequest(CamelModel):
     # Named when the person signing up is under 18 (DPDP s.9).
     guardian_name: str = ""
     guardian_relationship: str = ""
+
+    @field_validator("gender", mode="before")
+    @classmethod
+    def _normalise_gender(cls, v: object) -> object:
+        if isinstance(v, str):
+            return v.lower()
+        return v
 
 
 class UserCreate(CamelModel):

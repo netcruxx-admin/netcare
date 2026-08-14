@@ -14,6 +14,7 @@ import {
   useUpdateOwnAccountMutation,
 } from '@/store/api';
 import { FormField } from '@/components/form/FormField';
+import { PhoneField, toPhoneDigits, withPrefix } from '@/components/form/PhoneField';
 import { ConsentSettings } from './ConsentSettings';
 
 interface FormValues {
@@ -36,12 +37,12 @@ const schema = Yup.object({
   email: Yup.string().trim().email('Enter a valid email').required('Email is required'),
   dateOfBirth: Yup.string(),
   gender: Yup.string(),
-  phone: Yup.string().test('phone', 'Enter a valid phone number', (v) =>
-    !v || /^[+]?[\d\s().-]{7,20}$/.test(v),
+  phone: Yup.string().test('phone', 'Enter a valid 10-digit mobile number', (v) =>
+    !v || /^\d{10}$/.test(v),
   ),
   emergencyContact: Yup.string(),
-  emergencyPhone: Yup.string().test('emergencyPhone', 'Enter a valid phone number', (v) =>
-    !v || /^[+]?[\d\s().-]{7,20}$/.test(v),
+  emergencyPhone: Yup.string().test('emergencyPhone', 'Enter a valid 10-digit mobile number', (v) =>
+    !v || /^\d{10}$/.test(v),
   ),
   bloodGroup: Yup.string(),
   allergies: Yup.string(),
@@ -141,18 +142,13 @@ function WizardContent({ isSaving }: { isSaving: boolean }) {
       {currentStep === 2 && (
         <div className="space-y-4">
           <h3 className="text-lg font-semibold text-slate-900">Contact Details</h3>
-          <FormField name="phone" label="Phone Number" type="tel" placeholder="+91 98765 43210" />
+          <PhoneField name="phone" label="Phone Number" />
           <FormField
             name="emergencyContact"
             label="Emergency Contact Name"
             placeholder="e.g. Priya Sharma"
           />
-          <FormField
-            name="emergencyPhone"
-            label="Emergency Contact Phone"
-            type="tel"
-            placeholder="+91 98765 43210"
-          />
+          <PhoneField name="emergencyPhone" label="Emergency Contact Phone" />
         </div>
       )}
 
@@ -243,17 +239,14 @@ export function PatientProfile({ session }: RoleViewProps) {
   const [updateOwnAccount, { isLoading: isSavingAccount }] = useUpdateOwnAccountMutation();
   const isSaving = isSavingPatient || isSavingAccount;
 
-  const normalizeGender = (g: string) =>
-    g ? g.charAt(0).toUpperCase() + g.slice(1).toLowerCase() : '';
-
   const initialValues: FormValues = {
     name: session.user.name ?? '',
     email: session.user.email ?? '',
     dateOfBirth: patient?.dateOfBirth ?? '',
-    gender: normalizeGender(patient?.gender ?? ''),
-    phone: patient?.phone || session.user.phone || '',
+    gender: (patient?.gender ?? '').toLowerCase(),
+    phone: toPhoneDigits(patient?.phone || session.user.phone || ''),
     emergencyContact: patient?.emergencyContact ?? '',
-    emergencyPhone: patient?.emergencyPhone ?? '',
+    emergencyPhone: toPhoneDigits(patient?.emergencyPhone ?? ''),
     bloodGroup: patient?.bloodGroup ?? '',
     allergies: patient?.allergies ?? '',
     chronicDiseases: patient?.chronicDiseases ?? '',
@@ -307,7 +300,7 @@ export function PatientProfile({ session }: RoleViewProps) {
                       allergies: values.allergies || undefined,
                       chronicDiseases: values.chronicDiseases || undefined,
                       emergencyContact: values.emergencyContact || undefined,
-                      emergencyPhone: values.emergencyPhone || undefined,
+                      emergencyPhone: withPrefix(values.emergencyPhone) || undefined,
                       insuranceProvider: values.insuranceProvider || undefined,
                       insuranceNumber: values.insuranceNumber || undefined,
                     },
@@ -315,7 +308,7 @@ export function PatientProfile({ session }: RoleViewProps) {
                   updateOwnAccount({
                     name: values.name.trim() || undefined,
                     email: values.email.trim() || undefined,
-                    phone: values.phone.trim() || undefined,
+                    phone: withPrefix(values.phone) || undefined,
                   }).unwrap(),
                 ]);
                 toast.success('Profile updated');

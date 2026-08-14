@@ -82,7 +82,7 @@ export default function LabReportPage() {
         <div className="grid sm:grid-cols-2 gap-x-8 gap-y-2 px-8 py-5 border-b text-sm">
           <Field label="Patient" value={patientUser?.name ?? '—'} />
           <Field label="Referred by" value={doctorUser ? `Dr. ${doctorUser.name}` : '—'} />
-          <Field label="Gender / DOB" value={`${patient?.gender || '—'} · ${fmtDate(patient?.dateOfBirth)}`} />
+          <Field label="Gender / DOB" value={`${patient?.gender ? patient.gender.charAt(0).toUpperCase() + patient.gender.slice(1) : '—'} · ${fmtDate(patient?.dateOfBirth)}`} />
           <Field label="Ordered on" value={fmtDate(order.orderedAt)} />
           <Field label="Phone" value={patient?.phone || '—'} />
           <Field label="Status" value={ORDER_STATUS_LABEL[order.status]} />

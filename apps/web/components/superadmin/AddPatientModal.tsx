@@ -5,6 +5,7 @@ import { X } from 'lucide-react';
 import { toast } from 'sonner';
 import { superadminPost } from '@/lib/superadminFetch';
 import { useCreateUserMutation } from '@/store/api';
+import { PhoneInput } from '@/components/form/PhoneField';
 import { apiError } from '@/lib/apiError';
 import { patientRole } from '@/lib/roles';
 import type { HospitalInfo } from '@/store/api';
@@ -54,7 +55,7 @@ export function AddPatientModal({ open, onClose, onSuccess, preselectedHospitalI
     const body = {
       name: form.name.trim(), email: form.email.trim(),
       password: form.password, role: patientRole,
-      phone: form.phone.trim() || undefined,
+      phone: form.phone.trim() ? `+91${form.phone.trim()}` : undefined,
       gender: form.gender || undefined,
       bloodGroup: form.bloodGroup || undefined,
       dateOfBirth: form.dateOfBirth || undefined,
@@ -105,8 +106,12 @@ export function AddPatientModal({ open, onClose, onSuccess, preselectedHospitalI
               <input value={form.name} onChange={set('name')} placeholder="e.g. Anita Desai" className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-cyan-500" />
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Phone</label>
-              <input value={form.phone} onChange={set('phone')} placeholder="+91 98765 43210" className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-cyan-500" />
+              <PhoneInput
+                label="Phone"
+                name="phone"
+                value={form.phone}
+                onChange={(digits) => setForm((f) => ({ ...f, phone: digits }))}
+              />
             </div>
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">Email <span className="text-red-500">*</span></label>

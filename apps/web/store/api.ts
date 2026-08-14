@@ -331,6 +331,12 @@ export interface RegisterBody {
   dateOfBirth?: string;
   gender?: string;
   bloodGroup?: string;
+  allergies?: string;
+  chronicDiseases?: string;
+  emergencyContact?: string;
+  emergencyPhone?: string;
+  insuranceProvider?: string;
+  insuranceNumber?: string;
   /**
    * Purpose codes ticked on the notice. The backend refuses the sign-up unless
    * every required purpose is here — an account cannot exist before there is a

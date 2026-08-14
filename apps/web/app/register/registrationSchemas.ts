@@ -16,7 +16,7 @@ export type Step = 'hospital' | 'role' | 'account' | 'details' | 'consent';
 export const BLOOD_GROUPS = ['A+', 'A-', 'B+', 'B-', 'O+', 'O-', 'AB+', 'AB-'];
 export const GENDERS = ['Female', 'Male', 'Other', 'Prefer not to say'];
 
-const PHONE_REGEX = /^[+]?[\d\s().-]{7,20}$/;
+const PHONE_REGEX = /^\d{10}$/;
 
 export const initialValues = {
   // hospital picker (only used when on root domain — no subdomain)
@@ -50,7 +50,7 @@ export const accountSchema = Yup.object({
   name: Yup.string().trim().required('Full name is required'),
   email: Yup.string().email('Please enter a valid email').required('Email is required'),
   phone: Yup.string()
-    .matches(PHONE_REGEX, 'Please enter a valid phone number')
+    .matches(PHONE_REGEX, 'Enter a valid 10-digit mobile number')
     .required('Phone number is required'),
   password: Yup.string()
     .min(8, 'Password must be at least 8 characters')
@@ -65,7 +65,7 @@ export const accountSchema = Yup.object({
 });
 
 export const patientDetailsSchema = Yup.object({
-  emergencyPhone: Yup.string().matches(PHONE_REGEX, 'Please enter a valid phone number').notRequired(),
+  emergencyPhone: Yup.string().matches(PHONE_REGEX, 'Enter a valid 10-digit mobile number').notRequired(),
 });
 
 /** Age in whole years, or null when no usable date of birth was given.

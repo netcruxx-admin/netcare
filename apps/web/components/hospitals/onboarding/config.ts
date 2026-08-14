@@ -239,7 +239,7 @@ export const INITIAL_VALUES: WizardValues = {
 const PAN = /^[A-Z]{5}[0-9]{4}[A-Z]$/;
 const GSTIN = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][0-9A-Z]Z[0-9A-Z]$/;
 const PINCODE = /^[1-9][0-9]{5}$/;
-const PHONE = /^[0-9+\-\s()]{6,15}$/;
+const PHONE = /^\d{10}$/;
 
 const optionalMatch = (re: RegExp, message: string) =>
   Yup.string()
@@ -395,6 +395,7 @@ const num = (value: number | ''): number | undefined =>
   value === '' || value === null ? undefined : Number(value);
 
 const trimmed = (value: string): string => (value ?? '').trim();
+const phone = (digits: string): string => { const d = (digits ?? '').trim(); return d ? `+91${d}` : ''; };
 
 export function buildPayload(values: WizardValues): HospitalCreateBody {
   const licences: HospitalLicenceBody[] = values.licences
@@ -440,13 +441,13 @@ export function buildPayload(values: WizardValues): HospitalCreateBody {
       state: values.state,
       pincode: trimmed(values.pincode),
       country: values.country || 'India',
-      phonePrimary: trimmed(values.phonePrimary),
-      phoneSecondary: trimmed(values.phoneSecondary),
-      phoneEmergency: trimmed(values.phoneEmergency),
+      phonePrimary: phone(values.phonePrimary),
+      phoneSecondary: phone(values.phoneSecondary),
+      phoneEmergency: phone(values.phoneEmergency),
       email: trimmed(values.email),
       website: trimmed(values.website),
       ownerName: trimmed(values.ownerName),
-      ownerPhone: trimmed(values.ownerPhone),
+      ownerPhone: phone(values.ownerPhone),
       ownerEmail: trimmed(values.ownerEmail),
       medicalDirectorName: trimmed(values.medicalDirectorName),
       medicalDirectorRegNo: trimmed(values.medicalDirectorRegNo),
@@ -488,7 +489,7 @@ export function buildPayload(values: WizardValues): HospitalCreateBody {
       maxBeds: num(values.maxBeds),
       billingContactName: trimmed(values.billingContactName),
       billingContactEmail: trimmed(values.billingContactEmail),
-      billingContactPhone: trimmed(values.billingContactPhone),
+      billingContactPhone: phone(values.billingContactPhone),
       billingGstin: trimmed(values.billingGstin).toUpperCase(),
       billingAddress: trimmed(values.billingAddress),
     },
@@ -497,7 +498,7 @@ export function buildPayload(values: WizardValues): HospitalCreateBody {
       name: trimmed(values.adminName),
       email: trimmed(values.adminEmail).toLowerCase(),
       password: values.adminPassword,
-      phone: trimmed(values.adminPhone),
+      phone: phone(values.adminPhone),
     },
   };
 }

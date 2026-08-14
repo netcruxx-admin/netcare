@@ -3,6 +3,7 @@
 import type { FormikProps } from 'formik';
 import { Calendar, Droplet } from 'lucide-react';
 import { FormField } from '@/components/form/FormField';
+import { PhoneField } from '@/components/form/PhoneField';
 import { BLOOD_GROUPS, FormValues, GENDERS } from '../registrationSchemas';
 
 interface DetailsStepProps {
@@ -13,7 +14,7 @@ interface DetailsStepProps {
 // Final step: the patient's own health details. Staff accounts are provisioned
 // by the hospital through POST /users, so there is no clinician branch here.
 export function DetailsStep({ formik, onBack }: DetailsStepProps) {
-  const genderOptions = GENDERS.map((g) => ({ value: g, label: g }));
+  const genderOptions = GENDERS.map((g) => ({ value: g.toLowerCase(), label: g }));
   const bloodGroupOptions = BLOOD_GROUPS.map((b) => ({ value: b, label: b }));
 
   return (
@@ -31,7 +32,7 @@ export function DetailsStep({ formik, onBack }: DetailsStepProps) {
           <FormField name="chronicDiseases" label="Chronic Conditions" placeholder="e.g. Diabetes, Hypertension (or None)" />
         </div>
         <FormField name="emergencyContact" label="Emergency Contact Name" placeholder="Full name" />
-        <FormField name="emergencyPhone" label="Emergency Contact Phone" type="tel" placeholder="+91 98765 43210" />
+        <PhoneField name="emergencyPhone" label="Emergency Contact Phone" />
         <FormField name="insuranceProvider" label="Insurance Provider" placeholder="e.g. Star Health" />
         <FormField name="insuranceNumber" label="Insurance Number" placeholder="Policy / member ID" />
       </div>

@@ -5,6 +5,7 @@ import { Formik, Form } from 'formik';
 import * as Yup from 'yup';
 import { toast } from 'sonner';
 import { FormField } from '@/components/form/FormField';
+import { PhoneField, toPhoneDigits, withPrefix } from '@/components/form/PhoneField';
 import { apiError } from '@/lib/apiError';
 import { useUpdateDoctorMutation } from '@/store/api';
 import type { Doctor } from '@/lib/types';
@@ -12,7 +13,7 @@ import type { Doctor } from '@/lib/types';
 const editSchema = Yup.object({
   name: Yup.string().trim().required('Name is required').max(100, 'Too long'),
   email: Yup.string().trim().email('Enter a valid email').required('Email is required'),
-  phone: Yup.string().trim().max(20, 'Too long'),
+  phone: Yup.string().test('phone', 'Enter a valid 10-digit mobile number', (v) => !v || /^\d{10}$/.test(v)),
   specialization: Yup.string().trim().max(100, 'Too long'),
   qualification: Yup.string().trim().max(100, 'Too long'),
   experienceYears: Yup.number().min(0, 'Cannot be negative').integer('Must be a whole number'),
@@ -49,7 +50,7 @@ export function EditDoctorModal({ doctor, onClose, onSuccess, hospitalId }: Prop
           initialValues={{
             name: doctor.user?.name ?? '',
             email: doctor.user?.email ?? '',
-            phone: doctor.user?.phone ?? '',
+            phone: toPhoneDigits(doctor.user?.phone ?? ''),
             specialization: doctor.specialization ?? '',
             qualification: doctor.qualification ?? '',
             experienceYears: doctor.experienceYears ?? 0,
@@ -65,7 +66,7 @@ export function EditDoctorModal({ doctor, onClose, onSuccess, hospitalId }: Prop
                 body: {
                   name: values.name.trim(),
                   email: values.email.trim(),
-                  phone: values.phone.trim(),
+                  phone: withPrefix(values.phone),
                   specialization: values.specialization.trim(),
                   qualification: values.qualification.trim(),
                   experienceYears: Number(values.experienceYears),
@@ -90,7 +91,7 @@ export function EditDoctorModal({ doctor, onClose, onSuccess, hospitalId }: Prop
                   <FormField name="email" label="Email" type="email" placeholder="doctor@hospital.com" required />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
-                  <FormField name="phone" label="Phone" type="tel" placeholder="+91 98765 43210" />
+                  <PhoneField name="phone" label="Phone" />
                   <FormField name="specialization" label="Specialization" placeholder="e.g. Cardiology" />
                 </div>
                 <div className="grid grid-cols-2 gap-4">

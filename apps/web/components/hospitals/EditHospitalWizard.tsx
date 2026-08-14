@@ -56,6 +56,7 @@ import {
 } from './onboarding/StepPanels';
 import { ColourField, FieldGrid, ReviewRow, SectionTitle } from './onboarding/fields';
 import { FormField } from '@/components/form/FormField';
+import { toPhoneDigits, withPrefix } from '@/components/form/PhoneField';
 
 // ---------------------------------------------------------------------------
 // Step definitions (7 steps — identity through operations, no admin)
@@ -64,7 +65,7 @@ import { FormField } from '@/components/form/FormField';
 const PAN_RE = /^[A-Z]{5}[0-9]{4}[A-Z]$/;
 const GSTIN_RE = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][0-9A-Z]Z[0-9A-Z]$/;
 const PINCODE = /^[1-9][0-9]{5}$/;
-const PHONE = /^[0-9+\-\s()]{6,15}$/;
+const PHONE = /^\d{10}$/;
 
 const optionalMatch = (re: RegExp, message: string) =>
   Yup.string()
@@ -230,13 +231,13 @@ function detailToValues(detail: HospitalDetail): WizardValues {
     state: p?.state ?? '',
     pincode: p?.pincode ?? '',
     country: p?.country ?? 'India',
-    phonePrimary: p?.phonePrimary ?? '',
-    phoneSecondary: p?.phoneSecondary ?? '',
-    phoneEmergency: p?.phoneEmergency ?? '',
+    phonePrimary: toPhoneDigits(p?.phonePrimary ?? ''),
+    phoneSecondary: toPhoneDigits(p?.phoneSecondary ?? ''),
+    phoneEmergency: toPhoneDigits(p?.phoneEmergency ?? ''),
     email: p?.email ?? '',
     website: p?.website ?? '',
     ownerName: p?.ownerName ?? '',
-    ownerPhone: p?.ownerPhone ?? '',
+    ownerPhone: toPhoneDigits(p?.ownerPhone ?? ''),
     ownerEmail: p?.ownerEmail ?? '',
     medicalDirectorName: p?.medicalDirectorName ?? '',
     medicalDirectorRegNo: p?.medicalDirectorRegNo ?? '',
@@ -287,7 +288,7 @@ function detailToValues(detail: HospitalDetail): WizardValues {
     maxBeds: s?.maxBeds ?? '',
     billingContactName: s?.billingContactName ?? '',
     billingContactEmail: s?.billingContactEmail ?? '',
-    billingContactPhone: s?.billingContactPhone ?? '',
+    billingContactPhone: toPhoneDigits(s?.billingContactPhone ?? ''),
     billingGstin: s?.billingGstin ?? '',
     billingAddress: s?.billingAddress ?? '',
 
@@ -530,13 +531,13 @@ export function EditHospitalWizard({ open, hospital, onClose, onUpdated }: Props
             state: values.state,
             pincode: tr(values.pincode),
             country: values.country || 'India',
-            phonePrimary: tr(values.phonePrimary),
-            phoneSecondary: tr(values.phoneSecondary),
-            phoneEmergency: tr(values.phoneEmergency),
+            phonePrimary: withPrefix(values.phonePrimary),
+            phoneSecondary: withPrefix(values.phoneSecondary),
+            phoneEmergency: withPrefix(values.phoneEmergency),
             email: tr(values.email),
             website: tr(values.website),
             ownerName: tr(values.ownerName),
-            ownerPhone: tr(values.ownerPhone),
+            ownerPhone: withPrefix(values.ownerPhone),
             ownerEmail: tr(values.ownerEmail),
             medicalDirectorName: tr(values.medicalDirectorName),
             medicalDirectorRegNo: tr(values.medicalDirectorRegNo),
@@ -627,7 +628,7 @@ export function EditHospitalWizard({ open, hospital, onClose, onUpdated }: Props
             maxBeds: num(values.maxBeds),
             billingContactName: tr(values.billingContactName),
             billingContactEmail: tr(values.billingContactEmail),
-            billingContactPhone: tr(values.billingContactPhone),
+            billingContactPhone: withPrefix(values.billingContactPhone),
             billingGstin: tr(values.billingGstin).toUpperCase(),
             billingAddress: tr(values.billingAddress),
           },

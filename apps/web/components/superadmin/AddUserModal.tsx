@@ -6,6 +6,7 @@ import * as Yup from 'yup';
 import { X } from 'lucide-react';
 import { toast } from 'sonner';
 import { FormField } from '@/components/form/FormField';
+import { PhoneField, toPhoneDigits, withPrefix } from '@/components/form/PhoneField';
 import { superadminPost } from '@/lib/superadminFetch';
 import { apiError } from '@/lib/apiError';
 import {
@@ -56,9 +57,8 @@ export function AddUserModal({
         name: Yup.string().trim().required('Name is required').max(100, 'Too long'),
         email: Yup.string().trim().email('Enter a valid email').required('Email is required'),
         phone: Yup.string()
-          .trim()
-          .required('Phone is required')
-          .matches(/^[+]?[\d\s().-]{7,20}$/, 'Enter a valid phone number'),
+          .matches(/^\d{10}$/, 'Enter a valid 10-digit mobile number')
+          .required('Phone is required'),
         role: Yup.string()
           .oneOf(roleOptions.map((r) => r.value), 'Select a role')
           .required('Role is required'),
@@ -90,7 +90,7 @@ export function AddUserModal({
           initialValues={{
             name: editing?.name ?? '',
             email: editing?.email ?? '',
-            phone: editing?.phone ?? '',
+            phone: toPhoneDigits(editing?.phone ?? ''),
             role: editing?.role ?? (roleOptions[0]?.value ?? ''),
             password: '',
           }}
@@ -101,7 +101,7 @@ export function AddUserModal({
             const body = {
               name: values.name.trim(),
               email: values.email.trim(),
-              phone: values.phone.trim(),
+              phone: withPrefix(values.phone),
               role: values.role,
             };
 
@@ -178,7 +178,7 @@ export function AddUserModal({
                   <FormField name="email" label="Email" type="email" placeholder="user@example.com" required />
                 </div>
                 <div className="col-span-2 sm:col-span-1">
-                  <FormField name="phone" label="Phone Number" type="tel" placeholder="+91 98765 43210" required />
+                  <PhoneField name="phone" label="Phone Number" required />
                 </div>
                 {!isEditing && (
                   <div className="col-span-2">

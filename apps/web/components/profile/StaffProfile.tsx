@@ -16,6 +16,7 @@ import {
 import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
 import { FormField } from '@/components/form/FormField';
+import { PhoneField, toPhoneDigits, withPrefix } from '@/components/form/PhoneField';
 import { doctorRole } from '@/lib/roles';
 import type { AuthSession } from '@/lib/types';
 
@@ -35,9 +36,8 @@ const baseFields = () =>
       .email('Enter a valid email')
       .required('Email is required'),
     phone: Yup.string()
-      .trim()
-      .required('Phone is required')
-      .matches(/^[+]?[\d\s().-]{7,20}$/, 'Enter a valid phone number'),
+      .matches(/^\d{10}$/, 'Enter a valid 10-digit mobile number')
+      .required('Phone is required'),
   });
 
 // Extra fields only a doctor has.
@@ -140,7 +140,7 @@ export function StaffProfile({ session }: RoleViewProps) {
             initialValues={{
               name: currentUser?.name ?? '',
               email: currentUser?.email ?? '',
-              phone: currentUser?.phone ?? '',
+              phone: toPhoneDigits(currentUser?.phone ?? ''),
               specialization: doctor?.specialization ?? '',
               qualification: doctor?.qualification ?? '',
               experienceYears: String(doctor?.experienceYears ?? ''),
@@ -151,7 +151,7 @@ export function StaffProfile({ session }: RoleViewProps) {
             onSubmit={async (values, { setSubmitting, setStatus }) => {
               const name = values.name.trim();
               const email = values.email.trim();
-              const phone = values.phone.trim();
+              const phone = withPrefix(values.phone);
               setStatus(undefined);
 
               try {
@@ -197,7 +197,7 @@ export function StaffProfile({ session }: RoleViewProps) {
                 <FormField name="name" label="Full Name" placeholder="e.g. Sarah Smith" required />
               </div>
               <FormField name="email" label="Email" type="email" placeholder="you@example.com" required />
-              <FormField name="phone" label="Phone Number" type="tel" placeholder="+91 98765 43210" required />
+              <PhoneField name="phone" label="Phone Number" required />
               {isDoctor && (
                 <>
                   <div className="sm:col-span-2">

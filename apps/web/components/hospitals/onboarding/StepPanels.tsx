@@ -6,6 +6,7 @@
 import { useFormikContext } from 'formik';
 import { Plus, Trash2, Upload, FileText, X, AlertTriangle } from 'lucide-react';
 import { FormField } from '@/components/form/FormField';
+import { PhoneField } from '@/components/form/PhoneField';
 import { HOSPITAL_CATEGORIES } from '@/lib/hospitalCategories';
 import type { CatalogOption, OnboardingMeta } from '@/store/api';
 import {
@@ -211,9 +212,9 @@ export function ContactStep({ meta }: StepProps) {
       <div className="space-y-4 border-t border-slate-100 pt-5">
         <SectionTitle>Contact</SectionTitle>
         <FieldGrid cols={3}>
-          <FormField name="phonePrimary" label="Reception Phone" placeholder="080 4123 4567" />
-          <FormField name="phoneEmergency" label="Emergency Phone" placeholder="Printed on discharge summaries" />
-          <FormField name="phoneSecondary" label="Alternate Phone" />
+          <PhoneField name="phonePrimary" label="Reception Phone" />
+          <PhoneField name="phoneEmergency" label="Emergency Phone" />
+          <PhoneField name="phoneSecondary" label="Alternate Phone" />
         </FieldGrid>
         <FieldGrid>
           <FormField name="email" label="Hospital Email" type="email" placeholder="info@hospital.com" />
@@ -225,7 +226,7 @@ export function ContactStep({ meta }: StepProps) {
         <SectionTitle>Owner</SectionTitle>
         <FieldGrid cols={3}>
           <FormField name="ownerName" label="Owner / Proprietor" />
-          <FormField name="ownerPhone" label="Owner Phone" />
+          <PhoneField name="ownerPhone" label="Owner Phone" />
           <FormField name="ownerEmail" label="Owner Email" type="email" />
         </FieldGrid>
       </div>
@@ -692,7 +693,7 @@ export function OperationsStep({ meta }: StepProps) {
         <FieldGrid cols={3}>
           <FormField name="billingContactName" label="Name" />
           <FormField name="billingContactEmail" label="Email" type="email" />
-          <FormField name="billingContactPhone" label="Phone" />
+          <PhoneField name="billingContactPhone" label="Phone" />
         </FieldGrid>
         <FieldGrid>
           <FormField name="billingGstin" label="Billing GSTIN" placeholder="If different from above" />
@@ -726,7 +727,7 @@ export function AdminReviewStep({
         </FieldGrid>
         <FieldGrid>
           <FormField name="adminPassword" label="Temporary Password" type="password" required />
-          <FormField name="adminPhone" label="Admin Phone" />
+          <PhoneField name="adminPhone" label="Admin Phone" />
         </FieldGrid>
       </div>
 

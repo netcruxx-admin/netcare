@@ -163,6 +163,12 @@ def register(
             gender=body.gender or "",
             blood_group=body.blood_group or "",
             date_of_birth=body.date_of_birth or "",
+            allergies=body.allergies or "",
+            chronic_diseases=body.chronic_diseases or "",
+            emergency_contact=body.emergency_contact or "",
+            emergency_phone=body.emergency_phone or "",
+            insurance_provider=body.insurance_provider or "",
+            insurance_number=body.insurance_number or "",
             documents=[],
         )
     )
