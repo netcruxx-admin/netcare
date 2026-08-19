@@ -7,13 +7,14 @@ import { toast } from 'sonner';
 import { FormField } from '@/components/form/FormField';
 import { PhoneField, toPhoneDigits, withPrefix } from '@/components/form/PhoneField';
 import { apiError } from '@/lib/apiError';
-import { useUpdateDoctorMutation } from '@/store/api';
+import { useUpdateDoctorMutation, useListDepartmentsQuery, useGetSuperadminDepartmentsPagedQuery } from '@/store/api';
 import type { Doctor } from '@/lib/types';
 
 const editSchema = Yup.object({
   name: Yup.string().trim().required('Name is required').max(100, 'Too long'),
   email: Yup.string().trim().email('Enter a valid email').required('Email is required'),
   phone: Yup.string().test('phone', 'Enter a valid 10-digit mobile number', (v) => !v || /^\d{10}$/.test(v)),
+  departmentId: Yup.string(),
   specialization: Yup.string().trim().max(100, 'Too long'),
   qualification: Yup.string().trim().max(100, 'Too long'),
   experienceYears: Yup.number().min(0, 'Cannot be negative').integer('Must be a whole number'),
@@ -31,6 +32,15 @@ interface Props {
 
 export function EditDoctorModal({ doctor, onClose, onSuccess, hospitalId }: Props) {
   const [updateDoctor] = useUpdateDoctorMutation();
+  const isSuperadmin = hospitalId !== undefined;
+
+  // Admin: tenant-scoped. Superadmin: scoped to the doctor's hospital.
+  const { data: adminDepts = [] } = useListDepartmentsQuery(undefined, { skip: isSuperadmin });
+  const { data: superDeptsPage } = useGetSuperadminDepartmentsPagedQuery(
+    { hospitalId: hospitalId || undefined, limit: 200, offset: 0 },
+    { skip: !isSuperadmin },
+  );
+  const departments = isSuperadmin ? (superDeptsPage?.items ?? []) : adminDepts;
 
   if (!doctor) return null;
 
@@ -51,6 +61,7 @@ export function EditDoctorModal({ doctor, onClose, onSuccess, hospitalId }: Prop
             name: doctor.user?.name ?? '',
             email: doctor.user?.email ?? '',
             phone: toPhoneDigits(doctor.user?.phone ?? ''),
+            departmentId: doctor.departmentId ?? '',
             specialization: doctor.specialization ?? '',
             qualification: doctor.qualification ?? '',
             experienceYears: doctor.experienceYears ?? 0,
@@ -67,6 +78,7 @@ export function EditDoctorModal({ doctor, onClose, onSuccess, hospitalId }: Prop
                   name: values.name.trim(),
                   email: values.email.trim(),
                   phone: withPrefix(values.phone),
+                  departmentId: values.departmentId || undefined,
                   specialization: values.specialization.trim(),
                   qualification: values.qualification.trim(),
                   experienceYears: Number(values.experienceYears),
@@ -83,7 +95,7 @@ export function EditDoctorModal({ doctor, onClose, onSuccess, hospitalId }: Prop
             }
           }}
         >
-          {({ isSubmitting, status }) => (
+          {({ isSubmitting, status, values, setFieldValue }) => (
             <Form className="flex flex-col flex-1 min-h-0">
               <div className="px-6 py-5 space-y-4 overflow-y-auto flex-1">
                 <div className="grid grid-cols-2 gap-4">
@@ -92,13 +104,28 @@ export function EditDoctorModal({ doctor, onClose, onSuccess, hospitalId }: Prop
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <PhoneField name="phone" label="Phone" />
-                  <FormField name="specialization" label="Specialization" placeholder="e.g. Cardiology" />
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Department</label>
+                    <select
+                      value={values.departmentId}
+                      onChange={(e) => setFieldValue('departmentId', e.target.value)}
+                      className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-cyan-500 bg-white"
+                    >
+                      <option value="">Select department…</option>
+                      {departments.map((d) => (
+                        <option key={d.id} value={d.id}>{d.name}</option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
+                  <FormField name="specialization" label="Specialization" placeholder="e.g. Interventional Cardiology" />
                   <FormField name="qualification" label="Qualification" placeholder="e.g. MBBS, MD" />
-                  <FormField name="experienceYears" label="Experience (years)" type="number" placeholder="5" />
                 </div>
-                <FormField name="consultationFee" label="Consultation Fee (₹)" type="number" placeholder="500" />
+                <div className="grid grid-cols-2 gap-4">
+                  <FormField name="experienceYears" label="Experience (years)" type="number" placeholder="5" />
+                  <FormField name="consultationFee" label="Consultation Fee (₹)" type="number" placeholder="500" />
+                </div>
                 {status && (
                   <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
                     {status}

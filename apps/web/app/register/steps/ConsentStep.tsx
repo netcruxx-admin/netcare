@@ -1,7 +1,7 @@
 'use client';
 
 import type { FormikProps } from 'formik';
-import { Loader2, ShieldCheck } from 'lucide-react';
+import { AlertCircle, Loader2, ShieldCheck } from 'lucide-react';
 import { useListConsentPurposesQuery } from '@/store/api';
 import { FormField } from '@/components/form/FormField';
 import { FormValues } from '../registrationSchemas';
@@ -11,6 +11,8 @@ interface ConsentStepProps {
   onBack: () => void;
   /** True when the date of birth entered on the previous step is under 18. */
   isMinor: boolean;
+  /** Server or pre-flight error to show inline near the submit button. */
+  inlineError?: string;
 }
 
 // The notice, and the ticks that answer it (DPDP 2023).
@@ -25,7 +27,7 @@ interface ConsentStepProps {
 // start unticked. That is not styling: DPDP requires consent to be specific and
 // unconditional, so bundling "treatment" and "marketing" behind one pre-ticked
 // box would make every consent collected here invalid.
-export function ConsentStep({ formik, onBack, isMinor }: ConsentStepProps) {
+export function ConsentStep({ formik, onBack, isMinor, inlineError }: ConsentStepProps) {
   const { data: purposes = [], isLoading, isError } = useListConsentPurposesQuery();
 
   // Per-event purposes (a video consultation) are asked when the event happens,
@@ -145,6 +147,13 @@ export function ConsentStep({ formik, onBack, isMinor }: ConsentStepProps) {
               placeholder="e.g. Mother, Father, Legal guardian"
             />
           </div>
+        </div>
+      )}
+
+      {inlineError && (
+        <div className="flex items-start gap-2 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+          <AlertCircle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
+          <p className="text-sm text-red-700">{inlineError}</p>
         </div>
       )}
 

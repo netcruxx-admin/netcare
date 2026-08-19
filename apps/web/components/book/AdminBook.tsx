@@ -5,13 +5,12 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Formik, Form } from 'formik';
 import * as Yup from 'yup';
 import { CheckCircle, AlertCircle } from 'lucide-react';
-import type { Department, Doctor } from '@/lib/types';
+import type { Doctor } from '@/lib/types';
 import { apiError } from '@/lib/apiError';
 import { blockedSlotSet } from '@/lib/schedule';
 import {
   useCreateAppointmentMutation,
   useGetDoctorAvailabilityQuery,
-  useListDepartmentsQuery,
   useListDoctorsQuery,
   useListPatientsQuery,
 } from '@/store/api';
@@ -55,11 +54,8 @@ function slotStatus(slot: string, date: string, booked: Set<string>, blocked: Se
   return 'available';
 }
 
-// The appointment needs a department; derive it from who the doctor is rather
-// than asking the booker to restate it.
-function departmentForDoctor(departments: Department[], doctors: Doctor[], doctorId: string) {
-  const doc = doctors.find((d) => d.id === doctorId);
-  return departments.find((d) => d.name === doc?.specialization)?.id ?? departments[0]?.id ?? '';
+function departmentForDoctor(doctors: Doctor[], doctorId: string) {
+  return doctors.find((d) => d.id === doctorId)?.departmentId ?? '';
 }
 
 const bookingSchema = Yup.object({
@@ -78,7 +74,6 @@ function AdminBookForm({ session }: RoleViewProps) {
 
   const { data: patients = [] } = useListPatientsQuery();
   const { data: doctors = [] } = useListDoctorsQuery();
-  const { data: departments = [] } = useListDepartmentsQuery();
   const [createAppointment] = useCreateAppointmentMutation();
 
   // Prefill from query params (e.g. when arriving from a Schedule board slot)
@@ -143,7 +138,7 @@ function AdminBookForm({ session }: RoleViewProps) {
                 await createAppointment({
                   patientId: values.patientId,
                   doctorId: values.doctorId,
-                  departmentId: departmentForDoctor(departments, doctors, values.doctorId),
+                  departmentId: departmentForDoctor(doctors, values.doctorId),
                   date: values.date,
                   time: values.time,
                   status: 'scheduled',

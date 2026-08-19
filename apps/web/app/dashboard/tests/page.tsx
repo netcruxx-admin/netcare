@@ -2,7 +2,6 @@
 
 import { RoleView } from '@/components/RoleView';
 import { AdminTests } from '@/components/tests/AdminTests';
-import { LabCatalog } from '@/components/tests/LabCatalog';
 import { adminRole, labRole } from '@/lib/roles';
 
 export default function TestsPage() {
@@ -11,7 +10,7 @@ export default function TestsPage() {
       path="/dashboard/tests"
       views={{
         [adminRole]: AdminTests,
-        [labRole]: LabCatalog,
+        [labRole]: AdminTests,
       }}
     />
   );

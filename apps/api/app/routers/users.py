@@ -156,9 +156,11 @@ def create_user(
                 id=new_id("doc"),
                 hospital_id=tenant_id,
                 user_id=user.id,
+                department_id=body.department_id or None,
                 specialization=body.specialization or "",
                 qualification=body.qualification or "",
                 experience_years=body.experience_years or 0,
+                consultation_fee=body.consultation_fee or 0,
                 available_slots=[],
                 # Created by hospital staff, so the hospital has vouched for them.
                 verification_status="verified",

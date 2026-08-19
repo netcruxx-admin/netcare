@@ -19,7 +19,10 @@ export function PatientDashboard({ session }: RoleViewProps) {
 
   const deptName = (id: string) => departments.find((d) => d.id === id)?.name ?? id;
 
-  const upcomingAppointments = appointments.filter((a) => a.status === 'scheduled');
+  const today = new Date().toISOString().slice(0, 10);
+  const upcomingAppointments = appointments.filter(
+    (a) => a.status === 'scheduled' && a.date >= today,
+  );
   const canBook = hasPermission(session, 'appointments.create');
 
   return (

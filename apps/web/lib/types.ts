@@ -55,6 +55,7 @@ export interface Doctor {
   id: string;
   hospitalId?: string;
   userId: string;
+  departmentId?: string;
   qualification: string;
   specialization: string;
   experienceYears: number;

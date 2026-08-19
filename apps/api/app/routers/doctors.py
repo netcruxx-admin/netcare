@@ -31,6 +31,7 @@ def _with_user(db: Session, doctor: models.Doctor) -> schemas.DoctorOut:
 @router.get("", response_model=list[schemas.DoctorOut])
 def list_doctors(
     response: Response,
+    department_id: Optional[str] = Query(default=None, alias="departmentId"),
     specialization: Optional[str] = Query(default=None),
     verification_status: Optional[str] = Query(default=None, alias="verificationStatus"),
     params: ListQuery = Depends(list_params),
@@ -42,6 +43,8 @@ def list_doctors(
     query = scoped(db, models.Doctor, tenant_id)
     if scope == SCOPE_OWN:
         query = query.filter(models.Doctor.user_id == user.id)
+    if department_id:
+        query = query.filter(models.Doctor.department_id == department_id)
     if specialization:
         query = query.filter(models.Doctor.specialization == specialization)
     if verification_status:

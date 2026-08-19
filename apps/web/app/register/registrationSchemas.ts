@@ -65,6 +65,7 @@ export const accountSchema = Yup.object({
 });
 
 export const patientDetailsSchema = Yup.object({
+  dateOfBirth: Yup.string().required('Date of birth is required'),
   emergencyPhone: Yup.string().matches(PHONE_REGEX, 'Enter a valid 10-digit mobile number').notRequired(),
 });
 

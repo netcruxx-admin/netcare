@@ -21,11 +21,10 @@ import { useServerTable } from '@/hooks/useServerTable';
 import { apiError } from '@/lib/apiError';
 import { fmtDate } from '@/lib/date';
 import { hasPermission } from '@/lib/auth';
-import type { Appointment, Department, Doctor } from '@/lib/types';
+import type { Appointment, Doctor } from '@/lib/types';
 import {
   useGetSuperadminAppointmentsPagedQuery,
   useGetSuperadminDoctorsPagedQuery,
-  useGetSuperadminDepartmentsPagedQuery,
   useGetDoctorAvailabilityQuery,
   useListHospitalsQuery,
   useUpdateAppointmentMutation,
@@ -109,9 +108,8 @@ function slotStatus(slot: string, date: string, booked: Set<string>) {
   return 'available';
 }
 
-function departmentForDoctor(departments: Department[], doctors: Doctor[], doctorId: string) {
-  const doc = doctors.find((d) => d.id === doctorId);
-  return departments.find((d) => d.name === doc?.specialization)?.id ?? departments[0]?.id ?? '';
+function departmentForDoctor(doctors: Doctor[], doctorId: string) {
+  return doctors.find((d) => d.id === doctorId)?.departmentId ?? '';
 }
 
 export function PlatformAppointments({ session }: RoleViewProps) {
@@ -158,12 +156,7 @@ export function PlatformAppointments({ session }: RoleViewProps) {
     { hospitalId: editingHospitalId },
     { skip: !editingHospitalId },
   );
-  const { data: hospitalDepartments } = useGetSuperadminDepartmentsPagedQuery(
-    { hospitalId: editingHospitalId },
-    { skip: !editingHospitalId },
-  );
   const modalDoctors = useMemo(() => hospitalDoctors?.items ?? [], [hospitalDoctors]);
-  const modalDepartments = useMemo(() => hospitalDepartments?.items ?? [], [hospitalDepartments]);
 
   const doctorOptions = useMemo(
     () =>
@@ -361,7 +354,7 @@ export function PlatformAppointments({ session }: RoleViewProps) {
                     hospitalId: editing.hospitalId,
                     body: {
                       doctorId: values.doctorId,
-                      departmentId: departmentForDoctor(modalDepartments, modalDoctors, values.doctorId),
+                      departmentId: departmentForDoctor(modalDoctors, values.doctorId),
                       status: values.status as Appointment['status'],
                       reason: values.reason,
                     },

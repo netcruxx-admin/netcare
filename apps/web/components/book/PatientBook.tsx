@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Formik, Form } from 'formik';
 import * as Yup from 'yup';
 import { CheckCircle, AlertCircle } from 'lucide-react';
-import type { Appointment, Department, Doctor, ScheduleBlock } from '@/lib/types';
+import type { Doctor, ScheduleBlock } from '@/lib/types';
 import { apiError } from '@/lib/apiError';
 import { fmtDate } from '@/lib/date';
 import {
@@ -145,16 +145,10 @@ export function PatientBook({ session }: RoleViewProps) {
   // Doctors in the selected department, capped at MAX_DEPT so hook count is fixed.
   const deptDoctors = useMemo<Doctor[]>(() => {
     if (!selection.department) return [];
-    const dept = departments.find((d) => d.id === selection.department);
-    const matched = dept
-      ? doctors.filter(
-          (doc) =>
-            doc.specialization === dept.name ||
-            doc.specialization.includes(dept.name.split('&')[0]),
-        )
-      : [];
-    return (matched.length > 0 ? matched : doctors).slice(0, MAX_DEPT);
-  }, [departments, doctors, selection.department]);
+    return doctors
+      .filter((doc) => doc.departmentId === selection.department)
+      .slice(0, MAX_DEPT);
+  }, [doctors, selection.department]);
 
   // Fixed 5 availability hooks — skip when no doctor at that index or no date.
   // React requires hooks to be called the same number of times every render;
@@ -358,6 +352,11 @@ export function PatientBook({ session }: RoleViewProps) {
                             <div className="min-h-[220px] flex items-center justify-center text-slate-400 text-sm border border-dashed border-slate-300 rounded-lg">
                               Pick a date to see slots
                             </div>
+                          ) : deptDoctors.length === 0 ? (
+                            <div className="min-h-[220px] flex items-center justify-center text-slate-400 text-sm border border-dashed border-slate-300 rounded-lg text-center px-4">
+                              No doctors are currently assigned to this department.
+                              <br />Please choose a different department.
+                            </div>
                           ) : (
                             <>
                               <div className="flex flex-wrap gap-4 mb-3 text-xs text-slate-600">
@@ -416,13 +415,14 @@ export function PatientBook({ session }: RoleViewProps) {
                         </button>
                         <button
                           type="button"
+                          disabled={deptDoctors.length === 0}
                           onClick={async () => {
                             await setFieldTouched('date', true);
                             await setFieldTouched('time', true);
                             const errs = await validateForm();
                             if (!errs.date && !errs.time) setStep(3);
                           }}
-                          className="flex-1 px-6 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg hover:shadow-lg transition"
+                          className="flex-1 px-6 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg hover:shadow-lg transition disabled:opacity-40 disabled:cursor-not-allowed"
                         >
                           Next
                         </button>

@@ -4,7 +4,11 @@ import { useState } from 'react';
 import { X } from 'lucide-react';
 import { toast } from 'sonner';
 import { superadminPost } from '@/lib/superadminFetch';
-import { useCreateUserMutation } from '@/store/api';
+import {
+  useCreateUserMutation,
+  useListDepartmentsQuery,
+  useGetSuperadminDepartmentsPagedQuery,
+} from '@/store/api';
 import { PhoneInput } from '@/components/form/PhoneField';
 import { apiError } from '@/lib/apiError';
 import { doctorRole } from '@/lib/roles';
@@ -21,7 +25,7 @@ interface Props {
 
 const EMPTY_FORM = {
   name: '', email: '', password: 'password123', phone: '',
-  specialization: '', qualification: '', experienceYears: '', consultationFee: '',
+  departmentId: '', specialization: '', qualification: '', experienceYears: '', consultationFee: '',
 };
 
 export function AddDoctorModal({ open, onClose, onSuccess, preselectedHospitalId = '', hospitals }: Props) {
@@ -31,6 +35,14 @@ export function AddDoctorModal({ open, onClose, onSuccess, preselectedHospitalId
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [createUser] = useCreateUserMutation();
+
+  // Admin: tenant-scoped departments. Superadmin: scoped to the selected hospital.
+  const { data: adminDepts = [] } = useListDepartmentsQuery(undefined, { skip: isSuperadmin });
+  const { data: superDeptsPage } = useGetSuperadminDepartmentsPagedQuery(
+    { hospitalId: hospitalId || undefined, limit: 200, offset: 0 },
+    { skip: !isSuperadmin },
+  );
+  const departments = isSuperadmin ? (superDeptsPage?.items ?? []) : adminDepts;
 
   if (!open) return null;
 
@@ -51,6 +63,7 @@ export function AddDoctorModal({ open, onClose, onSuccess, preselectedHospitalId
       name: form.name.trim(), email: form.email.trim(),
       password: form.password, role: doctorRole,
       phone: form.phone.trim() ? `+91${form.phone.trim()}` : undefined,
+      departmentId: form.departmentId || undefined,
       specialization: form.specialization.trim() || undefined,
       qualification: form.qualification.trim() || undefined,
       experienceYears: form.experienceYears ? Number(form.experienceYears) : undefined,
@@ -58,7 +71,6 @@ export function AddDoctorModal({ open, onClose, onSuccess, preselectedHospitalId
     };
     try {
       if (isSuperadmin) {
-        // POST /users accepts any non-platform role and creates the doctor profile alongside
         await superadminPost('/users', hospitalId, body);
       } else {
         await createUser(body).unwrap();
@@ -89,7 +101,11 @@ export function AddDoctorModal({ open, onClose, onSuccess, preselectedHospitalId
             ) : (
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Hospital <span className="text-red-500">*</span></label>
-                <select value={hospitalId} onChange={(e) => setHospitalId(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-cyan-500">
+                <select
+                  value={hospitalId}
+                  onChange={(e) => { setHospitalId(e.target.value); setForm((f) => ({ ...f, departmentId: '' })); }}
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-cyan-500 bg-white"
+                >
                   <option value="">Select a hospital…</option>
                   {hospitals!.map((h) => <option key={h.id} value={h.id}>{h.name}</option>)}
                 </select>
@@ -124,8 +140,22 @@ export function AddDoctorModal({ open, onClose, onSuccess, preselectedHospitalId
           <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide pt-1">Professional Details</p>
           <div className="grid grid-cols-2 gap-4">
             <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Department</label>
+              <select
+                value={form.departmentId}
+                onChange={(e) => setForm((f) => ({ ...f, departmentId: e.target.value }))}
+                disabled={isSuperadmin && !hospitalId}
+                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-cyan-500 bg-white disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed"
+              >
+                <option value="">{isSuperadmin && !hospitalId ? 'Select a hospital first…' : 'Select department…'}</option>
+                {departments.map((d) => (
+                  <option key={d.id} value={d.id}>{d.name}</option>
+                ))}
+              </select>
+            </div>
+            <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">Specialization</label>
-              <input value={form.specialization} onChange={set('specialization')} placeholder="e.g. Cardiology" className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-cyan-500" />
+              <input value={form.specialization} onChange={set('specialization')} placeholder="e.g. Interventional Cardiology" className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-cyan-500" />
             </div>
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">Qualification</label>

@@ -2,7 +2,8 @@
 
 import { RoleView } from '@/components/RoleView';
 import { DoctorPrescriptions } from '@/components/prescriptions/DoctorPrescriptions';
-import { doctorRole } from '@/lib/roles';
+import { PharmacistPrescriptions } from '@/components/prescriptions/PharmacistPrescriptions';
+import { doctorRole, pharmacistRole } from '@/lib/roles';
 
 export default function PrescriptionsPage() {
   return (
@@ -10,6 +11,7 @@ export default function PrescriptionsPage() {
       path="/dashboard/prescriptions"
       views={{
         [doctorRole]: DoctorPrescriptions,
+        [pharmacistRole]: PharmacistPrescriptions,
       }}
     />
   );

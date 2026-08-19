@@ -6,7 +6,7 @@ import { Formik, Form } from 'formik';
 import * as Yup from 'yup';
 import { CheckCircle, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
-import type { Patient, Doctor, Department } from '@/lib/types';
+import type { Patient, Doctor } from '@/lib/types';
 import { blockedSlotSet } from '@/lib/schedule';
 import { superadminGet, superadminPost } from '@/lib/superadminFetch';
 import { useListHospitalsQuery, useGetDoctorAvailabilityQuery } from '@/store/api';
@@ -50,9 +50,8 @@ function slotStatus(slot: string, date: string, booked: Set<string>, blocked: Se
   return 'available';
 }
 
-function departmentForDoctor(departments: Department[], doctors: Doctor[], doctorId: string) {
-  const doc = doctors.find((d) => d.id === doctorId);
-  return departments.find((d) => d.name === doc?.specialization)?.id ?? departments[0]?.id ?? '';
+function departmentForDoctor(doctors: Doctor[], doctorId: string) {
+  return doctors.find((d) => d.id === doctorId)?.departmentId ?? '';
 }
 
 const bookingSchema = Yup.object({
@@ -72,7 +71,6 @@ function SuperadminBookForm({ session }: RoleViewProps) {
 
   const [patients, setPatients] = useState<Patient[]>([]);
   const [doctors, setDoctors] = useState<Doctor[]>([]);
-  const [departments, setDepartments] = useState<Department[]>([]);
   const [loadingOptions, setLoadingOptions] = useState(false);
 
   const [submitError, setSubmitError] = useState('');
@@ -81,18 +79,17 @@ function SuperadminBookForm({ session }: RoleViewProps) {
   // Reload patients/doctors/departments whenever the hospital changes.
   useEffect(() => {
     if (!hospitalId) {
-      setPatients([]); setDoctors([]); setDepartments([]);
+      setPatients([]); setDoctors([]);
       return;
     }
     setLoadingOptions(true);
-    setPatients([]); setDoctors([]); setDepartments([]);
+    setPatients([]); setDoctors([]);
 
     Promise.all([
       superadminGet<Patient[]>('/patients', hospitalId),
       superadminGet<Doctor[]>('/doctors', hospitalId),
-      superadminGet<Department[]>('/departments', hospitalId),
     ])
-      .then(([p, d, dep]) => { setPatients(p); setDoctors(d); setDepartments(dep); })
+      .then(([p, d]) => { setPatients(p); setDoctors(d); })
       .catch(() => {/* silent */})
       .finally(() => setLoadingOptions(false));
   }, [hospitalId]);
@@ -176,7 +173,7 @@ function SuperadminBookForm({ session }: RoleViewProps) {
                 await superadminPost('/appointments', hospitalId, {
                   patientId: values.patientId,
                   doctorId: values.doctorId,
-                  departmentId: departmentForDoctor(departments, doctors, values.doctorId),
+                  departmentId: departmentForDoctor(doctors, values.doctorId),
                   date: values.date,
                   time: values.time,
                   status: 'scheduled',

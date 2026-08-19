@@ -113,9 +113,8 @@ function bookedSlotsForDoctor(
       .map((a) => a.time),
   );
 }
-function departmentForDoctor(departments: Department[], doctors: Doctor[], doctorId: string) {
-  const doc = doctors.find((d) => d.id === doctorId);
-  return departments.find((d) => d.name === doc?.specialization)?.id ?? departments[0]?.id ?? '';
+function departmentForDoctor(doctors: Doctor[], doctorId: string) {
+  return doctors.find((d) => d.id === doctorId)?.departmentId ?? '';
 }
 
 const numOpt = Yup.number()
@@ -521,7 +520,7 @@ export function AdminAppointments({ session }: RoleViewProps) {
                     id: editing.id,
                     body: {
                       doctorId: values.doctorId,
-                      departmentId: departmentForDoctor(departments, doctors, values.doctorId),
+                      departmentId: departmentForDoctor(doctors, values.doctorId),
                       status: values.status as Appointment['status'],
                       reason: values.reason,
                     },
