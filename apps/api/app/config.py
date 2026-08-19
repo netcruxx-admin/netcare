@@ -28,6 +28,13 @@ class Settings(BaseSettings):
     login_max_failures_per_ip: int = 20
     login_failure_window_minutes: int = 15
     cors_origins: str = "http://localhost:3000"
+    # The platform's own domain, with no tenant label. Tenants live one level
+    # below it (hospA.netcare.co.in), so this is what distinguishes the
+    # operator's front door from a hospital whose subdomain happens to be
+    # "netcare". The host alone cannot say: a three-label host is either an apex
+    # on a compound suffix (netcare.co.in) or a tenant on a simple one
+    # (hospa.netcare.in). Empty in development, where "localhost" is unambiguous.
+    root_domain: str = ""
     # "development" or "production". Governs the convenience affordances that are
     # safe on a laptop and unsafe on the internet: the X-Hospital-Id override on
     # pre-login requests, the default-tenant fallback, and the *.localhost CORS

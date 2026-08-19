@@ -7,7 +7,7 @@ from .. import models, schemas
 from ..auth import get_current_user
 from ..authz import require_permission
 from ..database import get_db
-from ..tenancy import get_tenant_id, scoped
+from ..tenancy import assert_body_in_tenant, get_tenant_id, scoped
 from ..utils import ListQuery, list_params, new_id, now_iso, paginate, text_search
 
 router = APIRouter(prefix="/schedule-blocks", tags=["schedule"])
@@ -45,6 +45,10 @@ def create_schedule_block(
     _: str = Depends(require_permission("schedule.manage")),
     tenant_id: str = Depends(get_tenant_id),
 ):
+    # Every foreign key on the body, checked against the caller's tenant.
+    # Without this a row filed here can point at another hospital's records,
+    # and the display helpers then resolve that id to a real name.
+    assert_body_in_tenant(db, body, tenant_id)
     block = models.ScheduleBlock(
         id=new_id("blk"),
         hospital_id=tenant_id,

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { Suspense, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useFormik, FormikProvider } from 'formik';
@@ -20,7 +20,31 @@ const loginSchema = Yup.object({
   password: Yup.string().required('Password is required'),
 });
 
-export default function LoginPage() {
+/** The page's own frame, shown for the instant before the client subtree
+ *  hydrates. Matching the real layout rather than showing a spinner keeps the
+ *  header and card from jumping into place under the user. */
+function LoginFallback() {
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-cyan-50 via-white to-teal-50 flex flex-col">
+      <div className="bg-white shadow-md border-b-2 border-cyan-100">
+        <div className="max-w-6xl mx-auto px-6 py-2 flex items-center gap-3">
+          <Image src="/logo/logo-full.png" alt="NetCare" width={80} height={80} className="w-20 h-20 object-contain" />
+        </div>
+      </div>
+      <div className="flex-1 flex items-center justify-center px-6 py-12">
+        <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl p-8 space-y-8 border border-cyan-100">
+          <div className="text-center">
+            <h2 className="text-3xl font-bold bg-gradient-to-r from-cyan-600 to-brand-teal bg-clip-text text-transparent">Sign In</h2>
+            <p className="text-slate-600 mt-2">Loading…</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const justRegistered = searchParams.get('registered') === '1';
@@ -179,5 +203,19 @@ export default function LoginPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+
+// `useSearchParams` opts the subtree into client-side rendering, and Next
+// refuses to prerender a page that reaches for it without a boundary — which
+// failed the production build outright, not just this page. The fallback is the
+// page's own chrome rather than a spinner, so the form appearing is the only
+// thing that changes when hydration lands.
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<LoginFallback />}>
+      <LoginForm />
+    </Suspense>
   );
 }

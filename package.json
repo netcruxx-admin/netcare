@@ -2,7 +2,7 @@
   "name": "carbonhealth",
   "version": "1.0.0",
   "private": true,
-  "description": "CarbonHealth — Hospital Management Software (Monorepo)",
+  "description": "CarbonHealth \u2014 Hospital Management Software (Monorepo)",
   "scripts": {
     "dev": "npm run dev --prefix apps/web",
     "dev:api": "node scripts/venv-run.js uvicorn app.main:app --reload --port 8000",
@@ -11,7 +11,9 @@
     "lint": "npm run lint --prefix apps/web",
     "db:migrate": "node scripts/venv-run.js alembic upgrade head",
     "db:seed": "node scripts/db-seed.js",
-    "setup": "node scripts/setup.js"
+    "setup": "node scripts/setup.js",
+    "test:api": "node scripts/venv-run.js pytest",
+    "test": "npm run test:api"
   },
   "devDependencies": {
     "concurrently": "^9.0.0"

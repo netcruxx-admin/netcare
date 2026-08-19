@@ -7,7 +7,7 @@ from .. import models, schemas
 from ..auth import get_current_user
 from ..authz import SCOPE_OWN, own_record_filter, require_permission
 from ..database import get_db
-from ..tenancy import get_tenant_id, scoped
+from ..tenancy import assert_in_tenant, get_tenant_id, scoped
 from ..utils import (
     ListQuery,
     attach_patient_names,
@@ -59,7 +59,7 @@ def list_prescriptions(
     query = query.order_by(models.Prescription.created_at.desc(), models.Prescription.id)
     rows = paginate(query, response, params.limit, params.offset).all()
     out = [schemas.PrescriptionOut.model_validate(row) for row in rows]
-    attach_patient_names(db, out)
+    attach_patient_names(db, out, tenant_id=tenant_id)
     return out
 
 
@@ -70,6 +70,14 @@ def create_prescription(
     _: str = Depends(require_permission("prescriptions.manage")),
     tenant_id: str = Depends(get_tenant_id),
 ):
+    # Foreign keys arrive in the body and are otherwise trusted, which would let
+    # a row filed in this tenant point at another hospital's patient — an
+    # integrity fault that becomes a disclosure the moment a display helper
+    # resolves that id to a name. See tenancy.assert_in_tenant.
+    assert_in_tenant(db, models.Patient, body.patient_id, tenant_id)
+    assert_in_tenant(db, models.Doctor, body.doctor_id, tenant_id)
+    assert_in_tenant(db, models.Appointment, body.appointment_id, tenant_id)
+
     prescription = models.Prescription(
         id=new_id("presc"),
         hospital_id=tenant_id,

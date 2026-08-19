@@ -216,7 +216,7 @@ def patient_appointments(
     tenant_id: str = Depends(get_tenant_id),
 ):
     rows = _sub_resource(db, user, models.Appointment, patient_id, tenant_id, scope, response, params)
-    doctors = doctor_display(db, (r.doctor_id for r in rows))
+    doctors = doctor_display(db, (r.doctor_id for r in rows), tenant_id)
     out = []
     for row in rows:
         item = schemas.AppointmentOut.model_validate(row)

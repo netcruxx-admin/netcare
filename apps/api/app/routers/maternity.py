@@ -10,7 +10,7 @@ from .. import models, schemas
 from ..auth import get_current_user
 from ..authz import require_permission
 from ..database import get_db
-from ..tenancy import get_tenant_id, scoped
+from ..tenancy import assert_body_in_tenant, get_tenant_id, scoped
 from ..utils import (
     ListQuery,
     attach_patient_names,
@@ -82,7 +82,7 @@ def list_pregnancies(
     query = query.order_by(models.PregnancyRecord.created_at.desc(), models.PregnancyRecord.id)
     rows = paginate(query, response, params.limit, params.offset).all()
     out = [schemas.PregnancyOut.model_validate(row) for row in rows]
-    attach_patient_names(db, out)
+    attach_patient_names(db, out, tenant_id=tenant_id)
     attach_anc_summary(db, out)
     return out
 
@@ -96,6 +96,10 @@ def create_pregnancy(
     _: str = Depends(require_permission("pregnancies.manage")),
     tenant_id: str = Depends(get_tenant_id),
 ):
+    # Every foreign key on the body, checked against the caller's tenant.
+    # Without this a row filed here can point at another hospital's records,
+    # and the display helpers then resolve that id to a real name.
+    assert_body_in_tenant(db, body, tenant_id)
     record = models.PregnancyRecord(
         id=new_id("preg"),
         hospital_id=tenant_id,
@@ -172,6 +176,10 @@ def create_anc_visit(
     _: str = Depends(require_permission("pregnancies.manage")),
     tenant_id: str = Depends(get_tenant_id),
 ):
+    # Every foreign key on the body, checked against the caller's tenant.
+    # Without this a row filed here can point at another hospital's records,
+    # and the display helpers then resolve that id to a real name.
+    assert_body_in_tenant(db, body, tenant_id)
     visit = models.ANCVisit(
         id=new_id("anc"),
         hospital_id=tenant_id,

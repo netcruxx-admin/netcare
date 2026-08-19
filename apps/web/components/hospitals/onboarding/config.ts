@@ -43,6 +43,15 @@ export interface PendingDocument {
   title: string;
 }
 
+/** One department, and whether it survives onboarding. `fromTemplate` only
+ *  drives the UI grouping — the payload cares about `selected` alone. */
+export interface DepartmentRow {
+  name: string;
+  description: string;
+  selected: boolean;
+  fromTemplate: boolean;
+}
+
 export interface WizardValues {
   // Step 1 — identity
   name: string;
@@ -105,6 +114,11 @@ export interface WizardValues {
 
   // Step 5 — licences
   licences: LicenceRow[];
+
+  // Step — departments. Seeded from the chosen category's suggestions and then
+  // edited: unticking is how a multi-specialty hospital says it does not run
+  // cardiology, and a department nobody staffs is still bookable.
+  departments: DepartmentRow[];
 
   // Step 7 — operations and branding
   timezone: string;
@@ -203,6 +217,8 @@ export const INITIAL_VALUES: WizardValues = {
   specialties: [],
 
   licences: [],
+  // Filled from GET /hospitals/meta/onboarding once a category is picked.
+  departments: [],
 
   timezone: 'Asia/Kolkata',
   financialYearStart: '04-01',
@@ -350,6 +366,40 @@ export const STEPS: StepDefinition[] = [
     }),
   },
   {
+    id: 'departments',
+    title: 'Departments',
+    blurb: 'The clinical units this hospital actually runs. Appointments are booked into these.',
+    schema: Yup.object({
+      departments: Yup.array()
+        .of(
+          Yup.object({
+            name: Yup.string().trim(),
+            selected: Yup.boolean(),
+          }),
+        )
+        // A hospital with no departments cannot take a booking at all, so this
+        // is the one step that cannot be skipped empty. Checked here as well as
+        // on the server: the server refusal is the guarantee, this is what stops
+        // the operator filling in six more screens before finding out.
+        .test(
+          'at-least-one',
+          'Pick at least one department — appointments are booked into them.',
+          (rows) => (rows ?? []).some((r) => r?.selected && (r?.name ?? '').trim()),
+        )
+        .test(
+          'no-duplicates',
+          'Two departments have the same name.',
+          (rows) => {
+            const names = (rows ?? [])
+              .filter((r) => r?.selected)
+              .map((r) => (r?.name ?? '').trim().toLowerCase())
+              .filter(Boolean);
+            return new Set(names).size === names.length;
+          },
+        ),
+    }),
+  },
+  {
     id: 'documents',
     title: 'Documents',
     blurb: 'Scans of the certificates above. PDF or image, up to 10MB each.',
@@ -409,10 +459,18 @@ export function buildPayload(values: WizardValues): HospitalCreateBody {
       status: (l.status || 'pending') as HospitalLicenceBody['status'],
     }));
 
+  // Undefined rather than [] when nothing was chosen, so the backend falls back
+  // to the category template exactly as it did before this step existed. An
+  // empty array would mean "no departments", which it refuses.
+  const departments = values.departments
+    .filter((d) => d.selected && d.name.trim())
+    .map((d) => ({ name: trimmed(d.name), description: trimmed(d.description) }));
+
   return {
     name: trimmed(values.name),
     subdomain: trimmed(values.subdomain).toLowerCase(),
     category: values.category,
+    departments: departments.length ? departments : undefined,
     // Undefined rather than '' so the backend falls back to the category
     // template's tagline instead of storing a blank one.
     tagline: trimmed(values.tagline) || undefined,

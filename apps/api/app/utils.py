@@ -95,34 +95,53 @@ def users_by_id(db: Session, user_ids: Iterable[str]) -> dict[str, models.User]:
     return {u.id: u for u in rows}
 
 
-def patient_display(db: Session, patient_ids: Iterable[str]) -> dict[str, tuple[str, str]]:
-    """patient_id -> (name, phone), in one query. Empty tuple for unknown ids."""
+def patient_display(
+    db: Session, patient_ids: Iterable[str], tenant_id: Optional[str] = None
+) -> dict[str, tuple[str, str]]:
+    """patient_id -> (name, phone), in one query. Empty tuple for unknown ids.
+
+    `tenant_id` is the last line of defence against an identity leak. The ids
+    handed in come off rows the caller may read, so they *should* already be
+    within the tenant — but "should" is doing the work of an access check there.
+    A row that got a foreign patient_id onto it by any route would otherwise
+    have that id resolved to a real name and phone number and rendered into the
+    wrong hospital's screen, turning a data-integrity slip into a disclosure.
+
+    Optional only so the platform-wide superadmin views can still resolve names
+    across tenants. Every tenant-scoped caller passes it.
+    """
     ids = {pid for pid in patient_ids if pid}
     if not ids:
         return {}
-    rows = (
+    query = (
         db.query(models.Patient, models.User)
         .outerjoin(models.User, models.User.id == models.Patient.user_id)
         .filter(models.Patient.id.in_(ids))
-        .all()
     )
+    if tenant_id:
+        query = query.filter(models.Patient.hospital_id == tenant_id)
+    rows = query.all()
     return {
         p.id: ((u.name if u else "") or "", (p.phone or (u.phone if u else "")) or "")
         for p, u in rows
     }
 
 
-def doctor_display(db: Session, doctor_ids: Iterable[str]) -> dict[str, str]:
-    """doctor_id -> name, in one query."""
+def doctor_display(
+    db: Session, doctor_ids: Iterable[str], tenant_id: Optional[str] = None
+) -> dict[str, str]:
+    """doctor_id -> name, in one query. See patient_display for `tenant_id`."""
     ids = {did for did in doctor_ids if did}
     if not ids:
         return {}
-    rows = (
+    query = (
         db.query(models.Doctor, models.User)
         .outerjoin(models.User, models.User.id == models.Doctor.user_id)
         .filter(models.Doctor.id.in_(ids))
-        .all()
     )
+    if tenant_id:
+        query = query.filter(models.Doctor.hospital_id == tenant_id)
+    rows = query.all()
     return {d.id: (u.name if u else "") or "" for d, u in rows}
 
 
@@ -161,9 +180,12 @@ def attach_patient_names(
     *,
     id_attr: str = "patient_id",
     name_attr: str = "patient_name",
+    tenant_id: Optional[str] = None,
 ) -> None:
     """Fill a display name on already-serialized rows carrying a patient id."""
-    names = patient_display(db, (getattr(item, id_attr, None) for item in items))
+    names = patient_display(
+        db, (getattr(item, id_attr, None) for item in items), tenant_id
+    )
     for item in items:
         setattr(item, name_attr, names.get(getattr(item, id_attr, None), ("", ""))[0])
 

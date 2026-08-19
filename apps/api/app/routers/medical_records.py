@@ -7,7 +7,7 @@ from .. import models, schemas
 from ..auth import get_current_user
 from ..authz import SCOPE_OWN, own_record_filter, require_permission
 from ..database import get_db
-from ..tenancy import get_tenant_id, scoped
+from ..tenancy import assert_in_tenant, get_tenant_id, scoped
 from ..utils import ListQuery, list_params, new_id, now_iso, paginate, text_search
 
 router = APIRouter(prefix="/medical-records", tags=["medical-records"])
@@ -46,6 +46,14 @@ def create_record(
     _: str = Depends(require_permission("medical_records.manage")),
     tenant_id: str = Depends(get_tenant_id),
 ):
+    # Foreign keys arrive in the body and are otherwise trusted, which would let
+    # a row filed in this tenant point at another hospital's patient — an
+    # integrity fault that becomes a disclosure the moment a display helper
+    # resolves that id to a name. See tenancy.assert_in_tenant.
+    assert_in_tenant(db, models.Patient, body.patient_id, tenant_id)
+    assert_in_tenant(db, models.Doctor, body.doctor_id, tenant_id)
+    assert_in_tenant(db, models.Appointment, body.appointment_id, tenant_id)
+
     record = models.MedicalRecord(
         id=new_id("med"),
         hospital_id=tenant_id,

@@ -66,6 +66,7 @@ def provision_hospital(
     legal: Optional[dict] = None,
     profile: Optional[dict] = None,
     licences: Optional[list[dict]] = None,
+    departments: Optional[list[dict]] = None,
     subscription: Optional[dict] = None,
     admin_email: Optional[str] = None,
     admin_password: str = "password123",
@@ -98,13 +99,23 @@ def provision_hospital(
     # Ensure the hospitals row exists before its hospital_id children insert.
     db.flush()
 
-    for dept in template["departments"]:
+    # The category's departments are a *suggestion*, not a fact about the
+    # facility. "Maternity" genuinely implies obstetrics and a labour ward;
+    # "multi-specialty" implies almost nothing, and seeding six specialities a
+    # hospital does not run leaves reception able to book patients into a
+    # department with no doctors in it. So the caller may name its own, and the
+    # template is the fallback for when it does not — which keeps every existing
+    # caller, including the seeder, behaving exactly as before.
+    for dept in departments if departments is not None else template["departments"]:
+        dept_name = (dept.get("name") or "").strip()
+        if not dept_name:
+            continue
         db.add(
             models.Department(
                 id=new_id("dept"),
                 hospital_id=hid,
-                name=dept["name"],
-                description=dept["description"],
+                name=dept_name,
+                description=(dept.get("description") or "").strip(),
             )
         )
 

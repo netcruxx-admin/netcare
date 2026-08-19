@@ -256,6 +256,10 @@ export interface HospitalCreateBody {
   hfrId?: string;
   nabhStatus?: string;
   nabhValidTill?: string;
+  /** Omit to seed from the category template. An explicit list replaces it
+   *  outright, and must not be empty — the backend refuses a hospital with no
+   *  departments, since every appointment is booked into one. */
+  departments?: { name: string; description?: string }[];
   onboardingStatus?: OnboardingStatus;
   goLiveDate?: string;
 
@@ -316,6 +320,10 @@ export interface OnboardingMeta {
   states: string[];
   medicalCouncils: string[];
   categories: CatalogOption[];
+  /** The chosen category's suggested departments, which the wizard pre-ticks.
+   *  Served rather than restated in TS so the two sides cannot disagree about
+   *  what a maternity hospital starts with. Empty when no category was passed. */
+  suggestedDepartments: { name: string; description: string }[];
 }
 
 // ---------------------------------------------------------------------------

@@ -4,6 +4,111 @@ Notable changes to CarbonHealth. Format follows [Keep a Changelog](https://keepa
 
 ## [Unreleased]
 
+### Fixed — cross-tenant data leak (critical)
+
+**Hospital A could read hospital B's patient name and phone number.**
+
+Tenant scoping protected what a caller could *read*; nothing checked what they
+could *reference*. Creates took foreign keys straight from the request body, so
+hospital A could file an appointment in its own tenant naming hospital B's
+`patient_id` — and `patient_display()` / `doctor_display()` were not
+tenant-scoped either, so those ids were then resolved to real names and phone
+numbers and rendered into A's appointment list. Confirmed live in a test before
+the fix: `'patientName': 'Patient beta', 'patientPhone': '9000000000'`.
+
+Fixed at both layers, because either alone leaves a hole:
+
+- `tenancy.assert_in_tenant()` — refuses a single id that is not the caller's.
+- `tenancy.assert_body_in_tenant()` — walks every foreign key on a request body
+  against a central `field -> model` map, recursing into nested models and lists
+  (a test order carries its test ids inside `items`, which a top-level-only
+  guard sails past). Applied to **18 handlers**.
+- `patient_display()`, `doctor_display()` and `attach_patient_names()` now take
+  a tenant and filter on it, so the disclosure is blocked even where a foreign
+  id reaches a row by some other route.
+
+Why it went unnoticed: most creates splat `**body.model_dump()` onto the model,
+so the foreign key never appears in the router source at all. Grepping for
+`body.patient_id` finds nothing while the id still lands on the row. And with a
+single tenant the bug is invisible by construction.
+
+### Added — test suite (first tests in the project)
+
+**`npm test`** — 48 tests against a throwaway database, built entirely through
+the public API so a break in provisioning fails the suite rather than hiding
+behind hand-made fixtures.
+
+- **Tenant isolation** (25): two fully-populated hospitals, one `maternity` and
+  one `multi-specialty` — which doubles as proof that category is a provisioning
+  template and not a runtime branch. Collections, detail routes, writes,
+  caller-supplied filters, free-text search, login, cross-tenant tokens, the
+  audit trail and consent records are each checked for leakage. Reads run as the
+  **nurse**, deliberately: a doctor's `own` scope filters by ownership before
+  tenancy is reached, which would mask a leak rather than expose it.
+- **Foreign-key scoping** (12), including a static-analysis test that derives the
+  risky request schemas from `schemas.py` and asserts every consuming handler
+  calls a guard — so the next endpoint cannot quietly reopen the hole.
+- **Onboarding departments** (8).
+
+Every runtime test was verified by disabling the guard and confirming it fails.
+That caught two tests passing on a wrong path (`/lab-orders` does not exist; the
+route is `/test-orders`) which had been proving nothing.
+
+### Added — department selection at onboarding
+
+Departments were seeded from the category template with no choice offered. That
+is defensible for `maternity` and wrong for `multi-specialty`, which implies
+almost nothing about which units a hospital runs — and a seeded department
+nobody staffs is still bookable, so reception could put a patient into an empty
+one.
+
+- `departments` on `HospitalCreate`: omit it and the template seeds exactly as
+  before; send a list and it replaces the template outright.
+- Refuses an empty list, blank-only names, and case-insensitive duplicates. A
+  hospital with no departments cannot take a booking at all.
+- `GET /hospitals/meta/onboarding?category=…` now returns
+  `suggestedDepartments`, so the wizard pre-ticks from one copy of the rule
+  rather than restating the template in TypeScript.
+- New wizard step: pre-ticked suggestions, untickable, with custom departments
+  allowed — no catalog to validate against, since a hospital should not wait for
+  us to have heard of a speciality before it can have one.
+
+### Fixed — production deployment blockers
+
+- **`next build` failed outright.** `/login` used `useSearchParams()` with no
+  Suspense boundary, so the production build exited 1 and there was no
+  deployable artifact. Split into a boundary with a fallback that mirrors the
+  page chrome.
+- **Subdomain routing did not work on a real domain.** `middleware.ts` only
+  recognised `.localhost`, and its platform-console redirect hardcoded
+  `hostname = 'localhost'` — which would have redirected production users to
+  their own machine. Rewritten to derive the platform host by dropping the
+  tenant label, so it works on `hospA.netcare.co.in` and locally without
+  branching. The `x-hospital-subdomain` cookie it set was read nowhere and is
+  gone.
+- **The apex resolved as a tenant.** All three resolvers read `netcare.co.in` as
+  a hospital called "netcare" — harmless only until someone onboards that
+  subdomain, at which point the platform's own front door starts resolving to a
+  real hospital. `ROOT_DOMAIN` / `NEXT_PUBLIC_ROOT_DOMAIN` now name the apex.
+  The host cannot infer it: a three-label host is either an apex on a compound
+  suffix (`netcare.co.in`) or a tenant on a simple one (`hospa.netcare.in`).
+- `Hospital.category` no longer defaults to `"maternity"`. The category decides
+  modules, departments and licences, so a row arriving without one would have
+  silently become a maternity hospital.
+
+### Changed
+
+- `alembic.ini` gained `path_separator = os` (silences an Alembic 1.16 warning).
+- `pytest` and `httpx2` added to `requirements.txt` — the isolation suite is not
+  optional, since with one tenant every isolation bug is invisible.
+
+### Deployment note
+
+`resolve_public_tenant` reads the **request host**, so the API must be reachable
+on the tenant's own hostname — `hospA.netcare.co.in/api/...` behind a path
+proxy. Serving it from `api.netcare.co.in` resolves every request to the label
+"api", which is no hospital, and **no tenant user can sign in**.
+
 ### Added — regulatory compliance foundation (India)
 
 Three obligations that a hospital management system sold in India cannot ship

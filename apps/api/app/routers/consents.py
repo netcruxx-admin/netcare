@@ -19,7 +19,7 @@ from .. import audit, consent as consent_lib, models, schemas
 from ..auth import get_current_user
 from ..authz import SCOPE_OWN, require_permission
 from ..database import get_db
-from ..tenancy import get_tenant_id, resolve_public_tenant, scoped
+from ..tenancy import assert_body_in_tenant, get_tenant_id, resolve_public_tenant, scoped
 from ..utils import ListQuery, list_params, paginate
 
 router = APIRouter(tags=["consent"])
@@ -102,6 +102,10 @@ def create_consent(
     nobody else. Staff holding "all" record on behalf, and the row keeps both
     identities so an auditor can see who operated the form.
     """
+    # Every foreign key on the body, checked against the caller's tenant.
+    # Without this a row filed here can point at another hospital's records,
+    # and the display helpers then resolve that id to a real name.
+    assert_body_in_tenant(db, body, tenant_id)
     subject_user_id = body.subject_user_id or user.id
     if scope == SCOPE_OWN and subject_user_id != user.id:
         raise HTTPException(

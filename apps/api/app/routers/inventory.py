@@ -8,7 +8,7 @@ from .. import models, schemas
 from ..auth import get_current_user
 from ..authz import require_permission
 from ..database import get_db
-from ..tenancy import get_tenant_id, scoped
+from ..tenancy import assert_body_in_tenant, get_tenant_id, scoped
 from ..utils import ListQuery, list_params, new_id, now_iso, paginate
 
 router = APIRouter(prefix="/inventory", tags=["inventory"])
@@ -58,6 +58,10 @@ def restock(
     _: str = Depends(require_permission("inventory.manage")),
     tenant_id: str = Depends(get_tenant_id),
 ):
+    # Every foreign key on the body, checked against the caller's tenant.
+    # Without this a row filed here can point at another hospital's records,
+    # and the display helpers then resolve that id to a real name.
+    assert_body_in_tenant(db, body, tenant_id)
     med = scoped(db, models.Medicine, tenant_id).filter(models.Medicine.id == body.medicine_id).first()
     if med is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Medicine not found")
@@ -88,6 +92,10 @@ def adjust(
     _: str = Depends(require_permission("inventory.manage")),
     tenant_id: str = Depends(get_tenant_id),
 ):
+    # Every foreign key on the body, checked against the caller's tenant.
+    # Without this a row filed here can point at another hospital's records,
+    # and the display helpers then resolve that id to a real name.
+    assert_body_in_tenant(db, body, tenant_id)
     med = scoped(db, models.Medicine, tenant_id).filter(models.Medicine.id == body.medicine_id).first()
     if med is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Medicine not found")

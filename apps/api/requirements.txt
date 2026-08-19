@@ -9,3 +9,10 @@ alembic>=1.13
 # Multipart bodies — registration document uploads (POST /hospitals/{id}/documents).
 python-multipart>=0.0.20
 psycopg[binary]>=3.2
+
+# --- Tests ---
+# The tenant-isolation suite drives the real app through TestClient, which needs
+# an HTTP client to do it. Not optional: with one tenant every isolation bug is
+# invisible, so these run before any release that touches a query.
+pytest>=8.0
+httpx2>=2.0

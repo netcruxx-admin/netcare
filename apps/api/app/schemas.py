@@ -383,6 +383,18 @@ class HospitalAdminCreate(CamelModel):
     phone: Optional[str] = ""
 
 
+class DepartmentSeed(CamelModel):
+    """A department to create with the hospital.
+
+    Deliberately just a name and a description. There is no global catalog of
+    every department in Indian healthcare to validate against, and inventing one
+    would mean a hospital could not have a unit until we had heard of it.
+    """
+
+    name: str
+    description: str = ""
+
+
 class HospitalCreate(CamelModel):
     """Onboard a new tenant, in one request.
 
@@ -394,7 +406,9 @@ class HospitalCreate(CamelModel):
     afterwards (POST /hospitals/{id}/documents).
 
     Everything past `category` is optional. Modules, theme, tagline and
-    departments seed from the category template when omitted.
+    departments each fall back to the category template when omitted -- the
+    template is a starting point, not a constraint, so any of them may be
+    replaced outright.
     """
 
     # --- Identity (the only required part) ---
@@ -426,6 +440,11 @@ class HospitalCreate(CamelModel):
     licences: List[HospitalLicenceCreate] = []
     subscription: Optional[HospitalSubscriptionUpdate] = None
     admin: Optional[HospitalAdminCreate] = None
+
+    # --- Departments ---
+    # None means "seed from the category template", which is what every caller
+    # did before this existed. An explicit list replaces the template entirely.
+    departments: Optional[List[DepartmentSeed]] = None
 
     # Kept from the original flat body so existing callers (and the seed) do not
     # break; `admin` above wins when both are supplied.
@@ -474,6 +493,39 @@ class HospitalCreate(CamelModel):
         if value and not _GSTIN_RE.match(value):
             raise ValueError("GSTIN must be 15 characters, e.g. 27ABCDE1234F1Z5")
         return value
+
+    @field_validator("departments")
+    @classmethod
+    def _departments_are_usable(
+        cls, value: Optional[List[DepartmentSeed]]
+    ) -> Optional[List[DepartmentSeed]]:
+        """An explicit list must name at least one real department, once each.
+
+        A hospital with no departments cannot take a booking at all, because
+        every appointment carries a department_id. An empty list would therefore
+        create a tenant that exists and cannot function. Refused here rather
+        than quietly falling back to the template: the caller clearly meant
+        something, and guessing which something is worse than saying no.
+
+        Names are compared case-insensitively. "Cardiology" and "cardiology" are
+        one department to everybody except a UNIQUE constraint we do not have.
+        """
+        if value is None:
+            return value
+        cleaned = [d for d in value if d.name and d.name.strip()]
+        if not cleaned:
+            raise ValueError(
+                "Name at least one department, or omit the field to use the "
+                "category's."
+            )
+        seen: set[str] = set()
+        for dept in cleaned:
+            key = dept.name.strip().lower()
+            if key in seen:
+                raise ValueError(f"Duplicate department: {dept.name.strip()}")
+            seen.add(key)
+            dept.name = dept.name.strip()
+        return cleaned
 
 
 class HospitalUpdate(CamelModel):
@@ -549,6 +601,10 @@ class OnboardingMetaOut(CamelModel):
     states: List[str] = []
     medical_councils: List[str] = []
     categories: List[dict] = []
+    # The chosen category's suggested departments, so the wizard can pre-tick
+    # them without restating the template in TypeScript. Only populated when
+    # `category` is passed — without one there is nothing to suggest.
+    suggested_departments: List[dict] = []
 
 
 # ---------- Permissions ----------

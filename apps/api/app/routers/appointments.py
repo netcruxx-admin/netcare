@@ -14,7 +14,7 @@ from ..authz import (
     require_permission,
 )
 from ..database import get_db
-from ..tenancy import get_tenant_id, scoped
+from ..tenancy import assert_body_in_tenant, assert_in_tenant, get_tenant_id, scoped
 from ..utils import (
     appointment_name_search,
     appointments_with_vitals,
@@ -70,8 +70,8 @@ def list_appointments(
 
     # Resolve the display names in two queries for the whole page, so the client
     # never has to pull the full patient and doctor lists to render a table.
-    patients = patient_display(db, (r.patient_id for r in rows))
-    doctors = doctor_display(db, (r.doctor_id for r in rows))
+    patients = patient_display(db, (r.patient_id for r in rows), tenant_id)
+    doctors = doctor_display(db, (r.doctor_id for r in rows), tenant_id)
     # The nurse's list shows whether vitals have been recorded; one query over
     # the page, rather than the client fetching every vitals row to find out.
     with_vitals = appointments_with_vitals(db, (r.id for r in rows))
@@ -140,6 +140,14 @@ def create_appointment(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="You can only book appointments you are part of",
             )
+    # The body names three rows by id. None of them has been checked against the
+    # caller's tenant yet — scope "own" above only constrains *who* the caller
+    # is, not which hospital the ids belong to — so a booking could otherwise be
+    # filed here against another hospital's patient.
+    assert_in_tenant(db, models.Patient, body.patient_id, tenant_id)
+    assert_in_tenant(db, models.Doctor, body.doctor_id, tenant_id)
+    assert_in_tenant(db, models.Department, body.department_id, tenant_id)
+
     appointment = models.Appointment(
         id=new_id("apt"),
         hospital_id=tenant_id,
@@ -205,6 +213,10 @@ def update_appointment(
     scope: str = Depends(require_permission("appointments.manage")),
     tenant_id: str = Depends(get_tenant_id),
 ):
+    # Every foreign key on the body, checked against the caller's tenant.
+    # Without this a row filed here can point at another hospital's records,
+    # and the display helpers then resolve that id to a real name.
+    assert_body_in_tenant(db, body, tenant_id)
     query = scoped(db, models.Appointment, tenant_id).filter(
         models.Appointment.id == appointment_id
     )

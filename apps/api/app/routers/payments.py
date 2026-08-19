@@ -7,7 +7,7 @@ from .. import models, schemas
 from ..auth import get_current_user
 from ..authz import SCOPE_OWN, own_record_filter, require_permission
 from ..database import get_db
-from ..tenancy import get_tenant_id, scoped
+from ..tenancy import assert_body_in_tenant, get_tenant_id, scoped
 from ..utils import ListQuery, list_params, new_id, now_iso, paginate, text_search
 
 router = APIRouter(prefix="/payments", tags=["payments"])
@@ -49,6 +49,10 @@ def create_payment(
     _: str = Depends(require_permission("payments.manage")),
     tenant_id: str = Depends(get_tenant_id),
 ):
+    # Every foreign key on the body, checked against the caller's tenant.
+    # Without this a row filed here can point at another hospital's records,
+    # and the display helpers then resolve that id to a real name.
+    assert_body_in_tenant(db, body, tenant_id)
     payment = models.Payment(
         id=new_id("pay"),
         hospital_id=tenant_id,

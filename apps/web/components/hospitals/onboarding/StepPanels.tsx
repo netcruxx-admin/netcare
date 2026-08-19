@@ -3,6 +3,7 @@
 // The eight step bodies. Each is a plain component reading Formik state; the
 // wizard shell owns navigation, validation and submission.
 
+import { useEffect } from 'react';
 import { useFormikContext } from 'formik';
 import { Plus, Trash2, Upload, FileText, X, AlertTriangle } from 'lucide-react';
 import { FormField } from '@/components/form/FormField';
@@ -11,6 +12,7 @@ import { HOSPITAL_CATEGORIES } from '@/lib/hospitalCategories';
 import type { CatalogOption, OnboardingMeta } from '@/store/api';
 import {
   CATEGORY_THEMES,
+  type DepartmentRow,
   type LicenceRow,
   type PendingDocument,
   type WizardValues,
@@ -490,6 +492,154 @@ export function LicencesStep({ meta }: StepProps) {
 
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 const ACCEPTED = '.pdf,.jpg,.jpeg,.png,.webp,.heic,.tiff';
+
+// --- 6. Departments ----------------------------------------------------------
+
+export function DepartmentsStep({ meta }: StepProps) {
+  const { values, setFieldValue, errors, touched } = useFormikContext<WizardValues>();
+  const suggested = meta?.suggestedDepartments ?? [];
+
+  // The suggestions arrive with the category's meta, so the rows are seeded the
+  // first time this step is opened — and re-seeded if the category changed
+  // underneath it. Anything the operator typed is preserved: their custom rows
+  // are kept, and a suggestion they already ticked or unticked keeps that state.
+  useEffect(() => {
+    if (!suggested.length) return;
+    const previous = new Map(
+      values.departments.map((d) => [d.name.trim().toLowerCase(), d]),
+    );
+    const custom = values.departments.filter((d) => !d.fromTemplate);
+    const seeded: DepartmentRow[] = suggested.map((s) => {
+      const prior = previous.get(s.name.trim().toLowerCase());
+      return {
+        name: s.name,
+        description: s.description,
+        // Pre-ticked: the common case is "yes, these are right", and it should
+        // cost one click rather than five.
+        selected: prior ? prior.selected : true,
+        fromTemplate: true,
+      };
+    });
+    const next = [...seeded, ...custom];
+    const unchanged =
+      next.length === values.departments.length &&
+      next.every((d, i) => {
+        const cur = values.departments[i];
+        return cur && cur.name === d.name && cur.selected === d.selected;
+      });
+    if (!unchanged) setFieldValue('departments', next);
+    // values.departments is deliberately absent: including it would re-run on
+    // every tick and fight the operator for control of the list.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [suggested, setFieldValue]);
+
+  const update = (index: number, key: keyof DepartmentRow, value: string | boolean) =>
+    setFieldValue(
+      'departments',
+      values.departments.map((row, i) => (i === index ? { ...row, [key]: value } : row)),
+    );
+
+  const addCustom = () =>
+    setFieldValue('departments', [
+      ...values.departments,
+      { name: '', description: '', selected: true, fromTemplate: false },
+    ]);
+
+  const removeRow = (index: number) =>
+    setFieldValue(
+      'departments',
+      values.departments.filter((_, i) => i !== index),
+    );
+
+  const error = touched.departments && typeof errors.departments === 'string'
+    ? errors.departments
+    : '';
+  const chosen = values.departments.filter((d) => d.selected && d.name.trim()).length;
+
+  return (
+    <div className="space-y-5">
+      <SectionTitle>Departments</SectionTitle>
+      <p className="text-sm text-slate-600 -mt-3">
+        Suggested from the category you picked. Untick anything this hospital
+        does not run — reception can book a patient into any department listed
+        here, so one nobody staffs is worse than one that is missing.
+      </p>
+
+      {error && (
+        <div className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+          <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+          {error}
+        </div>
+      )}
+
+      <div className="space-y-2">
+        {values.departments.map((row, index) => (
+          <div
+            key={`${row.fromTemplate ? 'tpl' : 'custom'}-${index}`}
+            className="flex gap-3 items-start rounded-lg border border-slate-200 p-3"
+          >
+            <input
+              type="checkbox"
+              checked={row.selected}
+              onChange={(e) => update(index, 'selected', e.target.checked)}
+              className="mt-2 h-4 w-4 shrink-0 accent-cyan-600"
+              aria-label={row.name || 'New department'}
+            />
+            <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <input
+                value={row.name}
+                onChange={(e) => update(index, 'name', e.target.value)}
+                placeholder="Department name"
+                readOnly={row.fromTemplate}
+                className={`px-3 py-2 border rounded-lg text-sm ${
+                  row.fromTemplate
+                    ? 'border-transparent bg-transparent font-medium text-slate-900'
+                    : 'border-slate-300'
+                }`}
+              />
+              <input
+                value={row.description}
+                onChange={(e) => update(index, 'description', e.target.value)}
+                placeholder="What it covers (optional)"
+                className="px-3 py-2 border border-slate-300 rounded-lg text-sm"
+              />
+            </div>
+            {!row.fromTemplate && (
+              <button
+                type="button"
+                onClick={() => removeRow(index)}
+                className="mt-1 p-2 text-slate-400 hover:text-red-600"
+                aria-label="Remove department"
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+            )}
+          </div>
+        ))}
+      </div>
+
+      <div className="flex items-center justify-between">
+        <button
+          type="button"
+          onClick={addCustom}
+          className="inline-flex items-center gap-2 text-sm font-semibold text-cyan-600 hover:text-cyan-700"
+        >
+          <Plus className="h-4 w-4" /> Add a department
+        </button>
+        <span className="text-xs text-slate-500">
+          {chosen} selected
+        </span>
+      </div>
+
+      <p className="text-xs text-slate-500">
+        These can be changed later from the hospital&apos;s own dashboard — nothing here is permanent.
+      </p>
+    </div>
+  );
+}
+
+
+// --- 7. Documents ------------------------------------------------------------
 
 export function DocumentsStep({
   meta,

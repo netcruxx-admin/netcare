@@ -15,14 +15,30 @@
 // are no hospitals at all until the platform onboards the first one.
 // -----------------------------------------------------------------------------
 
-/** The subdomain label of the current URL, or null on the bare host / SSR. */
+/** The subdomain label of the current URL, or null on the bare host / SSR.
+ *
+ *  Mirrors `tenantLabel()` in middleware.ts and `_subdomain_label()` in the
+ *  API's tenancy.py — three copies because they run in three places, and all
+ *  three must agree about what counts as a tenant.
+ */
 export function currentSubdomain(): string | null {
   if (typeof window === 'undefined') return null;
-  const host = window.location.hostname; // e.g. "sunrise.localhost" or "localhost"
-  const label = host.split('.')[0];
-  if (!label || label === 'localhost' || label === 'www') return null;
+  const host = window.location.hostname.toLowerCase(); // "hospa.netcare.co.in"
+  const parts = host.split('.');
+  // A single label is the bare host: "localhost", or an internal hostname.
+  if (parts.length < 2) return null;
   // Ignore raw IPs (e.g. 127.0.0.1) — no subdomain there.
-  if (/^\d+$/.test(label)) return null;
+  if (/^\d+$/.test(parts[parts.length - 1])) return null;
+  // The apex is not a tenant. Without knowing it, "netcare.co.in" reads as a
+  // hospital called "netcare" — which is wrong on the platform's own front
+  // door, and would silently resolve to a real tenant if anyone ever onboarded
+  // that subdomain. The apex is the one thing the host cannot tell us, because
+  // a three-label host is either an apex on a compound suffix (netcare.co.in)
+  // or a tenant on a simple one (hospa.netcare.in).
+  const apex = process.env.NEXT_PUBLIC_ROOT_DOMAIN?.toLowerCase();
+  if (apex && host === apex) return null;
+  const label = parts[0];
+  if (!label || label === 'localhost' || label === 'www') return null;
   return label;
 }
 

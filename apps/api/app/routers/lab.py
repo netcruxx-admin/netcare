@@ -12,7 +12,7 @@ from .. import models, schemas
 from ..auth import get_current_user
 from ..authz import SCOPE_OWN, caller_doctor_id, caller_patient_id, own_record_filter, require_permission
 from ..database import get_db
-from ..tenancy import get_tenant_id, scoped
+from ..tenancy import assert_body_in_tenant, get_tenant_id, scoped
 from ..utils import (
     ListQuery,
     list_params,
@@ -109,6 +109,10 @@ def create_test_order(
     _: str = Depends(require_permission("lab_orders.create")),
     tenant_id: str = Depends(get_tenant_id),
 ):
+    # Every foreign key on the body, checked against the caller's tenant.
+    # Without this a row filed here can point at another hospital's records,
+    # and the display helpers then resolve that id to a real name.
+    assert_body_in_tenant(db, body, tenant_id)
     now = now_iso()
     payload = body.model_dump()
     payload["items"] = [i for i in payload.get("items", [])]  # plain dicts for JSON
@@ -263,6 +267,10 @@ def upsert_test_result(
     # A result is meaningless without the order it belongs to, and the order has
     # to be one of ours. Without this an unknown or foreign order id silently
     # produces an orphan report that no chart will ever show.
+    # Every foreign key on the body, checked against the caller's tenant.
+    # Without this a row filed here can point at another hospital's records,
+    # and the display helpers then resolve that id to a real name.
+    assert_body_in_tenant(db, body, tenant_id)
     order = (
         scoped(db, models.TestOrder, tenant_id)
         .filter(models.TestOrder.id == body.order_id)

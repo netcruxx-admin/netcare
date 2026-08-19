@@ -44,7 +44,11 @@ class Hospital(Base):
     name = Column(String, nullable=False)  # display/trading name
     subdomain = Column(String, unique=True, index=True, nullable=False)
     # maternity | multi-specialty | dental | eye | diagnostic
-    category = Column(String, nullable=False, default="maternity")
+    # No default: the category decides which modules, departments and licences a
+    # tenant is seeded with, so a row that arrived without one would silently
+    # become a maternity hospital. Provisioning always names it; anything that
+    # does not is a bug worth failing on.
+    category = Column(String, nullable=False)
     tagline = Column(String, default="")
     currency = Column(String, default="INR")
     # Which optional feature-modules are switched on (superadmin-controlled).

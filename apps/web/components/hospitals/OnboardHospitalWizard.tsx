@@ -49,6 +49,7 @@ import {
   AdminReviewStep,
   ClinicalStep,
   ContactStep,
+  DepartmentsStep,
   DocumentsStep,
   IdentityStep,
   LicencesStep,
@@ -347,6 +348,8 @@ function StepBody({
       return <ClinicalStep />;
     case 'licences':
       return <LicencesStep meta={meta} />;
+    case 'departments':
+      return <DepartmentsStep meta={meta} />;
     case 'documents':
       return (
         <DocumentsStep

@@ -1,17 +1,19 @@
 """Hospital (tenant) endpoints.
 
-Two audiences, and the split matters. `/hospitals/current` is public and serves
-the *runtime* config — the branding and modules the login page needs before
-anyone has signed in. Everything else is the platform superadmin's registration
-surface behind `hospitals.manage`, and none of it is public: a hospital's PAN,
-its licence numbers and its billing terms are not branding.
+Two audiences, and the split matters. `/hospitals/current` and
+`/hospitals/public` are public and serve the *runtime* config — the branding and
+modules the login page needs before anyone has signed in. Everything else is the
+platform superadmin's registration surface behind `hospitals.manage`, and none of
+it is public: a hospital's PAN, its licence numbers and its billing terms are not
+branding.
 
-The registration is spread across five tables (see models.Hospital and
-friends) but is created in one request, because a tenant that exists without a
-profile is a state nothing downstream expects. Documents are the exception —
-they are files, so they upload against a hospital that already exists.
+The registration is spread across five tables (see models.Hospital and friends)
+but is created in one request, because a tenant that exists without a profile is
+a state nothing downstream expects. Documents are the exception — they are files,
+so they upload against a hospital that already exists.
 """
 
+from datetime import date, timedelta
 from typing import Optional
 
 from fastapi import (
@@ -56,15 +58,18 @@ def list_public_hospitals(db: Session = Depends(get_db)):
         .order_by(models.Hospital.name)
         .all()
     )
+    # Built field by field rather than model_validate(row): this response is
+    # public, so an allowlist means a column added later is private until someone
+    # deliberately adds it here.
     return [
         schemas.HospitalPublicOut(
             id=h.id,
             name=h.name,
             subdomain=h.subdomain,
             category=h.category,
-            tagline=h.tagline,
-            theme=h.theme,
-            logo_url=p.logo_url if p else "",
+            tagline=h.tagline or "",
+            theme=h.theme or {},
+            logo_url=(p.logo_url if p else "") or "",
         )
         for h, p in rows
     ]
@@ -77,7 +82,12 @@ def current_hospital(
 ):
     """The active tenant's config — the FE fetches this at boot to replace the
     old hardcoded lib/hospitalConfig.ts. Public (no auth): branding/modules are
-    needed to render the login page. Tenant resolves from subdomain."""
+    needed to render the login page. Tenant resolves from subdomain.
+
+    Safe to serve wholesale because `hospitals` carries only runtime config and
+    legal identity; the address, licences and billing terms a stranger has no
+    business reading live in the child tables, which this does not touch.
+    """
     hospital = db.get(models.Hospital, tenant_id)
     if hospital is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Hospital not found")
@@ -143,13 +153,16 @@ def onboarding_meta(
     Served rather than restated in TypeScript because which licences apply is
     already a rule (category + enabled modules, see licences.py), and a second
     copy of that rule in the frontend would drift the first time one side
-    changed. Pass `category` to get only the licence types that vertical needs.
+    changed. Pass `category` to get only the licence types that vertical needs,
+    plus its suggested departments.
     """
-    if category and category in CATEGORY_TEMPLATES:
-        template = CATEGORY_TEMPLATES[category]
+    template = CATEGORY_TEMPLATES.get(category or "")
+    if template is not None:
         applicable = licence_catalog.licences_for(category, template["modules"])
+        suggested = list(template["departments"])
     else:
         applicable = licence_catalog.LICENCE_TYPES
+        suggested = []
 
     return schemas.OnboardingMetaOut(
         licence_types=[dict(lt) for lt in applicable],
@@ -165,6 +178,36 @@ def onboarding_meta(
             {"code": code, "label": tpl["label"], "tagline": tpl["tagline"]}
             for code, tpl in CATEGORY_TEMPLATES.items()
         ],
+        suggested_departments=suggested,
+    )
+
+
+@router.get(
+    "/meta/expiring-licences", response_model=list[schemas.HospitalLicenceOut]
+)
+def expiring_licences(
+    within_days: int = Query(default=60, ge=1, le=365),
+    db: Session = Depends(get_db),
+    _: str = Depends(require_permission("hospitals.manage")),
+):
+    """Licences lapsing in the next `within_days`, across every tenant.
+
+    The question the licence table exists to answer, and the reason it is a table
+    rather than columns on `hospitals`: one indexed range scan over
+    `ix_hospital_licences_expiry`, whatever the licence type.
+
+    A licence with no expiry date is not expiring and is excluded — "" sorts
+    before every real date and would otherwise match every window.
+    """
+    horizon = (date.today() + timedelta(days=within_days)).isoformat()
+    return (
+        db.query(models.HospitalLicence)
+        .filter(
+            models.HospitalLicence.expires_on != "",
+            models.HospitalLicence.expires_on <= horizon,
+        )
+        .order_by(models.HospitalLicence.expires_on)
+        .all()
     )
 
 
@@ -201,7 +244,9 @@ def list_hospitals(
     return paginate(query, response, params.limit, params.offset).all()
 
 
-@router.post("", response_model=schemas.HospitalDetailOut, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "", response_model=schemas.HospitalDetailOut, status_code=status.HTTP_201_CREATED
+)
 def onboard_hospital(
     body: schemas.HospitalCreate,
     db: Session = Depends(get_db),
@@ -251,6 +296,11 @@ def onboard_hospital(
         legal=legal,
         profile=body.profile.model_dump() if body.profile else None,
         licences=[lic.model_dump() for lic in body.licences],
+        departments=(
+            [d.model_dump() for d in body.departments]
+            if body.departments is not None
+            else None
+        ),
         subscription=body.subscription.model_dump() if body.subscription else None,
         admin_email=(admin.email or "").strip().lower() or None,
         admin_password=admin.password or "password123",
@@ -518,9 +568,11 @@ def list_documents(
 def upload_document(
     hospital_id: str,
     file: UploadFile = File(...),
-    # Aliased because a multipart body does not go through CamelModel, and the
-    # rest of this API is camelCase on the wire. Without these the frontend
-    # would have to remember that one endpoint out of every endpoint is snake.
+    # Aliased to camelCase because that is what crosses the wire everywhere else
+    # (CamelModel does it for JSON bodies). Form parameters get no alias
+    # generator, so without these the field names silently do not match what the
+    # client sends and every upload lands as an untyped "other" — which is
+    # exactly what happened before they were added.
     doc_type: str = Form(default="other", alias="docType"),
     licence_type: str = Form(default="", alias="licenceType"),
     title: str = Form(default=""),

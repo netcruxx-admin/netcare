@@ -92,7 +92,7 @@ def list_audit_logs(
     # Two batched lookups rather than one per row — an audit screen pages
     # through thousands of rows and each one names two people.
     actors = users_by_id(db, (r.actor_user_id for r in rows))
-    patients = patient_display(db, (r.patient_id for r in rows))
+    patients = patient_display(db, (r.patient_id for r in rows), tenant_id)
     for item in out:
         actor = actors.get(item.actor_user_id or "")
         item.actor_name = actor.name if actor else ""
