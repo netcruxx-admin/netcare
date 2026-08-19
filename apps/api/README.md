@@ -69,7 +69,7 @@ This project's `.venv` was created under an older path, so the console-script sh
 
 | Role       | Email                     | Tenant   |
 |------------|---------------------------|----------|
-| Superadmin | superadmin@platform.com   | — (platform) |
+| Superadmin | netcruxx@gmail.com   | — (platform) |
 | Admin      | admin@example.com         | hosp-1   |
 | Doctor     | doctor@example.com        | hosp-1   |
 | Nurse      | nurse@example.com         | hosp-1   |
@@ -101,13 +101,27 @@ Other resource endpoints are unchanged in shape but now tenant-scoped. `POST/PUT
 /departments` are open to a tenant `admin` (own hospital) or a `superadmin` (any hospital
 via `X-Hospital-Id`). See http://localhost:8000/docs for the full list.
 
-## Status: Slice 1
+## Status: Slice 2 — full FE parity
 
-Built: tenancy foundation + superadmin + auth + appointments + departments, tenant-isolated
-(verified: a tenant user cannot reach another tenant even with a forged `X-Hospital-Id`;
-a superadmin can switch tenants explicitly).
+Every FE `lib/db.ts` entity now has a tenant-scoped model + router:
 
-Deferred to later passes: scoping the remaining routers (medical-records, payments,
-prescriptions, vitals, doctors, patients), catalog tables (medicines, lab tests), lab
-orders/results, scheduling, video slots, notifications, and the maternity signature tables
-(pregnancies, ANC, babies, immunizations).
+- **Scoped in this pass:** patients, doctors, medical-records, payments (+ update),
+  prescriptions, vitals (previously unscoped).
+- **New tables + routers:** medicines, lab-tests (`/lab-tests`), lab orders + results
+  (`/test-orders`, `/test-results`, idempotent result upsert), schedule blocks
+  (`/schedule-blocks`), video slots (`/video-slots`, with `/{id}/book`), pregnancies +
+  ANC visits (`/pregnancies`, `/anc-visits`), and newborns (`/babies` with nested
+  `/growth` and `/immunizations`, plus mark-given).
+
+All new rows carry `hospital_id` and go through `scoped()`/`get_tenant_id`. Schema change
+is Alembic migration `b03f584e98dc` (11 new tables). Seed now includes a starter catalog
+(8 medicines, 6 lab tests) and a maternity demo (1 pregnancy + 3 ANC visits) for hosp-1.
+
+Verified end-to-end (20/20 checks) against a live Postgres: catalog/maternity/doctors are
+tenant-isolated, a forged `X-Hospital-Id` is ignored for tenant users, a superadmin can
+target a tenant explicitly (and is rejected without one), cross-tenant `GET` 404s, and the
+lab-result upsert is idempotent.
+
+Still deferred: notifications table (FE derives these live), catalog seeding for
+onboarded tenants (they start with an empty catalog by design), and richer role guards on
+the clinical write endpoints.

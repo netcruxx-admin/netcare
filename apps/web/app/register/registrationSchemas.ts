@@ -1,50 +1,26 @@
-// Constants, validation schemas and the per-role "verify & auto-fill" config
-// for the registration wizard. Kept out of the page/hook so the orchestration
-// and the presentational steps stay readable.
+// Constants and validation schemas for the registration wizard. Kept out of the
+// page/hook so the orchestration and the presentational steps stay readable.
+//
+// Public sign-up creates patients only — a staff account carries access to other
+// people's records, so the backend provisions those through POST /users
+// (`RegisterRole = Literal["patient"]`). There is deliberately no clinician
+// branch here, and no identity-verification step: the Aadhaar / medical-council
+// lookups that used to sit in front of this form were a hardcoded fixture, not a
+// KYC provider. When a real one is wired up (POST /verifications/…), the step
+// comes back — against the backend, not a list in the bundle.
 import * as Yup from 'yup';
-import { BadgeCheck, Fingerprint } from 'lucide-react';
-import type { LucideIcon } from 'lucide-react';
-import { SAMPLE_REGISTRATION_NUMBERS } from '@/lib/doctorRegistry';
-import { SAMPLE_NURSE_REGISTRATION_NUMBERS } from '@/lib/nurseRegistry';
-import { SAMPLE_AADHAAR_NUMBERS } from '@/lib/aadhaarRegistry';
 
-export type Role = 'patient' | 'doctor' | 'admin' | 'lab' | 'nurse';
-export type Step = 'role' | 'verify' | 'account' | 'details';
-
-// Per-role config for the first "verify & auto-fill" step. Patients verify via
-// Aadhaar; doctors and nurses via their council registration number.
-export interface VerifyConfig {
-  field: 'aadhaarNumber' | 'licenseNumber';
-  label: string;
-  placeholder: string;
-  icon: LucideIcon;
-  intro: string;
-  verifiedTitle: string;
-  samples: string[];
-}
+export type Role = 'patient';
+export type Step = 'hospital' | 'role' | 'account' | 'details' | 'consent';
 
 export const BLOOD_GROUPS = ['A+', 'A-', 'B+', 'B-', 'O+', 'O-', 'AB+', 'AB-'];
 export const GENDERS = ['Female', 'Male', 'Other', 'Prefer not to say'];
-export const MEDICAL_COUNCILS = [
-  'National Medical Commission (NMC)',
-  'Andhra Pradesh Medical Council',
-  'Delhi Medical Council',
-  'Gujarat Medical Council',
-  'Karnataka Medical Council',
-  'Maharashtra Medical Council',
-  'Tamil Nadu Medical Council',
-  'Telangana State Medical Council',
-  'Uttar Pradesh Medical Council',
-  'West Bengal Medical Council',
-  'Other',
-];
 
-const PHONE_REGEX = /^[+]?[\d\s().-]{7,20}$/;
-export const CURRENT_YEAR = new Date().getFullYear();
+const PHONE_REGEX = /^\d{10}$/;
 
 export const initialValues = {
-  // verification
-  aadhaarNumber: '',
+  // hospital picker (only used when on root domain — no subdomain)
+  hospitalId: '',
   // account
   name: '',
   email: '',
@@ -61,14 +37,11 @@ export const initialValues = {
   chronicDiseases: '',
   insuranceProvider: '',
   insuranceNumber: '',
-  // doctor details
-  licenseNumber: '',
-  medicalCouncil: '',
-  registrationYear: '',
-  qualification: '',
-  specialization: '',
-  experienceYears: '',
-  consultationFee: '',
+  // consent — purpose codes ticked on the notice, and the guardian who ticked
+  // them when the patient is under 18 (DPDP s.9).
+  consents: [] as string[],
+  guardianName: '',
+  guardianRelationship: '',
 };
 
 export type FormValues = typeof initialValues;
@@ -77,7 +50,7 @@ export const accountSchema = Yup.object({
   name: Yup.string().trim().required('Full name is required'),
   email: Yup.string().email('Please enter a valid email').required('Email is required'),
   phone: Yup.string()
-    .matches(PHONE_REGEX, 'Please enter a valid phone number')
+    .matches(PHONE_REGEX, 'Enter a valid 10-digit mobile number')
     .required('Phone number is required'),
   password: Yup.string()
     .min(8, 'Password must be at least 8 characters')
@@ -92,69 +65,31 @@ export const accountSchema = Yup.object({
 });
 
 export const patientDetailsSchema = Yup.object({
-  emergencyPhone: Yup.string().matches(PHONE_REGEX, 'Please enter a valid phone number').notRequired(),
+  dateOfBirth: Yup.string().required('Date of birth is required'),
+  emergencyPhone: Yup.string().matches(PHONE_REGEX, 'Enter a valid 10-digit mobile number').notRequired(),
 });
 
-export const licenseSchema = Yup.object({
-  licenseNumber: Yup.string().trim().required('Registration number is required'),
-});
+/** Age in whole years, or null when no usable date of birth was given.
+ *
+ *  Mirrors `_age_on` in apps/api/app/consent.py, and unknown means adult in both
+ *  places: the backend is the one that refuses a minor's sign-up without a
+ *  guardian, so this only decides whether to *show* the guardian fields. */
+export function ageFromDateOfBirth(dateOfBirth: string): number | null {
+  if (!dateOfBirth) return null;
+  const born = new Date(dateOfBirth);
+  if (Number.isNaN(born.getTime())) return null;
+  const today = new Date();
+  let age = today.getFullYear() - born.getFullYear();
+  const beforeBirthday =
+    today.getMonth() < born.getMonth() ||
+    (today.getMonth() === born.getMonth() && today.getDate() < born.getDate());
+  if (beforeBirthday) age -= 1;
+  return age;
+}
 
-export const aadhaarSchema = Yup.object({
-  aadhaarNumber: Yup.string()
-    .transform((v) => (typeof v === 'string' ? v.replace(/\D/g, '') : v))
-    .matches(/^\d{12}$/, 'Enter a valid 12-digit Aadhaar number')
-    .required('Aadhaar number is required'),
-});
+export const AGE_OF_MAJORITY = 18;
 
-export const doctorDetailsSchema = Yup.object({
-  licenseNumber: Yup.string().trim().required('Medical registration number is required'),
-  qualification: Yup.string().trim().required('Qualification is required'),
-  specialization: Yup.string().required('Specialization is required'),
-  registrationYear: Yup.number()
-    .transform((v, orig) => (orig === '' ? undefined : v))
-    .typeError('Enter a valid year')
-    .min(1950, 'Enter a valid year')
-    .max(CURRENT_YEAR, 'Year cannot be in the future')
-    .notRequired(),
-  experienceYears: Yup.number()
-    .transform((v, orig) => (orig === '' ? undefined : v))
-    .typeError('Enter a number')
-    .min(0, 'Cannot be negative')
-    .max(60, 'Please check this value')
-    .notRequired(),
-  consultationFee: Yup.number()
-    .transform((v, orig) => (orig === '' ? undefined : v))
-    .typeError('Enter a number')
-    .min(0, 'Cannot be negative')
-    .notRequired(),
-});
-
-export const VERIFY_CONFIG: Record<'patient' | 'doctor' | 'nurse', VerifyConfig> = {
-  patient: {
-    field: 'aadhaarNumber',
-    label: 'Aadhaar Number',
-    placeholder: 'e.g. 2345 6789 0123',
-    icon: Fingerprint,
-    intro: "Enter your Aadhaar number — we'll fetch your details and fill in the rest for you.",
-    verifiedTitle: 'Verified with UIDAI (Aadhaar)',
-    samples: SAMPLE_AADHAAR_NUMBERS,
-  },
-  doctor: {
-    field: 'licenseNumber',
-    label: 'Medical Registration / License Number',
-    placeholder: 'e.g. MH-2012-045678',
-    icon: BadgeCheck,
-    intro: "Enter your medical registration number — we'll fetch your council-verified details and fill in the rest for you.",
-    verifiedTitle: 'Verified with the medical council',
-    samples: SAMPLE_REGISTRATION_NUMBERS,
-  },
-  nurse: {
-    field: 'licenseNumber',
-    label: 'Nursing Council Registration Number',
-    placeholder: 'e.g. INC-2016-118822',
-    icon: BadgeCheck,
-    intro: "Enter your nursing council registration number — we'll fetch your verified details and fill in the rest for you.",
-    verifiedTitle: 'Verified with the nursing council',
-    samples: SAMPLE_NURSE_REGISTRATION_NUMBERS,
-  },
-};
+/** The consent step validates nothing through Yup — which purposes are required
+ *  is the backend's answer, fetched with the notice, so the step gates its own
+ *  submit button on that rather than on a schema written here. */
+export const consentSchema = Yup.object({});

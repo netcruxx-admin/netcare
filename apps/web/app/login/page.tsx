@@ -1,70 +1,107 @@
 'use client';
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { Suspense, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useFormik, FormikProvider } from 'formik';
 import * as Yup from 'yup';
-import { Heart, Mail, Lock, AlertCircle } from 'lucide-react';
-import { useActiveHospital } from '@/hooks/useActiveHospital';
-import { authOperations, authStorage } from '@/lib/auth';
+import { Mail, Lock, AlertCircle, CheckCircle } from 'lucide-react';
+import Image from 'next/image';
+import { authStorage } from '@/lib/auth';
+import { loginRoleTabs, resolveHomePath } from '@/lib/roles';
 import { FormField } from '@/components/form/FormField';
+import { useGetCurrentHospitalQuery, useLoginMutation } from '@/store/api';
+import { currentSubdomain } from '@/lib/tenant';
 
-type LoginType = 'patient' | 'doctor' | 'admin' | 'lab' | 'nurse';
-
-const DEMO_CREDENTIALS: Record<LoginType, { email: string; password: string }> = {
-  patient: { email: 'patient@example.com', password: 'password123' },
-  doctor: { email: 'obgyn@example.com', password: 'password123' },
-  admin: { email: 'admin@example.com', password: 'password123' },
-  lab: { email: 'lab@example.com', password: 'password123' },
-  nurse: { email: 'nurse@example.com', password: 'password123' },
-};
+type LoginType = (typeof loginRoleTabs)[number];
 
 const loginSchema = Yup.object({
   email: Yup.string().email('Please enter a valid email').required('Email is required'),
   password: Yup.string().required('Password is required'),
 });
 
-export default function LoginPage() {
+/** The page's own frame, shown for the instant before the client subtree
+ *  hydrates. Matching the real layout rather than showing a spinner keeps the
+ *  header and card from jumping into place under the user. */
+function LoginFallback() {
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-cyan-50 via-white to-teal-50 flex flex-col">
+      <div className="bg-white shadow-md border-b-2 border-cyan-100">
+        <div className="max-w-6xl mx-auto px-6 py-2 flex items-center gap-3">
+          <Image src="/logo/logo-full.png" alt="NetCare" width={80} height={80} className="w-20 h-20 object-contain" />
+        </div>
+      </div>
+      <div className="flex-1 flex items-center justify-center px-6 py-12">
+        <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl p-8 space-y-8 border border-cyan-100">
+          <div className="text-center">
+            <h2 className="text-3xl font-bold bg-gradient-to-r from-cyan-600 to-brand-teal bg-clip-text text-transparent">Sign In</h2>
+            <p className="text-slate-600 mt-2">Loading…</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+function LoginForm() {
   const router = useRouter();
-  const hospital = useActiveHospital();
+  const searchParams = useSearchParams();
+  const justRegistered = searchParams.get('registered') === '1';
+  const isHospitalSubdomain = !!currentSubdomain();
+  const { data: hospital } = useGetCurrentHospitalQuery(undefined, { skip: !isHospitalSubdomain });
+  const [loginMutation, { isLoading }] = useLoginMutation();
   const [error, setError] = useState('');
   const [loginType, setLoginType] = useState<LoginType>('patient');
 
+  const hospitalName = hospital?.name ?? 'NetCare';
+
   const formik = useFormik({
-    initialValues: DEMO_CREDENTIALS.patient,
+    initialValues: { email: '', password: '' },
     validationSchema: loginSchema,
     onSubmit: async (values, { setSubmitting }) => {
       setError('');
       try {
-        const session = await authOperations.login(values.email, values.password);
+        const result = await loginMutation({
+          email: values.email,
+          password: values.password,
+        }).unwrap();
 
-        if (!session) {
-          setError('Invalid email or password');
+        const role = result.user.role;
+
+        // Root domain is the superadmin portal — no hospital staff belongs here.
+        if (!isHospitalSubdomain && role !== 'superadmin') {
+          setError('This portal is for platform administrators only. Please log in at your hospital\'s subdomain.');
           return;
         }
 
-        // Verify role matches login type
-        if (session.user.role !== loginType) {
-          setError(`This account is not a ${loginType} account`);
-          return;
+        // On a hospital subdomain, enforce that the selected tab matches the
+        // account's role so a patient can't accidentally log in as a doctor tab.
+        if (isHospitalSubdomain) {
+          const isTabRole = loginRoleTabs.includes(role as LoginType);
+          if (isTabRole && role !== loginType) {
+            setError(`This account is not a ${loginType} account`);
+            return;
+          }
         }
 
-        authStorage.setSession(session);
+        authStorage.setSession({
+          user: result.user,
+          patient: result.patient,
+          hospitalId: result.user.hospitalId ?? '',
+          role: result.role,
+          permissions: result.permissions,
+          token: result.token,
+          refreshToken: result.refreshToken,
+          isAuthenticated: true,
+        });
 
-        if (session.user.role === 'patient') {
-          router.push('/dashboard/patient');
-        } else if (session.user.role === 'doctor') {
-          router.push('/dashboard/doctor');
-        } else if (session.user.role === 'admin') {
-          router.push('/dashboard/admin');
-        } else if (session.user.role === 'lab') {
-          router.push('/dashboard/lab');
-        } else if (session.user.role === 'nurse') {
-          router.push('/dashboard/nurse');
-        }
-      } catch (err) {
-        setError('An error occurred. Please try again.');
+        // The role itself declares where it lands, so a new role needs no code
+        // change here (see lib/roles.ts).
+        router.push(resolveHomePath(role, result.role?.homePath));
+      } catch (err: unknown) {
+        const detail = (err as { data?: { detail?: string } })?.data?.detail;
+        setError(detail ?? 'Invalid email or password');
       } finally {
         setSubmitting(false);
       }
@@ -74,8 +111,6 @@ export default function LoginPage() {
   const handleTypeSelect = (type: LoginType) => {
     setLoginType(type);
     setError('');
-    // Prefill the matching demo credentials for convenience.
-    formik.setValues(DEMO_CREDENTIALS[type]);
     formik.setTouched({});
   };
 
@@ -83,12 +118,9 @@ export default function LoginPage() {
     <div className="min-h-screen bg-gradient-to-br from-cyan-50 via-white to-teal-50 flex flex-col">
       {/* Header */}
       <div className="bg-white shadow-md border-b-2 border-cyan-100">
-        <div className="max-w-6xl mx-auto px-6 py-4 flex items-center gap-3">
-          <div className="w-10 h-10 bg-gradient-to-br from-cyan-500 to-teal-600 rounded-lg flex items-center justify-center">
-            <Heart className="w-6 h-6 text-white" />
-          </div>
-          <Link href="/" className="text-2xl font-bold bg-gradient-to-r from-cyan-600 to-teal-600 bg-clip-text text-transparent hover:opacity-80">
-            {hospital.name}
+        <div className="max-w-6xl mx-auto px-6 py-2 flex items-center gap-3">
+          <Link href="/" className="hover:opacity-80 transition">
+            <Image src="/logo/logo-full.png" alt={hospitalName} width={80} height={80} className="w-20 h-20 object-contain" />
           </Link>
         </div>
       </div>
@@ -97,30 +129,42 @@ export default function LoginPage() {
       <div className="flex-1 flex items-center justify-center px-6 py-12">
         <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl p-8 space-y-8 border border-cyan-100">
           <div className="text-center">
-            <h2 className="text-3xl font-bold bg-gradient-to-r from-cyan-600 to-teal-600 bg-clip-text text-transparent">Sign In</h2>
-            <p className="text-slate-600 mt-2">Access your {hospital.name} account</p>
+            <h2 className="text-3xl font-bold bg-gradient-to-r from-cyan-600 to-brand-teal bg-clip-text text-transparent">Sign In</h2>
+            <p className="text-slate-600 mt-2">
+              {isHospitalSubdomain ? `Access your ${hospitalName} account` : 'Platform administrator access'}
+            </p>
           </div>
 
-          {/* Login Type Selector */}
-          <div className="space-y-3">
-            <label className="block text-sm font-medium text-slate-700">Login As</label>
-            <div className="grid grid-cols-3 gap-2">
-              {(['patient', 'doctor', 'admin', 'lab', 'nurse'] as const).map((type) => (
-                <button
-                  key={type}
-                  type="button"
-                  onClick={() => handleTypeSelect(type)}
-                  className={`py-2 px-4 rounded-lg font-medium transition capitalize ${
-                    loginType === type
-                      ? 'bg-gradient-to-r from-cyan-500 to-teal-600 text-white shadow-lg'
-                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                  }`}
-                >
-                  {type}
-                </button>
-              ))}
+          {/* Login Type Selector — only on hospital subdomains */}
+          {isHospitalSubdomain && (
+            <div className="space-y-3">
+              <label className="block text-sm font-medium text-slate-700">Login As</label>
+              <div className="grid grid-cols-3 gap-2">
+                {loginRoleTabs.map((type) => (
+                  <button
+                    key={type}
+                    type="button"
+                    onClick={() => handleTypeSelect(type)}
+                    className={`py-2 px-4 rounded-lg font-medium transition capitalize ${
+                      loginType === type
+                        ? 'bg-gradient-to-r from-cyan-500 to-brand-teal text-white shadow-lg'
+                        : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                    }`}
+                  >
+                    {type}
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
+
+          {/* Registration success banner */}
+          {justRegistered && (
+            <div className="bg-green-50 border border-green-200 rounded-xl p-4 flex items-start gap-3">
+              <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
+              <p className="text-green-700 text-sm">Account created! Sign in to access your dashboard.</p>
+            </div>
+          )}
 
           {/* Error Message */}
           {error && (
@@ -130,18 +174,6 @@ export default function LoginPage() {
             </div>
           )}
 
-          {/* Demo Credentials */}
-          <div className="bg-gradient-to-br from-cyan-50 to-teal-50 border border-cyan-200 rounded-xl p-4">
-            <p className="text-sm font-semibold text-cyan-900 mb-2">Demo Credentials:</p>
-            <p className="text-sm text-cyan-800">Email: <span className="font-mono">{DEMO_CREDENTIALS[loginType].email}</span></p>
-            <p className="text-sm text-cyan-800">Password: <span className="font-mono">{DEMO_CREDENTIALS[loginType].password}</span></p>
-            {loginType === 'doctor' && (
-              <p className="text-xs text-cyan-700 mt-2">
-                By department: <span className="font-mono">obgyn@</span>, <span className="font-mono">neonatology@</span>,{' '}
-                <span className="font-mono">maternal@</span>, <span className="font-mono">pediatrics@</span> — all <span className="font-mono">@example.com</span>. The sidebar adapts to each department.
-              </p>
-            )}
-          </div>
 
           <FormikProvider value={formik}>
             <form onSubmit={formik.handleSubmit} className="space-y-4" noValidate>
@@ -150,24 +182,40 @@ export default function LoginPage() {
 
               <button
                 type="submit"
-                disabled={formik.isSubmitting}
-                className="w-full bg-gradient-to-r from-cyan-500 to-teal-600 text-white py-2 rounded-lg font-semibold hover:shadow-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={isLoading || formik.isSubmitting}
+                className="w-full bg-gradient-to-r from-cyan-500 to-brand-teal text-white py-2 rounded-lg font-semibold hover:shadow-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {formik.isSubmitting ? 'Signing in...' : 'Sign In'}
+                {isLoading || formik.isSubmitting ? 'Signing in...' : 'Sign In'}
               </button>
             </form>
           </FormikProvider>
 
-          <div className="text-center">
-            <p className="text-slate-600 text-sm">
-              Don&apos;t have an account?{' '}
-              <Link href="/register" className="text-cyan-600 font-semibold hover:text-teal-600">
-                Create one
-              </Link>
-            </p>
-          </div>
+          {isHospitalSubdomain && (
+            <div className="text-center">
+              <p className="text-slate-600 text-sm">
+                Don&apos;t have an account?{' '}
+                <Link href="/register" className="text-cyan-600 font-semibold hover:text-teal-600">
+                  Create one
+                </Link>
+              </p>
+            </div>
+          )}
         </div>
       </div>
     </div>
+  );
+}
+
+
+// `useSearchParams` opts the subtree into client-side rendering, and Next
+// refuses to prerender a page that reaches for it without a boundary — which
+// failed the production build outright, not just this page. The fallback is the
+// page's own chrome rather than a spinner, so the form appearing is the only
+// thing that changes when hydration lands.
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<LoginFallback />}>
+      <LoginForm />
+    </Suspense>
   );
 }

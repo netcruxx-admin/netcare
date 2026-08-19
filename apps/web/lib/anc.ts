@@ -3,7 +3,7 @@
 // Used by the maternity Pregnancy Tracker.
 // -----------------------------------------------------------------------------
 
-import type { ANCVisit, PregnancyRecord } from './db';
+import type { ANCVisit, PregnancyRecord } from './types';
 import { MS_PER_DAY } from './constants';
 import type { GestationalAge, Milestone, RiskFlag } from './types';
 

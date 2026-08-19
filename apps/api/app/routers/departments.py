@@ -1,22 +1,30 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from typing import Optional
+
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.orm import Session
 
 from .. import models, schemas
-from ..auth import get_current_user, require_role
+from ..auth import get_current_user
+from ..authz import require_permission
 from ..database import get_db
 from ..tenancy import get_tenant_id, scoped
-from ..utils import new_id
+from ..utils import ListQuery, list_params, new_id, paginate, text_search
 
 router = APIRouter(prefix="/departments", tags=["departments"])
 
 
 @router.get("", response_model=list[schemas.DepartmentOut])
 def list_departments(
+    response: Response,
+    params: ListQuery = Depends(list_params),
     db: Session = Depends(get_db),
-    _: models.User = Depends(get_current_user),
+    scope: str = Depends(require_permission("departments.read")),
     tenant_id: str = Depends(get_tenant_id),
 ):
-    return scoped(db, models.Department, tenant_id).all()
+    query = scoped(db, models.Department, tenant_id)
+    query = text_search(query, [models.Department.name, models.Department.description], params.q)
+    query = query.order_by(models.Department.name)
+    return paginate(query, response, params.limit, params.offset).all()
 
 
 @router.post("", response_model=schemas.DepartmentOut, status_code=status.HTTP_201_CREATED)
@@ -24,7 +32,7 @@ def create_department(
     body: schemas.DepartmentCreate,
     db: Session = Depends(get_db),
     # Tenant admin manages their own hospital; superadmin passes require_role.
-    _: models.User = Depends(require_role("admin")),
+    _: str = Depends(require_permission("departments.manage")),
     tenant_id: str = Depends(get_tenant_id),
 ):
     department = models.Department(
@@ -44,7 +52,7 @@ def update_department(
     department_id: str,
     body: schemas.DepartmentUpdate,
     db: Session = Depends(get_db),
-    _: models.User = Depends(require_role("admin")),
+    _: str = Depends(require_permission("departments.manage")),
     tenant_id: str = Depends(get_tenant_id),
 ):
     department = (
@@ -65,7 +73,7 @@ def update_department(
 def delete_department(
     department_id: str,
     db: Session = Depends(get_db),
-    _: models.User = Depends(require_role("admin")),
+    _: str = Depends(require_permission("departments.manage")),
     tenant_id: str = Depends(get_tenant_id),
 ):
     department = (

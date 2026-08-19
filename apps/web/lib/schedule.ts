@@ -1,4 +1,4 @@
-import { dbOperations, ScheduleBlock, BlockType } from '@/lib/db';
+import type { ScheduleBlock, BlockType } from '@/lib/types';
 
 export const BLOCK_LABEL: Record<BlockType, string> = {
   break: 'Break',
@@ -55,8 +55,20 @@ export function blockAtSlot(blocks: ScheduleBlock[], slot: string): ScheduleBloc
 }
 
 // Set of slot labels (from `slots`) that fall inside any block for this doctor/date.
-export function blockedSlotSet(doctorId: string, date: string, slots: string[]): Set<string> {
+/**
+ * Which of `slots` a doctor is unavailable for on `date`.
+ *
+ * Takes the blocks rather than fetching them: this module is imported by both
+ * client screens and shared helpers, and the blocks now come from the API, so
+ * the caller owns the request and this stays a pure calculation.
+ */
+export function blockedSlotSet(
+  blocks: ScheduleBlock[],
+  doctorId: string,
+  date: string,
+  slots: string[],
+): Set<string> {
   if (!doctorId || !date) return new Set();
-  const blocks = dbOperations.getScheduleBlocksByDoctorId(doctorId).filter((b) => b.date === date);
-  return new Set(slots.filter((s) => blockAtSlot(blocks, s)));
+  const onDay = blocks.filter((b) => b.doctorId === doctorId && b.date === date);
+  return new Set(slots.filter((s) => blockAtSlot(onDay, s)));
 }

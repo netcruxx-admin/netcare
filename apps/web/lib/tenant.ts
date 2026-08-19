@@ -1,78 +1,59 @@
 // -----------------------------------------------------------------------------
 // Tenant-resolution seam — the ONE place that answers "which hospital am I?"
 //
-// This is the runtime counterpart to the multi-tenant data model in db.ts (every
-// row carries a `hospitalId`). Keep this file dependency-free (no imports from
-// db.ts / hospitalConfig.ts) so both of those can import it without a cycle.
+// The answer is only ever a hint for the backend: it resolves the tenant from
+// the request host and, for an authenticated call, from the caller's own user
+// row. Nothing here can widen what a user may see.
 //
 // Resolution priority:
-//   1. Subdomain           — sunrise.localhost → 'hosp-2'   (URL is authoritative)
-//   2. localStorage switch — set by the in-app hospital switcher / onboarding
-//   3. Default             — the flagship tenant
+//   1. Subdomain           — sunrise.localhost → "sunrise"  (URL is authoritative)
+//   2. URL search param ?h — superadmin navigating to a tenant-scoped page
+//   3. Nothing             — let the backend decide from the host
 //
-// On real subdomains the browser gives each origin its own localStorage, so
-// tenants are naturally isolated; on the bare host the localStorage switch lets
-// you flip between tenants that all live in one store (best for demoing scoping).
+// There is deliberately no default tenant. Inventing one would make the client
+// name a hospital it has no reason to believe in — and on a fresh install there
+// are no hospitals at all until the platform onboards the first one.
 // -----------------------------------------------------------------------------
 
-import { ACTIVE_HOSPITAL_KEY, DEFAULT_HOSPITAL_ID } from './constants';
-
-// Re-export for back-compat (definitions live in ./constants).
-export { ACTIVE_HOSPITAL_KEY, DEFAULT_HOSPITAL_ID } from './constants';
-
-// subdomain label → hospitalId. Populated by the registry at import time via
-// registerTenantSubdomains() so this file needn't know the tenant catalog.
-const subdomainMap: Record<string, string> = {};
-
-/** Registry calls this so subdomain resolution knows the tenant catalog. */
-export function registerTenantSubdomains(map: Record<string, string>): void {
-  Object.assign(subdomainMap, map);
-}
-
-/** The subdomain label of the current URL, or null on the bare host / SSR. */
+/** The subdomain label of the current URL, or null on the bare host / SSR.
+ *
+ *  Mirrors `tenantLabel()` in middleware.ts and `_subdomain_label()` in the
+ *  API's tenancy.py — three copies because they run in three places, and all
+ *  three must agree about what counts as a tenant.
+ */
 export function currentSubdomain(): string | null {
   if (typeof window === 'undefined') return null;
-  const host = window.location.hostname; // e.g. "sunrise.localhost" or "localhost"
-  const label = host.split('.')[0];
-  if (!label || label === 'localhost' || label === 'www') return null;
+  const host = window.location.hostname.toLowerCase(); // "hospa.netcare.co.in"
+  const parts = host.split('.');
+  // A single label is the bare host: "localhost", or an internal hostname.
+  if (parts.length < 2) return null;
   // Ignore raw IPs (e.g. 127.0.0.1) — no subdomain there.
-  if (/^\d+$/.test(label)) return null;
+  if (/^\d+$/.test(parts[parts.length - 1])) return null;
+  // The apex is not a tenant. Without knowing it, "netcare.co.in" reads as a
+  // hospital called "netcare" — which is wrong on the platform's own front
+  // door, and would silently resolve to a real tenant if anyone ever onboarded
+  // that subdomain. The apex is the one thing the host cannot tell us, because
+  // a three-label host is either an apex on a compound suffix (netcare.co.in)
+  // or a tenant on a simple one (hospa.netcare.in).
+  const apex = process.env.NEXT_PUBLIC_ROOT_DOMAIN?.toLowerCase();
+  if (apex && host === apex) return null;
+  const label = parts[0];
+  if (!label || label === 'localhost' || label === 'www') return null;
   return label;
 }
 
-/** Maps the URL subdomain to a hospitalId, if it names a known tenant. */
-export function resolveFromSubdomain(): string | null {
-  const label = currentSubdomain();
-  return label ? subdomainMap[label] ?? null : null;
-}
-
 /**
- * The active tenant id. SSR-safe: returns the default when there's no window,
- * so server render and first client render agree (avoids hydration mismatch);
- * client code that needs the resolved tenant should read it after mount.
+ * The tenant hint to send with API calls, or "" when there is none.
+ *
+ * SSR-safe: returns "" with no window, so server render and first client render
+ * agree and the backend falls back to host-based resolution either way.
  */
 export function getCurrentHospitalId(): string {
-  if (typeof window === 'undefined') return DEFAULT_HOSPITAL_ID;
-  const sub = resolveFromSubdomain();
-  if (sub) return sub; // URL wins
-  const stored = localStorage.getItem(ACTIVE_HOSPITAL_KEY);
-  if (stored) return stored;
-  return DEFAULT_HOSPITAL_ID;
-}
-
-/**
- * Switch the active tenant (in-app switcher / onboarding). Persists to
- * localStorage; callers typically reload so all data reads re-scope cleanly.
- */
-export function setCurrentHospitalId(id: string): void {
-  if (typeof window !== 'undefined') {
-    localStorage.setItem(ACTIVE_HOSPITAL_KEY, id);
-  }
-}
-
-/** Clears an explicit switch, falling back to subdomain/default resolution. */
-export function clearHospitalOverride(): void {
-  if (typeof window !== 'undefined') {
-    localStorage.removeItem(ACTIVE_HOSPITAL_KEY);
-  }
+  if (typeof window === 'undefined') return '';
+  // On a hospital subdomain, send the label — the backend maps it to the id.
+  const label = currentSubdomain();
+  if (label) return label;
+  // Superadmin deep-links carry the target hospital (e.g. /appointment/1?h=hosp-x)
+  // so every query on that page scopes to it.
+  return new URLSearchParams(window.location.search).get('h') ?? '';
 }

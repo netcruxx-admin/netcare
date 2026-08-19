@@ -1,8 +1,11 @@
 'use client';
 
+import { useState } from 'react';
+
 import { Formik, Form } from 'formik';
 import { X } from 'lucide-react';
-import { dbOperations } from '@/lib/db';
+import { apiError } from '@/lib/apiError';
+import { useCreatePrescriptionMutation } from '@/store/api';
 import { FormField } from '@/components/form/FormField';
 import { Modal } from './Modal';
 import { rxSchema } from '../appointmentSchemas';
@@ -24,6 +27,9 @@ export function AddPrescriptionModal({
   onClose,
   onSaved,
 }: AddPrescriptionModalProps) {
+  const [createPrescription] = useCreatePrescriptionMutation();
+  const [error, setError] = useState('');
+
   return (
     <Modal maxWidth="max-w-lg" scroll>
       <div className="flex justify-between items-center mb-4">
@@ -35,20 +41,25 @@ export function AddPrescriptionModal({
       <Formik
         initialValues={{ medicineName: '', dosage: '', frequency: '', duration: '', instructions: '' }}
         validationSchema={rxSchema}
-        onSubmit={(values) => {
-          dbOperations.createPrescription({
-            id: `rx-${Date.now()}`,
-            appointmentId,
-            patientId,
-            doctorId,
-            medicineName: values.medicineName,
-            dosage: values.dosage.trim(),
-            frequency: values.frequency.trim(),
-            duration: values.duration.trim(),
-            instructions: values.instructions.trim(),
-            createdAt: new Date().toISOString(),
-          });
-          onSaved('Prescription added');
+        onSubmit={async (values, { setSubmitting }) => {
+          setError('');
+          try {
+            await createPrescription({
+              appointmentId,
+              patientId,
+              doctorId,
+              medicineName: values.medicineName,
+              dosage: values.dosage.trim(),
+              frequency: values.frequency.trim(),
+              duration: values.duration.trim(),
+              instructions: values.instructions.trim(),
+            }).unwrap();
+            onSaved('Prescription added');
+          } catch (err) {
+            setError(apiError(err, 'Could not add prescription'));
+          } finally {
+            setSubmitting(false);
+          }
         }}
       >
         <Form className="grid sm:grid-cols-2 gap-4">
@@ -62,6 +73,9 @@ export function AddPrescriptionModal({
           <div className="sm:col-span-2">
             <FormField name="instructions" label="Instructions" as="textarea" placeholder="e.g. After meals" rows={2} />
           </div>
+          {error && (
+            <p className="col-span-2 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</p>
+          )}
           <div className="sm:col-span-2 flex gap-3 pt-2">
             <button
               type="button"
@@ -72,7 +86,7 @@ export function AddPrescriptionModal({
             </button>
             <button
               type="submit"
-              className="flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-teal-600 text-white rounded-lg hover:shadow-lg font-semibold transition"
+              className="flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg hover:shadow-lg font-semibold transition"
             >
               Save Prescription
             </button>

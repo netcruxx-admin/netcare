@@ -1,7 +1,7 @@
 'use client';
 
 import { Calendar, Clock, MessageCircle, User } from 'lucide-react';
-import type { Appointment, Doctor, Patient } from '@/lib/db';
+import type { Appointment, Doctor, Patient } from '@/lib/types';
 
 interface AppointmentInfoProps {
   appointment: Appointment;

@@ -6,6 +6,7 @@ import {
   CalendarClock,
   CalendarPlus,
   CheckCircle2,
+  FileText,
   Pencil,
   Pill,
   FlaskConical,
@@ -13,8 +14,8 @@ import {
   Video,
   XCircle,
 } from 'lucide-react';
-import type { Appointment } from '@/lib/db';
-import { getEnabledModules } from '@/lib/hospitalCategories';
+import type { Appointment } from '@/lib/types';
+import { useActiveHospital } from '@/hooks/useActiveHospital';
 import type { ConfirmAction } from '../useAppointmentDetail';
 
 interface ActionsToolbarProps {
@@ -30,6 +31,7 @@ interface ActionsToolbarProps {
   onReschedule: () => void;
   onVitals: () => void;
   onPrescription: () => void;
+  onClinicalNotes: () => void;
   onOrderTest: () => void;
   onFollowUp: () => void;
   onConfirm: (action: ConfirmAction) => void;
@@ -51,18 +53,22 @@ export function ActionsToolbar({
   onReschedule,
   onVitals,
   onPrescription,
+  onClinicalNotes,
   onOrderTest,
   onFollowUp,
   onConfirm,
 }: ActionsToolbarProps) {
   const router = useRouter();
+  // Which features this tenant has is the hospital's own record, not a local
+  // template — a module the hospital hasn't bought must not offer a button.
+  const { modules } = useActiveHospital();
 
   return (
     <div className="mb-8 flex flex-wrap gap-2">
-      {getEnabledModules().telemedicine && appointment.mode === 'video' && appointment.status === 'scheduled' && (isPatient || canManage) && (
+      {modules.telemedicine && appointment.mode === 'video' && appointment.status === 'scheduled' && (isPatient || canManage) && (
         <button
           onClick={() => router.push(`/dashboard/consult/${appointmentId}`)}
-          className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-cyan-500 to-teal-600 text-white rounded-lg hover:shadow-lg transition font-semibold text-sm"
+          className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg hover:shadow-lg transition font-semibold text-sm"
         >
           <Video className="w-4 h-4" /> Join Video Consult
         </button>
@@ -82,10 +88,13 @@ export function ActionsToolbar({
           <button onClick={onVitals} className={secondaryBtn}>
             <Activity className="w-4 h-4" /> Record Vitals
           </button>
+          <button onClick={onClinicalNotes} className={secondaryBtn}>
+            <FileText className="w-4 h-4" /> Clinical Notes
+          </button>
           <button onClick={onPrescription} className={secondaryBtn}>
             <Pill className="w-4 h-4" /> Add Prescription
           </button>
-          {getEnabledModules().lab && (
+          {modules.lab && (
             <button onClick={onOrderTest} className={secondaryBtn}>
               <FlaskConical className="w-4 h-4" /> Order Test
             </button>

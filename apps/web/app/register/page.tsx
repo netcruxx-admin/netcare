@@ -2,12 +2,14 @@
 
 import Link from 'next/link';
 import { FormikProvider } from 'formik';
-import { AlertCircle, CheckCircle, Heart } from 'lucide-react';
+import { AlertCircle, CheckCircle } from 'lucide-react';
+import Image from 'next/image';
 import { useActiveHospital } from '@/hooks/useActiveHospital';
 import { useRegistration } from './useRegistration';
+import { HospitalStep } from './steps/HospitalStep';
 import { RoleStep } from './steps/RoleStep';
-import { VerifyStep } from './steps/VerifyStep';
 import { AccountStep } from './steps/AccountStep';
+import { ConsentStep } from './steps/ConsentStep';
 import { DetailsStep } from './steps/DetailsStep';
 
 export default function RegisterPage() {
@@ -15,20 +17,18 @@ export default function RegisterPage() {
   const {
     step,
     userType,
-    departments,
+    selectedHospital,
+    isRootDomain,
     serverError,
     success,
-    lookupState,
-    verified,
     formik,
-    needsDetails,
-    verifyConfig,
-    hasVerify,
     wizardSteps,
     currentIndex,
-    handleFetchDetails,
+    isMinor,
+    handleHospitalSelect,
     handleRoleSelect,
     backToRole,
+    backToHospital,
     goToStep,
   } = useRegistration();
 
@@ -36,15 +36,9 @@ export default function RegisterPage() {
     <div className="min-h-screen bg-gradient-to-br from-cyan-50 via-white to-teal-50 flex flex-col">
       {/* Header */}
       <div className="bg-white shadow-md border-b-2 border-cyan-100">
-        <div className="max-w-6xl mx-auto px-6 py-4 flex items-center gap-3">
-          <div className="w-10 h-10 bg-gradient-to-br from-cyan-500 to-teal-600 rounded-lg flex items-center justify-center">
-            <Heart className="w-6 h-6 text-white" />
-          </div>
-          <Link
-            href="/"
-            className="text-2xl font-bold bg-gradient-to-r from-cyan-600 to-teal-600 bg-clip-text text-transparent hover:opacity-80"
-          >
-            {hospital.name}
+        <div className="max-w-6xl mx-auto px-6 py-2 flex items-center gap-3">
+          <Link href="/" className="hover:opacity-80 transition">
+            <Image src="/logo/logo-full.png" alt={hospital.name} width={80} height={80} className="w-20 h-20 object-contain" />
           </Link>
         </div>
       </div>
@@ -52,13 +46,29 @@ export default function RegisterPage() {
       {/* Registration Form */}
       <div className="flex-1 flex items-center justify-center px-6 py-12">
         <div
-          className={`w-full ${step === 'details' ? 'max-w-2xl' : 'max-w-md'} bg-white rounded-lg shadow-xl p-8 space-y-8`}
+          className={`w-full ${step === 'details' || step === 'consent' ? 'max-w-2xl' : 'max-w-md'} bg-white rounded-lg shadow-xl p-8 space-y-8`}
         >
           <FormikProvider value={formik}>
-            {step === 'role' ? (
-              <RoleStep onSelect={handleRoleSelect} />
+            {step === 'hospital' ? (
+              <HospitalStep onSelect={handleHospitalSelect} />
+            ) : step === 'role' ? (
+              <>
+                {isRootDomain && selectedHospital && (
+                  <div className="flex items-center gap-2 px-3 py-2 bg-cyan-50 border border-cyan-200 rounded-lg text-sm">
+                    <span className="text-cyan-700 font-medium truncate">{selectedHospital.name}</span>
+                    <button onClick={backToHospital} className="ml-auto text-xs text-cyan-500 hover:text-cyan-700 whitespace-nowrap">Change</button>
+                  </div>
+                )}
+                <RoleStep onSelect={handleRoleSelect} />
+              </>
             ) : (
               <>
+                {isRootDomain && selectedHospital && (
+                  <div className="flex items-center gap-2 px-3 py-2 bg-cyan-50 border border-cyan-200 rounded-lg text-sm">
+                    <span className="text-cyan-700 font-medium truncate">{selectedHospital.name}</span>
+                    <button onClick={backToHospital} className="ml-auto text-xs text-cyan-500 hover:text-cyan-700 whitespace-nowrap">Change</button>
+                  </div>
+                )}
                 <div className="text-center">
                   <h2 className="text-3xl font-bold text-slate-900">Welcome!</h2>
                   <p className="text-slate-600 mt-2">Register as a {userType}</p>
@@ -71,7 +81,7 @@ export default function RegisterPage() {
                       <div className="flex items-center gap-2">
                         <div
                           className={`w-7 h-7 rounded-full flex items-center justify-center text-sm font-semibold transition ${
-                            i <= currentIndex ? 'bg-gradient-to-br from-cyan-500 to-teal-600 text-white' : 'bg-slate-100 text-slate-400'
+                            i <= currentIndex ? 'bg-gradient-to-br from-cyan-500 to-brand-teal text-white' : 'bg-slate-100 text-slate-400'
                           }`}
                         >
                           {i < currentIndex ? <CheckCircle className="w-4 h-4" /> : i + 1}
@@ -92,35 +102,30 @@ export default function RegisterPage() {
                   </div>
                 )}
 
-                {serverError && (
+                {serverError && step !== 'consent' && (
                   <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-start gap-3">
                     <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
                     <p className="text-red-700">{serverError}</p>
                   </div>
                 )}
 
-                {step === 'verify' && verifyConfig ? (
-                  <VerifyStep
-                    formik={formik}
-                    verifyConfig={verifyConfig}
-                    lookupState={lookupState}
-                    verified={verified}
-                    onFetch={handleFetchDetails}
-                    onBack={backToRole}
-                  />
-                ) : step === 'account' ? (
+                {step === 'account' && (
                   <AccountStep
                     formik={formik}
-                    needsDetails={needsDetails}
-                    hasVerify={hasVerify}
-                    onBack={() => (hasVerify ? goToStep('verify') : backToRole())}
+                    needsDetails
+                    hasVerify={false}
+                    onBack={backToRole}
                   />
-                ) : (
-                  <DetailsStep
+                )}
+                {step === 'details' && (
+                  <DetailsStep formik={formik} onBack={() => goToStep('account')} />
+                )}
+                {step === 'consent' && (
+                  <ConsentStep
                     formik={formik}
-                    userType={userType}
-                    departments={departments}
-                    onBack={() => goToStep('account')}
+                    isMinor={isMinor}
+                    onBack={() => goToStep('details')}
+                    inlineError={serverError}
                   />
                 )}
 

@@ -2,23 +2,23 @@
   "name": "carbonhealth",
   "version": "1.0.0",
   "private": true,
-  "description": "CarbonHealth — Hospital Management Software (Monorepo)",
+  "description": "CarbonHealth \u2014 Hospital Management Software (Monorepo)",
   "scripts": {
-    "dev": "pnpm --filter web dev",
-    "dev:api": "cd apps/api && uvicorn app.main:app --reload --port 8000",
-    "dev:all": "concurrently \"pnpm dev\" \"pnpm dev:api\"",
-    "build": "pnpm --filter web build",
-    "lint": "pnpm --filter web lint",
-    "install:api": "cd apps/api && pip install -r requirements.txt",
-    "db:migrate": "cd apps/api && alembic upgrade head",
-    "db:seed": "cd apps/api && python -c 'from app.seed import seed_database; from app.database import SessionLocal; db = SessionLocal(); seed_database(db)'",
-    "setup": "pnpm install && pnpm install:api && pnpm db:migrate"
+    "dev": "npm run dev --prefix apps/web",
+    "dev:api": "node scripts/venv-run.js uvicorn app.main:app --reload --port 8000",
+    "dev:all": "concurrently \"npm run dev\" \"npm run dev:api\"",
+    "build": "npm run build --prefix apps/web",
+    "lint": "npm run lint --prefix apps/web",
+    "db:migrate": "node scripts/venv-run.js alembic upgrade head",
+    "db:seed": "node scripts/db-seed.js",
+    "setup": "node scripts/setup.js",
+    "test:api": "node scripts/venv-run.js pytest",
+    "test": "npm run test:api"
   },
   "devDependencies": {
     "concurrently": "^9.0.0"
   },
   "engines": {
-    "node": ">=18",
-    "pnpm": ">=9"
+    "node": ">=18"
   }
 }

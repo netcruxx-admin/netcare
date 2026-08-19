@@ -2,7 +2,8 @@
 
 import { useMemo, useState } from 'react';
 import { X, Search } from 'lucide-react';
-import { dbOperations } from '@/lib/db';
+import { apiError } from '@/lib/apiError';
+import { useCreateTestOrderMutation, useListLabTestsQuery } from '@/store/api';
 import { Modal } from './Modal';
 
 interface OrderTestModalProps {
@@ -14,7 +15,9 @@ interface OrderTestModalProps {
 }
 
 export function OrderTestModal({ appointmentId, patientId, doctorId, onClose, onSaved }: OrderTestModalProps) {
-  const tests = useMemo(() => dbOperations.getAllLabTests(), []);
+  const { data: tests = [] } = useListLabTestsQuery();
+  const [createTestOrder] = useCreateTestOrderMutation();
+  const [error, setError] = useState('');
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [priority, setPriority] = useState<'routine' | 'urgent'>('routine');
@@ -33,23 +36,24 @@ export function OrderTestModal({ appointmentId, patientId, doctorId, onClose, on
 
   const total = tests.filter((t) => selected.has(t.id)).reduce((s, t) => s + t.price, 0);
 
-  const save = () => {
+  const save = async () => {
     const items = tests.filter((t) => selected.has(t.id)).map((t) => ({ testId: t.id, name: t.name, price: t.price }));
     if (items.length === 0) return;
-    const now = new Date().toISOString();
-    dbOperations.createTestOrder({
-      id: `order-${Date.now()}`,
-      patientId,
-      doctorId,
-      appointmentId,
-      items,
-      status: 'ordered',
-      priority,
-      clinicalNote: note.trim(),
-      orderedAt: now,
-      updatedAt: now,
-    });
-    onSaved(`Ordered ${items.length} test${items.length === 1 ? '' : 's'}`);
+    setError('');
+    try {
+      await createTestOrder({
+        patientId,
+        doctorId,
+        appointmentId,
+        items,
+        status: 'ordered',
+        priority,
+        clinicalNote: note.trim(),
+      }).unwrap();
+      onSaved(`Ordered ${items.length} test${items.length === 1 ? '' : 's'}`);
+    } catch (err) {
+      setError(apiError(err, 'Could not place the order'));
+    }
   };
 
   return (
@@ -107,6 +111,9 @@ export function OrderTestModal({ appointmentId, patientId, doctorId, onClose, on
         <span className="text-xs font-medium text-slate-600">Clinical note</span>
         <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} placeholder="Reason / clinical context" className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/30 focus:border-cyan-500" />
       </label>
+      {error && (
+        <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2 mb-3">{error}</p>
+      )}
 
       <div className="flex gap-3 pt-4">
         <button type="button" onClick={onClose} className="flex-1 px-4 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition">
@@ -116,7 +123,7 @@ export function OrderTestModal({ appointmentId, patientId, doctorId, onClose, on
           type="button"
           onClick={save}
           disabled={selected.size === 0}
-          className="flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-teal-600 text-white rounded-lg hover:shadow-lg font-semibold transition disabled:opacity-40 disabled:cursor-not-allowed"
+          className="flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg hover:shadow-lg font-semibold transition disabled:opacity-40 disabled:cursor-not-allowed"
         >
           Order {selected.size > 0 ? `(${selected.size})` : ''}
         </button>

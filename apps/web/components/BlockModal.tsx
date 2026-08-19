@@ -2,7 +2,9 @@
 
 import { useState } from 'react';
 import { X, Ban, AlertCircle } from 'lucide-react';
-import { dbOperations, BlockType } from '@/lib/db';
+import type { BlockType } from '@/lib/types';
+import { apiError } from '@/lib/apiError';
+import { useCreateScheduleBlockMutation } from '@/store/api';
 import { BLOCK_TYPE_OPTIONS, GRID_SLOTS, slotMin } from '@/lib/schedule';
 
 // Start options exclude the last slot; end options exclude the first (end is exclusive).
@@ -29,24 +31,27 @@ export function BlockModal({
   const [end, setEnd] = useState('09:30 AM');
   const [note, setNote] = useState('');
   const [error, setError] = useState('');
+  const [createScheduleBlock, { isLoading: saving }] = useCreateScheduleBlockMutation();
 
-  const save = () => {
+  const save = async () => {
     setError('');
     if (!doctor) return setError('Select a doctor');
     if (!date) return setError('Pick a date');
     if (slotMin(end) <= slotMin(start)) return setError('End time must be after start time');
 
-    dbOperations.createScheduleBlock({
-      id: `blk-${Date.now()}`,
-      doctorId: doctor,
-      date,
-      startTime: start,
-      endTime: end,
-      type,
-      note: note.trim(),
-      createdAt: new Date().toISOString(),
-    });
-    onCreated('Block added to schedule');
+    try {
+      await createScheduleBlock({
+        doctorId: doctor,
+        date,
+        startTime: start,
+        endTime: end,
+        type,
+        note: note.trim(),
+      }).unwrap();
+      onCreated('Block added to schedule');
+    } catch (err) {
+      setError(apiError(err, 'Could not add the block'));
+    }
   };
 
   return (
@@ -110,7 +115,7 @@ export function BlockModal({
 
         <div className="flex gap-3 px-6 py-4 border-t">
           <button onClick={onClose} className="flex-1 px-4 py-2 bg-slate-200 text-slate-700 rounded hover:bg-slate-300 transition">Cancel</button>
-          <button onClick={save} className="flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-teal-600 text-white rounded hover:shadow-lg font-semibold transition">Add Block</button>
+          <button onClick={save} className="flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded hover:shadow-lg font-semibold transition">Add Block</button>
         </div>
       </div>
     </div>

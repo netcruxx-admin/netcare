@@ -6,8 +6,15 @@ import {
   Mic, MicOff, Video as VideoIcon, VideoOff, PhoneOff, MessageSquare,
   FileText, Send, CheckCircle2, Signal, CameraOff, ArrowLeft,
 } from 'lucide-react';
-import { authStorage } from '@/lib/auth';
-import { dbOperations } from '@/lib/db';
+import { useDashboardGuard } from '@/hooks/useDashboardGuard';
+import {
+  useCreateMedicalRecordMutation,
+  useGetAppointmentQuery,
+  useGetDoctorQuery,
+  useGetPatientQuery,
+  useUpdateAppointmentMutation,
+} from '@/store/api';
+import { adminRole, doctorRole } from '@/lib/roles';
 
 interface ChatMsg { from: 'me' | 'them'; text: string; }
 type Phase = 'lobby' | 'call' | 'ended';
@@ -32,7 +39,7 @@ export default function ConsultRoomPage() {
   const params = useParams();
   const appointmentId = params.id as string;
 
-  const [session, setSession] = useState<ReturnType<typeof authStorage.getSession>>(null);
+  const session = useDashboardGuard();
   const [ready, setReady] = useState(false);
   const [otherName, setOtherName] = useState('Participant');
   const [selfName, setSelfName] = useState('You');
@@ -55,24 +62,36 @@ export default function ConsultRoomPage() {
   const chatEndRef = useRef<HTMLDivElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
 
-  // Load appointment context.
+  // The API 404s an appointment the caller isn't part of, so reaching this page
+  // with data is itself the access check.
+  const { data: appointment, isError } = useGetAppointmentQuery(appointmentId, {
+    skip: !appointmentId || !session,
+  });
+  const { data: doctor } = useGetDoctorQuery(appointment?.doctorId ?? '', { skip: !appointment });
+  const { data: patient } = useGetPatientQuery(appointment?.patientId ?? '', { skip: !appointment });
+  const [createMedicalRecord] = useCreateMedicalRecordMutation();
+  const [updateAppointment] = useUpdateAppointmentMutation();
+
   useEffect(() => {
-    const s = authStorage.getSession();
-    if (!s) { router.push('/login'); return; }
-    const appt = dbOperations.getAppointment(appointmentId);
-    if (!appt) { router.push('/login'); return; }
-    const doctor = dbOperations.getDoctor(appt.doctorId);
-    const patient = dbOperations.getPatient(appt.patientId);
-    const doctorUser = doctor ? dbOperations.getUserById(doctor.userId) : undefined;
-    const patientUser = patient ? dbOperations.getUserById(patient.userId) : undefined;
-    const isDoctor = s.user.role === 'doctor' || s.user.role === 'admin';
-    setSession(s);
+    if (isError) router.push('/login');
+  }, [isError, router]);
+
+  // Who is on the call, from the records themselves.
+  useEffect(() => {
+    if (!session || !appointment) return;
+    const isDoctor = session.user.role === doctorRole || session.user.role === adminRole;
     setAmDoctor(isDoctor);
-    setSelfName(s.user.name);
-    setOtherName(isDoctor ? (patientUser?.name ?? 'Patient') : (doctorUser ? `Dr. ${doctorUser.name}` : 'Doctor'));
-    setScheduled(`${appt.date} · ${appt.time}`);
+    setSelfName(session.user.name);
+    setOtherName(
+      isDoctor
+        ? patient?.user?.name ?? 'Patient'
+        : doctor?.user?.name
+          ? `Dr. ${doctor.user.name}`
+          : 'Doctor',
+    );
+    setScheduled(`${appointment.date} · ${appointment.time}`);
     setReady(true);
-  }, [appointmentId, router]);
+  }, [session, appointment, doctor, patient]);
 
   // Acquire the camera/mic once, on mount.
   useEffect(() => {
@@ -116,22 +135,29 @@ export default function ConsultRoomPage() {
     setDraft('');
   };
 
-  const saveNote = () => {
-    if (!note.trim()) return;
-    const appt = dbOperations.getAppointment(appointmentId);
-    if (appt) {
-      dbOperations.createMedicalRecord({
-        id: `med-${Date.now()}`, patientId: appt.patientId, appointmentId, doctorId: appt.doctorId,
-        diagnosis: `[Teleconsult note] ${note.trim()}`, prescription: '', labReports: [], createdAt: new Date().toISOString(),
-      });
+  const saveNote = async () => {
+    if (!note.trim() || !appointment) return;
+    try {
+      await createMedicalRecord({
+        patientId: appointment.patientId,
+        appointmentId,
+        doctorId: appointment.doctorId,
+        diagnosis: `[Teleconsult note] ${note.trim()}`,
+        prescription: '',
+        labReports: [],
+      }).unwrap();
+      setNoteSaved(true);
+      setTimeout(() => setNoteSaved(false), 2000);
+    } catch {
+      // Notes are written by clinicians; a patient's client never shows this.
     }
-    setNoteSaved(true);
-    setTimeout(() => setNoteSaved(false), 2000);
   };
 
   const endCall = (markComplete: boolean) => {
     streamRef.current?.getTracks().forEach((t) => t.stop());
-    if (markComplete && amDoctor) dbOperations.updateAppointment(appointmentId, { status: 'completed' });
+    if (markComplete && amDoctor) {
+      updateAppointment({ id: appointmentId, body: { status: 'completed' } });
+    }
     setPhase('ended');
   };
 
@@ -148,7 +174,7 @@ export default function ConsultRoomPage() {
               <SelfVideo stream={stream} className="w-full h-full object-cover" />
             ) : (
               <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-400">
-                {mediaError ? <CameraOff className="w-10 h-10 mb-2" /> : <div className="w-24 h-24 rounded-full bg-gradient-to-br from-cyan-500 to-teal-600 flex items-center justify-center text-4xl font-bold text-white">{initials(selfName)}</div>}
+                {mediaError ? <CameraOff className="w-10 h-10 mb-2" /> : <div className="w-24 h-24 rounded-full bg-gradient-to-br from-cyan-500 to-brand-teal flex items-center justify-center text-4xl font-bold text-white">{initials(selfName)}</div>}
                 <p className="text-sm mt-3">{mediaError ? 'Camera unavailable — you can still join' : 'Camera is off'}</p>
               </div>
             )}
@@ -166,7 +192,7 @@ export default function ConsultRoomPage() {
           </div>
 
           <div className="flex justify-center mt-6">
-            <button onClick={() => setPhase('call')} className="px-8 py-3 rounded-full bg-gradient-to-r from-cyan-500 to-teal-600 font-semibold hover:opacity-95 flex items-center gap-2">
+            <button onClick={() => setPhase('call')} className="px-8 py-3 rounded-full bg-gradient-to-r from-cyan-500 to-brand-teal font-semibold hover:opacity-95 flex items-center gap-2">
               <VideoIcon className="w-5 h-5" /> Join now
             </button>
           </div>
@@ -216,7 +242,7 @@ export default function ConsultRoomPage() {
         <div className="flex-1 relative p-4 flex items-center justify-center">
           {/* Remote tile */}
           <div className="w-full h-full max-w-4xl rounded-2xl bg-gradient-to-br from-slate-700 to-slate-800 flex items-center justify-center relative overflow-hidden">
-            <div className="w-28 h-28 rounded-full bg-gradient-to-br from-cyan-500 to-teal-600 flex items-center justify-center text-4xl font-bold">
+            <div className="w-28 h-28 rounded-full bg-gradient-to-br from-cyan-500 to-brand-teal flex items-center justify-center text-4xl font-bold">
               {initials(otherName)}
             </div>
             {remote === 'connecting' && (
@@ -270,7 +296,7 @@ export default function ConsultRoomPage() {
               </div>
               <div className="p-3 border-t border-slate-700 flex gap-2">
                 <input value={draft} onChange={(e) => setDraft(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && sendMessage()} placeholder="Type a message…" className="flex-1 bg-slate-700 rounded-lg px-3 py-2 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-cyan-500/40" />
-                <button onClick={sendMessage} className="p-2 rounded-lg bg-cyan-600 hover:bg-cyan-500"><Send className="w-4 h-4" /></button>
+                <button onClick={sendMessage} className="p-2 rounded-lg bg-gradient-to-r from-cyan-500 to-brand-teal hover:shadow-lg"><Send className="w-4 h-4" /></button>
               </div>
             </>
           ) : (

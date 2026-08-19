@@ -3,7 +3,9 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, CalendarPlus, Heart, Video } from 'lucide-react';
+import { ArrowLeft, CalendarPlus, Video } from 'lucide-react';
+import Image from 'next/image';
+import { toast } from 'sonner';
 import { FollowUpModal } from '@/components/FollowUpModal';
 import { useAppointmentDetail } from './useAppointmentDetail';
 import { ActionsToolbar } from './components/ActionsToolbar';
@@ -13,11 +15,12 @@ import { RescheduleModal } from './components/RescheduleModal';
 import { EditAppointmentModal } from './components/EditAppointmentModal';
 import { RecordVitalsModal } from './components/RecordVitalsModal';
 import { AddPrescriptionModal } from './components/AddPrescriptionModal';
+import { AddClinicalNotesModal } from './components/AddClinicalNotesModal';
 import { OrderTestModal } from './components/OrderTestModal';
 import { ConfirmActionModal } from './components/ConfirmActionModal';
 import { useActiveHospital } from '@/hooks/useActiveHospital';
 
-type OpenModal = 'reschedule' | 'edit' | 'vitals' | 'rx' | 'laborder' | 'followup' | null;
+type OpenModal = 'reschedule' | 'edit' | 'vitals' | 'rx' | 'notes' | 'laborder' | 'followup' | null;
 
 // Reused page shell for the loading / error states.
 function Chrome({ children }: { children: React.ReactNode }) {
@@ -26,12 +29,7 @@ function Chrome({ children }: { children: React.ReactNode }) {
     <div className="min-h-screen bg-gradient-to-br from-cyan-50 via-white to-teal-50 flex flex-col">
       <div className="bg-white shadow-md border-b-2 border-cyan-100">
         <div className="max-w-6xl mx-auto px-6 py-4 flex items-center gap-3">
-          <div className="w-10 h-10 bg-gradient-to-br from-cyan-500 to-teal-600 rounded-lg flex items-center justify-center">
-            <Heart className="w-6 h-6 text-white" />
-          </div>
-          <h1 className="text-2xl font-bold bg-gradient-to-r from-cyan-600 to-teal-600 bg-clip-text text-transparent">
-            {hospital.name}
-          </h1>
+          <Image src="/logo/logo-full.png" alt={hospital.name} width={80} height={80} className="w-20 h-20 object-contain" />
         </div>
       </div>
       {children}
@@ -49,8 +47,6 @@ export default function AppointmentDetailPage() {
     confirmAction,
     setConfirmAction,
     runConfirm,
-    toast,
-    flash,
     refreshAppointment,
     reloadDetails,
     doctorName,
@@ -70,7 +66,7 @@ export default function AppointmentDetailPage() {
   const afterSave = (msg: string) => {
     reloadDetails();
     closeModal();
-    flash(msg);
+    toast.success(msg);
   };
 
   if (loading) {
@@ -92,7 +88,7 @@ export default function AppointmentDetailPage() {
         <div className="flex-1 flex items-center justify-center px-6">
           <div className="text-center">
             <p className="text-red-600 text-lg mb-4">{error || 'Appointment not found'}</p>
-            <Link href="/dashboard/patient" className="text-cyan-600 hover:text-cyan-700 flex items-center justify-center gap-2">
+            <Link href="/dashboard" className="text-cyan-600 hover:text-cyan-700 flex items-center justify-center gap-2">
               <ArrowLeft className="w-4 h-4" />
               Back to Dashboard
             </Link>
@@ -110,10 +106,8 @@ export default function AppointmentDetailPage() {
       <div className="bg-white shadow-md border-b-2 border-cyan-100">
         <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-gradient-to-br from-cyan-500 to-teal-600 rounded-lg flex items-center justify-center">
-              <Heart className="w-6 h-6 text-white" />
-            </div>
-            <h1 className="text-2xl font-bold bg-gradient-to-r from-cyan-600 to-teal-600 bg-clip-text text-transparent">
+            <Image src="/logo/logo-icon.png" alt="Logo" width={40} height={40} className="w-10 h-10 object-contain" />
+            <h1 className="text-2xl font-bold bg-gradient-to-r from-cyan-600 to-brand-teal bg-clip-text text-transparent">
               Appointment Details
             </h1>
           </div>
@@ -181,6 +175,7 @@ export default function AppointmentDetailPage() {
           onReschedule={() => setModal('reschedule')}
           onVitals={() => setModal('vitals')}
           onPrescription={() => setModal('rx')}
+          onClinicalNotes={() => setModal('notes')}
           onOrderTest={() => setModal('laborder')}
           onFollowUp={() => setModal('followup')}
           onConfirm={setConfirmAction}
@@ -234,6 +229,16 @@ export default function AppointmentDetailPage() {
         />
       )}
 
+      {modal === 'notes' && (
+        <AddClinicalNotesModal
+          appointmentId={appointmentId}
+          patientId={appointment.patientId}
+          doctorId={appointment.doctorId}
+          onClose={closeModal}
+          onSaved={afterSave}
+        />
+      )}
+
       {modal === 'rx' && (
         <AddPrescriptionModal
           appointmentId={appointmentId}
@@ -265,17 +270,11 @@ export default function AppointmentDetailPage() {
           onClose={closeModal}
           onCreated={(msg) => {
             closeModal();
-            flash(msg);
+            toast.success(msg);
           }}
         />
       )}
 
-      {/* Toast */}
-      {toast && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-slate-900 text-white text-sm px-4 py-2 rounded-lg shadow-lg">
-          {toast}
-        </div>
-      )}
     </div>
   );
 }

@@ -1,8 +1,11 @@
 'use client';
 
+import { useState } from 'react';
+
 import { Formik, Form } from 'formik';
 import { X } from 'lucide-react';
-import { dbOperations } from '@/lib/db';
+import { apiError } from '@/lib/apiError';
+import { useCreateVitalsMutation } from '@/store/api';
 import { FormField } from '@/components/form/FormField';
 import { Modal } from './Modal';
 import { vitalsSchema } from '../appointmentSchemas';
@@ -16,6 +19,9 @@ interface RecordVitalsModalProps {
 }
 
 export function RecordVitalsModal({ appointmentId, patientId, doctorId, onClose, onSaved }: RecordVitalsModalProps) {
+  const [createVitals] = useCreateVitalsMutation();
+  const [error, setError] = useState('');
+
   return (
     <Modal maxWidth="max-w-lg" scroll>
       <div className="flex justify-between items-center mb-4">
@@ -27,22 +33,27 @@ export function RecordVitalsModal({ appointmentId, patientId, doctorId, onClose,
       <Formik
         initialValues={{ temperature: '', bloodPressure: '', heartRate: '', respiratoryRate: '', weight: '', height: '', notes: '' }}
         validationSchema={vitalsSchema}
-        onSubmit={(values) => {
-          dbOperations.createVitals({
-            id: `v-${Date.now()}`,
-            appointmentId,
-            patientId,
-            doctorId,
-            temperature: Number(values.temperature) || 0,
-            bloodPressure: values.bloodPressure,
-            heartRate: Number(values.heartRate) || 0,
-            respiratoryRate: Number(values.respiratoryRate) || 0,
-            weight: Number(values.weight) || 0,
-            height: Number(values.height) || 0,
-            notes: values.notes,
-            createdAt: new Date().toISOString(),
-          });
-          onSaved('Vitals recorded');
+        onSubmit={async (values, { setSubmitting }) => {
+          setError('');
+          try {
+            await createVitals({
+              appointmentId,
+              patientId,
+              doctorId,
+              temperature: Number(values.temperature) || 0,
+              bloodPressure: values.bloodPressure,
+              heartRate: Number(values.heartRate) || 0,
+              respiratoryRate: Number(values.respiratoryRate) || 0,
+              weight: Number(values.weight) || 0,
+              height: Number(values.height) || 0,
+              notes: values.notes,
+            }).unwrap();
+            onSaved('Vitals recorded');
+          } catch (err) {
+            setError(apiError(err, 'Could not record vitals'));
+          } finally {
+            setSubmitting(false);
+          }
         }}
       >
         <Form className="grid grid-cols-2 gap-4">
@@ -55,6 +66,9 @@ export function RecordVitalsModal({ appointmentId, patientId, doctorId, onClose,
           <div className="col-span-2">
             <FormField name="notes" label="Notes" as="textarea" placeholder="Any observations" rows={2} />
           </div>
+          {error && (
+            <p className="col-span-2 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</p>
+          )}
           <div className="col-span-2 flex gap-3 pt-2">
             <button
               type="button"
@@ -65,7 +79,7 @@ export function RecordVitalsModal({ appointmentId, patientId, doctorId, onClose,
             </button>
             <button
               type="submit"
-              className="flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-teal-600 text-white rounded-lg hover:shadow-lg font-semibold transition"
+              className="flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg hover:shadow-lg font-semibold transition"
             >
               Save Vitals
             </button>

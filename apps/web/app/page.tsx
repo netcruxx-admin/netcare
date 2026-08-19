@@ -1,7 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import { Heart, Calendar, Shield, Users } from 'lucide-react';
+import { Calendar, Shield, Users, Heart } from 'lucide-react';
+import Image from 'next/image';
 import { useActiveHospital } from '@/hooks/useActiveHospital';
 
 export default function LandingPage() {
@@ -10,12 +11,9 @@ export default function LandingPage() {
     <div className="min-h-screen flex flex-col">
       {/* Navigation */}
       <nav className="bg-white shadow-lg border-b-2 border-cyan-100">
-        <div className="max-w-6xl mx-auto px-6 py-4 flex justify-between items-center">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-gradient-to-br from-cyan-500 to-teal-600 rounded-lg flex items-center justify-center">
-              <Heart className="w-6 h-6 text-white" />
-            </div>
-            <h1 className="text-2xl font-bold bg-gradient-to-r from-cyan-600 to-teal-600 bg-clip-text text-transparent">{hospital.name}</h1>
+        <div className="max-w-6xl mx-auto px-6 py-2 flex justify-between items-center">
+          <div className="flex items-center">
+            <Image src="/logo/logo-full.png" alt={hospital.name} width={80} height={80} className="w-20 h-20 object-contain" />
           </div>
           <div className="flex gap-3">
             <Link
@@ -26,7 +24,7 @@ export default function LandingPage() {
             </Link>
             <Link
               href="/register"
-              className="px-6 py-2 bg-gradient-to-r from-cyan-500 to-teal-600 text-white font-semibold rounded-lg hover:shadow-lg transition"
+              className="px-6 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white font-semibold rounded-lg hover:shadow-lg transition"
             >
               Get Started
             </Link>
@@ -41,7 +39,7 @@ export default function LandingPage() {
             <div className="space-y-6">
               <h2 className="text-5xl md:text-6xl font-bold text-slate-900 leading-tight">
                 Your Health,
-                <span className="block bg-gradient-to-r from-cyan-600 to-teal-600 bg-clip-text text-transparent">Our Priority</span>
+                <span className="block bg-gradient-to-r from-cyan-600 to-brand-teal bg-clip-text text-transparent">Our Priority</span>
               </h2>
               <p className="text-lg text-slate-600 leading-relaxed">
                 Book appointments with healthcare professionals, manage your medical records, and stay on top of your health—all in one place.
@@ -49,7 +47,7 @@ export default function LandingPage() {
               <div className="flex gap-4 pt-4">
                 <Link
                   href="/register"
-                  className="px-8 py-3 bg-gradient-to-r from-cyan-500 to-teal-600 text-white font-semibold rounded-lg hover:shadow-lg transition"
+                  className="px-8 py-3 bg-gradient-to-r from-cyan-500 to-brand-teal text-white font-semibold rounded-lg hover:shadow-lg transition"
                 >
                   Start Booking
                 </Link>
@@ -100,9 +98,9 @@ export default function LandingPage() {
         <div className="max-w-6xl mx-auto px-6">
           <div className="text-center mb-16">
             <h2 className="text-4xl font-bold text-slate-900 mb-4">
-              Why Choose {hospital.name}?
+              Why Choose NetCare?
             </h2>
-            <div className="h-1 w-16 bg-gradient-to-r from-cyan-500 to-teal-600 mx-auto rounded-full"></div>
+            <div className="h-1 w-16 bg-gradient-to-r from-cyan-500 to-brand-teal mx-auto rounded-full"></div>
           </div>
           <div className="grid md:grid-cols-3 gap-8">
             {[
@@ -154,13 +152,13 @@ export default function LandingPage() {
       </section>
 
       {/* CTA Section */}
-      <section className="py-20 bg-gradient-to-r from-cyan-600 to-teal-600">
+      <section className="py-20 bg-gradient-to-r from-cyan-500 to-brand-teal">
         <div className="max-w-6xl mx-auto px-6 text-center">
           <h2 className="text-4xl md:text-5xl font-bold text-white mb-6">
             Ready to Take Control of Your Health?
           </h2>
           <p className="text-xl text-cyan-100 mb-8">
-            Join thousands of patients managing their appointments with {hospital.name}
+            Join thousands of patients managing their appointments with NetCare
           </p>
           <Link
             href="/register"
@@ -172,15 +170,13 @@ export default function LandingPage() {
       </section>
 
       {/* Footer */}
-      <footer className="bg-slate-900 text-slate-400 py-12">
+      <footer className="bg-brand-navy text-slate-400 py-12">
         <div className="max-w-6xl mx-auto px-6">
           <div className="grid md:grid-cols-4 gap-8 mb-8">
             <div>
-              <div className="flex items-center gap-3 mb-4">
-                <div className="w-10 h-10 bg-gradient-to-br from-cyan-400 to-teal-500 rounded-lg flex items-center justify-center">
-                  <Heart className="w-6 h-6 text-white" />
-                </div>
-                <span className="font-bold text-white text-lg">{hospital.name}</span>
+              <div className="flex items-center gap-2 mb-4">
+                <Image src="/logo/logo-full-white.png" alt={hospital.name} width={100} height={100} className="w-30 h-30 object-contain" />
+                {/* <span className="font-bold text-white text-lg">{hospital.name}</span> */}
               </div>
               <p className="text-sm">Your trusted healthcare companion</p>
             </div>
@@ -209,7 +205,7 @@ export default function LandingPage() {
             </div>
           </div>
           <div className="border-t border-gray-800 pt-8 text-center text-sm">
-            <p>&copy; {new Date().getFullYear()} {hospital.name}. All rights reserved.</p>
+            <p>&copy; {new Date().getFullYear()} NetCare. All rights reserved.</p>
           </div>
         </div>
       </footer>

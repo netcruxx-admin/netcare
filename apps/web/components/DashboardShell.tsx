@@ -2,142 +2,27 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
-import type { LucideIcon } from 'lucide-react';
-import {
-  Heart,
-  LogOut,
-  Menu,
-  X,
-  LayoutDashboard,
-  CalendarPlus,
-  Clock,
-  FileText,
-  HeartPulse,
-  CreditCard,
-  User,
-  CheckCircle,
-  Building2,
-  Stethoscope,
-  Users,
-  CalendarDays,
-  UserRound,
-  CalendarRange,
-  Pill,
-  FlaskConical,
-  ClipboardList,
-  FileBarChart,
-  Settings,
-  Baby,
-  Search,
-  Video,
-} from 'lucide-react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { LogOut, Menu, X, Search } from 'lucide-react';
+import Image from 'next/image';
 import { authStorage } from '@/lib/auth';
-import { dbOperations } from '@/lib/db';
-import { getAllHospitals, type HospitalConfig, type HospitalModules } from '@/lib/hospitalConfig';
-import { getEnabledModules } from '@/lib/hospitalCategories';
-import { setCurrentHospitalId } from '@/lib/tenant';
-import { useActiveHospital } from '@/hooks/useActiveHospital';
-import { NotificationBell } from '@/components/NotificationBell';
+import type { HospitalModules } from '@/lib/types';
+import {
+  doctorRole,
+  navRoutesForRole,
+  portalTitleForRole,
+  routeLabel,
+  superadminRole,
+  type PatientContext,
+  type PermissionGrant,
+} from '@/lib/roles';
+import {
+  useGetCurrentHospitalQuery,
+  useListHospitalsQuery,
+  useLogoutMutation,
+  useMeQuery,
+} from '@/store/api';
 import { CommandPalette } from '@/components/CommandPalette';
-
-type Role = 'patient' | 'doctor' | 'admin' | 'lab' | 'nurse';
-
-// A patient's care context, derived from their own data — used to show only the
-// sidebar items relevant to the care they're actually receiving.
-interface PatientContext {
-  specializations: string[]; // specializations of doctors they have appointments with
-  hasPregnancy: boolean;
-  hasBaby: boolean;
-}
-
-interface NavItem {
-  label: string;
-  href: string;
-  icon: LucideIcon;
-  /** If set, this item only shows when the module is enabled in hospitalConfig. */
-  module?: keyof HospitalModules;
-  /** For doctors: keywords matched (case-insensitive substring) against the
-   *  doctor's specialization. If set, the item only shows for matching
-   *  departments (e.g. "Newborns" → neonatology / paediatrics). Items without
-   *  this tag show for every doctor. */
-  specialties?: string[];
-  /** For patients: shown only when this returns true for the patient's care
-   *  context (e.g. "Pregnancy" only if they see a gynaecologist / have a
-   *  pregnancy record). Items without this show for every patient. */
-  patientVisible?: (ctx: PatientContext) => boolean;
-}
-
-const MENUS: Record<Role, { title: string; items: NavItem[] }> = {
-  patient: {
-    title: 'Patient Portal',
-    items: [
-      { label: 'Dashboard', href: '/dashboard/patient', icon: LayoutDashboard },
-      { label: 'Book Appointment', href: '/dashboard/patient/book', icon: CalendarPlus },
-      { label: 'Pregnancy', href: '/dashboard/patient/pregnancy', icon: Baby, module: 'anc', patientVisible: (c) => c.hasPregnancy || c.specializations.some((s) => /obstetric|gynec|gynaec|maternal/.test(s)) },
-      { label: 'My Baby', href: '/dashboard/patient/baby', icon: Baby, module: 'anc', patientVisible: (c) => c.hasBaby || c.specializations.some((s) => /neonat|pediatric|paediatric|child/.test(s)) },
-      { label: 'Video Consult', href: '/dashboard/patient/video-consult', icon: Video, module: 'telemedicine' },
-      { label: 'Schedule', href: '/dashboard/patient/schedule', icon: CalendarRange },
-      { label: 'Appointment History', href: '/dashboard/patient/appointments', icon: Clock },
-      { label: 'Medical Records', href: '/dashboard/patient/records', icon: FileText, module: 'medicalRecords' },
-      { label: 'Test Reports', href: '/dashboard/patient/reports', icon: FileBarChart, module: 'lab' },
-      { label: 'Medical History', href: '/dashboard/patient/medical-history', icon: HeartPulse, module: 'medicalRecords' },
-      { label: 'Payments', href: '/dashboard/patient/payments', icon: CreditCard, module: 'payments' },
-      { label: 'Profile', href: '/dashboard/patient/profile', icon: User },
-    ],
-  },
-  doctor: {
-    title: 'Doctor Portal',
-    items: [
-      { label: 'Dashboard', href: '/dashboard/doctor', icon: LayoutDashboard },
-      { label: 'Appointments', href: '/dashboard/doctor/appointments', icon: CalendarDays },
-      { label: 'Schedule', href: '/dashboard/doctor/schedule', icon: CalendarRange },
-      { label: 'My Patients', href: '/dashboard/doctor/patients', icon: UserRound },
-      { label: 'Pregnancies', href: '/dashboard/doctor/pregnancies', icon: Baby, module: 'anc', specialties: ['obstetric', 'gynec', 'gynaec', 'maternal'] },
-      { label: 'Newborns', href: '/dashboard/doctor/newborns', icon: Baby, module: 'anc', specialties: ['neonat', 'pediatric', 'paediatric', 'child'] },
-      { label: 'Video Consults', href: '/dashboard/doctor/video-consults', icon: Video, module: 'telemedicine' },
-      { label: 'Lab Orders', href: '/dashboard/doctor/lab-orders', icon: ClipboardList, module: 'lab' },
-      { label: 'Prescriptions', href: '/dashboard/doctor/prescriptions', icon: Pill, module: 'pharmacy' },
-      { label: 'Completed Visits', href: '/dashboard/doctor/completed', icon: CheckCircle },
-      { label: 'Profile', href: '/dashboard/doctor/profile', icon: User },
-    ],
-  },
-  admin: {
-    title: 'Admin Panel',
-    items: [
-      { label: 'Overview', href: '/dashboard/admin', icon: LayoutDashboard },
-      { label: 'Appointments', href: '/dashboard/admin/appointments', icon: CalendarDays },
-      { label: 'Schedule', href: '/dashboard/admin/schedule', icon: CalendarRange },
-      { label: 'Patients', href: '/dashboard/admin/patients', icon: UserRound },
-      { label: 'Departments', href: '/dashboard/admin/departments', icon: Building2 },
-      { label: 'Doctors', href: '/dashboard/admin/doctors', icon: Stethoscope },
-      { label: 'Medicines', href: '/dashboard/admin/medicines', icon: Pill, module: 'pharmacy' },
-      { label: 'Tests', href: '/dashboard/admin/tests', icon: FlaskConical, module: 'lab' },
-      { label: 'Users', href: '/dashboard/admin/users', icon: Users },
-      { label: 'Hospital Setup', href: '/dashboard/admin/setup', icon: Settings },
-      { label: 'Onboard Hospital', href: '/dashboard/platform', icon: Building2 },
-    ],
-  },
-  lab: {
-    title: 'Laboratory',
-    items: [
-      { label: 'Dashboard', href: '/dashboard/lab', icon: LayoutDashboard },
-      { label: 'Test Orders', href: '/dashboard/lab/orders', icon: ClipboardList },
-      { label: 'Reports', href: '/dashboard/lab/reports', icon: FileBarChart },
-      { label: 'Test Catalog', href: '/dashboard/lab/catalog', icon: FlaskConical },
-    ],
-  },
-  nurse: {
-    title: 'Nursing Station',
-    items: [
-      { label: 'Dashboard', href: '/dashboard/nurse', icon: LayoutDashboard },
-      { label: 'Appointments', href: '/dashboard/nurse/appointments', icon: CalendarDays },
-      { label: 'Patients', href: '/dashboard/nurse/patients', icon: UserRound },
-      { label: 'Record Vitals', href: '/dashboard/nurse/vitals', icon: HeartPulse, module: 'nursing' },
-      { label: 'Profile', href: '/dashboard/nurse/profile', icon: User },
-    ],
-  },
-};
 
 export function DashboardShell({
   role,
@@ -146,7 +31,8 @@ export function DashboardShell({
   subtitle,
   children,
 }: {
-  role: Role;
+  /** Role code of the signed-in user; drives the sidebar via the route table. */
+  role: string;
   userName: string;
   title: string;
   subtitle?: string;
@@ -154,21 +40,52 @@ export function DashboardShell({
 }) {
   const router = useRouter();
   const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const [logoutMutation] = useLogoutMutation();
   const [open, setOpen] = useState(false);
   const [cmdOpen, setCmdOpen] = useState(false);
-  const [sessionUser, setSessionUser] = useState<{ id: string; name: string; role: Role } | null>(null);
-  // The logged-in doctor's specialization, used to tailor the sidebar by
-  // department. Empty for non-doctors.
-  const [specialization, setSpecialization] = useState('');
-  // The patient's care context, used to tailor the patient sidebar.
-  const [patientCtx, setPatientCtx] = useState<PatientContext>({ specializations: [], hasPregnancy: false, hasBaby: false });
+  // Read the session synchronously so the sidebar is correct on the very first
+  // render — no useEffect delay, no blank-then-populated flash.
+  const [storedGrants] = useState<PermissionGrant[] | undefined>(
+    () => authStorage.getSession()?.permissions,
+  );
 
-  // Active tenant (branding) + all tenants (for the switcher).
-  const hospital = useActiveHospital();
-  const [hospitals, setHospitals] = useState<HospitalConfig[]>([]);
-  useEffect(() => {
-    setHospitals(getAllHospitals());
-  }, []);
+  // Live permissions from the server. Refetched when the cached copy is older
+  // than 30s or the window refocuses, so a revoked permission leaves the sidebar
+  // without a re-login — without re-fetching on every single navigation. The
+  // backend re-checks on every request regardless; this only drives the menu.
+  const { data: meData } = useMeQuery(undefined, { refetchOnMountOrArgChange: 30, refetchOnFocus: true });
+  const specialization = '';
+  const patientCtx: PatientContext = { specializations: [], hasPregnancy: false, hasBaby: false };
+
+  // Hospital selector for superadmin — preserves ?h= across nav clicks.
+  const { data: allHospitals = [] } = useListHospitalsQuery(undefined, { skip: role !== superadminRole });
+  const selectedHospitalId = searchParams.get('h') ?? '';
+
+  const handleHospitalChange = (id: string) => {
+    const params = new URLSearchParams(searchParams.toString());
+    if (id) params.set('h', id);
+    else params.delete('h');
+    router.push(`${pathname}?${params.toString()}`);
+  };
+
+  // Active tenant branding from the real backend (skipped for superadmin).
+  const { data: hospitalData } = useGetCurrentHospitalQuery(undefined, { skip: role === superadminRole });
+  const hospital = role === superadminRole
+    // The platform wordmark is our own: navy → teal, exactly as "Net"/"Care" render in the logo.
+    ? { id: '', name: 'NetCare Platform', theme: { primary: '#00346e', primaryDark: '#019695' }, modules: {} as Partial<HospitalModules> }
+    : {
+      id: hospitalData?.id ?? '',
+      name: hospitalData?.name ?? '…',
+      theme: {
+        // Unbranded tenants fall back to the logo's blue → teal, matching the icon beside it.
+        primary: (hospitalData?.theme as Record<string, string>)?.primary ?? '#00509f',
+        primaryDark: (hospitalData?.theme as Record<string, string>)?.primaryDark ?? '#019695',
+      },
+      // The backend returns whichever modules this tenant has; anything
+      // missing counts as disabled rather than being asserted into existence.
+      modules: (hospitalData?.modules ?? {}) as Partial<HospitalModules>,
+    };
 
   // Paint the active tenant's brand colours so each hospital looks distinct.
   const brandGradient = {
@@ -180,37 +97,6 @@ export function DashboardShell({
     backgroundClip: 'text',
     color: 'transparent',
   } as React.CSSProperties;
-
-  // Switch tenants (demo tool): clear the session and land on the target
-  // hospital's login, since accounts are per-tenant.
-  const switchHospital = (id: string) => {
-    setCurrentHospitalId(id);
-    authStorage.clearSession();
-    window.location.href = '/login';
-  };
-
-  // Load the current user (for notifications + command palette) after mount.
-  useEffect(() => {
-    const s = authStorage.getSession();
-    if (!s) return;
-    setSessionUser({ id: s.user.id, name: s.user.name, role: s.user.role as Role });
-    if (s.user.role === 'doctor') {
-      setSpecialization(dbOperations.getDoctorByUserId(s.user.id)?.specialization ?? '');
-    } else if (s.user.role === 'patient') {
-      const patientId = dbOperations.getPatientByUserId(s.user.id)?.id;
-      if (patientId) {
-        const specializations = dbOperations
-          .getAppointmentsByPatientId(patientId)
-          .map((a) => dbOperations.getDoctorById(a.doctorId)?.specialization?.toLowerCase() ?? '')
-          .filter(Boolean);
-        setPatientCtx({
-          specializations,
-          hasPregnancy: !!dbOperations.getActivePregnancyByPatientId(patientId),
-          hasBaby: dbOperations.getBabiesByMother(patientId).length > 0,
-        });
-      }
-    }
-  }, []);
 
   // Cmd/Ctrl+K opens the command palette.
   useEffect(() => {
@@ -224,33 +110,42 @@ export function DashboardShell({
     return () => document.removeEventListener('keydown', onKey);
   }, []);
 
-  const menu = MENUS[role];
+  // Enabled modules come from the real hospital config fetched from the backend.
+  const modules = hospital.modules;
 
-  // Enabled modules come from the active hospital category. Read after mount so
-  // a category switch (stored in localStorage) re-shapes the nav live; the
-  // initial value matches SSR to avoid a hydration mismatch.
-  const [modules, setModules] = useState<HospitalModules>(() => getEnabledModules());
-  useEffect(() => {
-    setModules(getEnabledModules());
-  }, [pathname]);
-
-  // Show a nav item when (a) its module is enabled, and (b) for doctors, its
-  // specialty tag matches the doctor's department (untagged items always show).
-  const spec = specialization.toLowerCase();
-  const navItems = menu.items.filter((item) => {
-    if (item.module && !modules[item.module]) return false;
-    if (item.specialties && role === 'doctor') {
-      return item.specialties.some((k) => spec.includes(k));
-    }
-    if (item.patientVisible && role === 'patient') {
-      return item.patientVisible(patientCtx);
-    }
-    return true;
-  });
+  // The sidebar is the route table filtered to this role — no menu is defined
+  // here, so adding a screen means adding one route in lib/roles.ts.
+  // Grants from the session render the menu on first paint; the live ones from
+  // /auth/me replace them the moment they arrive, so a revoked permission drops
+  // out of the sidebar without a re-login.
+  const navItems = navRoutesForRole(role, {
+    modules,
+    specialization,
+    patientContext: patientCtx,
+    permissions: meData?.permissions ?? storedGrants,
+  }).map((route) => ({
+    label: routeLabel(route, role),
+    href: route.path,
+    icon: route.icon,
+  }));
 
   const isActive = (href: string) => pathname === href;
 
-  const handleLogout = () => {
+  // Build an href that carries the ?h= param forward so selecting a hospital
+  // persists when clicking nav items.
+  const navHref = (href: string) =>
+    selectedHospitalId ? `${href}?h=${selectedHospitalId}` : href;
+
+  const handleLogout = async () => {
+    // Told to the server first: clearing localStorage alone leaves the session
+    // live, so a token recovered from a shared machine would keep working for
+    // the rest of the refresh window. The local clear happens either way — a
+    // failed call must not trap someone in a session they asked to leave.
+    try {
+      await logoutMutation().unwrap();
+    } catch {
+      // Offline, or the session was already gone. Nothing to recover from.
+    }
     authStorage.clearSession();
     router.push('/');
   };
@@ -258,31 +153,47 @@ export function DashboardShell({
   const SidebarContent = (
     <>
       <div className="flex items-center gap-3 px-6 h-16 border-b border-slate-100">
-        <div style={brandGradient} className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0">
-          <Heart className="w-5 h-5 text-white" />
-        </div>
+        <Image src="/logo/logo-icon.png" alt="Logo" width={50} height={50} className="w-12 h-12 object-contain shrink-0" />
         <div className="min-w-0">
-          <p style={brandText} className="font-bold leading-tight">
+          <Link href="/dashboard" style={brandText} className="font-bold leading-tight">
             {hospital.name}
-          </p>
-          <p className="text-xs text-slate-500 truncate">{role === 'doctor' && specialization ? specialization : menu.title}</p>
+          </Link>
+          <p className="text-xs text-slate-500 truncate">{role === doctorRole && specialization ? specialization : portalTitleForRole(role)}</p>
         </div>
       </div>
 
       <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-1">
+        {/* Hospital filter — superadmin only */}
+        {role === superadminRole && allHospitals.length > 0 && (
+          <div className="mb-3 px-1">
+            <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-1.5 px-2">
+              Filter by Hospital
+            </label>
+            <select
+              value={selectedHospitalId}
+              onChange={(e) => handleHospitalChange(e.target.value)}
+              className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700 focus:outline-none focus:border-slate-400 focus:bg-white transition"
+            >
+              <option value="">All Hospitals</option>
+              {allHospitals.map((h) => (
+                <option key={h.id} value={h.id}>{h.name}</option>
+              ))}
+            </select>
+          </div>
+        )}
+
         {navItems.map((item) => {
           const active = isActive(item.href);
           const Icon = item.icon;
           return (
             <Link
               key={item.href}
-              href={item.href}
+              href={navHref(item.href)}
               onClick={() => setOpen(false)}
-              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition ${
-                active
-                  ? 'bg-gradient-to-r from-cyan-500 to-teal-600 text-white shadow'
+              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition ${active
+                  ? 'bg-gradient-to-r from-cyan-500 to-brand-teal text-white shadow'
                   : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
-              }`}
+                }`}
             >
               <Icon className="w-5 h-5 shrink-0" />
               {item.label}
@@ -324,9 +235,7 @@ export function DashboardShell({
           <Menu className="w-6 h-6" />
         </button>
         <div className="flex items-center gap-2">
-          <div style={brandGradient} className="w-7 h-7 rounded-md flex items-center justify-center">
-            <Heart className="w-4 h-4 text-white" />
-          </div>
+          <Image src="/logo/logo-icon.png" alt="Logo" width={30} height={30} className="w-8 h-8 object-contain" />
           <span style={brandText} className="font-bold">
             {hospital.name}
           </span>
@@ -339,7 +248,6 @@ export function DashboardShell({
           >
             <Search className="w-5 h-5" />
           </button>
-          {sessionUser && <NotificationBell user={sessionUser} />}
         </div>
       </div>
 
@@ -377,19 +285,6 @@ export function DashboardShell({
               {subtitle && <p className="text-sm text-slate-500">{subtitle}</p>}
             </div>
             <div className="flex items-center gap-3">
-              {hospitals.length > 1 && (
-                <select
-                  value={hospital.id}
-                  onChange={(e) => switchHospital(e.target.value)}
-                  className="text-sm border border-slate-200 rounded-lg px-2 py-1.5 bg-slate-50 text-slate-700 hover:bg-slate-100 transition"
-                  aria-label="Switch hospital"
-                  title="Switch hospital (demo)"
-                >
-                  {hospitals.map((h) => (
-                    <option key={h.id} value={h.id}>{h.name}</option>
-                  ))}
-                </select>
-              )}
               <button
                 onClick={() => setCmdOpen(true)}
                 className="flex items-center gap-2 text-sm text-slate-400 bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 hover:bg-slate-100 hover:text-slate-600 transition"
@@ -398,7 +293,6 @@ export function DashboardShell({
                 <span>Search…</span>
                 <kbd className="ml-2 text-[10px] font-sans bg-white border border-slate-200 rounded px-1.5 py-0.5 text-slate-500">⌘K</kbd>
               </button>
-              {sessionUser && <NotificationBell user={sessionUser} />}
               <span className="text-sm text-slate-600">
                 Welcome, <span className="font-semibold text-slate-900">{userName}</span>
               </span>

@@ -1,122 +1,129 @@
 'use client';
 
-// All state + business logic for the registration wizard: step navigation,
-// the Formik instance (with per-step validation), the "verify & auto-fill"
-// lookups, and final account creation. The page and step components stay
-// purely presentational and read from what this returns.
-import { useEffect, useMemo, useState } from 'react';
+// All state + business logic for the registration wizard: step navigation, the
+// Formik instance (with per-step validation), and final account creation. The
+// page and step components stay purely presentational and read from what this
+// returns.
+import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useFormik } from 'formik';
-import { authOperations, authStorage, PatientDetails, DoctorDetails } from '@/lib/auth';
-import { dbOperations, Department } from '@/lib/db';
-import { lookupDoctorRegistration } from '@/lib/doctorRegistry';
-import { lookupNurseRegistration } from '@/lib/nurseRegistry';
-import { lookupAadhaar } from '@/lib/aadhaarRegistry';
+import { authStorage } from '@/lib/auth';
+import { resolveHomePath } from '@/lib/roles';
+import { useRegisterMutation, type HospitalPublicInfo } from '@/store/api';
+import { currentSubdomain } from '@/lib/tenant';
 import {
-  aadhaarSchema,
   accountSchema,
-  doctorDetailsSchema,
+  ageFromDateOfBirth,
+  AGE_OF_MAJORITY,
+  consentSchema,
   FormValues,
   initialValues,
-  licenseSchema,
   patientDetailsSchema,
   Role,
   Step,
-  VERIFY_CONFIG,
 } from './registrationSchemas';
-
-type LookupState = 'idle' | 'loading' | 'found' | 'notfound';
-type Verified = { status?: string; rows: [string, string][] } | null;
 
 export function useRegistration() {
   const router = useRouter();
-  const [step, setStep] = useState<Step>('role');
+  const [registerMutation] = useRegisterMutation();
+  // On the root domain (no subdomain) we don't know which hospital the patient
+  // belongs to — show a picker first. On a hospital subdomain, skip straight to
+  // the role step (tenant is already resolved from the URL).
+  const isRootDomain = typeof window !== 'undefined' && currentSubdomain() === null;
+  const [step, setStep] = useState<Step>(isRootDomain ? 'hospital' : 'role');
+  const [selectedHospital, setSelectedHospital] = useState<HospitalPublicInfo | null>(null);
   const [userType, setUserType] = useState<Role | null>(null);
-  const [departments, setDepartments] = useState<Department[]>([]);
   const [serverError, setServerError] = useState('');
   const [success, setSuccess] = useState(false);
-  const [lookupState, setLookupState] = useState<LookupState>('idle');
-  // Normalized verified result for display, independent of the lookup source.
-  const [verified, setVerified] = useState<Verified>(null);
-
-  useEffect(() => {
-    setDepartments(dbOperations.getAllDepartments());
-  }, []);
-
-  const needsDetails = userType === 'patient' || userType === 'doctor';
-  const verifyConfig =
-    userType && userType in VERIFY_CONFIG ? VERIFY_CONFIG[userType as keyof typeof VERIFY_CONFIG] : null;
-  const hasVerify = !!verifyConfig;
 
   // Validate only the fields relevant to the current step.
   const validationSchema = useMemo(() => {
-    if (step === 'verify') return userType === 'patient' ? aadhaarSchema : licenseSchema;
     if (step === 'account') return accountSchema;
-    return userType === 'doctor' ? doctorDetailsSchema : patientDetailsSchema;
-  }, [step, userType]);
+    if (step === 'consent') return consentSchema;
+    return patientDetailsSchema;
+  }, [step]);
 
   const doRegister = async (values: FormValues) => {
     setServerError('');
 
-    const details: PatientDetails | DoctorDetails | undefined =
-      userType === 'patient'
-        ? {
-            dateOfBirth: values.dateOfBirth,
-            gender: values.gender,
-            bloodGroup: values.bloodGroup,
-            allergies: values.allergies,
-            chronicDiseases: values.chronicDiseases,
-            emergencyContact: values.emergencyContact,
-            emergencyPhone: values.emergencyPhone,
-            insuranceProvider: values.insuranceProvider,
-            insuranceNumber: values.insuranceNumber,
-          }
-        : userType === 'doctor'
-        ? {
-            licenseNumber: values.licenseNumber,
-            medicalCouncil: values.medicalCouncil,
-            registrationYear: values.registrationYear,
-            qualification: values.qualification,
-            specialization: values.specialization,
-            experienceYears: Number(values.experienceYears) || 0,
-            consultationFee: Number(values.consultationFee) || 0,
-          }
-        : undefined;
+    // Client-side guardian check — mirrors the backend rule so the user sees
+    // the error inline before any network request is made.
+    const age = ageFromDateOfBirth(values.dateOfBirth);
+    const minor = age !== null && age < AGE_OF_MAJORITY;
+    if (minor && !values.guardianName.trim()) {
+      setServerError('Parent / Guardian name is required for patients under 18.');
+      return;
+    }
 
     try {
-      const session = await authOperations.register(
-        values.email,
-        values.password,
-        values.name,
-        userType || 'patient',
-        values.phone.trim(),
-        details
-      );
+      const result = await registerMutation({
+        email: values.email,
+        password: values.password,
+        name: values.name,
+        role: 'patient',
+        phone: values.phone.trim() ? `+91${values.phone.trim()}` : '',
+        // Sent so the backend can tell whether this is a minor, which decides
+        // whether it demands a guardian on the consent (DPDP s.9).
+        dateOfBirth: values.dateOfBirth,
+        gender: values.gender,
+        bloodGroup: values.bloodGroup,
+        allergies: values.allergies.trim() || undefined,
+        chronicDiseases: values.chronicDiseases.trim() || undefined,
+        emergencyContact: values.emergencyContact.trim() || undefined,
+        emergencyPhone: values.emergencyPhone.trim() ? `+91${values.emergencyPhone.trim()}` : undefined,
+        insuranceProvider: values.insuranceProvider.trim() || undefined,
+        insuranceNumber: values.insuranceNumber.trim() || undefined,
+        consents: values.consents,
+        guardianName: values.guardianName.trim(),
+        guardianRelationship: values.guardianRelationship.trim(),
+        // On root domain the patient picked a hospital; pass it as the tenant
+        // header so the backend knows which hospital to file this account under.
+        hospitalId: selectedHospital?.id,
+      }).unwrap();
 
-      if (!session) {
-        setServerError('Email already registered');
-        setStep('account');
-        return;
-      }
-
-      authStorage.setSession(session);
+      authStorage.setSession({
+        user: result.user,
+        patient: result.patient,
+        hospitalId: result.user.hospitalId ?? '',
+        role: result.role,
+        permissions: result.permissions,
+        token: result.token,
+        refreshToken: result.refreshToken,
+        isAuthenticated: true,
+      });
       setSuccess(true);
 
       setTimeout(() => {
-        if (session.user.role === 'patient') {
-          router.push('/dashboard/patient/profile');
-        } else if (session.user.role === 'doctor') {
-          router.push('/dashboard/doctor');
-        } else if (session.user.role === 'lab') {
-          router.push('/dashboard/lab');
-        } else if (session.user.role === 'nurse') {
-          router.push('/dashboard/nurse');
+        const role = result.user.role;
+        const path = role === 'patient'
+          ? '/dashboard'
+          : resolveHomePath(role, result.role?.homePath);
+
+        // When the patient registered via root domain they picked a hospital —
+        // redirect to that hospital's subdomain. localStorage is domain-scoped
+        // so the session stored here won't be visible there; send them to the
+        // subdomain's login page with a ?registered=1 flag so it can show a
+        // "Registration successful" message and let them sign in.
+        if (selectedHospital) {
+          const { protocol, host } = window.location;
+          window.location.href = `${protocol}//${selectedHospital.subdomain}.${host}/login?registered=1`;
         } else {
-          router.push('/dashboard/admin');
+          router.push(path);
         }
       }, 2000);
-    } catch (err) {
-      setServerError('An error occurred. Please try again.');
+    } catch (err: unknown) {
+      const detail = (err as { data?: { detail?: string } })?.data?.detail;
+      if (detail?.toLowerCase().includes('already')) {
+        setServerError('Email already registered');
+        setStep('account');
+      } else if (detail?.toLowerCase().includes('consent') || detail?.toLowerCase().includes('guardian')) {
+        // The consents are the only thing the last step controls, so send the
+        // user back to the step that can actually fix the refusal.
+        setServerError(detail);
+        setStep('consent');
+      } else {
+        setServerError(detail ?? 'An error occurred. Please try again.');
+      }
     }
   };
 
@@ -125,15 +132,15 @@ export function useRegistration() {
     validationSchema,
     validateOnMount: false,
     onSubmit: async (values, { setSubmitting }) => {
-      // Patients/doctors/nurses verify (Aadhaar / registration) first, then account.
-      if (step === 'verify') {
-        setStep('account');
+      // The first two steps only advance; the account is created on the last
+      // one, so that no data is submitted before the notice has been shown.
+      if (step === 'account') {
+        setStep('details');
         setSubmitting(false);
         return;
       }
-      // On the account step for patient/doctor, "submit" advances to details.
-      if (step === 'account' && needsDetails) {
-        setStep('details');
+      if (step === 'details') {
+        setStep('consent');
         setSubmitting(false);
         return;
       }
@@ -142,95 +149,15 @@ export function useRegistration() {
     },
   });
 
-  const handleFetchDetails = async () => {
-    if (!verifyConfig) return;
-    const field = verifyConfig.field;
-    const value = String(formik.values[field] ?? '').trim();
-    if (!value) {
-      formik.setFieldTouched(field, true);
-      formik.setFieldError(
-        field,
-        userType === 'patient' ? 'Enter your Aadhaar number to look up' : 'Enter a registration number to look up'
-      );
-      return;
-    }
-    setLookupState('loading');
-    setVerified(null);
-
-    if (userType === 'patient') {
-      const rec = await lookupAadhaar(value);
-      if (!rec) {
-        setLookupState('notfound');
-        return;
-      }
-      // Aadhaar fills identity + contact (account) and DOB/gender (details).
-      formik.setFieldValue('name', rec.name);
-      formik.setFieldValue('phone', rec.phone);
-      formik.setFieldValue('dateOfBirth', rec.dateOfBirth);
-      formik.setFieldValue('gender', rec.gender);
-      setVerified({
-        rows: [
-          ['Name', rec.name],
-          ['Date of birth', rec.dateOfBirth],
-          ['Gender', rec.gender],
-          ['Phone', rec.phone],
-          ['Address', rec.address],
-        ],
-      });
-      setLookupState('found');
-      return;
-    }
-
-    if (userType === 'doctor') {
-      const rec = await lookupDoctorRegistration(value);
-      if (!rec) {
-        setLookupState('notfound');
-        return;
-      }
-      // Strip any "Dr." prefix — the app adds the title on display.
-      formik.setFieldValue('name', rec.name.replace(/^Dr\.?\s*/i, ''));
-      formik.setFieldValue('qualification', rec.qualification);
-      formik.setFieldValue('specialization', rec.specialization);
-      formik.setFieldValue('medicalCouncil', rec.medicalCouncil);
-      formik.setFieldValue('registrationYear', rec.registrationYear);
-      setVerified({
-        status: rec.status,
-        rows: [
-          ['Name', rec.name],
-          ['Council', rec.medicalCouncil],
-          ['Qualification', rec.qualification],
-          ['Specialization', rec.specialization],
-          ['Year of registration', rec.registrationYear],
-        ],
-      });
-      setLookupState('found');
-      return;
-    }
-
-    // nurse
-    const rec = await lookupNurseRegistration(value);
-    if (!rec) {
-      setLookupState('notfound');
-      return;
-    }
-    formik.setFieldValue('name', rec.name);
-    setVerified({
-      status: rec.status,
-      rows: [
-        ['Name', rec.name],
-        ['Council', rec.nursingCouncil],
-        ['Qualification', rec.qualification],
-        ['Year of registration', rec.registrationYear],
-      ],
-    });
-    setLookupState('found');
+  const handleHospitalSelect = (hospital: HospitalPublicInfo) => {
+    setSelectedHospital(hospital);
+    setStep('role');
+    setServerError('');
   };
 
   const handleRoleSelect = (role: Role) => {
     setUserType(role);
-    // Patients (Aadhaar), doctors & nurses (registration) verify first.
-    const startsWithVerify = role === 'patient' || role === 'doctor' || role === 'nurse';
-    setStep(startsWithVerify ? 'verify' : 'account');
+    setStep('account');
     setServerError('');
   };
 
@@ -238,8 +165,14 @@ export function useRegistration() {
     setStep('role');
     setUserType(null);
     setServerError('');
-    setLookupState('idle');
-    setVerified(null);
+    formik.resetForm();
+  };
+
+  const backToHospital = () => {
+    setStep('hospital');
+    setSelectedHospital(null);
+    setUserType(null);
+    setServerError('');
     formik.resetForm();
   };
 
@@ -248,32 +181,35 @@ export function useRegistration() {
     setServerError('');
   };
 
-  // Progress indicator: which named steps apply to this role and where we are.
-  const wizardSteps = [...(hasVerify ? ['Verify'] : []), 'Account', ...(needsDetails ? ['Details'] : [])];
-  const stepOrder = [...(hasVerify ? ['verify'] : []), 'account', ...(needsDetails ? ['details'] : [])] as Step[];
+  // Progress indicator: the named steps and where we are in them.
+  const wizardSteps = ['Account', 'Details', 'Consent'];
+  const stepOrder: Step[] = ['account', 'details', 'consent'];
   const currentIndex = Math.max(0, stepOrder.indexOf(step));
+
+  // Drives the guardian fields on the consent step. The backend makes the real
+  // decision — this only decides what to ask for.
+  const age = ageFromDateOfBirth(formik.values.dateOfBirth);
+  const isMinor = age !== null && age < AGE_OF_MAJORITY;
 
   return {
     // state
     step,
     userType,
-    departments,
+    selectedHospital,
+    isRootDomain,
     serverError,
     success,
-    lookupState,
-    verified,
     formik,
     // derived
-    needsDetails,
-    verifyConfig,
-    hasVerify,
     wizardSteps,
     currentIndex,
+    isMinor,
     // actions
     doRegister,
-    handleFetchDetails,
+    handleHospitalSelect,
     handleRoleSelect,
     backToRole,
+    backToHospital,
     goToStep,
   };
 }

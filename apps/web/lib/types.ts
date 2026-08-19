@@ -13,14 +13,17 @@ import type { LucideIcon } from 'lucide-react';
 
 export interface User {
   id: string;
-  // Tenant this row belongs to. Optional so older localStorage snapshots and
+  // Tenant this row belongs to. Optional so responses that omit it and
   // partially-built objects stay valid; it's stamped automatically on write.
   hospitalId?: string;
   email: string;
   password: string;
   name: string;
   phone?: string;
-  role: 'patient' | 'doctor' | 'admin' | 'lab' | 'nurse';
+  // Any code in the backend `roles` table. Not a closed union: the catalog is
+  // superadmin-managed at runtime, so custom roles are valid here. Match against
+  // the fetched catalog rather than writing exhaustive switches on this.
+  role: string;
   createdAt: string;
 }
 
@@ -40,17 +43,25 @@ export interface Patient {
   insuranceProvider: string;
   insuranceNumber: string;
   documents: string[];
+  /** Appointment aggregates — populated only when the list is fetched with
+   *  withStats=true, so the cheap reads stay cheap. */
+  visitCount?: number;
+  lastVisit?: string | null;
+  nextVisit?: string | null;
+  user?: User;
 }
 
 export interface Doctor {
   id: string;
   hospitalId?: string;
   userId: string;
+  departmentId?: string;
   qualification: string;
   specialization: string;
   experienceYears: number;
   consultationFee: number;
   availableSlots: TimeSlot[];
+  user?: User;
   // Medical council credentials (collected at registration). Optional so
   // existing/seeded doctors remain valid.
   licenseNumber?: string;
@@ -83,6 +94,13 @@ export interface Appointment {
   reason: string;
   notes: string;
   rescheduled?: boolean;
+  /** Display fields resolved server-side, so a table needn't fetch every
+   *  patient and doctor just to turn ids into names. */
+  patientName?: string;
+  patientPhone?: string;
+  doctorName?: string;
+  /** Whether vitals have been recorded against this appointment. */
+  hasVitals?: boolean;
   // Set when this appointment was booked as a follow-up to an earlier one.
   followUpOf?: string;
   createdAt: string;
@@ -130,6 +148,8 @@ export interface Prescription {
   duration: string;
   instructions: string;
   createdAt: string;
+  /** Resolved by the API, so a table need not fetch every patient to name one. */
+  patientName?: string;
 }
 
 export interface Vitals {
@@ -146,6 +166,8 @@ export interface Vitals {
   height: number;
   notes: string;
   createdAt: string;
+  /** Resolved by the API, so a table need not fetch every patient to name one. */
+  patientName?: string;
 }
 
 export interface Medicine {
@@ -157,6 +179,52 @@ export interface Medicine {
   strength: string;
   price: number;
   stock: number;
+  lotNumber?: string;
+  expiryDate?: string;
+  reorderLevel?: number;
+  location?: string;
+  unit?: string;
+}
+
+export type MedicationOrderStatus = 'pending' | 'dispensed' | 'administered' | 'cancelled';
+
+export interface MedicationOrder {
+  id: string;
+  hospitalId?: string;
+  appointmentId: string;
+  patientId: string;
+  doctorId: string;
+  medicineId?: string;
+  medicineName: string;
+  dosage: string;
+  route: string;
+  frequency: string;
+  duration: string;
+  instructions: string;
+  status: MedicationOrderStatus;
+  notes: string;
+  orderedAt: string;
+  patientName?: string;
+  patientPhone?: string;
+  doctorName?: string;
+}
+
+export type InventoryMovementType = 'restock' | 'dispense' | 'expired' | 'returned' | 'adjustment';
+
+export interface InventoryMovement {
+  id: string;
+  hospitalId?: string;
+  medicineId: string;
+  movementType: InventoryMovementType;
+  quantity: number;
+  lotNumber: string;
+  expiryDate: string;
+  referenceId: string;
+  performedBy: string;
+  notes: string;
+  createdAt: string;
+  medicineName?: string;
+  performedByName?: string;
 }
 
 export interface TestParameterTemplate {
@@ -222,6 +290,15 @@ export interface TestOrder {
   clinicalNote: string;
   orderedAt: string;
   updatedAt: string;
+  /** Resolved server-side, for the same reason as Appointment.patientName. */
+  patientName?: string;
+  /** Whether a report has been entered for this order. */
+  hasResults?: boolean;
+  /** Whether any reported parameter carries a non-normal flag. */
+  abnormal?: boolean;
+  /** When the report was filed and by whom; empty until one exists. */
+  reportedAt?: string;
+  reportedBy?: string;
 }
 
 export interface TestResultParameter {
@@ -263,6 +340,8 @@ export interface Baby {
   headCircumference: number;         // cm
   deliveryType: 'normal' | 'c-section' | 'assisted';
   gestationalWeeks: number;
+  /** Resolved by the API, so a list needn't fetch every patient to name one. */
+  motherName?: string;
   createdAt: string;
 }
 
@@ -342,6 +421,11 @@ export interface PregnancyRecord {
   status: 'active' | 'delivered' | 'closed';
   notes: string;
   createdAt: string;
+  /** Resolved by the API: the mother's name, how many antenatal visits there
+   *  have been, and the newest visit (whose readings drive the risk flags). */
+  patientName?: string;
+  visitCount?: number;
+  latestVisit?: ANCVisit | null;
 }
 
 export interface ANCVisit {
@@ -389,7 +473,19 @@ export interface AuthSession {
   patient?: Patient;
   /** Tenant the authenticated user belongs to (mirror of user.hospitalId). */
   hospitalId: string;
+  /** The user's role record from the backend catalog, including the dashboard
+   *  it lands on. Optional so pre-existing stored sessions stay valid. */
+  role?: { code: string; label: string; homePath: string };
+  /** What this user may do, as resolved by the server (role grants ∩ the
+   *  hospital's modules). Never computed on the client. */
+  permissions?: { code: string; scope?: 'own' | 'all' | null }[];
+  /** Short-lived access token (minutes). Renewed silently by store/baseQuery. */
   token: string;
+  /** Opaque, long-lived, and the only thing that can mint a new access token.
+   *  Rotates on every use, so whatever came back last is the one to keep.
+   *  Optional so a session stored before this existed still parses — it will
+   *  simply fail to renew once, and sign the user in again. */
+  refreshToken?: string;
   isAuthenticated: boolean;
 }
 
@@ -418,7 +514,11 @@ export interface DoctorDetails {
 
 export type RegisterDetails = PatientDetails | DoctorDetails;
 
-// == Hospital config / tenancy ================================================
+// == Hospital modules =========================================================
+//
+// The hospital record itself (id, name, subdomain, category, theme, modules)
+// is HospitalInfo in store/api.ts — it comes from GET /hospitals/current and is
+// not modelled locally.
 
 /** Which optional feature-modules a hospital has switched on. */
 export interface HospitalModules {
@@ -429,31 +529,6 @@ export interface HospitalModules {
   medicalRecords: boolean; // clinical records + history
   telemedicine: boolean;   // video consults (future)
   anc: boolean;            // antenatal / pregnancy tracker (maternity-only, future)
-}
-
-export interface HospitalConfig {
-  /** Stable id — the tenant key stamped onto every row (`hospitalId`). */
-  id: string;
-  /** Subdomain label this tenant is served on, e.g. "sunrise" → sunrise.host. */
-  subdomain: string;
-  name: string;
-  tagline: string;
-  /** Hospital vertical — drives which template/catalog/modules make sense. */
-  type: 'maternity' | 'multi-specialty' | 'dental' | 'eye' | 'diagnostic';
-  currency: string; // ISO 4217, e.g. "INR"
-  /** Branding colors. Exposed for future CSS-variable theming / white-labeling. */
-  theme: {
-    primary: string;
-    primaryDark: string;
-  };
-  modules: HospitalModules;
-  /** Specializations doctors can be assigned to (was free-text in seed data). */
-  specializations: string[];
-  /** Seed catalog — departments/medicines/tests this hospital offers. Used to
-   *  populate a fresh database; admins can then edit via the admin UI. */
-  departments: Department[];
-  medicines: Medicine[];
-  labTests: LabTest[];
 }
 
 // == Hospital categories (vertical templates) =================================
@@ -489,49 +564,48 @@ export interface HospitalCategory {
   signatureFeatures: CategoryFeature[];
 }
 
-// == Notifications ============================================================
 
-export type NotificationTone = 'info' | 'success' | 'warning';
+// ---------------------------------------------------------------------------
+// Consent (DPDP 2023). Mirrors apps/api/app/schemas.py.
+// ---------------------------------------------------------------------------
 
-export interface AppNotification {
+/** One thing the hospital may ask to do with a person's data.
+ *
+ *  Code-owned and versioned on the backend, so the wording shown here is a row
+ *  the API returns rather than copy living in this bundle — the text a patient
+ *  agreed to has to be reproducible later, and a string in the frontend that
+ *  changed on the next deploy would not be. */
+export interface ConsentPurpose {
+  code: string;
+  label: string;
+  notice: string;
+  version: number;
+  /** True when care genuinely cannot be delivered without it. Everything else
+   *  must be refusable without losing care, which is why the form separates
+   *  them rather than presenting one tickbox. */
+  required: boolean;
+  module: string | null;
+  /** `per_person` is settled at sign-up; `per_event` is asked each time (a
+   *  teleconsultation, under the Telemedicine Practice Guidelines 2020). */
+  cadence: 'per_person' | 'per_event';
+  sortOrder: number;
+}
+
+export interface Consent {
   id: string;
-  title: string;
-  description: string;
-  time: string; // ISO
-  href?: string;
-  tone: NotificationTone;
-}
-
-// == Verification registries (mock KYC services) ==============================
-
-export interface DoctorRegistryRecord {
-  registrationNumber: string;
-  name: string;
-  qualification: string;
-  specialization: string;
-  medicalCouncil: string;
-  registrationYear: string;
-  /** Council standing — a real API would return this too. */
-  status: 'active' | 'suspended';
-}
-
-export interface NurseRegistryRecord {
-  registrationNumber: string;
-  name: string;
-  qualification: string;
-  nursingCouncil: string;
-  registrationYear: string;
-  /** Council standing. */
-  status: 'active' | 'suspended';
-}
-
-export interface AadhaarRecord {
-  aadhaarNumber: string;
-  name: string;
-  /** ISO date (YYYY-MM-DD). */
-  dateOfBirth: string;
-  /** Matches the app's gender options: 'Female' | 'Male' | 'Other'. */
-  gender: string;
-  phone: string;
-  address: string;
+  subjectUserId: string;
+  purposeCode: string;
+  version: number;
+  method: 'explicit' | 'implied_patient_initiated';
+  recordedByUserId: string | null;
+  guardianUserId: string | null;
+  guardianName: string;
+  guardianRelationship: string;
+  appointmentId: string | null;
+  grantedAt: string;
+  withdrawnAt: string | null;
+  /** Set when the notice has been reworded since this was given, so the UI can
+   *  re-ask. Not treated as withdrawn — that would stop care over a typo fix. */
+  stale: boolean;
+  purposeLabel: string;
 }

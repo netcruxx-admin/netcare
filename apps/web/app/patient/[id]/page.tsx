@@ -18,10 +18,23 @@ import {
   HeartPulse,
   CalendarPlus,
   AlertTriangle,
+  ClipboardList,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import { authStorage } from '@/lib/auth';
-import { dbOperations, Appointment, Patient, User, Vitals, Prescription, TestOrder, TestResult } from '@/lib/db';
+import { useDashboardGuard } from '@/hooks/useDashboardGuard';
+import { adminRole, staffRoles } from '@/lib/roles';
+import type { Appointment, MedicationOrder, Patient, User, Vitals, Prescription, TestOrder, TestResult } from '@/lib/types';
+import {
+  useGetPatientAppointmentsQuery,
+  useGetPatientPrescriptionsQuery,
+  useGetPatientQuery,
+  useGetPatientVitalsQuery,
+  useListDepartmentsQuery,
+  useListDoctorsQuery,
+  useListMedicationOrdersQuery,
+  useListTestOrdersQuery,
+  useListTestResultsQuery,
+} from '@/store/api';
 import { DashboardShell } from '@/components/DashboardShell';
 import { ORDER_STATUS_LABEL, ORDER_STATUS_STYLE, isAbnormal } from '@/lib/lab';
 
@@ -41,7 +54,8 @@ interface Model {
   vitals: Vitals[];
   prescriptions: (Prescription & { doctor: string; date: string })[];
   orders: { order: TestOrder; tests: string[]; ready: boolean; abnormal: boolean; date: string }[];
-  stats: { total: number; completed: number; upcoming: number; prescriptions: number; tests: number };
+  medicationOrders: MedicationOrder[];
+  stats: { total: number; completed: number; upcoming: number; prescriptions: number; tests: number; medOrders: number };
 }
 
 export default function PatientDetailPage() {
@@ -49,54 +63,54 @@ export default function PatientDetailPage() {
   const params = useParams();
   const patientId = params.id as string;
 
-  const [session, setSession] = useState<ReturnType<typeof authStorage.getSession>>(null);
-  const [notFound, setNotFound] = useState(false);
-  const [model, setModel] = useState<Model | null>(null);
+  const session = useDashboardGuard();
 
-  useEffect(() => {
-    const s = authStorage.getSession();
-    if (!s || (s.user.role !== 'admin' && s.user.role !== 'doctor' && s.user.role !== 'nurse')) {
-      router.push('/login');
-      return;
-    }
-    setSession(s);
+  // The API decides what this caller may see: a patient they don't treat 404s,
+  // and each sub-resource is narrowed by the same "own" scope.
+  const { data: patient, isError: notFound } = useGetPatientQuery(patientId, {
+    skip: !patientId || !session,
+  });
+  const { data: rawAppointments = [] } = useGetPatientAppointmentsQuery(patientId, { skip: !patient });
+  const { data: rawVitals = [] } = useGetPatientVitalsQuery(patientId, { skip: !patient });
+  const { data: rawPrescriptions = [] } = useGetPatientPrescriptionsQuery(patientId, { skip: !patient });
+  const { data: rawOrders = [] } = useListTestOrdersQuery({ patientId }, { skip: !patient });
+  const { data: rawMedOrders = [] } = useListMedicationOrdersQuery({ patientId }, { skip: !patient });
+  // Only this patient's orders' results, in one request.
+  const orderIds = rawOrders.map((o) => o.id).join(',');
+  const { data: allResults = [] } = useListTestResultsQuery(
+    { orderId: orderIds },
+    { skip: !patient || !orderIds },
+  );
+  const { data: doctors = [] } = useListDoctorsQuery(undefined, { skip: !patient });
+  const { data: departments = [] } = useListDepartmentsQuery(undefined, { skip: !patient });
 
-    const patient = dbOperations.getPatient(patientId);
-    if (!patient) {
-      setNotFound(true);
-      return;
-    }
+  const model: Model | null = useMemo(() => {
+    if (!patient) return null;
 
-    const userById = new Map(dbOperations.getAllUsers().map((u) => [u.id, u]));
-    const doctorById = new Map(dbOperations.getAllDoctors().map((d) => [d.id, d]));
-    const deptById = new Map(dbOperations.getAllDepartments().map((d) => [d.id, d]));
+    const doctorById = new Map(doctors.map((d) => [d.id, d]));
+    const deptById = new Map(departments.map((d) => [d.id, d]));
     const doctorName = (id: string) => {
-      const d = doctorById.get(id);
-      const u = d ? userById.get(d.userId) : null;
-      return u ? `Dr. ${u.name}` : '—';
+      const name = doctorById.get(id)?.user?.name;
+      return name ? `Dr. ${name}` : '—';
     };
 
-    const appointments = dbOperations
-      .getAppointmentsByPatientId(patientId)
+    const appointments = [...rawAppointments]
       .map((a) => ({ ...a, doctor: doctorName(a.doctorId), dept: deptById.get(a.departmentId)?.name ?? '—' }))
       .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
 
-    const vitals = dbOperations.getVitalsByPatientId(patientId).sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+    const vitals = [...rawVitals].sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
 
-    const prescriptions = dbOperations
-      .getPrescriptionsByPatientId(patientId)
+    const prescriptions = [...rawPrescriptions]
       .map((rx) => ({ ...rx, doctor: doctorName(rx.doctorId), date: rx.createdAt.split('T')[0] }))
       .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
 
-    const allResults = dbOperations.getAllTestResults();
     const resultsByOrder = new Map<string, TestResult[]>();
     allResults.forEach((r) => {
       const list = resultsByOrder.get(r.orderId) ?? [];
       list.push(r);
       resultsByOrder.set(r.orderId, list);
     });
-    const orders = dbOperations
-      .getTestOrdersByPatientId(patientId)
+    const orders = [...rawOrders]
       .map((o) => {
         const res = resultsByOrder.get(o.id) ?? [];
         return {
@@ -109,24 +123,30 @@ export default function PatientDetailPage() {
       })
       .sort((a, b) => (a.order.orderedAt < b.order.orderedAt ? 1 : -1));
 
-    setModel({
+    const medicationOrders = [...rawMedOrders].sort((a, b) =>
+      a.orderedAt < b.orderedAt ? 1 : -1,
+    );
+
+    return {
       patient,
-      patientUser: userById.get(patient.userId) ?? null,
+      patientUser: patient.user ?? null,
       appointments,
       vitals,
       prescriptions,
       orders,
+      medicationOrders,
       stats: {
         total: appointments.length,
         completed: appointments.filter((a) => a.status === 'completed').length,
         upcoming: appointments.filter((a) => a.status === 'scheduled' && a.date >= todayStr).length,
         prescriptions: prescriptions.length,
         tests: orders.length,
+        medOrders: medicationOrders.length,
       },
-    });
-  }, [patientId, router]);
+    };
+  }, [patient, rawAppointments, rawVitals, rawPrescriptions, rawOrders, rawMedOrders, allResults, doctors, departments]);
 
-  const role = (session?.user.role ?? 'admin') as 'admin' | 'doctor' | 'nurse';
+  const role = session?.user.role ?? adminRole;
 
   if (notFound) {
     return (
@@ -141,7 +161,7 @@ export default function PatientDetailPage() {
 
   if (!session || !model) return null;
 
-  const { patient, patientUser } = model;
+  const { patient: patientRecord, patientUser } = model;
   const name = patientUser?.name ?? 'Patient';
 
   const cards: { label: string; value: number; icon: LucideIcon; tint: string }[] = [
@@ -150,6 +170,7 @@ export default function PatientDetailPage() {
     { label: 'Upcoming', value: model.stats.upcoming, icon: CalendarClock, tint: 'text-blue-600 bg-blue-50' },
     { label: 'Prescriptions', value: model.stats.prescriptions, icon: Pill, tint: 'text-purple-600 bg-purple-50' },
     { label: 'Lab Tests', value: model.stats.tests, icon: FlaskConical, tint: 'text-amber-600 bg-amber-50' },
+    { label: 'Med. Orders', value: model.stats.medOrders, icon: ClipboardList, tint: 'text-teal-600 bg-teal-50' },
   ];
 
   const latest = model.vitals[0];
@@ -163,22 +184,22 @@ export default function PatientDetailPage() {
 
         {/* Profile header */}
         <div className="bg-white rounded-lg shadow p-6 flex flex-col sm:flex-row sm:items-center gap-5">
-          <div className="w-16 h-16 rounded-full bg-gradient-to-br from-cyan-500 to-teal-600 text-white flex items-center justify-center text-2xl font-bold shrink-0">
+          <div className="w-16 h-16 rounded-full bg-gradient-to-br from-cyan-500 to-brand-teal text-white flex items-center justify-center text-2xl font-bold shrink-0">
             {name.charAt(0).toUpperCase()}
           </div>
           <div className="min-w-0 flex-1">
             <h2 className="text-xl font-bold text-slate-900">{name}</h2>
             <div className="flex flex-wrap gap-x-5 gap-y-1 mt-1 text-sm text-slate-600">
               <span className="flex items-center gap-1"><Mail className="w-3.5 h-3.5 text-slate-400" /> {patientUser?.email ?? '—'}</span>
-              <span className="flex items-center gap-1"><Phone className="w-3.5 h-3.5 text-slate-400" /> {patient.phone || '—'}</span>
-              <span className="flex items-center gap-1"><Droplet className="w-3.5 h-3.5 text-slate-400" /> {patient.bloodGroup || '—'}</span>
-              <span>{patient.gender || '—'}{patient.dateOfBirth ? ` · DOB ${patient.dateOfBirth}` : ''}</span>
+              <span className="flex items-center gap-1"><Phone className="w-3.5 h-3.5 text-slate-400" /> {patientRecord.phone || '—'}</span>
+              <span className="flex items-center gap-1"><Droplet className="w-3.5 h-3.5 text-slate-400" /> {patientRecord.bloodGroup || '—'}</span>
+              <span className="capitalize">{patientRecord.gender || '—'}{patientRecord.dateOfBirth ? ` · DOB ${patientRecord.dateOfBirth}` : ''}</span>
             </div>
           </div>
         </div>
 
         {/* Stats */}
-        <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-6 gap-4">
           {cards.map((c) => {
             const Icon = c.icon;
             return (
@@ -199,12 +220,12 @@ export default function PatientDetailPage() {
         <div className="bg-white rounded-lg shadow p-6">
           <h3 className="font-semibold text-slate-900 mb-4 flex items-center gap-2"><HeartPulse className="w-5 h-5 text-cyan-600" /> Medical Profile</h3>
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-4 text-sm">
-            <Info label="Allergies" value={patient.allergies} icon={ShieldAlert} highlight={!!patient.allergies && patient.allergies.toLowerCase() !== 'none' && !patient.allergies.toLowerCase().includes('no known')} />
-            <Info label="Chronic Diseases" value={patient.chronicDiseases} />
-            <Info label="Medical History" value={patient.medicalHistory} />
-            <Info label="Emergency Contact" value={patient.emergencyContact ? `${patient.emergencyContact}${patient.emergencyPhone ? ` · ${patient.emergencyPhone}` : ''}` : ''} />
-            <Info label="Insurance Provider" value={patient.insuranceProvider} />
-            <Info label="Insurance Number" value={patient.insuranceNumber} />
+            <Info label="Allergies" value={patientRecord.allergies} icon={ShieldAlert} noneIfEmpty highlight={!!patientRecord.allergies && patientRecord.allergies.toLowerCase() !== 'none' && !patientRecord.allergies.toLowerCase().includes('no known')} />
+            <Info label="Chronic Diseases" value={patientRecord.chronicDiseases} noneIfEmpty />
+            <Info label="Medical History" value={patientRecord.medicalHistory} noneIfEmpty />
+            <Info label="Emergency Contact" value={patientRecord.emergencyContact ? `${patientRecord.emergencyContact}${patientRecord.emergencyPhone ? ` · ${patientRecord.emergencyPhone}` : ''}` : ''} />
+            <Info label="Insurance Provider" value={patientRecord.insuranceProvider} />
+            <Info label="Insurance Number" value={patientRecord.insuranceNumber} />
           </div>
         </div>
 
@@ -298,6 +319,40 @@ export default function PatientDetailPage() {
           )}
         </Section>
 
+        {/* Medication Orders */}
+        <Section title="Medication Orders" icon={ClipboardList} count={model.medicationOrders.length}>
+          {model.medicationOrders.length === 0 ? (
+            <Empty text="No medication orders." />
+          ) : (
+            <TableWrap head={['Date', 'Medicine', 'Dosage', 'Route', 'Doctor', 'Status', 'Notes']}>
+              {model.medicationOrders.map((o) => (
+                <tr key={o.id} className="border-b hover:bg-slate-50">
+                  <td className="py-3 px-6 text-slate-600 whitespace-nowrap">{o.orderedAt.split('T')[0]}</td>
+                  <td className="py-3 px-6 font-medium text-slate-900">{o.medicineName}</td>
+                  <td className="py-3 px-6 text-slate-600">{o.dosage}</td>
+                  <td className="py-3 px-6">
+                    <span className={`inline-block px-2 py-0.5 rounded text-xs font-semibold ${
+                      ['IV','IM','SC'].includes(o.route)
+                        ? 'bg-orange-100 text-orange-700'
+                        : 'bg-slate-100 text-slate-600'
+                    }`}>{o.route}</span>
+                  </td>
+                  <td className="py-3 px-6 text-slate-600">{o.doctorName ?? '—'}</td>
+                  <td className="py-3 px-6">
+                    <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-semibold ${
+                      o.status === 'administered' ? 'bg-green-100 text-green-700' :
+                      o.status === 'dispensed'    ? 'bg-blue-100 text-blue-700' :
+                      o.status === 'cancelled'    ? 'bg-slate-100 text-slate-500' :
+                                                    'bg-amber-100 text-amber-700'
+                    }`}>{o.status}</span>
+                  </td>
+                  <td className="py-3 px-6 text-slate-500 max-w-xs truncate">{o.notes || '—'}</td>
+                </tr>
+              ))}
+            </TableWrap>
+          )}
+        </Section>
+
         {/* Test reports */}
         <Section title="Test Reports" icon={FlaskConical} count={model.orders.length}>
           {model.orders.length === 0 ? (
@@ -331,11 +386,12 @@ export default function PatientDetailPage() {
   );
 }
 
-function Info({ label, value, icon: Icon, highlight }: { label: string; value: string; icon?: LucideIcon; highlight?: boolean }) {
+function Info({ label, value, icon: Icon, highlight, noneIfEmpty }: { label: string; value: string; icon?: LucideIcon; highlight?: boolean; noneIfEmpty?: boolean }) {
+  const display = value || (noneIfEmpty ? 'None' : '—');
   return (
     <div>
       <p className="text-slate-500 text-xs mb-0.5 flex items-center gap-1">{Icon && <Icon className="w-3.5 h-3.5" />} {label}</p>
-      <p className={`font-medium ${highlight ? 'text-red-600' : 'text-slate-900'}`}>{value || '—'}</p>
+      <p className={`font-medium ${highlight ? 'text-red-600' : display === 'None' ? 'text-slate-400' : 'text-slate-900'}`}>{display}</p>
     </div>
   );
 }

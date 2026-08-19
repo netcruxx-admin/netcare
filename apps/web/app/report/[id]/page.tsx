@@ -1,12 +1,19 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import { Heart, ArrowLeft, Printer, AlertTriangle } from 'lucide-react';
-import { authStorage } from '@/lib/auth';
-import { dbOperations, TestOrder, TestResult, Patient, User, Doctor } from '@/lib/db';
+import { ArrowLeft, Printer, AlertTriangle } from 'lucide-react';
+import Image from 'next/image';
+import { useDashboardGuard } from '@/hooks/useDashboardGuard';
+import {
+  useGetDoctorQuery,
+  useGetPatientQuery,
+  useGetTestOrderQuery,
+  useListTestResultsQuery,
+} from '@/store/api';
 import { ORDER_STATUS_LABEL, FLAG_STYLE, FLAG_LABEL, isAbnormal } from '@/lib/lab';
 import { useActiveHospital } from '@/hooks/useActiveHospital';
+import { fmtDate } from '@/lib/date';
 
 export default function LabReportPage() {
   const router = useRouter();
@@ -14,44 +21,27 @@ export default function LabReportPage() {
   const params = useParams();
   const orderId = params.id as string;
 
-  const [session, setSession] = useState<ReturnType<typeof authStorage.getSession>>(null);
-  const [ready, setReady] = useState(false);
-  const [order, setOrder] = useState<TestOrder | null>(null);
-  const [results, setResults] = useState<TestResult[]>([]);
-  const [patient, setPatient] = useState<Patient | null>(null);
-  const [patientUser, setPatientUser] = useState<User | null>(null);
-  const [doctor, setDoctor] = useState<Doctor | null>(null);
-  const [doctorUser, setDoctorUser] = useState<User | null>(null);
+  // The API returns 404 for an order the caller isn't entitled to, so there is
+  // no separate access check here.
+  const session = useDashboardGuard();
+  const { data: order, isLoading, isError } = useGetTestOrderQuery(orderId, {
+    skip: !orderId || !session,
+  });
+  const { data: results = [] } = useListTestResultsQuery({ orderId }, { skip: !order });
+  const { data: patient } = useGetPatientQuery(order?.patientId ?? '', { skip: !order });
+  const { data: doctor } = useGetDoctorQuery(order?.doctorId ?? '', { skip: !order });
 
-  useEffect(() => {
-    const s = authStorage.getSession();
-    if (!s) {
-      router.push('/login');
-      return;
-    }
-    setSession(s);
-    const o = dbOperations.getTestOrderById(orderId) ?? null;
-    setOrder(o);
-    if (o) {
-      setResults(dbOperations.getTestResultsByOrderId(o.id));
-      const p = dbOperations.getPatient(o.patientId) ?? null;
-      setPatient(p);
-      setPatientUser(p ? dbOperations.getUserById(p.userId) ?? null : null);
-      const d = dbOperations.getDoctorById(o.doctorId) ?? null;
-      setDoctor(d);
-      setDoctorUser(d ? dbOperations.getUserById(d.userId) ?? null : null);
-    }
-    setReady(true);
-  }, [orderId, router]);
+  const patientUser = patient?.user ?? null;
+  const doctorUser = doctor?.user ?? null;
 
   const anyAbnormal = useMemo(
     () => results.some((r) => r.parameters.some((p) => isAbnormal(p.flag))),
     [results],
   );
 
-  if (!session || !ready) return null;
+  if (!session || isLoading) return null;
 
-  if (!order) {
+  if (!order || isError) {
     return (
       <div className="min-h-screen bg-slate-100 flex flex-col items-center justify-center gap-4">
         <p className="text-slate-600">Report not found.</p>
@@ -60,7 +50,7 @@ export default function LabReportPage() {
     );
   }
 
-  const reportedAt = results[0]?.reportedAt ? new Date(results[0].reportedAt).toLocaleString() : '—';
+  const reportedAt = results[0]?.reportedAt ? fmtDate(results[0].reportedAt) : '—';
   const reportedBy = results[0]?.reportedBy ?? '—';
 
   return (
@@ -70,7 +60,7 @@ export default function LabReportPage() {
         <button onClick={() => router.back()} className="inline-flex items-center gap-2 text-slate-600 hover:text-slate-900 font-medium">
           <ArrowLeft className="w-4 h-4" /> Back
         </button>
-        <button onClick={() => window.print()} className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-cyan-500 to-teal-600 text-white rounded-lg text-sm font-semibold hover:shadow-lg transition">
+        <button onClick={() => window.print()} className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg text-sm font-semibold hover:shadow-lg transition">
           <Printer className="w-4 h-4" /> Print / Save PDF
         </button>
       </div>
@@ -80,13 +70,7 @@ export default function LabReportPage() {
         {/* Header */}
         <div className="flex items-center justify-between px-8 py-6 border-b-2 border-cyan-600">
           <div className="flex items-center gap-3">
-            <div className="w-11 h-11 bg-gradient-to-br from-cyan-500 to-teal-600 rounded-lg flex items-center justify-center">
-              <Heart className="w-6 h-6 text-white" />
-            </div>
-            <div>
-              <p className="text-xl font-bold bg-gradient-to-r from-cyan-600 to-teal-600 bg-clip-text text-transparent">{hospital.name}</p>
-              <p className="text-xs text-slate-500">Maternity Hospital · Laboratory</p>
-            </div>
+            <Image src="/logo/logo-full.png" alt={hospital.name} width={80} height={80} className="w-20 h-20 object-contain" />
           </div>
           <div className="text-right">
             <p className="text-sm font-semibold text-slate-900">LAB REPORT</p>
@@ -98,8 +82,8 @@ export default function LabReportPage() {
         <div className="grid sm:grid-cols-2 gap-x-8 gap-y-2 px-8 py-5 border-b text-sm">
           <Field label="Patient" value={patientUser?.name ?? '—'} />
           <Field label="Referred by" value={doctorUser ? `Dr. ${doctorUser.name}` : '—'} />
-          <Field label="Gender / DOB" value={`${patient?.gender || '—'} · ${patient?.dateOfBirth || '—'}`} />
-          <Field label="Ordered on" value={order.orderedAt.split('T')[0]} />
+          <Field label="Gender / DOB" value={`${patient?.gender ? patient.gender.charAt(0).toUpperCase() + patient.gender.slice(1) : '—'} · ${fmtDate(patient?.dateOfBirth)}`} />
+          <Field label="Ordered on" value={fmtDate(order.orderedAt)} />
           <Field label="Phone" value={patient?.phone || '—'} />
           <Field label="Status" value={ORDER_STATUS_LABEL[order.status]} />
           {order.clinicalNote && (
