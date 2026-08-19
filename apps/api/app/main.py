@@ -113,17 +113,12 @@ app.add_middleware(
     # per-tenant subdomains work in local dev. Dropped in production, where it
     # would pair a wildcard origin with allow_credentials; real tenant origins
     # belong in CORS_ORIGINS.
-    allow_origin_regex=(
-        # In production, allow any subdomain of the root domain (tenant subdomains).
-        # In dev, allow any subdomain of localhost (e.g. http://sunrise.localhost:3000).
-        (
-            rf"^https://[a-z0-9-]+\.{re.escape(settings.root_domain)}$"
-            if settings.root_domain
-            else None
-        )
-        if settings.is_production
-        else r"^https?://([a-z0-9-]+\.)?localhost(:\d+)?$"
-    ),
+    allow_origin_regex="|".join(filter(None, [
+        # Any subdomain of localhost for local dev.
+        r"^https?://([a-z0-9-]+\.)?localhost(:\d+)?$",
+        # Any subdomain of the root domain in production.
+        rf"^https://[a-z0-9-]+\.{re.escape(settings.root_domain)}$" if settings.root_domain else None,
+    ])),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
