@@ -69,7 +69,7 @@ This project's `.venv` was created under an older path, so the console-script sh
 
 | Role       | Email                     | Tenant   |
 |------------|---------------------------|----------|
-| Superadmin | superadmin@platform.com   | — (platform) |
+| Superadmin | netcruxx@gmail.com   | — (platform) |
 | Admin      | admin@example.com         | hosp-1   |
 | Doctor     | doctor@example.com        | hosp-1   |
 | Nurse      | nurse@example.com         | hosp-1   |

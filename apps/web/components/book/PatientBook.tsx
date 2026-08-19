@@ -352,6 +352,11 @@ export function PatientBook({ session }: RoleViewProps) {
                             <div className="min-h-[220px] flex items-center justify-center text-slate-400 text-sm border border-dashed border-slate-300 rounded-lg">
                               Pick a date to see slots
                             </div>
+                          ) : deptDoctors.length === 0 ? (
+                            <div className="min-h-[220px] flex items-center justify-center text-slate-400 text-sm border border-dashed border-slate-300 rounded-lg text-center px-4">
+                              No doctors are currently assigned to this department.
+                              <br />Please choose a different department.
+                            </div>
                           ) : (
                             <>
                               <div className="flex flex-wrap gap-4 mb-3 text-xs text-slate-600">
@@ -410,13 +415,14 @@ export function PatientBook({ session }: RoleViewProps) {
                         </button>
                         <button
                           type="button"
+                          disabled={deptDoctors.length === 0}
                           onClick={async () => {
                             await setFieldTouched('date', true);
                             await setFieldTouched('time', true);
                             const errs = await validateForm();
                             if (!errs.date && !errs.time) setStep(3);
                           }}
-                          className="flex-1 px-6 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg hover:shadow-lg transition"
+                          className="flex-1 px-6 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg hover:shadow-lg transition disabled:opacity-40 disabled:cursor-not-allowed"
                         >
                           Next
                         </button>

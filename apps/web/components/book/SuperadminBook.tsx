@@ -79,7 +79,7 @@ function SuperadminBookForm({ session }: RoleViewProps) {
   // Reload patients/doctors/departments whenever the hospital changes.
   useEffect(() => {
     if (!hospitalId) {
-      setPatients([]); setDoctors([]); setDepartments([]);
+      setPatients([]); setDoctors([]);
       return;
     }
     setLoadingOptions(true);

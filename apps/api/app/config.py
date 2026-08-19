@@ -46,7 +46,7 @@ class Settings(BaseSettings):
     # Bootstrap credentials for the platform superadmin, created on first boot.
     # The default password is a demo convenience and is refused in production —
     # set SUPERADMIN_PASSWORD (and ideally SUPERADMIN_EMAIL) before deploying.
-    superadmin_email: str = "superadmin@platform.com"
+    superadmin_email: str = "netcruxx@gmail.com"
     superadmin_password: str = "password123"
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
