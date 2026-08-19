@@ -264,7 +264,7 @@ export const dashboardRoutes: DashboardRoute[] = [
     path: '/dashboard/prescriptions',
     label: 'Prescriptions',
     icon: Pill,
-    viewRoles: [doctorRole],
+    viewRoles: [doctorRole, pharmacistRole],
     permission: 'prescriptions.read',
     module: 'pharmacy',
   },

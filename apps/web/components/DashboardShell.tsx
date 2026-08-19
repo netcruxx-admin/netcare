@@ -75,17 +75,17 @@ export function DashboardShell({
     // The platform wordmark is our own: navy → teal, exactly as "Net"/"Care" render in the logo.
     ? { id: '', name: 'NetCare Platform', theme: { primary: '#00346e', primaryDark: '#019695' }, modules: {} as Partial<HospitalModules> }
     : {
-        id: hospitalData?.id ?? '',
-        name: hospitalData?.name ?? '…',
-        theme: {
-          // Unbranded tenants fall back to the logo's blue → teal, matching the icon beside it.
-          primary: (hospitalData?.theme as Record<string, string>)?.primary ?? '#00509f',
-          primaryDark: (hospitalData?.theme as Record<string, string>)?.primaryDark ?? '#019695',
-        },
-        // The backend returns whichever modules this tenant has; anything
-        // missing counts as disabled rather than being asserted into existence.
-        modules: (hospitalData?.modules ?? {}) as Partial<HospitalModules>,
-      };
+      id: hospitalData?.id ?? '',
+      name: hospitalData?.name ?? '…',
+      theme: {
+        // Unbranded tenants fall back to the logo's blue → teal, matching the icon beside it.
+        primary: (hospitalData?.theme as Record<string, string>)?.primary ?? '#00509f',
+        primaryDark: (hospitalData?.theme as Record<string, string>)?.primaryDark ?? '#019695',
+      },
+      // The backend returns whichever modules this tenant has; anything
+      // missing counts as disabled rather than being asserted into existence.
+      modules: (hospitalData?.modules ?? {}) as Partial<HospitalModules>,
+    };
 
   // Paint the active tenant's brand colours so each hospital looks distinct.
   const brandGradient = {
@@ -155,9 +155,9 @@ export function DashboardShell({
       <div className="flex items-center gap-3 px-6 h-16 border-b border-slate-100">
         <Image src="/logo/logo-icon.png" alt="Logo" width={50} height={50} className="w-12 h-12 object-contain shrink-0" />
         <div className="min-w-0">
-          <p style={brandText} className="font-bold leading-tight">
+          <Link href="/dashboard" style={brandText} className="font-bold leading-tight">
             {hospital.name}
-          </p>
+          </Link>
           <p className="text-xs text-slate-500 truncate">{role === doctorRole && specialization ? specialization : portalTitleForRole(role)}</p>
         </div>
       </div>
@@ -190,11 +190,10 @@ export function DashboardShell({
               key={item.href}
               href={navHref(item.href)}
               onClick={() => setOpen(false)}
-              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition ${
-                active
+              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition ${active
                   ? 'bg-gradient-to-r from-cyan-500 to-brand-teal text-white shadow'
                   : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
-              }`}
+                }`}
             >
               <Icon className="w-5 h-5 shrink-0" />
               {item.label}

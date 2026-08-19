@@ -452,6 +452,7 @@ class Doctor(Base):
     id = Column(String, primary_key=True)
     hospital_id = Column(String, ForeignKey("hospitals.id", ondelete="CASCADE"), index=True, nullable=False)
     user_id = Column(String, index=True, nullable=False)
+    department_id = Column(String, ForeignKey("departments.id", ondelete="SET NULL"), nullable=True)
     qualification = Column(Text, default="")
     specialization = Column(String, default="")
     experience_years = Column(Integer, default=0)

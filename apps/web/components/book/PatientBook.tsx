@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Formik, Form } from 'formik';
 import * as Yup from 'yup';
 import { CheckCircle, AlertCircle } from 'lucide-react';
-import type { Appointment, Department, Doctor, ScheduleBlock } from '@/lib/types';
+import type { Doctor, ScheduleBlock } from '@/lib/types';
 import { apiError } from '@/lib/apiError';
 import { fmtDate } from '@/lib/date';
 import {
@@ -145,16 +145,10 @@ export function PatientBook({ session }: RoleViewProps) {
   // Doctors in the selected department, capped at MAX_DEPT so hook count is fixed.
   const deptDoctors = useMemo<Doctor[]>(() => {
     if (!selection.department) return [];
-    const dept = departments.find((d) => d.id === selection.department);
-    const matched = dept
-      ? doctors.filter(
-          (doc) =>
-            doc.specialization === dept.name ||
-            doc.specialization.includes(dept.name.split('&')[0]),
-        )
-      : [];
-    return (matched.length > 0 ? matched : doctors).slice(0, MAX_DEPT);
-  }, [departments, doctors, selection.department]);
+    return doctors
+      .filter((doc) => doc.departmentId === selection.department)
+      .slice(0, MAX_DEPT);
+  }, [doctors, selection.department]);
 
   // Fixed 5 availability hooks — skip when no doctor at that index or no date.
   // React requires hooks to be called the same number of times every render;

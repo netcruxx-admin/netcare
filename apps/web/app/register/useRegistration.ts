@@ -46,6 +46,15 @@ export function useRegistration() {
   const doRegister = async (values: FormValues) => {
     setServerError('');
 
+    // Client-side guardian check — mirrors the backend rule so the user sees
+    // the error inline before any network request is made.
+    const age = ageFromDateOfBirth(values.dateOfBirth);
+    const minor = age !== null && age < AGE_OF_MAJORITY;
+    if (minor && !values.guardianName.trim()) {
+      setServerError('Parent / Guardian name is required for patients under 18.');
+      return;
+    }
+
     try {
       const result = await registerMutation({
         email: values.email,
@@ -87,7 +96,7 @@ export function useRegistration() {
       setTimeout(() => {
         const role = result.user.role;
         const path = role === 'patient'
-          ? '/dashboard/profile'
+          ? '/dashboard'
           : resolveHomePath(role, result.role?.homePath);
 
         // When the patient registered via root domain they picked a hospital —

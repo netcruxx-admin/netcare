@@ -677,9 +677,11 @@ class UserCreate(CamelModel):
     role: str
     phone: str = ""
     # Doctor-specific (ignored for other roles)
+    department_id: Optional[str] = None
     specialization: Optional[str] = None
     qualification: Optional[str] = None
     experience_years: Optional[int] = None
+    consultation_fee: Optional[float] = None
     # Patient-specific (ignored for other roles)
     gender: Optional[str] = None
     blood_group: Optional[str] = None
@@ -786,6 +788,7 @@ class DoctorOut(OutModel):
     id: str
     hospital_id: Optional[str] = None
     user_id: str
+    department_id: Optional[str] = None
     qualification: str = ""
     specialization: str = ""
     experience_years: int = 0
@@ -805,6 +808,7 @@ class DoctorUpdate(CamelModel):
     name: Optional[str] = None
     email: Optional[str] = None
     phone: Optional[str] = None
+    department_id: Optional[str] = None
     qualification: Optional[str] = None
     specialization: Optional[str] = None
     experience_years: Optional[int] = None

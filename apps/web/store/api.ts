@@ -499,9 +499,11 @@ export interface UserCreateBody {
   name: string;
   role: string;
   phone?: string;
+  departmentId?: string;
   specialization?: string;
   qualification?: string;
   experienceYears?: number;
+  consultationFee?: number;
   gender?: string;
   bloodGroup?: string;
   dateOfBirth?: string;
@@ -518,6 +520,7 @@ export interface DoctorUpdateBody {
   name?: string;
   email?: string;
   phone?: string;
+  departmentId?: string;
   qualification?: string;
   specialization?: string;
   experienceYears?: number;

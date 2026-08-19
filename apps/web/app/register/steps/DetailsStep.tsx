@@ -24,7 +24,7 @@ export function DetailsStep({ formik, onBack }: DetailsStepProps) {
       </p>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <FormField name="dateOfBirth" label="Date of Birth" type="date" icon={Calendar} />
+        <FormField name="dateOfBirth" label="Date of Birth" type="date" icon={Calendar} required />
         <FormField name="gender" label="Gender" as="select" placeholder="Select…" options={genderOptions} />
         <FormField name="bloodGroup" label="Blood Group" as="select" placeholder="Select…" options={bloodGroupOptions} icon={Droplet} />
         <FormField name="allergies" label="Known Allergies" placeholder="e.g. Penicillin (or None)" />

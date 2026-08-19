@@ -326,7 +326,7 @@ export function PatientProfile({ session }: RoleViewProps) {
         </div>
 
         {/* Consent is a persistent setting, not a one-time setup step. */}
-        <ConsentSettings />
+        <ConsentSettings dateOfBirth={patient?.dateOfBirth ?? ''} />
       </div>
     </DashboardShell>
   );

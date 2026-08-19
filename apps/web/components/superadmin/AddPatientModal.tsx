@@ -51,6 +51,7 @@ export function AddPatientModal({ open, onClose, onSuccess, preselectedHospitalI
     e.preventDefault();
     if (isSuperadmin && !hospitalId) { setError('Please select a hospital'); return; }
     if (!form.name.trim() || !form.email.trim()) { setError('Name and email are required'); return; }
+    if (!form.dateOfBirth) { setError('Date of birth is required'); return; }
     setLoading(true); setError('');
     const body = {
       name: form.name.trim(), email: form.email.trim(),
@@ -136,8 +137,8 @@ export function AddPatientModal({ open, onClose, onSuccess, preselectedHospitalI
               </select>
             </div>
             <div className="col-span-2">
-              <label className="block text-sm font-medium text-slate-700 mb-1">Date of Birth</label>
-              <input type="date" value={form.dateOfBirth} onChange={set('dateOfBirth')} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-cyan-500" />
+              <label className="block text-sm font-medium text-slate-700 mb-1">Date of Birth <span className="text-red-500">*</span></label>
+              <input type="date" value={form.dateOfBirth} onChange={set('dateOfBirth')} max={new Date().toISOString().split('T')[0]} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-cyan-500" />
             </div>
           </div>
 
