@@ -1,7 +1,7 @@
 # CarbonHealth — Claude Context
 
 ## What This Project Is
-CarbonHealth is a multi-tenant Hospital Management Software (HMS) SaaS. Multiple hospitals buy access and each hospital gets its own isolated subdomain (e.g., `cityhospital.carbonhealth.com`). Patients, doctors, admins, nurses, and lab technicians at Hospital A cannot see any data from Hospital B.
+CarbonHealth is a multi-tenant Hospital Management Software (HMS) SaaS. Multiple hospitals buy access and each hospital gets its own isolated subdomain (e.g., `cityhospital.netcare.co.in`). Patients, doctors, admins, nurses, and lab technicians at Hospital A cannot see any data from Hospital B.
 
 ## Monorepo Structure
 ```
@@ -42,7 +42,7 @@ Every request answers these separately — do not collapse them:
 ## Multi-Tenancy Architecture
 - Every DB table has a `hospital_id` column (Foreign Key)
 - `hospital_id` is baked into the JWT token at login time — cannot be spoofed
-- Subdomain determines which hospital: `sunrise.carbonhealth.com` → hospital with subdomain `sunrise`
+- Subdomain determines which hospital: `sunrise.netcare.co.in` → hospital with subdomain `sunrise`
 - Backend uses `get_tenant_id()` FastAPI dependency + `scoped(db, Model, tenant_id)` helper to filter all queries
 - Frontend resolves tenant via `apps/web/lib/tenant.ts`
 

@@ -60,7 +60,7 @@ export function IdentityStep({ meta }: StepProps) {
       <p className="-mt-3 text-xs text-slate-400">
         Staff will sign in at{' '}
         <span className="font-mono text-slate-600">
-          {values.subdomain || 'subdomain'}.carbonhealth.com
+          {values.subdomain || 'subdomain'}.netcare.co.in
         </span>
         . This cannot be changed later.
       </p>
@@ -908,7 +908,7 @@ export function AdminReviewStep({
           <div>
             <p className="text-xs font-semibold text-slate-400 mb-1">Identity</p>
             <ReviewRow label="Name" value={values.name} />
-            <ReviewRow label="Subdomain" value={`${values.subdomain}.carbonhealth.com`} />
+            <ReviewRow label="Subdomain" value={`${values.subdomain}.netcare.co.in`} />
             <ReviewRow label="Legal name" value={values.legalName} />
             <ReviewRow label="Category" value={label(meta?.categories, values.category)} />
             <ReviewRow label="Entity" value={label(meta?.entityTypes, values.entityType)} />

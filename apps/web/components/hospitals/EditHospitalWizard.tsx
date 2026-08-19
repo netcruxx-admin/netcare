@@ -328,7 +328,7 @@ function EditIdentityStep({ meta }: { meta?: OnboardingMeta }) {
           </div>
           <p className="text-xs text-slate-400 mt-1">
             Staff sign in at{' '}
-            <span className="font-mono text-slate-600">{values.subdomain}.carbonhealth.com</span>{' '}
+            <span className="font-mono text-slate-600">{values.subdomain}.netcare.co.in</span>{' '}
             — this cannot be changed.
           </p>
         </div>
@@ -849,7 +849,7 @@ function EditReviewStep({
           <div>
             <p className="text-xs font-semibold text-slate-400 mb-1">Identity</p>
             <ReviewRow label="Name" value={values.name} />
-            <ReviewRow label="Subdomain" value={`${values.subdomain}.carbonhealth.com`} />
+            <ReviewRow label="Subdomain" value={`${values.subdomain}.netcare.co.in`} />
             <ReviewRow label="Legal name" value={values.legalName} />
             <ReviewRow label="Category" value={label(meta?.categories ?? [], values.category)} />
             <ReviewRow label="Entity" value={label(meta?.entityTypes ?? [], values.entityType)} />
