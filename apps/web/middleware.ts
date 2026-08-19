@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import { platformOnlyPaths } from '@/lib/roles';
+
+// Keep in sync with platformOnlyPaths in lib/roles.ts.
+// Inlined here to avoid pulling lucide-react icons into the edge runtime.
+const platformOnlyPaths = ['/dashboard/hospitals', '/dashboard/roles'];
 
 // Keeps the platform console off tenant subdomains.
 //
