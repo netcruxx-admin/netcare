@@ -9,7 +9,9 @@ alembic>=1.13
 # Multipart bodies — registration document uploads (POST /hospitals/{id}/documents).
 python-multipart>=0.0.20
 psycopg[binary]>=3.2
-boto3>=1.34
+# Cloudflare R2, over its S3-compatible API (STORAGE_BACKEND=r2). Imported lazily
+# in app/storage.py, so the local backend runs without it.
+boto3>=1.35
 
 # --- Tests ---
 # The tenant-isolation suite drives the real app through TestClient, which needs

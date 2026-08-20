@@ -13,6 +13,7 @@ Two backends:
 import re
 import unicodedata
 from pathlib import Path
+from tempfile import SpooledTemporaryFile
 from typing import BinaryIO
 
 from fastapi import HTTPException, status
@@ -30,6 +31,12 @@ ALLOWED_CONTENT_TYPES = {
 }
 
 _SAFE_NAME = re.compile(r"[^A-Za-z0-9._-]+")
+
+R2_SCHEME = "r2://"
+
+
+def _backend() -> str:
+    return (settings.storage_backend or "local").strip().lower()
 
 
 def _use_r2() -> bool:
@@ -64,6 +71,113 @@ def safe_filename(name: str) -> str:
     name = unicodedata.normalize("NFKD", name).encode("ascii", "ignore").decode()
     name = _SAFE_NAME.sub("-", name).strip("-._")
     return name[:120] or "file"
+
+
+# ----- Cloudflare R2 ---------------------------------------------------------
+
+
+_r2_client = None
+
+
+def _r2_endpoint() -> str:
+    """The S3-compatible endpoint for the account.
+
+    R2 publishes one per account, so the account id is enough. An explicit
+    R2_ENDPOINT still wins, because jurisdiction-specific endpoints exist and
+    guessing at them here would be worse than letting the operator say.
+    """
+    if settings.r2_endpoint:
+        return settings.r2_endpoint.rstrip("/")
+    return f"https://{settings.r2_account_id}.r2.cloudflarestorage.com"
+
+
+def _client():
+    """A cached boto3 S3 client pointed at R2.
+
+    boto3 is imported here rather than at module scope so a developer running
+    the local backend never needs it installed.
+    """
+    global _r2_client
+    if _r2_client is not None:
+        return _r2_client
+
+    missing = [
+        name
+        for name, value in (
+            ("R2_BUCKET", settings.r2_bucket),
+            ("R2_ACCESS_KEY_ID", settings.r2_access_key_id),
+            ("R2_SECRET_ACCESS_KEY", settings.r2_secret_access_key),
+            ("R2_ACCOUNT_ID or R2_ENDPOINT", settings.r2_account_id or settings.r2_endpoint),
+        )
+        if not value
+    ]
+    if missing:
+        raise RuntimeError(
+            "STORAGE_BACKEND=r2 needs " + ", ".join(missing) + " in the environment"
+        )
+
+    try:
+        import boto3
+        from botocore.config import Config
+    except ImportError as exc:  # pragma: no cover - environment problem, not logic
+        raise RuntimeError(
+            "STORAGE_BACKEND=r2 needs boto3 — it is in requirements.txt"
+        ) from exc
+
+    _r2_client = boto3.session.Session().client(
+        "s3",
+        endpoint_url=_r2_endpoint(),
+        aws_access_key_id=settings.r2_access_key_id,
+        aws_secret_access_key=settings.r2_secret_access_key,
+        # R2 has no regions, but SigV4 will not sign without one and boto3 will
+        # not fall back to a default here.
+        region_name="auto",
+        config=Config(signature_version="s3v4", retries={"max_attempts": 3}),
+    )
+    return _r2_client
+
+
+def _r2_key(url: str) -> str:
+    """The object key inside a stored `r2://` URL, or "" if it is not one."""
+    if not url or not url.startswith(R2_SCHEME):
+        return ""
+    relative = url[len(R2_SCHEME):]
+    parts = [safe_filename(p) for p in relative.split("/") if p not in ("", ".", "..")]
+    return "/".join(parts)
+
+
+# ----- The seam --------------------------------------------------------------
+
+
+def _capped_copy(fileobj: BinaryIO) -> tuple[SpooledTemporaryFile, int]:
+    """Read the upload into a spooled buffer, refusing it past the ceiling.
+
+    Reads in chunks and aborts the moment the size ceiling is passed, so a
+    multi-gigabyte body costs a few megabytes of memory rather than filling the
+    disk before anyone checks. Small files never touch the disk at all.
+    """
+    limit = settings.max_upload_mb * 1024 * 1024
+    buffer = SpooledTemporaryFile(max_size=1024 * 1024)
+    size = 0
+    try:
+        while chunk := fileobj.read(1024 * 1024):
+            size += len(chunk)
+            if size > limit:
+                raise HTTPException(
+                    status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                    f"File is larger than {settings.max_upload_mb}MB",
+                )
+            buffer.write(chunk)
+    except Exception:
+        buffer.close()
+        raise
+
+    if size == 0:
+        buffer.close()
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "File is empty")
+
+    buffer.seek(0)
+    return buffer, size
 
 
 def save_upload(
@@ -159,8 +273,29 @@ def delete_file(url: str) -> None:
         pass
 
 
+def serves_locally() -> bool:
+    """Whether this process has to serve the files itself.
+
+    False on R2, where the bytes are fetched straight from Cloudflare and
+    mounting a static directory would only advertise an empty one.
+    """
+    return _backend() != "r2"
+
+
 def ensure_root() -> Path:
     """Create the local upload root at boot (no-op when using R2)."""
     root = _root()
     root.mkdir(parents=True, exist_ok=True)
     return root
+
+
+def ensure_ready() -> None:
+    """Fail at boot rather than on the first upload.
+
+    A misconfigured bucket that only shows up when a hospital is halfway through
+    onboarding is far more expensive than a container that refuses to start.
+    """
+    if serves_locally():
+        ensure_root()
+        return
+    _client()  # raises on missing configuration

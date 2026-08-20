@@ -166,11 +166,16 @@ for module in (
 # random id). That is adequate for a laptop and is not access control — a
 # production deployment serves these from object storage behind signed URLs,
 # which is the other half of why app/storage.py exists as a seam.
-app.mount(
-    settings.files_url_prefix,
-    StaticFiles(directory=str(storage.ensure_root())),
-    name="files",
-)
+# On R2 there is nothing local to mount: the browser fetches the bytes from
+# Cloudflare over a signed URL, and mounting here would only advertise an empty
+# directory.
+storage.ensure_ready()
+if storage.serves_locally():
+    app.mount(
+        settings.files_url_prefix,
+        StaticFiles(directory=str(storage.ensure_root())),
+        name="files",
+    )
 
 
 @app.get("/", tags=["health"])

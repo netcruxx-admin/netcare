@@ -47,6 +47,23 @@ class Settings(BaseSettings):
     # storage seam (app/storage.py) is written not to care which it is.
     upload_dir: str = "uploads"
     files_url_prefix: str = "/files"
+    # Which implementation of that seam is live: "local" or "r2".
+    storage_backend: str = "local"
+    # --- Cloudflare R2 (STORAGE_BACKEND=r2) ---
+    # The account id is enough to derive the S3-compatible endpoint; R2_ENDPOINT
+    # is the override for a jurisdiction-specific one.
+    r2_account_id: str = ""
+    r2_endpoint: str = ""
+    r2_bucket: str = ""
+    r2_access_key_id: str = ""
+    r2_secret_access_key: str = ""
+    # Set ONLY for a bucket deliberately exposed on a public custom domain.
+    # Leaving it empty keeps the bucket private and every outgoing link signed,
+    # which is what a scan of a medical licence needs.
+    r2_public_base_url: str = ""
+    # How long a signed link stays good. Long enough to open a PDF, short enough
+    # that a link pasted into a chat stops working before it matters.
+    r2_signed_url_ttl_seconds: int = 900
     # Per-file ceiling. Registration scans are photographs of certificates; 10MB
     # is generous for one and small enough that a truncated read is cheap.
     max_upload_mb: int = 10

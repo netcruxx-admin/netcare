@@ -131,6 +131,25 @@ def _licences_of(db: Session, hospital_id: str) -> list[models.HospitalLicence]:
     )
 
 
+def _document_out(row: models.HospitalDocument) -> schemas.HospitalDocumentOut:
+    """A document row with a URL the browser can actually fetch.
+
+    `file_url` is stored opaque and stable (see app/storage.py); the signature
+    is attached here, on the way out, and is never written back.
+    """
+    out = schemas.HospitalDocumentOut.model_validate(row)
+    out.file_url = storage.public_url(row.file_url)
+    return out
+
+
+def _licence_out(row: models.HospitalLicence) -> schemas.HospitalLicenceOut:
+    """Same treatment for the scan attached to a licence, which is a copy of
+    some document's stored URL."""
+    out = schemas.HospitalLicenceOut.model_validate(row)
+    out.document_url = storage.public_url(row.document_url)
+    return out
+
+
 def _documents_of(db: Session, hospital_id: str) -> list[models.HospitalDocument]:
     return (
         db.query(models.HospitalDocument)
@@ -345,14 +364,8 @@ def _detail(db: Session, hospital: models.Hospital) -> schemas.HospitalDetailOut
             if (profile := _profile_of(db, hospital.id))
             else None
         ),
-        licences=[
-            schemas.HospitalLicenceOut.model_validate(row)
-            for row in _licences_of(db, hospital.id)
-        ],
-        documents=[
-            schemas.HospitalDocumentOut.model_validate(row)
-            for row in _documents_of(db, hospital.id)
-        ],
+        licences=[_licence_out(row) for row in _licences_of(db, hospital.id)],
+        documents=[_document_out(row) for row in _documents_of(db, hospital.id)],
         subscription=(
             schemas.HospitalSubscriptionOut.model_validate(subscription)
             if (subscription := _subscription_of(db, hospital.id))
@@ -491,7 +504,7 @@ def add_licence(
     db.commit()
     db.refresh(licence)
     audit.record_subject("hospital_licence", licence.id, detail=licence.type)
-    return licence
+    return _licence_out(licence)
 
 
 @router.patch(
@@ -505,13 +518,19 @@ def update_licence(
     _: str = Depends(require_permission("hospitals.manage")),
 ):
     licence = _licence_or_404(db, hospital_id, licence_id)
-    for field, value in body.model_dump(exclude_unset=True).items():
+    fields = body.model_dump(exclude_unset=True)
+    # Which scan backs a licence is set by the upload that produced it, not by
+    # the client echoing a URL back. Since outgoing URLs are now signed, taking
+    # this from the client would store a link that expires — and a stored URL
+    # that has expired is a document nobody can open again.
+    fields.pop("document_url", None)
+    for field, value in fields.items():
         setattr(licence, field, value)
     licence.updated_at = now_iso()
     db.commit()
     db.refresh(licence)
     audit.record_subject("hospital_licence", licence.id, detail=licence.type)
-    return licence
+    return _licence_out(licence)
 
 
 @router.delete(
@@ -557,7 +576,7 @@ def list_documents(
     _: str = Depends(require_permission("hospitals.manage")),
 ):
     _get_hospital(db, hospital_id)
-    return _documents_of(db, hospital_id)
+    return [_document_out(row) for row in _documents_of(db, hospital_id)]
 
 
 @router.post(
@@ -634,7 +653,7 @@ def upload_document(
     db.commit()
     db.refresh(document)
     audit.record_subject("hospital_document", document.id, detail=doc_type)
-    return document
+    return _document_out(document)
 
 
 @router.delete(

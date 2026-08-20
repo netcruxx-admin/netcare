@@ -4,6 +4,36 @@ Notable changes to CarbonHealth. Format follows [Keep a Changelog](https://keepa
 
 ## [Unreleased]
 
+### Added — Cloudflare R2 storage backend
+
+`STORAGE_BACKEND=r2` puts uploaded registration documents in a Cloudflare R2
+bucket over its S3-compatible API; `local` (the default) is unchanged and still
+dev-only. Everything above `app/storage.py` was already written not to care.
+
+The one thing that *is* new above the seam: on R2 the URL stored in the database
+and the URL handed to a browser are different strings. Stored is an opaque,
+stable `r2://folder/name`; outgoing is a presigned link with a 15-minute life,
+attached by `storage.public_url()` in the four places that return a document or
+licence row. Deliberately not the same string — a stored URL that expires is a
+document nobody can open again, and a stored URL that never expires is a scan of
+a medical licence readable by anyone who ever saw the link.
+
+The bucket stays **private** by default. `R2_PUBLIC_BASE_URL` opts into an
+unsigned public custom domain, which is right for a logo and wrong for a PAN
+card.
+
+Consequences worth knowing:
+
+- `PATCH /hospitals/{id}/licences/{id}` now **ignores** a client-supplied
+  `document_url`. Which scan backs a licence is set by the upload that produced
+  it; echoing a signed URL back would have stored a link that expires.
+- The app refuses to boot on `STORAGE_BACKEND=r2` with incomplete credentials,
+  rather than failing on the first upload halfway through an onboarding.
+- `/files` is only mounted when this process actually serves the bytes.
+- 11 tests stub boto3 and pin the contract: stored URLs stay opaque, outgoing
+  ones get signed, the size ceiling uploads nothing when it trips, and a
+  signature failure costs one row rather than the whole page.
+
 ### Fixed — multi-file document upload dropped every file but one
 
 Step 7 of onboarding handed `onAdd` the live `FileList` off the input and then
