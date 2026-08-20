@@ -17,13 +17,16 @@ carbonhealth/
 - **Package manager:** pnpm (workspaces)
 
 ## Current Status — PHASE 0/1 (Integrated)
-The frontend runs on the real API. Every screen but the two demo-data buttons in `AdminSetup` has
-been moved off the localStorage mock (`apps/web/lib/db.ts`), and every backend router is both
-tenant-scoped and permission-guarded.
+The frontend runs on the real API — the localStorage mock is gone entirely. Every backend router is
+tenant-scoped and permission-guarded, the route table gates on `permission` rather than role lists,
+the sidebar is built from `session.permissions`, and `/auth/me` is refetched so a revoked grant
+updates the menu without a re-login.
 
-Next up: frontend permission gating (route table `roles: []` → `permission`, nav built from
-`session.permissions`), `/auth/me` refresh so a revoked grant updates the sidebar without a
-re-login, then tests.
+Tests exist: `npm test` runs the backend suite (tenant isolation, foreign-key scoping, onboarding
+departments, R2 storage, the platform-only grants) against a throwaway database. There are no
+frontend tests yet — `npx tsc --noEmit` in `apps/web` is the only automated check there, and
+`next.config.mjs` currently sets `typescript.ignoreBuildErrors`, so a type error will not fail a
+production build.
 
 ## User Roles
 - `superadmin` — Platform owner (us, CarbonHealth). Can onboard new hospitals.
@@ -56,6 +59,14 @@ Every request answers these separately — do not collapse them:
   backend enforcement or frontend navigation.
 - **No role code appears in `authz.py`.** If you find yourself writing `if role == "doctor"`, the
   answer is a permission.
+- `hospital.settings.manage` (`c4e8b1d90f36`) and `departments.manage` (`d7a2c5f81e64`) are
+  **superadmin's**, not a hospital admin's. Both reach provisioning decisions: the first picks a
+  category template and replaces a hospital's whole department list, the second edits the
+  departments that appointments are already filed into and doctors already belong to.
+- `departments.read` deliberately **stayed with admin** when `departments.manage` left. The list is
+  not the screen: the admin overview, the appointments board, the doctors list and both doctor
+  modals read it, and the modals write `department_id`. Revoking read to hide one screen would have
+  broken creating a doctor. When you move a capability, check what else reads it first.
 
 ### Rules that keep coming up
 - A record that does not exist *or* is not yours returns **404**, never 403 — a 403 confirms the id exists.
@@ -93,7 +104,11 @@ A hospital is five tables, split by access shape rather than tidiness:
 - `verified_at` / `verified_by` are written by the server on the status transition — facts about
   what happened are not the client's to send.
 - Uploads go through `app/storage.py`, the one seam that knows whether a file is on local disk or
-  in a bucket. Local disk is dev-only (`UPLOAD_DIR`, served at `/files`).
+  in a bucket. `STORAGE_BACKEND=local` is dev-only (`UPLOAD_DIR`, served at `/files`);
+  `STORAGE_BACKEND=r2` is Cloudflare R2 for production.
+- What is **stored** in `file_url` and what is **served** to a browser are different strings on R2:
+  the stored one is an opaque, stable `r2://folder/name`, and `storage.public_url()` signs it on the
+  way out. Anything returning a document or licence row must call it — never write its result back.
 - Tenant FKs are `ON DELETE CASCADE` as of `d1a4f8c62b93`. Before that `DELETE /hospitals/{id}`
   failed on any hospital that had ever been provisioned. `audit_logs` still carries no FK by design.
 
@@ -105,10 +120,12 @@ A hospital is five tables, split by access shape rather than tidiness:
   the single entitlement check.
 - All data goes through `store/api.ts` (RTK Query). No component reads a store directly.
 
-## Frontend: Remaining Mock
-`lib/db.ts` survives only for the two demo-data buttons in `components/setup/AdminSetup.tsx`.
-Everything else is on the real API. `lib/auth.ts`, `lib/doctorRegistry.ts`, `lib/nurseRegistry.ts`
-and `lib/aadhaarRegistry.ts` are gone.
+## Frontend: Mock is Gone
+`lib/db.ts` no longer exists and nothing imports it — the whole app is on the real API.
+`lib/doctorRegistry.ts`, `lib/nurseRegistry.ts` and `lib/aadhaarRegistry.ts` are gone too.
+`lib/auth.ts` is **not** gone — it holds `authStorage` and `hasPermission` and is imported in ~28
+files. (`lib/types.ts` still mentions the old `@/lib/db` import path in a comment;
+that is history, not a dependency.)
 
 Keep: `lib/tenant.ts`, `lib/anc.ts`, `lib/baby.ts`, `lib/schedule.ts`, `lib/types.ts`, `lib/lab.ts`,
 `lib/apiError.ts`
