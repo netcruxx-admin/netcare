@@ -43,6 +43,17 @@ export interface PendingDocument {
   title: string;
 }
 
+/** A key for one picked file.
+ *
+ *  Deliberately not `crypto.randomUUID()`: that is only defined in a secure
+ *  context, so it throws the moment the app is opened over http on a LAN
+ *  address — which is exactly how the wizard gets tested from a phone. The key
+ *  never leaves the browser, so a counter is enough.
+ */
+let pendingDocumentSeq = 0;
+export const pendingDocumentKey = (file: File): string =>
+  `${file.name}-${file.size}-${(pendingDocumentSeq += 1)}`;
+
 /** One department, and whether it survives onboarding. `fromTemplate` only
  *  drives the UI grouping — the payload cares about `selected` alone. */
 export interface DepartmentRow {

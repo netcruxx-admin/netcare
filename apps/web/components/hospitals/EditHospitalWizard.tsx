@@ -42,6 +42,7 @@ import type { HospitalDetail, HospitalInfo, OnboardingMeta } from '@/store/api';
 import {
   CATEGORY_THEMES,
   INITIAL_VALUES,
+  pendingDocumentKey,
   type PendingDocument,
   type WizardValues,
   type LicenceRow,
@@ -462,11 +463,11 @@ export function EditHospitalWizard({ open, hospital, onClose, onUpdated }: Props
     onClose();
   };
 
-  const addDocuments = (files: FileList) =>
+  const addDocuments = (files: File[]) =>
     setDocuments((cur) => [
       ...cur,
-      ...Array.from(files).map((file) => ({
-        key: `${file.name}-${file.size}-${crypto.randomUUID()}`,
+      ...files.map((file) => ({
+        key: pendingDocumentKey(file),
         file,
         docType: 'other',
         licenceType: '',
@@ -898,7 +899,7 @@ function StepBody({
   step: number;
   meta?: OnboardingMeta;
   documents: PendingDocument[];
-  onAdd: (files: FileList) => void;
+  onAdd: (files: File[]) => void;
   onRemove: (key: string) => void;
   onChange: (key: string, patch: Partial<PendingDocument>) => void;
 }) {

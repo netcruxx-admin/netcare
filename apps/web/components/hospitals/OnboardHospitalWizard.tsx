@@ -42,6 +42,7 @@ import {
   FIELD_STEP,
   INITIAL_VALUES,
   STEPS,
+  pendingDocumentKey,
   type PendingDocument,
   type WizardValues,
 } from './onboarding/config';
@@ -100,11 +101,11 @@ export function OnboardHospitalWizard({ open, onClose, onCreated }: Props) {
     onClose();
   };
 
-  const addDocuments = (files: FileList) =>
+  const addDocuments = (files: File[]) =>
     setDocuments((current) => [
       ...current,
-      ...Array.from(files).map((file) => ({
-        key: `${file.name}-${file.size}-${crypto.randomUUID()}`,
+      ...files.map((file) => ({
+        key: pendingDocumentKey(file),
         file,
         docType: 'other',
         licenceType: '',
@@ -333,7 +334,7 @@ function StepBody({
   step: number;
   meta: Parameters<typeof IdentityStep>[0]['meta'];
   documents: PendingDocument[];
-  onAdd: (files: FileList) => void;
+  onAdd: (files: File[]) => void;
   onRemove: (key: string) => void;
   onChange: (key: string, patch: Partial<PendingDocument>) => void;
 }) {

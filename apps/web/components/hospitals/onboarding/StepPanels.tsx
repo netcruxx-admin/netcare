@@ -649,7 +649,7 @@ export function DocumentsStep({
   onChange,
 }: StepProps & {
   documents: PendingDocument[];
-  onAdd: (files: FileList) => void;
+  onAdd: (files: File[]) => void;
   onRemove: (key: string) => void;
   onChange: (key: string, patch: Partial<PendingDocument>) => void;
 }) {
@@ -670,9 +670,14 @@ export function DocumentsStep({
           accept={ACCEPTED}
           className="hidden"
           onChange={(e) => {
-            if (e.target.files?.length) onAdd(e.target.files);
+            // Copy before resetting the input. `e.target.files` is a *live*
+            // FileList owned by the element, and clearing `value` empties it —
+            // so handing the FileList itself to onAdd loses every file the
+            // moment the reset below runs.
+            const picked = Array.from(e.target.files ?? []);
             // Reset so picking the same file twice still fires a change.
             e.target.value = '';
+            if (picked.length) onAdd(picked);
           }}
         />
         <Upload className="w-8 h-8 text-slate-300 mx-auto mb-2" />

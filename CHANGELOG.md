@@ -4,6 +4,20 @@ Notable changes to CarbonHealth. Format follows [Keep a Changelog](https://keepa
 
 ## [Unreleased]
 
+### Fixed — multi-file document upload dropped every file but one
+
+Step 7 of onboarding handed `onAdd` the live `FileList` off the input and then
+cleared `input.value` on the next line, which empties that same FileList. The
+copy (`Array.from`) happened inside the `setDocuments` updater, which React runs
+later — by then there was nothing left to copy. The handler now snapshots to an
+array before resetting, and the prop type is `File[]` so a live list cannot
+cross that boundary again. Same bug, same fix, in `EditHospitalWizard`.
+
+Also replaced `crypto.randomUUID()` in both wizards' key generation: it is
+undefined outside a secure context, so attaching any document threw the moment
+the app was opened over http on a LAN address — which is how the wizard gets
+tested from a phone.
+
 ### Fixed — department_id crossed tenants
 
 `b2d4f6a8c0e1` added `department_id` to `DoctorUpdate` and `UserCreate` without
