@@ -55,6 +55,13 @@ class Settings(BaseSettings):
     # set SUPERADMIN_PASSWORD (and ideally SUPERADMIN_EMAIL) before deploying.
     superadmin_email: str = "netcruxx@gmail.com"
     superadmin_password: str = "password123"
+    # Cloudflare R2 object storage. When all three are set, storage.py uploads
+    # to R2 instead of local disk. Leave empty in development.
+    r2_account_id: str = ""
+    r2_access_key_id: str = ""
+    r2_secret_access_key: str = ""
+    r2_bucket: str = "netcare-uploads"
+    r2_public_url: str = ""  # Optional public bucket URL for serving files
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
