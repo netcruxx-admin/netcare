@@ -4,6 +4,14 @@ Notable changes to CarbonHealth. Format follows [Keep a Changelog](https://keepa
 
 ## [Unreleased]
 
+### Fixed — department_id crossed tenants
+
+`b2d4f6a8c0e1` added `department_id` to `DoctorUpdate` and `UserCreate` without
+a guard, so a hospital could file its own doctor under another hospital's
+department. Both handlers now call `assert_body_in_tenant()`. Caught by
+`test_every_fk_carrying_schema_has_a_guarded_handler`, which derives the risky
+schemas from `schemas.py` — nobody had to write a case for `department_id`.
+
 ### Fixed — cross-tenant data leak (critical)
 
 **Hospital A could read hospital B's patient name and phone number.**

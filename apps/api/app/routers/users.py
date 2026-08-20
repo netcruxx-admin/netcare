@@ -16,7 +16,7 @@ from ..auth import get_current_user, hash_password
 from .. import sessions
 from ..authz import SCOPE_OWN, require_any_permission, require_permission
 from ..database import get_db
-from ..tenancy import get_tenant_id, scoped
+from ..tenancy import assert_body_in_tenant, get_tenant_id, scoped
 from ..utils import ListQuery, list_params, new_id, now_iso, paginate, text_search
 
 router = APIRouter(prefix="/users", tags=["users"])
@@ -105,6 +105,10 @@ def create_user(
                 status.HTTP_403_FORBIDDEN,
                 "You do not have permission to create this account type",
             )
+    # A doctor account carries a department_id, which is a tenant-owned id the
+    # caller supplied — checked before anything is written.
+    assert_body_in_tenant(db, body, tenant_id)
+
     role = db.get(models.Role, body.role)
     if role is None:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Unknown role")

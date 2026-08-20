@@ -14,7 +14,7 @@ from ..authz import (
     require_permission,
 )
 from ..database import get_db
-from ..tenancy import get_tenant_id, scoped
+from ..tenancy import assert_body_in_tenant, get_tenant_id, scoped
 from ..utils import ListQuery, attach_users, list_params, paginate, text_search
 
 router = APIRouter(prefix="/doctors", tags=["doctors"])
@@ -155,6 +155,11 @@ def update_doctor(
     # Staff may edit any doctor; a doctor may edit only their own record.
     if "doctors.manage" not in held and doctor.user_id != user.id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Doctor not found")
+
+    # department_id arrived with the doctor-department link and was not checked:
+    # without this, a caller could file their own doctor under another
+    # hospital's department.
+    assert_body_in_tenant(db, body, tenant_id)
 
     fields = body.model_dump(exclude_unset=True)
     # Name/email/phone live on the user row, the rest on the doctor row.
