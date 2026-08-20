@@ -4,6 +4,64 @@ Notable changes to CarbonHealth. Format follows [Keep a Changelog](https://keepa
 
 ## [Unreleased]
 
+### Changed — department CRUD is the platform's too
+
+`departments.manage` moved from `admin` to `superadmin` (`d7a2c5f81e64`), and
+`/dashboard/departments` is now a platform screen. Departments are the spine of
+booking — appointments are filed into them, doctors belong to them — so renaming
+or deleting one on a live tenant reaches records already pointing at it.
+
+`departments.read` **stayed** with admin, and that distinction is the whole
+change. The department list is read by the admin overview, the appointments
+board, the doctors list and both doctor modals, and those modals write
+`department_id`. Revoking read to hide one screen would have broken creating a
+doctor. So the route now gates on `departments.manage` rather than
+`departments.read`, which is the capability the screen actually exercises.
+
+- `components/departments/AdminDepartments.tsx` deleted; `PlatformDepartments`
+  already ran cross-tenant against `/superadmin/departments` and needs no `?h=`.
+- `/dashboard/departments` joined `platformOnlyPaths` and the inlined copy in
+  `middleware.ts`.
+- Six tests, written as real requests rather than grant lookups — hiding a
+  screen in the route table proves nothing while the URL is still typeable and
+  the API is still listening. Admin gets 403 on create/rename/delete and 200 on
+  the list; superadmin runs the full cycle; a cross-tenant id still refuses
+  without confirming it exists.
+
+### Changed — Hospital Setup is the platform's screen now
+
+`/dashboard/setup` picks a hospital's category template and **replaces its
+entire department list**, deleting departments that live appointments are booked
+into. That is a provisioning decision, so `hospital.settings.manage` moved from
+`admin` to `superadmin` (`c4e8b1d90f36`, granting before revoking so the
+capability is never held by nobody).
+
+Hospital admins lose the category picker and the template bulldozer. They keep
+`departments.read` and `departments.manage`, so they still run their own
+departments from `/dashboard/departments` — the move takes away the wholesale
+rewrite, not day-to-day department management.
+
+Because a platform user has no tenant of their own, the screen had to change
+shape as well as ownership:
+
+- The target hospital comes from the sidebar's `?h=` selector rather than the
+  host subdomain. `useActiveHospital()` reads `GET /hospitals/current`, which
+  resolves from the host and ignores `X-Hospital-Id` in production by design —
+  on the platform's apex domain it would have rendered blank.
+- With no hospital chosen, the screen says so instead of firing department
+  queries the backend answers with a 400.
+- Applying a template now asks first, naming the hospital and the number of
+  departments about to be deleted. The operator running it is not the hospital
+  that loses them.
+- `/dashboard/setup` joined `platformOnlyPaths` (and the inlined copy in
+  `middleware.ts`), so reaching it from a tenant subdomain redirects to the
+  platform host — where the selector it depends on actually exists.
+- `components/setup/AdminSetup.tsx` → `HospitalSetup.tsx`.
+
+Four tests pin the grant, including that admins kept department management —
+the grant lives in data, so nothing in the source would otherwise stop a later
+migration moving it back.
+
 ### Added — Cloudflare R2 storage backend
 
 `STORAGE_BACKEND=r2` puts uploaded registration documents in a Cloudflare R2

@@ -361,8 +361,11 @@ export const dashboardRoutes: DashboardRoute[] = [
     path: '/dashboard/departments',
     label: 'Departments',
     icon: Building2,
-    viewRoles: [superadminRole, adminRole],
-    permission: 'departments.read',
+    viewRoles: [superadminRole],
+    // Gated on `manage`, not `read`. Everyone who books an appointment or edits
+    // a doctor still reads the department list; this screen is the one that
+    // creates, renames and deletes them, and that is the platform's call.
+    permission: 'departments.manage',
   },
   {
     path: '/dashboard/medicines',
@@ -374,7 +377,7 @@ export const dashboardRoutes: DashboardRoute[] = [
   },
   { path: '/dashboard/users', label: 'Users', icon: Users, viewRoles: [superadminRole, adminRole], permission: 'users.read' },
   { path: '/dashboard/roles', label: 'Roles', icon: ShieldCheck, viewRoles: [superadminRole], permission: 'roles.manage' },
-  { path: '/dashboard/setup', label: 'Hospital Setup', icon: Settings, viewRoles: [adminRole], permission: 'hospital.settings.manage' },
+  { path: '/dashboard/setup', label: 'Hospital Setup', icon: Settings, viewRoles: [superadminRole], permission: 'hospital.settings.manage' },
 ];
 
 /**
@@ -382,7 +385,12 @@ export const dashboardRoutes: DashboardRoute[] = [
  * middleware can import it without pulling in the route table's icons. Keep it
  * in step with the superadmin-only entries above.
  */
-export const platformOnlyPaths = ['/dashboard/hospitals', '/dashboard/roles'];
+export const platformOnlyPaths = [
+  '/dashboard/hospitals',
+  '/dashboard/roles',
+  '/dashboard/setup',
+  '/dashboard/departments',
+];
 
 /**
  * Paths any signed-in user may open, matched exactly. `/dashboard` is here

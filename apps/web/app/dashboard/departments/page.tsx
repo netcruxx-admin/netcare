@@ -1,9 +1,8 @@
 'use client';
 
 import { RoleView } from '@/components/RoleView';
-import { AdminDepartments } from '@/components/departments/AdminDepartments';
 import { PlatformDepartments } from '@/components/departments/PlatformDepartments';
-import { adminRole, superadminRole } from '@/lib/roles';
+import { superadminRole } from '@/lib/roles';
 
 export default function DepartmentsPage() {
   return (
@@ -11,7 +10,6 @@ export default function DepartmentsPage() {
       path="/dashboard/departments"
       views={{
         [superadminRole]: PlatformDepartments,
-        [adminRole]: AdminDepartments,
       }}
     />
   );

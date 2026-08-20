@@ -1,15 +1,16 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { Check, X, Sparkles, Building2, Layers } from 'lucide-react';
 import { apiError } from '@/lib/apiError';
 import {
   useCreateDepartmentMutation,
   useDeleteDepartmentMutation,
   useListDepartmentsQuery,
+  useListHospitalsQuery,
 } from '@/store/api';
 import { hasPermission } from '@/lib/auth';
-import { useActiveHospital } from '@/hooks/useActiveHospital';
 import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
 import {
@@ -30,22 +31,34 @@ const MODULE_LABELS: { key: keyof HospitalModules; label: string }[] = [
   { key: 'anc', label: 'Pregnancy (ANC) Tracker' },
 ];
 
-export function AdminSetup({ session }: RoleViewProps) {
-  // The hospital's real category and modules — set at onboarding and changed
-  // only by the platform (hospitals.manage), so this screen reports them rather
-  // than pretending a hospital admin can switch them.
-  const hospital = useActiveHospital();
+export function HospitalSetup({ session }: RoleViewProps) {
+  // Which hospital this screen operates on.
+  //
+  // A platform user has no tenant of their own, so the target comes from the
+  // ?h= selector in the sidebar rather than from the host. That is the same
+  // parameter every other cross-tenant screen uses, and the one lib/tenant.ts
+  // turns into the X-Hospital-Id header on the department calls below — so
+  // picking a hospital up there is what makes the writes here land anywhere.
+  const searchParams = useSearchParams();
+  const hospitalId = searchParams.get('h') ?? '';
+  const { data: hospitals = [] } = useListHospitalsQuery();
+  const hospital = hospitals.find((h) => h.id === hospitalId);
+
   const canManageDepts = hasPermission(session, 'departments.manage');
-  const activeId = hospital.category as HospitalCategoryId;
+  const activeId = (hospital?.category ?? '') as HospitalCategoryId;
   const [selectedId, setSelectedId] = useState<HospitalCategoryId>('maternity');
   const [applyDepartments, setApplyDepartments] = useState(true);
   const [applied, setApplied] = useState('');
 
   useEffect(() => {
-    if (hospital.category) setSelectedId(hospital.category as HospitalCategoryId);
-  }, [hospital.category]);
+    if (hospital?.category) setSelectedId(hospital.category as HospitalCategoryId);
+  }, [hospital?.category]);
 
-  const { data: existingDepartments = [] } = useListDepartmentsQuery();
+  // Skipped until a hospital is chosen: with no ?h= there is no tenant header,
+  // and the backend answers 400 rather than guessing which hospital was meant.
+  const { data: existingDepartments = [] } = useListDepartmentsQuery(undefined, {
+    skip: !hospitalId,
+  });
   const [createDepartment] = useCreateDepartmentMutation();
   const [deleteDepartment] = useDeleteDepartmentMutation();
   const [error, setError] = useState('');
@@ -57,6 +70,18 @@ export function AdminSetup({ session }: RoleViewProps) {
   const isActiveCategory = selectedId === activeId;
 
   const handleApply = async () => {
+    // This deletes departments that a live hospital already has appointments
+    // booked into, and the operator running it is not that hospital. Naming the
+    // hospital in the prompt is the difference between a deliberate act and a
+    // misread of which tenant the ?h= selector was pointing at.
+    const ok = window.confirm(
+      `Replace all ${existingDepartments.length} departments at ${hospital?.name} `
+        + `with the ${selected.label} template?\n\n`
+        + 'Existing departments will be deleted. Appointments booked into them '
+        + 'may be left without a department.',
+    );
+    if (!ok) return;
+
     setError('');
     setApplied('');
     setBusy(true);
@@ -76,12 +101,34 @@ export function AdminSetup({ session }: RoleViewProps) {
     }
   };
 
+  if (!hospital) {
+    return (
+      <DashboardShell
+        role={session.user.role}
+        userName={session.user.name}
+        title="Hospital Setup"
+        subtitle="Pick a hospital to configure"
+      >
+        <div className="rounded-xl border border-slate-200 bg-white p-8 text-center">
+          <Building2 className="w-8 h-8 text-slate-300 mx-auto mb-3" />
+          <p className="text-sm font-medium text-slate-700">
+            {hospitalId ? 'That hospital could not be found.' : 'No hospital selected.'}
+          </p>
+          <p className="text-xs text-slate-500 mt-1">
+            Choose one from the selector at the top of the sidebar. This screen
+            edits a hospital&apos;s setup, so it has to know which.
+          </p>
+        </div>
+      </DashboardShell>
+    );
+  }
+
   return (
     <DashboardShell
       role={session.user.role}
       userName={session.user.name}
       title="Hospital Setup"
-      subtitle="Your hospital type and the departments that go with it"
+      subtitle={`${hospital.name} — category and departments`}
     >
       <div className="space-y-6">
         {/* Category picker */}
@@ -129,13 +176,13 @@ export function AdminSetup({ session }: RoleViewProps) {
           <div className="rounded-xl border border-slate-200 bg-white p-5">
             <h3 className="text-sm font-semibold text-slate-900 mb-3">
               {isActiveCategory
-                ? 'Features enabled for your hospital'
+                ? 'Features enabled for this hospital'
                 : `Features a ${selected.label} hospital would get`}
             </h3>
             {!isActiveCategory && (
               <p className="text-xs text-slate-500 mb-3">
-                Preview of the {selected.label} template — not your hospital&apos;s
-                current plan.
+                Preview of the {selected.label} template — not this
+                hospital&apos;s current plan.
               </p>
             )}
             <ul className="space-y-2">
@@ -236,7 +283,7 @@ export function AdminSetup({ session }: RoleViewProps) {
                   onChange={(e) => setApplyDepartments(e.target.checked)}
                   className="rounded border-slate-300 text-cyan-600 focus:ring-cyan-500"
                 />
-                Replace my departments with the {selected.label} template
+                Replace this hospital&apos;s departments with the {selected.label} template
               </label>
               <button
                 onClick={handleApply}
@@ -247,9 +294,9 @@ export function AdminSetup({ session }: RoleViewProps) {
               </button>
             </div>
             <p className="text-xs text-amber-600 mt-2">
-              This deletes your current departments and recreates them from the
-              template. Your hospital&apos;s category and enabled features are set by
-              the platform and are not changed here.
+              This deletes the hospital&apos;s current departments and recreates
+              them from the template. Category and enabled features are set at
+              onboarding and are not changed here.
             </p>
           </section>
         )}
