@@ -427,6 +427,52 @@ def delete_hospital(
     db.commit()
 
 
+# ----- Operational settings --------------------------------------------------
+# Public read (booking UI needs it before login) + admin write.
+
+
+@router.get("/current/operational", response_model=schemas.HospitalOperationalOut)
+def current_operational(
+    db: Session = Depends(get_db),
+    tenant_id: str = Depends(resolve_public_tenant),
+):
+    """Operational config — public, resolves from subdomain like /current.
+
+    Returns the default (12:00-14:00) when the hospital has no profile yet.
+    """
+    if not tenant_id:
+        return schemas.HospitalOperationalOut()
+    profile = _profile_of(db, tenant_id)
+    if not profile:
+        return schemas.HospitalOperationalOut()
+    return schemas.HospitalOperationalOut(
+        lunch_break_start=profile.lunch_break_start or "12:00",
+        lunch_break_end=profile.lunch_break_end or "14:00",
+    )
+
+
+@router.put("/me/operational", response_model=schemas.HospitalOperationalOut)
+def update_operational(
+    body: schemas.HospitalOperationalUpdate,
+    db: Session = Depends(get_db),
+    user: models.User = Depends(get_current_user),
+    _: str = Depends(require_permission("hospital.operational.manage")),
+):
+    """Update the operational settings (lunch break window) for the caller's hospital."""
+    profile = _profile_of(db, user.hospital_id)
+    if not profile:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Hospital profile not found")
+    profile.lunch_break_start = body.lunch_break_start
+    profile.lunch_break_end = body.lunch_break_end
+    profile.updated_at = now_iso()
+    db.commit()
+    db.refresh(profile)
+    return schemas.HospitalOperationalOut(
+        lunch_break_start=profile.lunch_break_start,
+        lunch_break_end=profile.lunch_break_end,
+    )
+
+
 # ----- Profile ---------------------------------------------------------------
 
 

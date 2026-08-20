@@ -8,6 +8,7 @@ import { CheckCircle, AlertCircle } from 'lucide-react';
 import type { Doctor } from '@/lib/types';
 import { apiError } from '@/lib/apiError';
 import { blockedSlotSet } from '@/lib/schedule';
+import { useBreakSlots } from '@/hooks/useBreakSlots';
 import {
   useCreateAppointmentMutation,
   useGetDoctorAvailabilityQuery,
@@ -41,11 +42,9 @@ const SLOTS = [
   '12:00 PM', '01:00 PM', '02:00 PM', '02:30 PM', '03:00 PM', '03:30 PM',
   '04:00 PM', '04:30 PM',
 ];
-const BREAK_SLOTS = new Set(['12:00 PM', '01:00 PM']);
-
 type SlotStatus = 'available' | 'booked' | 'blocked';
-function slotStatus(slot: string, date: string, booked: Set<string>, blocked: Set<string>): SlotStatus {
-  if (BREAK_SLOTS.has(slot) || blocked.has(slot)) return 'blocked';
+function slotStatus(slot: string, date: string, booked: Set<string>, blocked: Set<string>, breakSlots: Set<string>): SlotStatus {
+  if (breakSlots.has(slot) || blocked.has(slot)) return 'blocked';
   if (date === today) {
     const now = new Date();
     if (slotToMinutes(slot) <= now.getHours() * 60 + now.getMinutes()) return 'blocked';
@@ -97,6 +96,7 @@ function AdminBookForm({ session }: RoleViewProps) {
   );
   const booked = new Set(availability?.taken ?? []);
   const blocked = blockedSlotSet(availability?.blocks ?? [], selection.doctorId, selection.date, SLOTS);
+  const breakSlots = useBreakSlots(SLOTS);
 
   const patientOptions = patients.map((p) => ({
     value: p.id,
@@ -130,7 +130,7 @@ function AdminBookForm({ session }: RoleViewProps) {
             validationSchema={bookingSchema}
             onSubmit={async (values, { setFieldError }) => {
               setSubmitError('');
-              if (slotStatus(values.time, values.date, booked, blocked) !== 'available') {
+              if (slotStatus(values.time, values.date, booked, blocked, breakSlots) !== 'available') {
                 setFieldError('time', 'That slot is not available for the selected doctor');
                 return;
               }
@@ -215,7 +215,7 @@ function AdminBookForm({ session }: RoleViewProps) {
                           </div>
                           <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                             {SLOTS.map((slot) => {
-                              const st = slotStatus(slot, values.date, booked, blocked);
+                              const st = slotStatus(slot, values.date, booked, blocked, breakSlots);
                               const selected = values.time === slot && st === 'available';
                               const cls = selected
                                 ? 'bg-cyan-600 text-white border-cyan-600'

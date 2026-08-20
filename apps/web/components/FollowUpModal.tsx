@@ -11,6 +11,7 @@ import {
   useListScheduleBlocksQuery,
 } from '@/store/api';
 import { blockedSlotSet } from '@/lib/schedule';
+import { useBreakSlots } from '@/hooks/useBreakSlots';
 
 function toDateStr(d: Date) {
   const y = d.getFullYear();
@@ -32,11 +33,9 @@ const SLOTS = [
   '12:00 PM', '01:00 PM', '02:00 PM', '02:30 PM', '03:00 PM', '03:30 PM',
   '04:00 PM', '04:30 PM',
 ];
-const BREAK_SLOTS = new Set(['12:00 PM', '01:00 PM']);
-
 type SlotStatus = 'available' | 'booked' | 'blocked';
-function slotStatus(slot: string, date: string, booked: Set<string>, blocked: Set<string>): SlotStatus {
-  if (BREAK_SLOTS.has(slot) || blocked.has(slot)) return 'blocked';
+function slotStatus(slot: string, date: string, booked: Set<string>, blocked: Set<string>, breakSlots: Set<string>): SlotStatus {
+  if (breakSlots.has(slot) || blocked.has(slot)) return 'blocked';
   if (date === todayStr) {
     const now = new Date();
     if (slotToMinutes(slot) <= now.getHours() * 60 + now.getMinutes()) return 'blocked';
@@ -80,12 +79,13 @@ export function FollowUpModal({
 
   const booked = bookedSlotsFrom(appointments, appointment.doctorId, date);
   const blocked = blockedSlotSet(blocks, appointment.doctorId, date, SLOTS);
+  const breakSlots = useBreakSlots(SLOTS);
 
   const save = async () => {
     setError('');
     if (!date) return setError('Pick a date');
     if (!time) return setError('Select a time slot');
-    if (slotStatus(time, date, booked, blocked) !== 'available') return setError('That slot is not available for this doctor');
+    if (slotStatus(time, date, booked, blocked, breakSlots) !== 'available') return setError('That slot is not available for this doctor');
 
     try {
       await createAppointment({
@@ -145,7 +145,7 @@ export function FollowUpModal({
               ) : (
                 <div className="grid grid-cols-2 gap-2">
                   {SLOTS.map((slot) => {
-                    const st = slotStatus(slot, date, booked, blocked);
+                    const st = slotStatus(slot, date, booked, blocked, breakSlots);
                     const selected = time === slot && st === 'available';
                     const cls = selected
                       ? 'bg-cyan-600 text-white border-cyan-600'

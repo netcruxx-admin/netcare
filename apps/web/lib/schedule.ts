@@ -54,6 +54,27 @@ export function blockAtSlot(blocks: ScheduleBlock[], slot: string): ScheduleBloc
   return blockAtMinute(blocks, slotMin(slot));
 }
 
+/**
+ * Given a lunch break range in 24-hour "HH:MM" format (end exclusive),
+ * returns the subset of `slots` whose times fall within [start, end).
+ *
+ * Example: breakSlotsFromRange("12:00", "14:00", SLOTS)
+ * → Set { "12:00 PM", "01:00 PM" } (the slots at 12:00 and 13:00)
+ */
+export function breakSlotsFromRange(
+  startHhmm: string,
+  endHhmm: string,
+  slots: string[],
+): Set<string> {
+  const toMin = (hhmm: string) => {
+    const [h, m] = hhmm.split(':').map(Number);
+    return h * 60 + m;
+  };
+  const startMin = toMin(startHhmm);
+  const endMin = toMin(endHhmm);
+  return new Set(slots.filter((s) => { const sm = slotMin(s); return sm >= startMin && sm < endMin; }));
+}
+
 // Set of slot labels (from `slots`) that fall inside any block for this doctor/date.
 /**
  * Which of `slots` a doctor is unavailable for on `date`.

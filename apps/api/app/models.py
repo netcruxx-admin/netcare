@@ -180,6 +180,10 @@ class HospitalProfile(Base):
     opd_hours = Column(JSON, default=dict)
     weekly_off = Column(JSON, default=list)  # list of day keys
     appointment_slot_minutes = Column(Integer, default=15)
+    # Lunch / mid-day break — HH:MM in 24-hour format, end is exclusive.
+    # Slots that fall within [start, end) are blocked in the booking UI.
+    lunch_break_start = Column(String, default="12:00")
+    lunch_break_end = Column(String, default="14:00")
     # Hospitals are opinionated about the shape of an invoice number and an MRN,
     # and both block go-live if they are wrong. `{prefix}{seq}` style tokens.
     invoice_prefix = Column(String, default="INV")

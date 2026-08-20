@@ -378,6 +378,7 @@ export const dashboardRoutes: DashboardRoute[] = [
   { path: '/dashboard/users', label: 'Users', icon: Users, viewRoles: [superadminRole, adminRole], permission: 'users.read' },
   { path: '/dashboard/roles', label: 'Roles', icon: ShieldCheck, viewRoles: [superadminRole], permission: 'roles.manage' },
   { path: '/dashboard/setup', label: 'Hospital Setup', icon: Settings, viewRoles: [superadminRole], permission: 'hospital.settings.manage' },
+  { path: '/dashboard/hospital-settings', label: 'Hospital Settings', icon: Settings, viewRoles: [adminRole], permission: 'hospital.operational.manage' },
 ];
 
 /**

@@ -227,6 +227,9 @@ class HospitalProfileBase(CamelModel):
     opd_hours: dict = {}
     weekly_off: List[str] = []
     appointment_slot_minutes: int = 15
+    # Lunch break window — HH:MM 24-hour, end exclusive.
+    lunch_break_start: str = "12:00"
+    lunch_break_end: str = "14:00"
     invoice_prefix: str = "INV"
     invoice_series_start: int = 1
     mrn_prefix: str = "MRN"
@@ -274,6 +277,18 @@ class HospitalProfileOut(OutModel, HospitalProfileBase):
 class HospitalProfileUpdate(HospitalProfileBase):
     """Full replacement of the profile — the settings screen edits it as one
     form, so a PUT with the whole object is honest about what it does."""
+
+
+class HospitalOperationalOut(CamelModel):
+    """The operational settings the booking UI needs — public, no auth."""
+    lunch_break_start: str = "12:00"
+    lunch_break_end: str = "14:00"
+
+
+class HospitalOperationalUpdate(CamelModel):
+    """Admin-settable operational config."""
+    lunch_break_start: str
+    lunch_break_end: str
 
 
 class HospitalLicenceBase(CamelModel):

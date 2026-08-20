@@ -19,6 +19,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { TablePagination } from '@/components/TablePagination';
 import { useServerTable } from '@/hooks/useServerTable';
 import { apiError } from '@/lib/apiError';
+import { useBreakSlots } from '@/hooks/useBreakSlots';
 import { fmtDate } from '@/lib/date';
 import { hasPermission } from '@/lib/auth';
 import type { Appointment, Doctor } from '@/lib/types';
@@ -77,7 +78,6 @@ const SLOTS = [
   '12:00 PM', '01:00 PM', '02:00 PM', '02:30 PM', '03:00 PM', '03:30 PM',
   '04:00 PM', '04:30 PM',
 ];
-const BREAK_SLOTS = new Set(['12:00 PM', '01:00 PM']);
 const todayStr = toDateStr(new Date());
 
 function DateBadge({ date }: { date: string }) {
@@ -98,8 +98,8 @@ function slotToMinutes(slot: string) {
   return h * 60 + m;
 }
 
-function slotStatus(slot: string, date: string, booked: Set<string>) {
-  if (BREAK_SLOTS.has(slot)) return 'blocked';
+function slotStatus(slot: string, date: string, booked: Set<string>, breakSlots: Set<string>) {
+  if (breakSlots.has(slot)) return 'blocked';
   if (date === todayStr) {
     const now = new Date();
     if (slotToMinutes(slot) <= now.getHours() * 60 + now.getMinutes()) return 'blocked';
@@ -176,6 +176,7 @@ export function PlatformAppointments({ session }: RoleViewProps) {
     { doctorId: rescheduling?.doctorId ?? '', date: reDate, hospitalId: rescheduling?.hospitalId },
     { skip: !rescheduling || !reDate },
   );
+  const breakSlots = useBreakSlots(SLOTS);
   const reBooked = useMemo(
     () =>
       new Set(
@@ -407,7 +408,7 @@ export function PlatformAppointments({ session }: RoleViewProps) {
                 ) : (
                   <div className="grid grid-cols-2 gap-2">
                     {SLOTS.map((slot) => {
-                      const st = slotStatus(slot, reDate, reBooked);
+                      const st = slotStatus(slot, reDate, reBooked, breakSlots);
                       const selected = reTime === slot && st === 'available';
                       const cls = selected
                         ? 'bg-cyan-600 text-white border-cyan-600'

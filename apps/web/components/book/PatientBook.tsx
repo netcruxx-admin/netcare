@@ -17,6 +17,7 @@ import {
   useListScheduleBlocksQuery,
 } from '@/store/api';
 import { blockedSlotSet } from '@/lib/schedule';
+import { useBreakSlots } from '@/hooks/useBreakSlots';
 import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
 import { FormField } from '@/components/form/FormField';
@@ -43,16 +44,11 @@ function slotToMinutes(slot: string) {
 
 const today = toDateStr(new Date());
 
-// TODO (Phase 3): derive SLOTS and BREAK_SLOTS from hospital_profiles.slot_length
-// and hospital_profiles.operational_config instead of hardcoding here.
-// For now these match the demo hospital's default working hours (9am–4:30pm, 30-min slots).
 const SLOTS = [
   '09:00 AM', '09:30 AM', '10:00 AM', '10:30 AM', '11:00 AM', '11:30 AM',
   '12:00 PM', '01:00 PM', '02:00 PM', '02:30 PM', '03:00 PM', '03:30 PM',
   '04:00 PM', '04:30 PM',
 ];
-// Clinic lunch break — always unavailable
-const BREAK_SLOTS = new Set(['12:00 PM', '01:00 PM']);
 
 // Maximum number of dept doctors to fetch availability for in parallel.
 // 5 covers virtually all real departments; hooks must be a fixed count.
@@ -75,8 +71,9 @@ function getDeptSlotStatus(
   date: string,
   deptDoctors: Doctor[],
   allAv: AvailabilityData[],
+  breakSlots: Set<string>,
 ): SlotStatus {
-  if (BREAK_SLOTS.has(slot)) return 'blocked';
+  if (breakSlots.has(slot)) return 'blocked';
   if (date === today) {
     const now = new Date();
     if (slotToMinutes(slot) <= now.getHours() * 60 + now.getMinutes()) return 'blocked';
@@ -141,6 +138,7 @@ export function PatientBook({ session }: RoleViewProps) {
   const { data: doctors = [] } = useListDoctorsQuery();
   const { data: patient } = useGetPatientByUserQuery(session.user.id);
   const [createAppointment] = useCreateAppointmentMutation();
+  const breakSlots = useBreakSlots(SLOTS);
 
   // Doctors in the selected department, capped at MAX_DEPT so hook count is fixed.
   const deptDoctors = useMemo<Doctor[]>(() => {
@@ -235,7 +233,7 @@ export function PatientBook({ session }: RoleViewProps) {
                 }
 
                 // Guard against the slot being taken between page load and submit.
-                const st = getDeptSlotStatus(values.time, values.date, deptDoctors, allAv);
+                const st = getDeptSlotStatus(values.time, values.date, deptDoctors, allAv, breakSlots);
                 if (st !== 'available') {
                   setSubmitError('That time slot is no longer available. Please pick another.');
                   return;
@@ -372,7 +370,7 @@ export function PatientBook({ session }: RoleViewProps) {
                               </div>
                               <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                                 {SLOTS.map((slot) => {
-                                  const st = getDeptSlotStatus(slot, values.date, deptDoctors, allAv);
+                                  const st = getDeptSlotStatus(slot, values.date, deptDoctors, allAv, breakSlots);
                                   const selected = values.time === slot;
                                   const cls = selected
                                     ? 'bg-cyan-600 text-white border-cyan-600'

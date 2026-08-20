@@ -144,6 +144,8 @@ export interface HospitalProfileBody {
   opdHours?: Record<string, unknown>;
   weeklyOff?: string[];
   appointmentSlotMinutes?: number;
+  lunchBreakStart?: string;
+  lunchBreakEnd?: string;
   invoicePrefix?: string;
   invoiceSeriesStart?: number;
   mrnPrefix?: string;
@@ -159,6 +161,12 @@ export interface HospitalProfile extends HospitalProfileBody {
   id: string;
   hospitalId: string;
   updatedAt: string;
+}
+
+/** Operational config needed by the booking UI. Public endpoint, no auth. */
+export interface HospitalOperational {
+  lunchBreakStart: string;
+  lunchBreakEnd: string;
 }
 
 export type LicenceStatus = 'pending' | 'active' | 'expired' | 'rejected';
@@ -671,6 +679,14 @@ export const api = createApi({
     getCurrentHospital: build.query<HospitalInfo, void>({
       query: () => '/hospitals/current',
       providesTags: ['Hospital'],
+    }),
+    getHospitalOperational: build.query<HospitalOperational, void>({
+      query: () => '/hospitals/current/operational',
+      providesTags: ['Hospital'],
+    }),
+    updateHospitalOperational: build.mutation<HospitalOperational, { lunchBreakStart: string; lunchBreakEnd: string }>({
+      query: (body) => ({ url: '/hospitals/me/operational', method: 'PUT', body }),
+      invalidatesTags: ['Hospital'],
     }),
     listPublicHospitals: build.query<HospitalPublicInfo[], void>({
       query: () => '/hospitals/public',
@@ -1522,6 +1538,8 @@ export const {
   useUpdateRoleMutation,
   useDeleteRoleMutation,
   useGetCurrentHospitalQuery,
+  useGetHospitalOperationalQuery,
+  useUpdateHospitalOperationalMutation,
   useListPublicHospitalsQuery,
   useListHospitalsQuery,
   useGetHospitalDetailQuery,

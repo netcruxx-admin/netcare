@@ -18,7 +18,8 @@ import {
 import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
 import { BlockModal } from '@/components/BlockModal';
-import { BLOCK_LABEL, BLOCK_CELL_STYLE, blockAtMinute } from '@/lib/schedule';
+import { BLOCK_LABEL, BLOCK_CELL_STYLE, blockAtMinute, GRID_SLOTS } from '@/lib/schedule';
+import { useBreakSlots } from '@/hooks/useBreakSlots';
 
 const toDateStr = (d: Date) => {
   const y = d.getFullYear();
@@ -60,14 +61,12 @@ const minToLabel = (min: number) => {
 const GRID_MINS: number[] = [];
 for (let m = 9 * 60; m <= 17 * 60; m += 30) GRID_MINS.push(m);
 
-// Slots that can be booked from here (matches the booking form; excludes the lunch break)
-const BOOKABLE = new Set([
+// Booking slots the schedule grid offers — same array the booking form uses.
+const ALL_BOOKING_SLOTS = [
   '09:00 AM', '09:30 AM', '10:00 AM', '10:30 AM', '11:00 AM', '11:30 AM',
-  '02:00 PM', '02:30 PM', '03:00 PM', '03:30 PM', '04:00 PM', '04:30 PM',
-]);
-
-// Clinic lunch break window
-const BREAK = new Set(['12:00 PM', '12:30 PM', '01:00 PM', '01:30 PM']);
+  '12:00 PM', '01:00 PM', '02:00 PM', '02:30 PM', '03:00 PM', '03:30 PM',
+  '04:00 PM', '04:30 PM',
+];
 
 export function AdminSchedule({ session }: RoleViewProps) {
   const [date, setDate] = useState(toDateStr(new Date()));
@@ -80,6 +79,13 @@ export function AdminSchedule({ session }: RoleViewProps) {
   const { data: allAppointments = [], refetch: refetchAppointments } = useListAppointmentsQuery();
   const { data: allBlocks = [], refetch: refetchBlocks } = useListScheduleBlocksQuery();
   const [deleteScheduleBlock] = useDeleteScheduleBlockMutation();
+
+  // Dynamic break window — fetched from hospital operational config.
+  const breakGrid = useBreakSlots(GRID_SLOTS);
+  const bookableSlots = useMemo(
+    () => new Set(ALL_BOOKING_SLOTS.filter((s) => !breakGrid.has(s))),
+    [breakGrid],
+  );
 
   const { doctors, rowMins, cellMap, blocksByDoctor } = useMemo(() => {
     const patientById = new Map(allPatients.map((p) => [p.id, p]));
@@ -238,7 +244,7 @@ export function AdminSchedule({ session }: RoleViewProps) {
                               </button>
                             )}
                           </div>
-                        ) : BOOKABLE.has(label) && !isPast ? (
+                        ) : bookableSlots.has(label) && !isPast ? (
                           <Link
                             href={`/dashboard/book?doctor=${d.id}&date=${date}&time=${encodeURIComponent(label)}`}
                             className="group block px-4 py-3 text-center text-emerald-600 hover:bg-emerald-50 transition"
@@ -247,7 +253,7 @@ export function AdminSchedule({ session }: RoleViewProps) {
                             <span className="group-hover:hidden">Available</span>
                             <span className="hidden group-hover:inline font-medium">+ Book</span>
                           </Link>
-                        ) : BREAK.has(label) ? (
+                        ) : breakGrid.has(label) ? (
                           <div className="px-4 py-3 text-center text-slate-400 text-sm bg-slate-50 cursor-not-allowed">Break</div>
                         ) : (
                           <div className="px-4 py-3 text-center text-slate-300 text-sm bg-slate-50 cursor-not-allowed">—</div>

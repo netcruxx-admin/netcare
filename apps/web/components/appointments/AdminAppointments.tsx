@@ -34,6 +34,7 @@ import { ActionIcon } from '@/components/ActionIcon';
 import { ExportButton } from '@/components/ExportButton';
 import { useDebounced } from '@/hooks/useDebounced';
 import { blockedSlotSet } from '@/lib/schedule';
+import { useBreakSlots } from '@/hooks/useBreakSlots';
 import { fmtDate } from '@/lib/date';
 import {
   useCreateVitalsMutation,
@@ -89,10 +90,9 @@ const SLOTS = [
   '12:00 PM', '01:00 PM', '02:00 PM', '02:30 PM', '03:00 PM', '03:30 PM',
   '04:00 PM', '04:30 PM',
 ];
-const BREAK_SLOTS = new Set(['12:00 PM', '01:00 PM']);
 type SlotStatus = 'available' | 'booked' | 'blocked';
-function slotStatus(slot: string, date: string, booked: Set<string>, blocked: Set<string>): SlotStatus {
-  if (BREAK_SLOTS.has(slot) || blocked.has(slot)) return 'blocked';
+function slotStatus(slot: string, date: string, booked: Set<string>, blocked: Set<string>, breakSlots: Set<string>): SlotStatus {
+  if (breakSlots.has(slot) || blocked.has(slot)) return 'blocked';
   if (date === todayStr) {
     const now = new Date();
     if (slotToMinutes(slot) <= now.getHours() * 60 + now.getMinutes()) return 'blocked';
@@ -286,6 +286,7 @@ export function AdminAppointments({ session }: RoleViewProps) {
   const reBlocked = rescheduling
     ? blockedSlotSet(scheduleBlocks, rescheduling.doctorId, reDate, SLOTS)
     : new Set<string>();
+  const breakSlots = useBreakSlots(SLOTS);
 
   return (
     <DashboardShell
@@ -589,7 +590,7 @@ export function AdminAppointments({ session }: RoleViewProps) {
                 ) : (
                   <div className="grid grid-cols-2 gap-2">
                     {SLOTS.map((slot) => {
-                      const st = slotStatus(slot, reDate, reBooked, reBlocked);
+                      const st = slotStatus(slot, reDate, reBooked, reBlocked, breakSlots);
                       const selected = reTime === slot && st === 'available';
                       const cls = selected
                         ? 'bg-cyan-600 text-white border-cyan-600'
