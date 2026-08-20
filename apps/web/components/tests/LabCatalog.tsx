@@ -1,13 +1,18 @@
 'use client';
 
-import { Search, FlaskConical } from 'lucide-react';
+import { useState } from 'react';
+import { Search, FlaskConical, Eye } from 'lucide-react';
 import { DashboardShell } from '@/components/DashboardShell';
+import { ActionIcon } from '@/components/ActionIcon';
+import { RecordDialog } from '@/components/RecordDialog';
 import { useListLabTestsPagedQuery } from '@/store/api';
 import type { RoleViewProps } from '@/components/RoleView';
+import type { LabTest } from '@/lib/types';
 import { TablePagination } from '@/components/TablePagination';
 import { useServerTable } from '@/hooks/useServerTable';
 
 export function LabCatalog({ session }: RoleViewProps) {
+  const [viewing, setViewing] = useState<LabTest | null>(null);
   const table = useServerTable();
   const { data: testPage } = useListLabTestsPagedQuery({
     q: table.q.trim() || undefined,
@@ -50,6 +55,7 @@ export function LabCatalog({ session }: RoleViewProps) {
                     <th className="text-left py-3 px-6 font-semibold text-slate-900">Parameters</th>
                     <th className="text-left py-3 px-6 font-semibold text-slate-900">TAT</th>
                     <th className="text-right py-3 px-6 font-semibold text-slate-900">Price</th>
+                    <th className="text-right py-3 px-6 font-semibold text-slate-900">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -61,6 +67,9 @@ export function LabCatalog({ session }: RoleViewProps) {
                       <td className="py-3 px-6 text-slate-600">{t.parameters?.length ?? 1}</td>
                       <td className="py-3 px-6 text-slate-600">{t.turnaroundTime}</td>
                       <td className="py-3 px-6 text-right text-slate-600">₹{t.price}</td>
+                      <td className="py-3 px-6 text-right">
+                        <ActionIcon icon={Eye} label="View" onClick={() => setViewing(t)} />
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -75,6 +84,29 @@ export function LabCatalog({ session }: RoleViewProps) {
           )}
         </div>
       </div>
+      <RecordDialog
+        open={viewing !== null}
+        onClose={() => setViewing(null)}
+        title={viewing?.name ?? ''}
+        subtitle={viewing?.category}
+        fields={[
+          { label: 'Category', value: viewing?.category },
+          { label: 'Sample type', value: viewing?.sampleType },
+          { label: 'Turnaround', value: viewing?.turnaroundTime },
+          { label: 'Price', value: viewing ? `₹${viewing.price}` : '' },
+          {
+            label: 'Parameters',
+            wide: true,
+            // The table can only show how many; the names are what tells a
+            // technician whether this is the panel they were asked for.
+            value: viewing?.parameters?.length
+              ? viewing.parameters
+                  .map((param) => [param.name, param.unit].filter(Boolean).join(' '))
+                  .join(', ')
+              : '',
+          },
+        ]}
+      />
     </DashboardShell>
   );
 }

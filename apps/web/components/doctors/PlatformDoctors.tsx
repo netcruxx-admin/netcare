@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Stethoscope, Plus, Search, Pencil, Trash2 } from 'lucide-react';
+import { Stethoscope, Plus, Search, Pencil, Trash2, Eye } from 'lucide-react';
 import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
 import { AddDoctorModal } from '@/components/superadmin/AddDoctorModal';
@@ -10,6 +10,7 @@ import { EditDoctorModal } from '@/components/doctors/EditDoctorModal';
 import { DeleteDoctorModal } from '@/components/doctors/DeleteDoctorModal';
 import { HospitalBadge } from '@/components/superadmin/HospitalBadge';
 import { ActionIcon } from '@/components/ActionIcon';
+import { RecordDialog } from '@/components/RecordDialog';
 import { TablePagination } from '@/components/TablePagination';
 import { useServerTable } from '@/hooks/useServerTable';
 import { hasPermission } from '@/lib/auth';
@@ -26,6 +27,7 @@ export function PlatformDoctors({ session }: RoleViewProps) {
   const [addModalOpen, setAddModalOpen] = useState(false);
   const [editing, setEditing] = useState<Doctor | null>(null);
   const [deleting, setDeleting] = useState<Doctor | null>(null);
+  const [viewing, setViewing] = useState<Doctor | null>(null);
 
   const table = useServerTable({ filterKey: selectedHospitalId });
   const { data: doctorPage, isLoading, refetch } = useGetSuperadminDoctorsPagedQuery({
@@ -92,7 +94,7 @@ export function PlatformDoctors({ session }: RoleViewProps) {
                   {['Name', 'Email', 'Specialization', 'Qualification', 'Experience'].map((h) => (
                     <th key={h} className="text-left py-3 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wide">{h}</th>
                   ))}
-                  {canManage && <th className="text-right py-3 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wide">Actions</th>}
+                  <th className="text-right py-3 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wide">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -108,14 +110,17 @@ export function PlatformDoctors({ session }: RoleViewProps) {
                     <td className="py-3 px-6 text-slate-600">{d.specialization || '—'}</td>
                     <td className="py-3 px-6 text-slate-600">{d.qualification || '—'}</td>
                     <td className="py-3 px-6 text-slate-600">{d.experienceYears != null ? `${d.experienceYears} yrs` : '—'}</td>
-                    {canManage && (
-                      <td className="py-3 px-6 text-right">
-                        <div className="flex items-center justify-end gap-1">
-                          <ActionIcon icon={Pencil} label="Edit" onClick={() => setEditing(d)} />
-                          <ActionIcon icon={Trash2} label="Delete" tone="danger" onClick={() => setDeleting(d)} />
-                        </div>
-                      </td>
-                    )}
+                    <td className="py-3 px-6 text-right">
+                      <div className="flex items-center justify-end gap-1">
+                        <ActionIcon icon={Eye} label="View" onClick={() => setViewing(d)} />
+                        {canManage && (
+                          <>
+                            <ActionIcon icon={Pencil} label="Edit" onClick={() => setEditing(d)} />
+                            <ActionIcon icon={Trash2} label="Delete" tone="danger" onClick={() => setDeleting(d)} />
+                          </>
+                        )}
+                      </div>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -148,6 +153,28 @@ export function PlatformDoctors({ session }: RoleViewProps) {
         onClose={() => setDeleting(null)}
         onSuccess={refetch}
         hospitalId={deleting?.hospitalId}
+      />
+      <RecordDialog
+        open={viewing !== null}
+        onClose={() => setViewing(null)}
+        title={viewing?.user?.name ?? 'Doctor'}
+        subtitle={hospitals.find((h) => h.id === viewing?.hospitalId)?.name}
+        fields={[
+          {
+            label: 'Hospital',
+            value: hospitals.find((h) => h.id === viewing?.hospitalId)?.name ?? viewing?.hospitalId,
+          },
+          { label: 'Email', value: viewing?.user?.email },
+          { label: 'Phone', value: viewing?.user?.phone },
+          { label: 'Specialization', value: viewing?.specialization },
+          { label: 'Qualification', value: viewing?.qualification },
+          { label: 'Experience', value: viewing?.experienceYears != null ? `${viewing.experienceYears} yrs` : '' },
+          { label: 'Consultation fee', value: viewing ? `₹${viewing.consultationFee}` : '' },
+          { label: 'Licence number', value: viewing?.licenseNumber },
+          { label: 'Medical council', value: viewing?.medicalCouncil },
+          { label: 'Registration year', value: viewing?.registrationYear },
+          { label: 'Verification', value: viewing?.verificationStatus },
+        ]}
       />
     </DashboardShell>
   );

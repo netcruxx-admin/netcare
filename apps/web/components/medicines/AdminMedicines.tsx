@@ -3,11 +3,13 @@
 import { useState } from 'react';
 import { Formik, Form } from 'formik';
 import * as Yup from 'yup';
-import { Plus, X, Pill, AlertTriangle, Search, Pencil, Trash2 } from 'lucide-react';
+import { Plus, X, Pill, AlertTriangle, Search, Pencil, Trash2, Eye } from 'lucide-react';
 import { toast } from 'sonner';
 import type { Medicine } from '@/lib/types';
 import { DashboardShell } from '@/components/DashboardShell';
 import { ActionIcon } from '@/components/ActionIcon';
+import { RecordDialog } from '@/components/RecordDialog';
+import { FormattedDate } from '@/components/ui/FormattedDate';
 import { apiError } from '@/lib/apiError';
 import { hasPermission } from '@/lib/auth';
 import {
@@ -51,6 +53,7 @@ export function AdminMedicines({ session }: RoleViewProps) {
   const [editing, setEditing] = useState<Medicine | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [deleting, setDeleting] = useState<Medicine | null>(null);
+  const [viewing, setViewing] = useState<Medicine | null>(null);
   const [categoryFilter, setCategoryFilter] = useState('all');
 
   const canManage = hasPermission(session, 'medicines.manage');
@@ -166,9 +169,7 @@ export function AdminMedicines({ session }: RoleViewProps) {
                   <th className="text-left py-3 px-6 font-semibold text-slate-900">Strength</th>
                   <th className="text-left py-3 px-6 font-semibold text-slate-900">Price</th>
                   <th className="text-left py-3 px-6 font-semibold text-slate-900">Stock</th>
-                  {canManage && (
-                    <th className="text-right py-3 px-6 font-semibold text-slate-900">Actions</th>
-                  )}
+                  <th className="text-right py-3 px-6 font-semibold text-slate-900">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -184,14 +185,17 @@ export function AdminMedicines({ session }: RoleViewProps) {
                         {m.stock}
                       </span>
                     </td>
-                    {canManage && (
-                      <td className="py-3 px-6 text-right">
-                        <div className="flex items-center justify-end gap-1">
-                          <ActionIcon icon={Pencil} label="Edit" onClick={() => openEdit(m)} />
-                          <ActionIcon icon={Trash2} label="Delete" tone="danger" onClick={() => setDeleting(m)} />
-                        </div>
-                      </td>
-                    )}
+                    <td className="py-3 px-6 text-right">
+                      <div className="flex items-center justify-end gap-1">
+                        <ActionIcon icon={Eye} label="View" onClick={() => setViewing(m)} />
+                        {canManage && (
+                          <>
+                            <ActionIcon icon={Pencil} label="Edit" onClick={() => openEdit(m)} />
+                            <ActionIcon icon={Trash2} label="Delete" tone="danger" onClick={() => setDeleting(m)} />
+                          </>
+                        )}
+                      </div>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -320,6 +324,24 @@ export function AdminMedicines({ session }: RoleViewProps) {
           </div>
         </div>
       )}
+      <RecordDialog
+        open={viewing !== null}
+        onClose={() => setViewing(null)}
+        title={viewing?.name ?? ''}
+        subtitle={[viewing?.form, viewing?.strength].filter(Boolean).join(' · ')}
+        fields={[
+          { label: 'Category', value: viewing?.category },
+          { label: 'Form', value: viewing?.form },
+          { label: 'Strength', value: viewing?.strength },
+          { label: 'Unit', value: viewing?.unit },
+          { label: 'Price', value: viewing ? `₹${viewing.price}` : '' },
+          { label: 'Stock', value: viewing ? String(viewing.stock) : '' },
+          { label: 'Reorder level', value: viewing?.reorderLevel?.toString() },
+          { label: 'Lot number', value: viewing?.lotNumber },
+          { label: 'Expiry', value: viewing?.expiryDate ? <FormattedDate iso={viewing.expiryDate} /> : '' },
+          { label: 'Storage location', value: viewing?.location },
+        ]}
+      />
     </DashboardShell>
   );
 }

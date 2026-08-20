@@ -4,6 +4,33 @@ Notable changes to CarbonHealth. Format follows [Keep a Changelog](https://keepa
 
 ## [Unreleased]
 
+### Added — a View action on every table that had none
+
+Ten list screens offered Edit and Delete but no way to simply look at a row, so
+anything that did not fit in the columns was reachable only by opening the edit
+form. `components/RecordDialog.tsx` is one read-only detail dialog they all
+share: label/value pairs, long text spanning both columns, Escape and backdrop
+to close.
+
+Deliberately not the edit modal in a disabled state. A greyed-out form reads as
+"you may not touch this" when the point is only to look — and it means a role
+holding read but not manage gets a real view rather than a dead form.
+
+Empty fields are shown as `—` rather than dropped: "Expiry —" says the field
+exists and is blank, while omitting the row leaves the reader wondering whether
+the system tracks it at all.
+
+Covered: medicines, lab tests, lab catalog, inventory, departments, doctors
+(hospital + platform), users (hospital + platform), hospitals. Each dialog
+carries the fields the table has no room for — a medicine's lot number and
+expiry, a doctor's licence and council, a hospital's PAN/GSTIN/HFR and enabled
+modules, a lab test's parameter template.
+
+One behaviour change worth noting: on six of these tables the whole Actions
+column was gated behind `canManage`, so a read-only viewer saw no column at
+all. The column now always renders, with View always present and Edit/Delete
+still gated.
+
 ### Changed — department CRUD is the platform's too
 
 `departments.manage` moved from `admin` to `superadmin` (`d7a2c5f81e64`), and

@@ -2,13 +2,14 @@
 
 import { useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Building2, Plus, Ban, RotateCcw, Pencil } from 'lucide-react';
+import { Building2, Plus, Ban, RotateCcw, Pencil, Eye } from 'lucide-react';
 import { toast } from 'sonner';
 import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
 import { OnboardHospitalWizard } from '@/components/hospitals/OnboardHospitalWizard';
 import { EditHospitalWizard } from '@/components/hospitals/EditHospitalWizard';
 import { ActionIcon } from '@/components/ActionIcon';
+import { RecordDialog } from '@/components/RecordDialog';
 import { apiError } from '@/lib/apiError';
 import { hasPermission } from '@/lib/auth';
 import { fmtDate } from '@/lib/date';
@@ -22,6 +23,7 @@ export function PlatformHospitals({ session }: RoleViewProps) {
   const [onboardOpen, setOnboardOpen] = useState(false);
   const [editing, setEditing] = useState<HospitalInfo | null>(null);
   const [toggling, setToggling] = useState<HospitalInfo | null>(null);
+  const [viewing, setViewing] = useState<HospitalInfo | null>(null);
 
   const { data: allHospitals = [], isLoading, refetch } = useListHospitalsQuery();
   const [updateHospital] = useUpdateHospitalMutation();
@@ -84,7 +86,7 @@ export function PlatformHospitals({ session }: RoleViewProps) {
                   {['Name', 'Subdomain', 'Category', 'Theme', 'Status', 'Created'].map((h) => (
                     <th key={h} className="text-left py-3 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wide">{h}</th>
                   ))}
-                  {canManage && <th className="text-right py-3 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wide">Actions</th>}
+                  <th className="text-right py-3 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wide">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -105,17 +107,20 @@ export function PlatformHospitals({ session }: RoleViewProps) {
                       </span>
                     </td>
                     <td className="py-3 px-6 text-slate-500 text-sm">{fmtDate(h.createdAt)}</td>
-                    {canManage && (
-                      <td className="py-3 px-6 text-right">
-                        <div className="flex items-center justify-end gap-1">
-                          <ActionIcon icon={Pencil} label="Edit" onClick={() => setEditing(h)} />
-                          {h.status === 'active'
-                            ? <ActionIcon icon={Ban} label="Suspend" tone="danger" onClick={() => setToggling(h)} />
-                            : <ActionIcon icon={RotateCcw} label="Reactivate" tone="success" onClick={() => setToggling(h)} />
-                          }
-                        </div>
-                      </td>
-                    )}
+                    <td className="py-3 px-6 text-right">
+                      <div className="flex items-center justify-end gap-1">
+                        <ActionIcon icon={Eye} label="View" onClick={() => setViewing(h)} />
+                        {canManage && (
+                          <>
+                            <ActionIcon icon={Pencil} label="Edit" onClick={() => setEditing(h)} />
+                            {h.status === 'active'
+                              ? <ActionIcon icon={Ban} label="Suspend" tone="danger" onClick={() => setToggling(h)} />
+                              : <ActionIcon icon={RotateCcw} label="Reactivate" tone="success" onClick={() => setToggling(h)} />
+                            }
+                          </>
+                        )}
+                      </div>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -178,6 +183,34 @@ export function PlatformHospitals({ session }: RoleViewProps) {
           </div>
         </div>
       )}
+      <RecordDialog
+        open={viewing !== null}
+        onClose={() => setViewing(null)}
+        title={viewing?.name ?? ''}
+        subtitle={viewing?.subdomain}
+        fields={[
+          { label: 'Subdomain', value: viewing?.subdomain },
+          { label: 'Category', value: viewing?.category?.replace('-', ' ') },
+          { label: 'Status', value: viewing?.status },
+          { label: 'Onboarding', value: viewing?.onboardingStatus },
+          { label: 'Legal name', value: viewing?.legalName },
+          { label: 'Entity type', value: viewing?.entityType },
+          { label: 'Registration no.', value: viewing?.registrationNo },
+          { label: 'PAN', value: viewing?.pan },
+          { label: 'GSTIN', value: viewing?.gstin },
+          { label: 'HFR ID', value: viewing?.hfrId },
+          { label: 'NABH', value: viewing?.nabhStatus },
+          { label: 'Created', value: viewing?.createdAt ? fmtDate(viewing.createdAt) : '' },
+          {
+            label: 'Modules',
+            wide: true,
+            value: Object.entries(viewing?.modules ?? {})
+              .filter(([, on]) => on)
+              .map(([name]) => name)
+              .join(', '),
+          },
+        ]}
+      />
     </DashboardShell>
   );
 }

@@ -2,10 +2,12 @@
 
 import { useState } from 'react';
 import { toast } from 'sonner';
-import { Package, X, AlertTriangle, TrendingUp, TrendingDown } from 'lucide-react';
+import { Package, X, AlertTriangle, TrendingUp, TrendingDown, Eye } from 'lucide-react';
 import { apiError } from '@/lib/apiError';
 import type { InventoryMovementType, Medicine } from '@/lib/types';
 import { DashboardShell } from '@/components/DashboardShell';
+import { ActionIcon } from '@/components/ActionIcon';
+import { RecordDialog } from '@/components/RecordDialog';
 import type { RoleViewProps } from '@/components/RoleView';
 import {
   useListMedicinesPagedQuery,
@@ -45,6 +47,7 @@ interface AdjustForm {
 
 export function InventoryManagement({ session }: RoleViewProps) {
   const [activeTab, setActiveTab] = useState<ActiveTab>('stock');
+  const [viewing, setViewing] = useState<Medicine | null>(null);
   const [restockMed, setRestockMed] = useState<Medicine | null>(null);
   const [adjustMed, setAdjustMed] = useState<Medicine | null>(null);
   const [restockForm, setRestockForm] = useState<RestockForm>({
@@ -206,6 +209,7 @@ export function InventoryManagement({ session }: RoleViewProps) {
                         <td className="py-3 px-4 text-slate-600">{med.unit || '—'}</td>
                         <td className="py-3 px-4 text-right">
                           <div className="flex items-center justify-end gap-2">
+                            <ActionIcon icon={Eye} label="View" onClick={() => setViewing(med)} />
                             <button
                               onClick={() => openRestock(med)}
                               className="px-2 py-1 text-xs font-medium bg-green-50 text-green-700 rounded hover:bg-green-100 transition flex items-center gap-1"
@@ -426,6 +430,24 @@ export function InventoryManagement({ session }: RoleViewProps) {
           </div>
         </div>
       )}
+      <RecordDialog
+        open={viewing !== null}
+        onClose={() => setViewing(null)}
+        title={viewing?.name ?? ''}
+        subtitle={[viewing?.form, viewing?.strength].filter(Boolean).join(' · ')}
+        fields={[
+          { label: 'Category', value: viewing?.category },
+          { label: 'Form', value: viewing?.form },
+          { label: 'Strength', value: viewing?.strength },
+          { label: 'Unit', value: viewing?.unit },
+          { label: 'Price', value: viewing ? `₹${viewing.price}` : '' },
+          { label: 'Stock', value: viewing ? String(viewing.stock) : '' },
+          { label: 'Reorder level', value: viewing?.reorderLevel?.toString() },
+          { label: 'Lot number', value: viewing?.lotNumber },
+          { label: 'Expiry', value: viewing?.expiryDate ? fmtDate(viewing.expiryDate) : '' },
+          { label: 'Storage location', value: viewing?.location },
+        ]}
+      />
     </DashboardShell>
   );
 }

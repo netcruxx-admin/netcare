@@ -1,12 +1,14 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { Users, Plus, Search, Pencil, Trash2 } from 'lucide-react';
+import { Users, Plus, Search, Pencil, Trash2, Eye } from 'lucide-react';
 import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
 import { AddUserModal } from '@/components/superadmin/AddUserModal';
 import { DeleteUserModal } from '@/components/users/DeleteUserModal';
 import { ActionIcon } from '@/components/ActionIcon';
+import { RecordDialog } from '@/components/RecordDialog';
+import { fmtDate } from '@/lib/date';
 import { ExportButton } from '@/components/ExportButton';
 import { TablePagination } from '@/components/TablePagination';
 import { useServerTable } from '@/hooks/useServerTable';
@@ -35,6 +37,7 @@ export function AdminUsers({ session }: RoleViewProps) {
   const [editing, setEditing] = useState<User | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [deleting, setDeleting] = useState<User | null>(null);
+  const [viewing, setViewing] = useState<User | null>(null);
   const [roleFilter, setRoleFilter] = useState<string>('all');
 
   const canManage = hasPermission(session, 'users.manage');
@@ -129,9 +132,7 @@ export function AdminUsers({ session }: RoleViewProps) {
                 <th className="text-left py-3 px-6 font-semibold text-slate-900">Email</th>
                 <th className="text-left py-3 px-6 font-semibold text-slate-900">Phone</th>
                 <th className="text-left py-3 px-6 font-semibold text-slate-900">Role</th>
-                {canManage && (
-                  <th className="text-right py-3 px-6 font-semibold text-slate-900">Actions</th>
-                )}
+                <th className="text-right py-3 px-6 font-semibold text-slate-900">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -163,20 +164,23 @@ export function AdminUsers({ session }: RoleViewProps) {
                         {user.role}
                       </span>
                     </td>
-                    {canManage && (
-                      <td className="py-3 px-6 text-right">
-                        <div className="flex items-center justify-end gap-1">
-                          <ActionIcon icon={Pencil} label="Edit" onClick={() => openEdit(user)} />
-                          {isSelf ? (
-                            <span className="p-2 text-slate-300 cursor-not-allowed" title="Cannot delete yourself">
-                              <Trash2 className="w-4 h-4" />
-                            </span>
-                          ) : (
-                            <ActionIcon icon={Trash2} label="Delete" tone="danger" onClick={() => setDeleting(user)} />
-                          )}
-                        </div>
-                      </td>
-                    )}
+                    <td className="py-3 px-6 text-right">
+                      <div className="flex items-center justify-end gap-1">
+                        <ActionIcon icon={Eye} label="View" onClick={() => setViewing(user)} />
+                        {canManage && (
+                          <>
+                            <ActionIcon icon={Pencil} label="Edit" onClick={() => openEdit(user)} />
+                            {isSelf ? (
+                              <span className="p-2 text-slate-300 cursor-not-allowed" title="Cannot delete yourself">
+                                <Trash2 className="w-4 h-4" />
+                              </span>
+                            ) : (
+                              <ActionIcon icon={Trash2} label="Delete" tone="danger" onClick={() => setDeleting(user)} />
+                            )}
+                          </>
+                        )}
+                      </div>
+                    </td>
                   </tr>
                 );
               })}
@@ -201,6 +205,20 @@ export function AdminUsers({ session }: RoleViewProps) {
         user={deleting}
         onClose={() => setDeleting(null)}
         onSuccess={refetch}
+      />
+      <RecordDialog
+        open={viewing !== null}
+        onClose={() => setViewing(null)}
+        title={viewing?.name ?? ''}
+        subtitle={viewing?.email}
+        fields={[
+          { label: 'Name', value: viewing?.name },
+          { label: 'Email', value: viewing?.email },
+          { label: 'Phone', value: viewing?.phone },
+          { label: 'Role', value: viewing?.role },
+          { label: 'Created', value: viewing?.createdAt ? fmtDate(viewing.createdAt) : '' },
+          { label: 'User ID', value: viewing?.id },
+        ]}
       />
     </DashboardShell>
   );

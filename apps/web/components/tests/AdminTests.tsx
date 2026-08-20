@@ -3,11 +3,12 @@
 import { useState } from 'react';
 import { Formik, Form } from 'formik';
 import * as Yup from 'yup';
-import { Plus, X, FlaskConical, AlertTriangle, Search, Pencil, Trash2 } from 'lucide-react';
+import { Plus, X, FlaskConical, AlertTriangle, Search, Pencil, Trash2, Eye } from 'lucide-react';
 import { toast } from 'sonner';
 import type { LabTest } from '@/lib/types';
 import { DashboardShell } from '@/components/DashboardShell';
 import { ActionIcon } from '@/components/ActionIcon';
+import { RecordDialog } from '@/components/RecordDialog';
 import { apiError } from '@/lib/apiError';
 import { hasPermission } from '@/lib/auth';
 import {
@@ -45,6 +46,7 @@ export function AdminTests({ session }: RoleViewProps) {
   const [editing, setEditing] = useState<LabTest | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [deleting, setDeleting] = useState<LabTest | null>(null);
+  const [viewing, setViewing] = useState<LabTest | null>(null);
   const [categoryFilter, setCategoryFilter] = useState('all');
 
   const canManage = hasPermission(session, 'lab_tests.manage');
@@ -152,9 +154,7 @@ export function AdminTests({ session }: RoleViewProps) {
                   <th className="text-left py-3 px-6 font-semibold text-slate-900">Sample</th>
                   <th className="text-left py-3 px-6 font-semibold text-slate-900">Price</th>
                   <th className="text-left py-3 px-6 font-semibold text-slate-900">Turnaround</th>
-                  {canManage && (
-                    <th className="text-right py-3 px-6 font-semibold text-slate-900">Actions</th>
-                  )}
+                  <th className="text-right py-3 px-6 font-semibold text-slate-900">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -165,14 +165,17 @@ export function AdminTests({ session }: RoleViewProps) {
                     <td className="py-3 px-6 text-slate-600">{t.sampleType}</td>
                     <td className="py-3 px-6 text-slate-600">₹{t.price}</td>
                     <td className="py-3 px-6 text-slate-600">{t.turnaroundTime || '—'}</td>
-                    {canManage && (
-                      <td className="py-3 px-6 text-right">
-                        <div className="flex items-center justify-end gap-1">
-                          <ActionIcon icon={Pencil} label="Edit" onClick={() => openEdit(t)} />
-                          <ActionIcon icon={Trash2} label="Delete" tone="danger" onClick={() => setDeleting(t)} />
-                        </div>
-                      </td>
-                    )}
+                    <td className="py-3 px-6 text-right">
+                      <div className="flex items-center justify-end gap-1">
+                        <ActionIcon icon={Eye} label="View" onClick={() => setViewing(t)} />
+                        {canManage && (
+                          <>
+                            <ActionIcon icon={Pencil} label="Edit" onClick={() => openEdit(t)} />
+                            <ActionIcon icon={Trash2} label="Delete" tone="danger" onClick={() => setDeleting(t)} />
+                          </>
+                        )}
+                      </div>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -298,6 +301,30 @@ export function AdminTests({ session }: RoleViewProps) {
           </div>
         </div>
       )}
+      <RecordDialog
+        open={viewing !== null}
+        onClose={() => setViewing(null)}
+        title={viewing?.name ?? ''}
+        subtitle={viewing?.category}
+        fields={[
+          { label: 'Category', value: viewing?.category },
+          { label: 'Sample type', value: viewing?.sampleType },
+          { label: 'Price', value: viewing ? `₹${viewing.price}` : '' },
+          { label: 'Turnaround', value: viewing?.turnaroundTime },
+          {
+            label: 'Result parameters',
+            wide: true,
+            // The template lab staff get pre-filled rows from. Worth showing:
+            // it is the difference between a test that reports one number and
+            // one that reports a panel, and no column has room for it.
+            value: viewing?.parameters?.length
+              ? viewing.parameters
+                  .map((param) => [param.name, param.unit].filter(Boolean).join(' '))
+                  .join(', ')
+              : '',
+          },
+        ]}
+      />
     </DashboardShell>
   );
 }

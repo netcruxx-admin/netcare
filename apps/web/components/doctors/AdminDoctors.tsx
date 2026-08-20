@@ -1,12 +1,13 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { Stethoscope, Search, UserPlus, Pencil, Trash2 } from 'lucide-react';
+import { Stethoscope, Search, UserPlus, Pencil, Trash2, Eye } from 'lucide-react';
 import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
 import { ExportButton } from '@/components/ExportButton';
 import { TablePagination } from '@/components/TablePagination';
 import { ActionIcon } from '@/components/ActionIcon';
+import { RecordDialog } from '@/components/RecordDialog';
 import { useServerTable } from '@/hooks/useServerTable';
 import { AddDoctorModal } from '@/components/superadmin/AddDoctorModal';
 import { EditDoctorModal } from '@/components/doctors/EditDoctorModal';
@@ -34,6 +35,7 @@ export function AdminDoctors({ session }: RoleViewProps) {
   const [showAddModal, setShowAddModal] = useState(false);
   const [editing, setEditing] = useState<Doctor | null>(null);
   const [deleting, setDeleting] = useState<Doctor | null>(null);
+  const [viewing, setViewing] = useState<Doctor | null>(null);
 
   const canManage = hasPermission(session, 'doctors.manage');
 
@@ -127,9 +129,7 @@ export function AdminDoctors({ session }: RoleViewProps) {
                   <th className="text-left py-3 px-6 font-semibold text-slate-900">Experience</th>
                   <th className="text-left py-3 px-6 font-semibold text-slate-900">Fee</th>
                   <th className="text-left py-3 px-6 font-semibold text-slate-900">Status</th>
-                  {canManage && (
-                    <th className="text-right py-3 px-6 font-semibold text-slate-900">Actions</th>
-                  )}
+                  <th className="text-right py-3 px-6 font-semibold text-slate-900">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -152,14 +152,17 @@ export function AdminDoctors({ session }: RoleViewProps) {
                         {doctor.verificationStatus ?? 'verified'}
                       </span>
                     </td>
-                    {canManage && (
-                      <td className="py-3 px-6 text-right">
-                        <div className="flex items-center justify-end gap-1">
-                          <ActionIcon icon={Pencil} label="Edit" onClick={() => setEditing(doctor)} />
-                          <ActionIcon icon={Trash2} label="Delete" tone="danger" onClick={() => setDeleting(doctor)} />
-                        </div>
-                      </td>
-                    )}
+                    <td className="py-3 px-6 text-right">
+                      <div className="flex items-center justify-end gap-1">
+                        <ActionIcon icon={Eye} label="View" onClick={() => setViewing(doctor)} />
+                        {canManage && (
+                          <>
+                            <ActionIcon icon={Pencil} label="Edit" onClick={() => setEditing(doctor)} />
+                            <ActionIcon icon={Trash2} label="Delete" tone="danger" onClick={() => setDeleting(doctor)} />
+                          </>
+                        )}
+                      </div>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -188,6 +191,25 @@ export function AdminDoctors({ session }: RoleViewProps) {
         doctor={deleting}
         onClose={() => setDeleting(null)}
         onSuccess={refetch}
+      />
+      <RecordDialog
+        open={viewing !== null}
+        onClose={() => setViewing(null)}
+        title={viewing?.user?.name ?? 'Doctor'}
+        subtitle={departments.find((d) => d.id === viewing?.departmentId)?.name}
+        fields={[
+          { label: 'Email', value: viewing?.user?.email },
+          { label: 'Phone', value: viewing?.user?.phone },
+          { label: 'Department', value: departments.find((d) => d.id === viewing?.departmentId)?.name },
+          { label: 'Specialization', value: viewing?.specialization },
+          { label: 'Qualification', value: viewing?.qualification },
+          { label: 'Experience', value: viewing?.experienceYears != null ? `${viewing.experienceYears} yrs` : '' },
+          { label: 'Consultation fee', value: viewing ? `₹${viewing.consultationFee}` : '' },
+          { label: 'Licence number', value: viewing?.licenseNumber },
+          { label: 'Medical council', value: viewing?.medicalCouncil },
+          { label: 'Registration year', value: viewing?.registrationYear },
+          { label: 'Verification', value: viewing?.verificationStatus },
+        ]}
       />
     </DashboardShell>
   );

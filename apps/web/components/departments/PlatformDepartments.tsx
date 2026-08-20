@@ -2,13 +2,14 @@
 
 import { useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Globe, Plus, AlertTriangle, Search, Pencil, Trash2 } from 'lucide-react';
+import { Globe, Plus, AlertTriangle, Search, Pencil, Trash2, Eye } from 'lucide-react';
 import { toast } from 'sonner';
 import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
 import { DepartmentModal } from '@/components/departments/DepartmentModal';
 import { HospitalBadge } from '@/components/superadmin/HospitalBadge';
 import { ActionIcon } from '@/components/ActionIcon';
+import { RecordDialog } from '@/components/RecordDialog';
 import { TablePagination } from '@/components/TablePagination';
 import { useServerTable } from '@/hooks/useServerTable';
 import { hasPermission } from '@/lib/auth';
@@ -27,6 +28,7 @@ export function PlatformDepartments({ session }: RoleViewProps) {
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Department | null>(null);
   const [deleting, setDeleting] = useState<Department | null>(null);
+  const [viewing, setViewing] = useState<Department | null>(null);
 
   const table = useServerTable({ filterKey: selectedHospitalId });
   const { data: departmentPage, isLoading, refetch } = useGetSuperadminDepartmentsPagedQuery({
@@ -111,7 +113,7 @@ export function PlatformDepartments({ session }: RoleViewProps) {
                   {showHospital && <th className="text-left py-3 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wide">Hospital</th>}
                   <th className="text-left py-3 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wide">Name</th>
                   <th className="text-left py-3 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wide">Description</th>
-                  {canManage && <th className="text-right py-3 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wide">Actions</th>}
+                  <th className="text-right py-3 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wide">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -124,14 +126,17 @@ export function PlatformDepartments({ session }: RoleViewProps) {
                     )}
                     <td className="py-3 px-6 font-medium text-slate-900">{d.name}</td>
                     <td className="py-3 px-6 text-slate-600 text-sm">{d.description || '—'}</td>
-                    {canManage && (
-                      <td className="py-3 px-6 text-right">
-                        <div className="flex items-center justify-end gap-1">
-                          <ActionIcon icon={Pencil} label="Edit" onClick={() => openEdit(d)} />
-                          <ActionIcon icon={Trash2} label="Delete" tone="danger" onClick={() => setDeleting(d)} />
-                        </div>
-                      </td>
-                    )}
+                    <td className="py-3 px-6 text-right">
+                      <div className="flex items-center justify-end gap-1">
+                        <ActionIcon icon={Eye} label="View" onClick={() => setViewing(d)} />
+                        {canManage && (
+                          <>
+                            <ActionIcon icon={Pencil} label="Edit" onClick={() => openEdit(d)} />
+                            <ActionIcon icon={Trash2} label="Delete" tone="danger" onClick={() => setDeleting(d)} />
+                          </>
+                        )}
+                      </div>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -183,6 +188,20 @@ export function PlatformDepartments({ session }: RoleViewProps) {
           </div>
         </div>
       )}
+      <RecordDialog
+        open={viewing !== null}
+        onClose={() => setViewing(null)}
+        title={viewing?.name ?? ''}
+        subtitle={hospitals.find((h) => h.id === viewing?.hospitalId)?.name}
+        fields={[
+          { label: 'Name', value: viewing?.name },
+          {
+            label: 'Hospital',
+            value: hospitals.find((h) => h.id === viewing?.hospitalId)?.name ?? viewing?.hospitalId,
+          },
+          { label: 'Description', value: viewing?.description, wide: true },
+        ]}
+      />
     </DashboardShell>
   );
 }
