@@ -36,7 +36,7 @@ from ..categories import CATEGORY_TEMPLATES
 from ..database import get_db
 from ..utils import ListQuery, list_params, new_id, now_iso, paginate, text_search
 from ..provisioning import provision_hospital
-from ..tenancy import resolve_public_tenant
+from ..tenancy import get_tenant_id, resolve_public_tenant
 
 router = APIRouter(prefix="/hospitals", tags=["hospitals"])
 
@@ -425,6 +425,78 @@ def delete_hospital(
         storage.delete_file(document.file_url)
     db.delete(hospital)
     db.commit()
+
+
+# ----- The hospital's own settings screen ------------------------------------
+#
+# Everything above this point is the platform looking at a hospital
+# (`hospitals.manage`, any tenant, by id). These two are a hospital looking at
+# itself: the tenant comes from the caller's token, never from the URL, so
+# there is no id to tamper with and no way to name someone else's hospital.
+
+
+@router.get("/me/settings", response_model=schemas.HospitalDetailOut)
+def my_hospital_settings(
+    db: Session = Depends(get_db),
+    _: str = Depends(require_permission("hospital.profile.read")),
+    tenant_id: str = Depends(get_tenant_id),
+):
+    """The caller's own hospital, whole — identity, profile, licences,
+    documents and plan.
+
+    The same shape the platform's detail endpoint returns, deliberately: an
+    admin should be able to see everything recorded about them, including the
+    parts only we can change. Being unable to *edit* the GSTIN is not a reason
+    to be unable to *read* it — quite the opposite, since noticing it is wrong
+    is the first step to asking for it to be fixed.
+    """
+    return _detail(db, _get_hospital(db, tenant_id))
+
+
+@router.patch("/me/settings", response_model=schemas.HospitalDetailOut)
+def update_my_hospital_settings(
+    body: schemas.HospitalSelfUpdate,
+    db: Session = Depends(get_db),
+    _: str = Depends(require_permission("hospital.profile.manage")),
+    tenant_id: str = Depends(get_tenant_id),
+):
+    """Update the parts of their own hospital an admin owns.
+
+    The allowlist is `HospitalSelfUpdate` itself — a field that is not on that
+    model cannot arrive here, so legal identity, subdomain, category, modules
+    and the numbering prefixes are unreachable rather than merely unrendered.
+    A screen that hides a field is a hint; this is the guarantee.
+
+    PATCH, not PUT: unset fields are left alone, so one section can be saved
+    without blanking the rest.
+    """
+    hospital = _get_hospital(db, tenant_id)
+    changes = body.model_dump(exclude_unset=True)
+
+    profile = _profile_of(db, tenant_id)
+    if profile is None:
+        # A hospital onboarded before profiles existed has no row yet. Create it
+        # rather than 404 — the admin asking to set their address is not the
+        # right moment to explain our migration history.
+        profile = models.HospitalProfile(id=new_id("hprof"), hospital_id=tenant_id)
+        db.add(profile)
+
+    for field, value in changes.items():
+        target = (
+            hospital
+            if field in schemas.HOSPITAL_SELF_FIELDS_ON_HOSPITAL
+            else profile
+        )
+        setattr(target, field, value)
+
+    if changes:
+        profile.updated_at = now_iso()
+        db.commit()
+        db.refresh(hospital)
+        db.refresh(profile)
+        audit.record_subject("hospital_profile", profile.id, detail=tenant_id)
+
+    return _detail(db, hospital)
 
 
 # ----- Operational settings --------------------------------------------------

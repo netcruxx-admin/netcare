@@ -279,6 +279,143 @@ class HospitalProfileUpdate(HospitalProfileBase):
     form, so a PUT with the whole object is honest about what it does."""
 
 
+class HospitalSelfUpdate(CamelModel):
+    """What a hospital admin may change about their own hospital.
+
+    This class *is* the allowlist. It is written out field by field rather than
+    derived from HospitalProfileBase, because the interesting part is what is
+    absent — and a subclass that excluded fields would silently re-admit them
+    the next time the base grew one.
+
+    Deliberately not here:
+
+    * **Legal identity** (registration no, PAN, GSTIN, HFR, NABH) and the
+      licences. These are not claims, they are attestations: `verified_at` and
+      `verified_by` record that the platform checked them against the uploaded
+      scans. If they could be edited afterwards, `verified_at` would assert
+      "we checked this" about a value that has since changed. Changing one is a
+      re-submission, not a text box.
+    * **subdomain, category, modules, status, onboarding_status** — the
+      subdomain *is* the tenancy, and the other three are what the hospital is
+      paying for. Ours, not theirs.
+    * **invoice_prefix, invoice_series_start, mrn_prefix, mrn_format,
+      financial_year_start.** Nothing reads these yet. That is exactly why they
+      are locked now: the day numbering is wired up, a mid-flight prefix change
+      splits the series, and under GST an invoice number must be sequential and
+      unique within the financial year. Cheaper to never grant than to withdraw.
+
+    Every field is optional and unset fields are left alone, so a screen may
+    submit one section without blanking the others.
+    """
+
+    # --- On the hospitals row ---
+    name: Optional[str] = None
+    tagline: Optional[str] = None
+    theme: Optional[dict] = None
+
+    # --- Address ---
+    address_line1: Optional[str] = None
+    address_line2: Optional[str] = None
+    city: Optional[str] = None
+    district: Optional[str] = None
+    state: Optional[str] = None
+    pincode: Optional[str] = None
+    country: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+
+    # --- Contact ---
+    phone_primary: Optional[str] = None
+    phone_secondary: Optional[str] = None
+    phone_emergency: Optional[str] = None
+    email: Optional[str] = None
+    website: Optional[str] = None
+
+    # --- Owner and responsible clinician ---
+    owner_name: Optional[str] = None
+    owner_phone: Optional[str] = None
+    owner_email: Optional[str] = None
+    medical_director_name: Optional[str] = None
+    medical_director_reg_no: Optional[str] = None
+    medical_director_council: Optional[str] = None
+    medical_director_qualification: Optional[str] = None
+
+    # --- Clinical profile ---
+    facility_type: Optional[FacilityType] = None
+    bed_count: Optional[int] = None
+    icu_beds: Optional[int] = None
+    nicu_beds: Optional[int] = None
+    emergency_beds: Optional[int] = None
+    operation_theatres: Optional[int] = None
+    ambulance_count: Optional[int] = None
+    has_pharmacy: Optional[bool] = None
+    has_lab: Optional[bool] = None
+    has_radiology: Optional[bool] = None
+    has_blood_bank: Optional[bool] = None
+    has_emergency: Optional[bool] = None
+    has_ambulance: Optional[bool] = None
+    specialties: Optional[List[str]] = None
+
+    # --- Operations ---
+    timezone: Optional[str] = None
+    locale: Optional[str] = None
+    opd_hours: Optional[dict] = None
+    weekly_off: Optional[List[str]] = None
+    appointment_slot_minutes: Optional[int] = None
+    lunch_break_start: Optional[str] = None
+    lunch_break_end: Optional[str] = None
+
+    # --- Branding assets ---
+    logo_url: Optional[str] = None
+    letterhead_url: Optional[str] = None
+    signature_url: Optional[str] = None
+
+    notes: Optional[str] = None
+
+    @field_validator("pincode")
+    @classmethod
+    def _check_pincode(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return value
+        value = value.strip()
+        if value and not _PINCODE_RE.match(value):
+            raise ValueError("PIN code must be 6 digits and cannot start with 0")
+        return value
+
+    @field_validator(
+        "bed_count", "icu_beds", "nicu_beds", "emergency_beds",
+        "operation_theatres", "ambulance_count",
+    )
+    @classmethod
+    def _non_negative(cls, value: Optional[int]) -> Optional[int]:
+        if value is not None and value < 0:
+            raise ValueError("Cannot be negative")
+        return value
+
+    @field_validator("appointment_slot_minutes")
+    @classmethod
+    def _slot_length(cls, value: Optional[int]) -> Optional[int]:
+        if value is not None and not (5 <= value <= 240):
+            raise ValueError("Slot length must be between 5 and 240 minutes")
+        return value
+
+    @field_validator("name")
+    @classmethod
+    def _name_present(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return value
+        value = value.strip()
+        if not value:
+            raise ValueError("Hospital name cannot be empty")
+        return value
+
+
+#: Which model owns each editable field. The router splits the patch by this
+#: rather than by trying both models and hoping, so a field that belongs to
+#: neither cannot be written by accident.
+HOSPITAL_SELF_FIELDS_ON_HOSPITAL = {"name", "tagline", "theme"}
+
+
 class HospitalOperationalOut(CamelModel):
     """The operational settings the booking UI needs — public, no auth."""
     lunch_break_start: str = "12:00"

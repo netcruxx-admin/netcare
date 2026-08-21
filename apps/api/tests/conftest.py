@@ -127,6 +127,9 @@ class Tenant:
     def post(self, path, json=None, token=None, **kw):
         return self.client.post(path, json=json, headers=self.headers(token), **kw)
 
+    def patch(self, path, json=None, token=None, **kw):
+        return self.client.patch(path, json=json, headers=self.headers(token), **kw)
+
     def put(self, path, json=None, token=None, **kw):
         return self.client.put(path, json=json, headers=self.headers(token), **kw)
 

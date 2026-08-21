@@ -163,6 +163,33 @@ export interface HospitalProfile extends HospitalProfileBody {
   updatedAt: string;
 }
 
+/** What a hospital admin may change about their own hospital.
+ *
+ *  Mirrors `schemas.HospitalSelfUpdate` on the server, which is the real
+ *  allowlist — legal identity, subdomain, category, modules and the numbering
+ *  prefixes are absent from both, so the screen cannot even offer them.
+ */
+export type HospitalSelfUpdateBody = Pick<
+  HospitalProfileBody,
+  | 'addressLine1' | 'addressLine2' | 'city' | 'district' | 'state' | 'pincode'
+  | 'country' | 'latitude' | 'longitude'
+  | 'phonePrimary' | 'phoneSecondary' | 'phoneEmergency' | 'email' | 'website'
+  | 'ownerName' | 'ownerPhone' | 'ownerEmail'
+  | 'medicalDirectorName' | 'medicalDirectorRegNo' | 'medicalDirectorCouncil'
+  | 'medicalDirectorQualification'
+  | 'facilityType' | 'bedCount' | 'icuBeds' | 'nicuBeds' | 'emergencyBeds'
+  | 'operationTheatres' | 'ambulanceCount'
+  | 'hasPharmacy' | 'hasLab' | 'hasRadiology' | 'hasBloodBank' | 'hasEmergency'
+  | 'hasAmbulance' | 'specialties'
+  | 'timezone' | 'locale' | 'opdHours' | 'weeklyOff' | 'appointmentSlotMinutes'
+  | 'lunchBreakStart' | 'lunchBreakEnd'
+  | 'logoUrl' | 'letterheadUrl' | 'signatureUrl' | 'notes'
+> & {
+  name?: string;
+  tagline?: string;
+  theme?: Record<string, string>;
+};
+
 /** Operational config needed by the booking UI. Public endpoint, no auth. */
 export interface HospitalOperational {
   lunchBreakStart: string;
@@ -694,6 +721,16 @@ export const api = createApi({
     listHospitals: build.query<HospitalInfo[], void>({
       query: () => '/hospitals',
       providesTags: ['Hospital'],
+    }),
+    /** The caller's OWN hospital, whole. No id in the URL — the tenant comes
+     *  from the token, so there is nothing to point at someone else. */
+    getMyHospitalSettings: build.query<HospitalDetail, void>({
+      query: () => '/hospitals/me/settings',
+      providesTags: ['Hospital'],
+    }),
+    updateMyHospitalSettings: build.mutation<HospitalDetail, HospitalSelfUpdateBody>({
+      query: (body) => ({ url: '/hospitals/me/settings', method: 'PATCH', body }),
+      invalidatesTags: ['Hospital'],
     }),
     getHospitalDetail: build.query<HospitalDetail, string>({
       query: (id) => `/hospitals/${id}/detail`,
@@ -1543,6 +1580,8 @@ export const {
   useListPublicHospitalsQuery,
   useListHospitalsQuery,
   useGetHospitalDetailQuery,
+  useGetMyHospitalSettingsQuery,
+  useUpdateMyHospitalSettingsMutation,
   useGetOnboardingMetaQuery,
   useOnboardHospitalMutation,
   useUpdateHospitalMutation,

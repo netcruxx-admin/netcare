@@ -4,6 +4,57 @@ Notable changes to CarbonHealth. Format follows [Keep a Changelog](https://keepa
 
 ## [Unreleased]
 
+### Added — a hospital admin can see their own record and edit what they own
+
+`/dashboard/hospital-settings` existed but only configured the lunch break, and
+everything else about a hospital was gated on `hospitals.manage` — the
+platform's permission. An admin had no way to read their own address, let alone
+correct a phone number.
+
+Two capabilities (`e5b73c02a94f`), split because reading and writing are
+different questions:
+
+  * `hospital.profile.read` — see everything recorded about your own hospital,
+    **including the parts only the platform can change**. Being unable to edit
+    the GSTIN is not a reason to be unable to read it; noticing it is wrong is
+    the first step to asking for it to be fixed.
+  * `hospital.profile.manage` — edit address, contacts, owner and medical
+    director, facilities and bed counts, scheduling, branding assets, and the
+    hospital's own name and tagline.
+
+Both endpoints take the tenant from the caller's token and carry **no id in the
+URL**, so there is nothing to point at another hospital.
+
+What stays with the platform, and why:
+
+  * **Legal identity** (registration no, PAN, GSTIN, HFR, NABH) and the
+    licences. These are attestations, not claims: `verified_at`/`verified_by`
+    record that we checked them against the uploaded scans. If they could be
+    edited afterwards, `verified_at` would assert "we checked this" about a
+    value that has since changed. Changing one is a re-submission.
+  * **subdomain, category, modules, status, onboarding_status** — the subdomain
+    *is* the tenancy, and the rest is what the hospital is paying for.
+  * **invoice/MRN prefixes and financial year start.** Nothing reads these yet,
+    which is exactly why they are locked now: once numbering is wired up a
+    mid-flight prefix change splits the series, and a GST invoice number must be
+    sequential and unique within the financial year. Cheaper to never grant than
+    to withdraw.
+
+`schemas.HospitalSelfUpdate` **is** the allowlist — written out field by field
+rather than derived from `HospitalProfileBase`, because a subclass that excluded
+fields would silently re-admit them the next time the base grew one. Nine tests
+send the forbidden fields anyway and assert the values did not move.
+
+The screen shows registered identity read-only at the top, the editable
+sections below, and licences, documents and plan read-only at the bottom. The
+form is wrapped in a disabled fieldset for a caller holding read but not manage,
+so they get a real view instead of a dead form.
+
+Not included, deliberately: letting an admin upload a renewed licence scan. It
+is a genuine workflow, but done properly it has to push `onboarding_status` back
+to `documents_submitted` so the platform re-verifies, rather than quietly
+swapping a file behind a `verified` badge.
+
 ### Fixed — storage tests asserted a design that is no longer on the branch
 
 `tests/test_storage_r2.py` was written against a storage seam where the stored
