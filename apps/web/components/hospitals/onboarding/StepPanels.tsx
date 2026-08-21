@@ -9,7 +9,7 @@ import { Plus, Trash2, Upload, FileText, X, AlertTriangle } from 'lucide-react';
 import { FormField } from '@/components/form/FormField';
 import { PhoneField } from '@/components/form/PhoneField';
 import { HOSPITAL_CATEGORIES } from '@/lib/hospitalCategories';
-import type { CatalogOption, OnboardingMeta } from '@/store/api';
+import type { CatalogOption, HospitalDocument, OnboardingMeta } from '@/store/api';
 import {
   CATEGORY_THEMES,
   type DepartmentRow,
@@ -375,57 +375,51 @@ export function LicencesStep({ meta }: StepProps) {
             const authority = types.find((t) => t.code === row.type)?.authority;
             return (
               <div key={index} className="rounded-lg border border-slate-200 p-4 space-y-3">
-                <div className="flex items-start gap-3">
-                  <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-xs font-medium text-slate-600 mb-1">Licence Type</label>
-                      <select
-                        value={row.type}
-                        onChange={(e) => update(index, 'type', e.target.value)}
-                        className="w-full px-3 py-2 border border-slate-300 rounded text-sm focus:outline-none focus:border-cyan-500"
-                      >
-                        <option value="">Select type…</option>
-                        {types.map((t) => (
-                          <option key={t.code} value={t.code}>
-                            {t.label}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-slate-600 mb-1">
-                        Licence Number
-                      </label>
-                      <input
-                        value={row.number}
-                        onChange={(e) => update(index, 'number', e.target.value)}
-                        placeholder="e.g. KA/20B/9931"
-                        className={`w-full px-3 py-2 border rounded text-sm focus:outline-none ${
-                          rowTouched[index]?.number && rowErrors[index]?.number
-                            ? 'border-red-400'
-                            : 'border-slate-300 focus:border-cyan-500'
-                        }`}
-                      />
-                      {rowErrors[index]?.number && (
-                        <p className="text-red-500 text-xs mt-1">{rowErrors[index]?.number}</p>
-                      )}
-                    </div>
+                {/* Row 1: Type · Number · Delete */}
+                <div className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto] gap-3 items-start">
+                  <div>
+                    <label className="block text-xs font-medium text-slate-600 mb-1">Licence Type</label>
+                    <select
+                      value={row.type}
+                      onChange={(e) => update(index, 'type', e.target.value)}
+                      className="w-full px-3 py-2 border border-slate-300 rounded text-sm focus:outline-none focus:border-cyan-500"
+                    >
+                      <option value="">Select type…</option>
+                      {types.map((t) => (
+                        <option key={t.code} value={t.code}>{t.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-600 mb-1">Licence Number</label>
+                    <input
+                      value={row.number}
+                      onChange={(e) => update(index, 'number', e.target.value)}
+                      placeholder="e.g. KA/20B/9931"
+                      className={`w-full px-3 py-2 border rounded text-sm focus:outline-none ${
+                        rowTouched[index]?.number && rowErrors[index]?.number
+                          ? 'border-red-400'
+                          : 'border-slate-300 focus:border-cyan-500'
+                      }`}
+                    />
+                    {rowTouched[index]?.number && rowErrors[index]?.number && (
+                      <p className="text-red-500 text-xs mt-1">{rowErrors[index]?.number}</p>
+                    )}
                   </div>
                   <button
                     type="button"
                     onClick={() => removeRow(index)}
                     aria-label="Remove licence"
-                    className="mt-6 p-1.5 text-slate-400 hover:text-red-500 transition"
+                    className="mt-5 p-1.5 text-slate-400 hover:text-red-500 transition self-start"
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
-                  <div className="sm:col-span-2">
-                    <label className="block text-xs font-medium text-slate-600 mb-1">
-                      Issuing Authority
-                    </label>
+                {/* Row 2: Issuing Authority · Issued On · Expires On · Status */}
+                <div className="grid grid-cols-1 sm:grid-cols-[2fr_1fr_1fr_auto] gap-3 items-end">
+                  <div>
+                    <label className="block text-xs font-medium text-slate-600 mb-1">Issuing Authority</label>
                     <input
                       value={row.issuingAuthority}
                       onChange={(e) => update(index, 'issuingAuthority', e.target.value)}
@@ -451,25 +445,25 @@ export function LicencesStep({ meta }: StepProps) {
                       className="w-full px-3 py-2 border border-slate-300 rounded text-sm focus:outline-none focus:border-cyan-500"
                     />
                   </div>
-                </div>
-
-                <div className="flex items-center justify-between gap-3">
-                  <select
-                    value={row.status}
-                    onChange={(e) => update(index, 'status', e.target.value)}
-                    className="px-3 py-1.5 border border-slate-300 rounded text-xs focus:outline-none focus:border-cyan-500"
-                  >
-                    {LICENCE_STATUSES.map((s) => (
-                      <option key={s.value} value={s.value}>
-                        {s.label}
-                      </option>
-                    ))}
-                  </select>
-                  {row.expiresOn && new Date(row.expiresOn) < new Date() && (
-                    <span className="flex items-center gap-1 text-xs text-amber-600">
-                      <AlertTriangle className="w-3.5 h-3.5" /> Already expired
-                    </span>
-                  )}
+                  <div className="flex flex-col gap-1">
+                    <label className="block text-xs font-medium text-slate-600 mb-1">Status</label>
+                    <div className="flex items-center gap-2">
+                      <select
+                        value={row.status}
+                        onChange={(e) => update(index, 'status', e.target.value)}
+                        className="px-3 py-2 border border-slate-300 rounded text-sm focus:outline-none focus:border-cyan-500"
+                      >
+                        {LICENCE_STATUSES.map((s) => (
+                          <option key={s.value} value={s.value}>{s.label}</option>
+                        ))}
+                      </select>
+                      {row.expiresOn && new Date(row.expiresOn) < new Date() && (
+                        <span className="flex items-center gap-1 text-xs text-amber-600 whitespace-nowrap">
+                          <AlertTriangle className="w-3.5 h-3.5" /> Expired
+                        </span>
+                      )}
+                    </div>
+                  </div>
                 </div>
               </div>
             );
@@ -576,43 +570,43 @@ export function DepartmentsStep({ meta }: StepProps) {
         {values.departments.map((row, index) => (
           <div
             key={`${row.fromTemplate ? 'tpl' : 'custom'}-${index}`}
-            className="flex gap-3 items-start rounded-lg border border-slate-200 p-3"
+            className="grid grid-cols-[auto_1fr_1fr_auto] items-center gap-3 rounded-lg border border-slate-200 px-3 py-2.5"
           >
             <input
               type="checkbox"
               checked={row.selected}
               onChange={(e) => update(index, 'selected', e.target.checked)}
-              className="mt-2 h-4 w-4 shrink-0 accent-cyan-600"
+              className="h-4 w-4 shrink-0 accent-cyan-600"
               aria-label={row.name || 'New department'}
             />
-            <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-2">
-              <input
-                value={row.name}
-                onChange={(e) => update(index, 'name', e.target.value)}
-                placeholder="Department name"
-                readOnly={row.fromTemplate}
-                className={`px-3 py-2 border rounded-lg text-sm ${
-                  row.fromTemplate
-                    ? 'border-transparent bg-transparent font-medium text-slate-900'
-                    : 'border-slate-300'
-                }`}
-              />
-              <input
-                value={row.description}
-                onChange={(e) => update(index, 'description', e.target.value)}
-                placeholder="What it covers (optional)"
-                className="px-3 py-2 border border-slate-300 rounded-lg text-sm"
-              />
-            </div>
-            {!row.fromTemplate && (
+            <input
+              value={row.name}
+              onChange={(e) => update(index, 'name', e.target.value)}
+              placeholder="Department name"
+              readOnly={row.fromTemplate}
+              className={`w-full px-3 py-2 border rounded-lg text-sm focus:outline-none ${
+                row.fromTemplate
+                  ? 'bg-slate-50 border-slate-200 text-slate-800 font-medium cursor-default'
+                  : 'border-slate-300 focus:border-cyan-500'
+              }`}
+            />
+            <input
+              value={row.description}
+              onChange={(e) => update(index, 'description', e.target.value)}
+              placeholder="What it covers (optional)"
+              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:border-cyan-500"
+            />
+            {!row.fromTemplate ? (
               <button
                 type="button"
                 onClick={() => removeRow(index)}
-                className="mt-1 p-2 text-slate-400 hover:text-red-600"
+                className="p-1.5 text-slate-400 hover:text-red-600 transition"
                 aria-label="Remove department"
               >
                 <Trash2 className="h-4 w-4" />
               </button>
+            ) : (
+              <span className="w-7" />
             )}
           </div>
         ))}
@@ -647,11 +641,15 @@ export function DocumentsStep({
   onAdd,
   onRemove,
   onChange,
+  existingDocuments = [],
+  onDeleteExisting,
 }: StepProps & {
   documents: PendingDocument[];
   onAdd: (files: File[]) => void;
   onRemove: (key: string) => void;
   onChange: (key: string, patch: Partial<PendingDocument>) => void;
+  existingDocuments?: HospitalDocument[];
+  onDeleteExisting?: (id: string) => void;
 }) {
   const { values } = useFormikContext<WizardValues>();
   const docTypes = meta?.documentTypes ?? [];
@@ -685,11 +683,52 @@ export function DocumentsStep({
         <p className="text-xs text-slate-400 mt-1">PDF or image, up to 10MB each</p>
       </label>
 
-      {documents.length === 0 ? (
+      {existingDocuments.length > 0 && (
+        <div className="space-y-2">
+          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Uploaded documents</p>
+          {existingDocuments.map((doc) => (
+            <div key={doc.id} className="rounded-lg border border-slate-200 p-3 flex items-center gap-3">
+              <FileText className="w-5 h-5 text-slate-400 shrink-0" />
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium text-slate-800 truncate">{doc.title || doc.fileName}</p>
+                <p className="text-xs text-slate-400">
+                  {doc.docType}{doc.licenceType ? ` · ${doc.licenceType}` : ''} · {(doc.sizeBytes / 1024).toFixed(0)} KB
+                </p>
+              </div>
+              {doc.fileUrl && (
+                <a
+                  href={
+                    doc.fileUrl.startsWith('/')
+                      ? `${process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000'}${doc.fileUrl}`
+                      : doc.fileUrl
+                  }
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs text-cyan-600 hover:underline shrink-0"
+                >
+                  View
+                </a>
+              )}
+              {onDeleteExisting && (
+                <button
+                  type="button"
+                  onClick={() => onDeleteExisting(doc.id)}
+                  aria-label="Delete document"
+                  className="p-1 text-slate-400 hover:text-red-500 transition shrink-0"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {documents.length === 0 && existingDocuments.length === 0 ? (
         <p className="text-xs text-slate-400 text-center">
           Nothing attached yet. Documents can also be uploaded after onboarding.
         </p>
-      ) : (
+      ) : documents.length === 0 ? null : (
         <div className="space-y-2">
           {documents.map((doc) => {
             const tooBig = doc.file.size > MAX_UPLOAD_BYTES;

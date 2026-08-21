@@ -243,7 +243,7 @@ export function AdminAppointments({ session }: RoleViewProps) {
 
   const doctorOptions = doctors.map((d) => ({
     value: d.id,
-    label: `Dr. ${d.user?.name ?? 'Doctor'} — ${d.specialization}`,
+    label: `Dr. ${d.user?.name ?? 'Doctor'}`,
   }));
 
   const openReschedule = (a: Appointment) => {

@@ -37,6 +37,7 @@ import {
   useDeleteHospitalLicenceMutation,
   useReplaceHospitalSubscriptionMutation,
   useUploadHospitalDocumentMutation,
+  useDeleteHospitalDocumentMutation,
 } from '@/store/api';
 import type { HospitalDetail, HospitalInfo, OnboardingMeta } from '@/store/api';
 import {
@@ -436,6 +437,7 @@ export function EditHospitalWizard({ open, hospital, onClose, onUpdated }: Props
   const [deleteLicence] = useDeleteHospitalLicenceMutation();
   const [replaceSubscription] = useReplaceHospitalSubscriptionMutation();
   const [uploadDocument] = useUploadHospitalDocumentMutation();
+  const [deleteDocument] = useDeleteHospitalDocumentMutation();
 
   const { data: detail, isLoading: loadingDetail } = useGetHospitalDetailQuery(hospital.id, {
     skip: !open,
@@ -738,6 +740,10 @@ export function EditHospitalWizard({ open, hospital, onClose, onUpdated }: Props
                       onAdd={addDocuments}
                       onRemove={removeDocument}
                       onChange={patchDocument}
+                      existingDocuments={detail.documents}
+                      onDeleteExisting={(docId) =>
+                        deleteDocument({ id: hospital.id, documentId: docId })
+                      }
                     />
                   </div>
 
@@ -895,6 +901,8 @@ function StepBody({
   onAdd,
   onRemove,
   onChange,
+  existingDocuments,
+  onDeleteExisting,
 }: {
   step: number;
   meta?: OnboardingMeta;
@@ -902,6 +910,8 @@ function StepBody({
   onAdd: (files: File[]) => void;
   onRemove: (key: string) => void;
   onChange: (key: string, patch: Partial<PendingDocument>) => void;
+  existingDocuments?: import('@/store/api').HospitalDocument[];
+  onDeleteExisting?: (id: string) => void;
 }) {
   switch (EDIT_STEPS[step].id) {
     case 'identity':
@@ -922,6 +932,8 @@ function StepBody({
           onAdd={onAdd}
           onRemove={onRemove}
           onChange={onChange}
+          existingDocuments={existingDocuments}
+          onDeleteExisting={onDeleteExisting}
         />
       );
     case 'operations':

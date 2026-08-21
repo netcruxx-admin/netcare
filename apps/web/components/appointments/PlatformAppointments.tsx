@@ -162,7 +162,7 @@ export function PlatformAppointments({ session }: RoleViewProps) {
     () =>
       modalDoctors.map((d) => ({
         value: d.id,
-        label: `Dr. ${d.user?.name ?? 'Doctor'} — ${d.specialization}`,
+        label: `Dr. ${d.user?.name ?? 'Doctor'}`,
       })),
     [modalDoctors],
   );

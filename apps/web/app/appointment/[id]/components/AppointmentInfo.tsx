@@ -99,12 +99,14 @@ export function AppointmentInfo({ appointment, doctor, patient, doctorName, pati
               </div>
               <div>
                 <p className="text-sm text-slate-600">Allergies</p>
-                <p className="font-semibold text-slate-900">{patient.allergies}</p>
+                <p className="font-semibold text-slate-900">{patient.allergies || 'None'}</p>
               </div>
               <div>
                 <p className="text-sm text-slate-600">Insurance</p>
                 <p className="font-semibold text-slate-900">
-                  {patient.insuranceProvider} - {patient.insuranceNumber}
+                  {patient.insuranceProvider && patient.insuranceNumber
+                    ? `${patient.insuranceProvider} - ${patient.insuranceNumber}`
+                    : patient.insuranceProvider || patient.insuranceNumber || 'None'}
                 </p>
               </div>
             </div>

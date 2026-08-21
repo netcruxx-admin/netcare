@@ -220,9 +220,9 @@ export default function PatientDetailPage() {
         <div className="bg-white rounded-lg shadow p-6">
           <h3 className="font-semibold text-slate-900 mb-4 flex items-center gap-2"><HeartPulse className="w-5 h-5 text-cyan-600" /> Medical Profile</h3>
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-4 text-sm">
-            <Info label="Allergies" value={patientRecord.allergies} icon={ShieldAlert} noneIfEmpty highlight={!!patientRecord.allergies && patientRecord.allergies.toLowerCase() !== 'none' && !patientRecord.allergies.toLowerCase().includes('no known')} />
-            <Info label="Chronic Diseases" value={patientRecord.chronicDiseases} noneIfEmpty />
-            <Info label="Medical History" value={patientRecord.medicalHistory} noneIfEmpty />
+            <Info label="Allergies" value={patientRecord.allergies} icon={ShieldAlert} highlight={!!patientRecord.allergies && patientRecord.allergies.toLowerCase() !== 'none' && !patientRecord.allergies.toLowerCase().includes('no known')} />
+            <Info label="Chronic Diseases" value={patientRecord.chronicDiseases} />
+            <Info label="Medical History" value={patientRecord.medicalHistory} />
             <Info label="Emergency Contact" value={patientRecord.emergencyContact ? `${patientRecord.emergencyContact}${patientRecord.emergencyPhone ? ` · ${patientRecord.emergencyPhone}` : ''}` : ''} />
             <Info label="Insurance Provider" value={patientRecord.insuranceProvider} />
             <Info label="Insurance Number" value={patientRecord.insuranceNumber} />
@@ -386,8 +386,8 @@ export default function PatientDetailPage() {
   );
 }
 
-function Info({ label, value, icon: Icon, highlight, noneIfEmpty }: { label: string; value: string; icon?: LucideIcon; highlight?: boolean; noneIfEmpty?: boolean }) {
-  const display = value || (noneIfEmpty ? 'None' : '—');
+function Info({ label, value, icon: Icon, highlight }: { label: string; value: string; icon?: LucideIcon; highlight?: boolean }) {
+  const display = value || 'None';
   return (
     <div>
       <p className="text-slate-500 text-xs mb-0.5 flex items-center gap-1">{Icon && <Icon className="w-3.5 h-3.5" />} {label}</p>

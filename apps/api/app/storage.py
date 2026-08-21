@@ -273,6 +273,40 @@ def delete_file(url: str) -> None:
         pass
 
 
+def public_url(url: str) -> str:
+    """Return a browser-fetchable URL for a stored file URL.
+
+    Local backend stores the full path already (e.g. ``/files/folder/name``),
+    so it is returned unchanged.  R2 stores either the public CDN URL (when
+    ``R2_PUBLIC_URL`` is set) or the raw S3-compatible URL — both are already
+    fetchable by the browser and returned unchanged.  If a legacy ``r2://``
+    opaque URI is found (from an older storage scheme), it is converted to a
+    presigned URL so the browser can still open it.
+    """
+    if not url:
+        return url
+
+    # Legacy opaque r2:// URI — convert to a presigned URL on the fly.
+    if url.startswith(R2_SCHEME):
+        key = _r2_key(url)
+        if not key:
+            return url
+        base = (settings.r2_public_url or "").rstrip("/")
+        if base:
+            return f"{base}/{key}"
+        try:
+            return _client().generate_presigned_url(
+                "get_object",
+                Params={"Bucket": settings.r2_bucket, "Key": key},
+                ExpiresIn=3600,
+            )
+        except Exception:
+            return url
+
+    # Already a full URL (local path or R2 public/S3 URL).
+    return url
+
+
 def serves_locally() -> bool:
     """Whether this process has to serve the files itself.
 
