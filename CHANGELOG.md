@@ -4,6 +4,32 @@ Notable changes to CarbonHealth. Format follows [Keep a Changelog](https://keepa
 
 ## [Unreleased]
 
+### Fixed — storage tests asserted a design that is no longer on the branch
+
+`tests/test_storage_r2.py` was written against a storage seam where the stored
+URL and the served URL were different strings. The implementation that landed
+in `fa6e598` keeps them the same and adds `public_url()` only to rescue legacy
+`r2://` rows, so five tests failed and `npm test` was red.
+
+They now assert what the code does: a public bucket stores the public URL and
+`public_url()` is identity; a legacy `r2://` row is signed on the way out, or
+resolved against `R2_PUBLIC_URL` when one is set; a failed signature falls back
+to the stored value rather than raising through the handler; the size ceiling,
+the empty-file refusal and the content-type allowlist each upload nothing when
+they trip.
+
+Two behaviours are deliberately left as they are, and are worth a look rather
+than a test that blesses them:
+
+  * with `R2_PUBLIC_URL` unset, `save_upload` stores
+    `https://{account}.r2.cloudflarestorage.com/{bucket}/{key}` and notes that
+    it "requires bucket to be public" — on a private bucket that is a link
+    which always 401s, stored permanently in the database;
+  * `delete_file` returns early without deleting when `R2_PUBLIC_URL` is empty,
+    so the object outlives the row it belonged to.
+
+Neither bites while the bucket is public. Both bite the day it is not.
+
 ### Added — a View action on every table that had none
 
 Ten list screens offered Edit and Delete but no way to simply look at a row, so
