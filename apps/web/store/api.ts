@@ -73,6 +73,9 @@ export interface HospitalInfo {
   currency: string;
   modules: Record<string, boolean>;
   theme: Record<string, string>;
+  /** The tenant's own logo, already resolved to a fetchable URL. Empty when
+   *  they have not uploaded one — screens fall back to the platform mark. */
+  logoUrl: string;
   status: string;
 
   // Legal identity — printed on invoices and reports.
@@ -724,6 +727,19 @@ export const api = createApi({
     }),
     /** The caller's OWN hospital, whole. No id in the URL — the tenant comes
      *  from the token, so there is nothing to point at someone else. */
+    /** PUT, not POST: a hospital has one logo and a second upload replaces it. */
+    uploadMyHospitalLogo: build.mutation<HospitalProfile, File>({
+      query: (file) => {
+        const form = new FormData();
+        form.append('file', file);
+        return { url: '/hospitals/me/logo', method: 'PUT', body: form };
+      },
+      invalidatesTags: ['Hospital'],
+    }),
+    removeMyHospitalLogo: build.mutation<HospitalProfile, void>({
+      query: () => ({ url: '/hospitals/me/logo', method: 'DELETE' }),
+      invalidatesTags: ['Hospital'],
+    }),
     getMyHospitalSettings: build.query<HospitalDetail, void>({
       query: () => '/hospitals/me/settings',
       providesTags: ['Hospital'],
@@ -1587,6 +1603,8 @@ export const {
   useListHospitalsQuery,
   useGetHospitalDetailQuery,
   useGetMyHospitalSettingsQuery,
+  useUploadMyHospitalLogoMutation,
+  useRemoveMyHospitalLogoMutation,
   useUpdateMyHospitalSettingsMutation,
   useGetOnboardingMetaQuery,
   useOnboardHospitalMutation,

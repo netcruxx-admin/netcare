@@ -73,10 +73,13 @@ export function DashboardShell({
   const { data: hospitalData } = useGetCurrentHospitalQuery(undefined, { skip: role === superadminRole });
   const hospital = role === superadminRole
     // The platform wordmark is our own: navy → teal, exactly as "Net"/"Care" render in the logo.
-    ? { id: '', name: 'NetCare Platform', theme: { primary: '#00346e', primaryDark: '#019695' }, modules: {} as Partial<HospitalModules> }
+    // The platform console is ours; a tenant's logo would be wrong here even
+    // when one is selected in the ?h= picker.
+    ? { id: '', name: 'NetCare Platform', logoUrl: '', theme: { primary: '#00346e', primaryDark: '#019695' }, modules: {} as Partial<HospitalModules> }
     : {
       id: hospitalData?.id ?? '',
       name: hospitalData?.name ?? '…',
+      logoUrl: hospitalData?.logoUrl ?? '',
       theme: {
         // Unbranded tenants fall back to the logo's blue → teal, matching the icon beside it.
         primary: (hospitalData?.theme as Record<string, string>)?.primary ?? '#00509f',
@@ -153,7 +156,20 @@ export function DashboardShell({
   const SidebarContent = (
     <>
       <div className="flex items-center gap-3 px-6 h-16 border-b border-slate-100">
-        <Image src="/logo/logo-icon.png" alt="Logo" width={50} height={50} className="w-12 h-12 object-contain shrink-0" />
+        {/* The tenant's own mark when they have uploaded one; the platform's
+            otherwise, so an unbranded hospital still looks finished. Plain
+            <img> for a tenant logo: next/image would need every hospital's
+            bucket host in next.config, and these are already small files. */}
+        {hospital.logoUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={hospital.logoUrl}
+            alt={hospital.name}
+            className="w-12 h-12 object-contain shrink-0"
+          />
+        ) : (
+          <Image src="/logo/logo-icon.png" alt="Logo" width={50} height={50} className="w-12 h-12 object-contain shrink-0" />
+        )}
         <div className="min-w-0">
           <Link href="/dashboard" style={brandText} className="font-bold leading-tight">
             {hospital.name}
@@ -235,7 +251,12 @@ export function DashboardShell({
           <Menu className="w-6 h-6" />
         </button>
         <div className="flex items-center gap-2">
-          <Image src="/logo/logo-icon.png" alt="Logo" width={30} height={30} className="w-8 h-8 object-contain" />
+          {hospital.logoUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={hospital.logoUrl} alt={hospital.name} className="w-8 h-8 object-contain" />
+          ) : (
+            <Image src="/logo/logo-icon.png" alt="Logo" width={30} height={30} className="w-8 h-8 object-contain" />
+          )}
           <span style={brandText} className="font-bold">
             {hospital.name}
           </span>

@@ -4,6 +4,33 @@ Notable changes to CarbonHealth. Format follows [Keep a Changelog](https://keepa
 
 ## [Unreleased]
 
+### Added — a hospital's own logo, on their own subdomain
+
+Every tenant saw the NetCare mark. `DashboardShell` and the login page both
+hardcoded `/logo/logo-icon.png`, and the only way to record a logo at all was a
+free-text "Logo URL" field pointing at something hosted elsewhere.
+
+`PUT /hospitals/me/logo` uploads one, `DELETE` clears it, both gated on
+`hospital.profile.manage` with the tenant taken from the token. Uploading again
+replaces rather than accumulates, and the old file is deleted only after the new
+row is committed — the other order risks losing the bytes while the row still
+points at them. Images only: the document allowlist accepts PDF, which is right
+for a scan of a licence and wrong for an `<img>` on every page.
+
+**The logo had to become public.** A tenant's login page shows it before anyone
+has signed in, so there is no session to read a profile with. `HospitalOut` now
+carries `logo_url`, populated from the profile by `GET /hospitals/current` — the
+endpoint that already resolves a tenant from the host subdomain. Branding assets
+are resolved through `storage.public_url()` on the way out, like documents.
+
+Screens fall back to the platform mark when a hospital has not uploaded one, so
+an unbranded tenant still looks finished. The settings screen's logo control
+sits outside the Formik form on purpose: a file uploads the moment it is chosen,
+and pairing it with a Save button would misstate when the change lands.
+
+Nine tests, including that a nurse cannot change it and that one hospital never
+receives another's.
+
 ### Fixed — a negative restock drove stock below zero
 
 `POST /inventory/restock` took any integer. Restocking `-100` returned 201, left

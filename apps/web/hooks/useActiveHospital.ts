@@ -23,6 +23,7 @@ const PLACEHOLDER: HospitalInfo = {
   currency: 'INR',
   modules: {},
   theme: {},
+  logoUrl: '',
   status: '',
   legalName: '',
   entityType: '',

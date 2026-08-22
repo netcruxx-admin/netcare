@@ -148,6 +148,11 @@ class HospitalOut(OutModel):
     currency: str = "INR"
     modules: dict = {}
     theme: dict = {}
+    #: The tenant's own logo, resolved to something a browser can fetch. Lives
+    #: on hospital_profiles with the other branding assets, but is surfaced
+    #: here because it is read on every page — including the login screen,
+    #: before there is a session to read a profile with.
+    logo_url: str = ""
     status: HospitalStatus = "active"
 
     # Legal identity

@@ -91,7 +91,7 @@ def current_hospital(
     hospital = db.get(models.Hospital, tenant_id)
     if hospital is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Hospital not found")
-    return hospital
+    return _hospital_out(db, hospital)
 
 
 # ----- Helpers ---------------------------------------------------------------
@@ -129,6 +129,28 @@ def _licences_of(db: Session, hospital_id: str) -> list[models.HospitalLicence]:
         .order_by(models.HospitalLicence.type)
         .all()
     )
+
+
+def _profile_out(row: models.HospitalProfile) -> schemas.HospitalProfileOut:
+    """A profile whose branding assets point at something fetchable.
+
+    Same treatment as a document: the stored URL is opaque and stable, the
+    outgoing one is resolved here and never written back.
+    """
+    out = schemas.HospitalProfileOut.model_validate(row)
+    out.logo_url = storage.public_url(row.logo_url)
+    out.letterhead_url = storage.public_url(row.letterhead_url)
+    out.signature_url = storage.public_url(row.signature_url)
+    return out
+
+
+def _hospital_out(db: Session, row: models.Hospital) -> schemas.HospitalOut:
+    """The hospital row plus the one branding asset every page needs."""
+    out = schemas.HospitalOut.model_validate(row)
+    profile = _profile_of(db, row.id)
+    if profile is not None:
+        out.logo_url = storage.public_url(profile.logo_url)
+    return out
 
 
 def _document_out(row: models.HospitalDocument) -> schemas.HospitalDocumentOut:
@@ -360,7 +382,7 @@ def _detail(db: Session, hospital: models.Hospital) -> schemas.HospitalDetailOut
     return schemas.HospitalDetailOut(
         hospital=schemas.HospitalOut.model_validate(hospital),
         profile=(
-            schemas.HospitalProfileOut.model_validate(profile)
+            _profile_out(profile)
             if (profile := _profile_of(db, hospital.id))
             else None
         ),
@@ -497,6 +519,88 @@ def update_my_hospital_settings(
         audit.record_subject("hospital_profile", profile.id, detail=tenant_id)
 
     return _detail(db, hospital)
+
+
+# ----- The hospital's logo ---------------------------------------------------
+#
+# Separate from documents, which are registration evidence the platform
+# verifies. A logo is branding: the hospital owns it, changes it whenever they
+# like, and it is shown to anyone who opens their subdomain — including on the
+# login page, before there is a session.
+
+#: Images only. The document allowlist includes PDF, which is right for a scan
+#: of a licence and wrong for something rendered in an <img> on every page.
+LOGO_CONTENT_TYPES = {
+    "image/jpeg", "image/png", "image/webp",
+}
+
+
+@router.put("/me/logo", response_model=schemas.HospitalProfileOut)
+def upload_my_logo(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    _: str = Depends(require_permission("hospital.profile.manage")),
+    tenant_id: str = Depends(get_tenant_id),
+):
+    """Set (or replace) the caller's own hospital logo.
+
+    PUT rather than POST: a hospital has one logo, and uploading a second
+    replaces the first rather than accumulating. The old file is deleted after
+    the row is updated — the other order risks losing the bytes while the row
+    still points at them.
+    """
+    content_type = (file.content_type or "").split(";")[0].strip().lower()
+    if content_type not in LOGO_CONTENT_TYPES:
+        raise HTTPException(
+            status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            "A logo must be a JPEG, PNG or WebP image",
+        )
+
+    profile = _profile_of(db, tenant_id)
+    if profile is None:
+        profile = models.HospitalProfile(id=new_id("hprof"), hospital_id=tenant_id)
+        db.add(profile)
+        db.flush()
+
+    previous = profile.logo_url
+    url, _name, _size = storage.save_upload(
+        fileobj=file.file,
+        filename=file.filename or "logo",
+        content_type=content_type,
+        folder=tenant_id,
+    )
+    profile.logo_url = url
+    profile.updated_at = now_iso()
+    db.commit()
+    db.refresh(profile)
+
+    # Only once the new one is safely recorded.
+    if previous and previous != url:
+        storage.delete_file(previous)
+
+    audit.record_subject("hospital_profile", profile.id, detail="logo")
+    return _profile_out(profile)
+
+
+@router.delete("/me/logo", response_model=schemas.HospitalProfileOut)
+def remove_my_logo(
+    db: Session = Depends(get_db),
+    _: str = Depends(require_permission("hospital.profile.manage")),
+    tenant_id: str = Depends(get_tenant_id),
+):
+    """Clear the logo. Screens fall back to the platform mark."""
+    profile = _profile_of(db, tenant_id)
+    if profile is None or not profile.logo_url:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "No logo to remove")
+
+    previous = profile.logo_url
+    profile.logo_url = ""
+    profile.updated_at = now_iso()
+    db.commit()
+    db.refresh(profile)
+    storage.delete_file(previous)
+    audit.record_subject("hospital_profile", profile.id, detail="logo removed")
+    return _profile_out(profile)
 
 
 # ----- Operational settings --------------------------------------------------
