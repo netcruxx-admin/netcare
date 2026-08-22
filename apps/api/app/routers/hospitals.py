@@ -75,7 +75,7 @@ def list_public_hospitals(db: Session = Depends(get_db)):
     ]
 
 
-@router.get("/current", response_model=schemas.HospitalOut)
+@router.get("/current", response_model=schemas.HospitalPublicConfigOut)
 def current_hospital(
     db: Session = Depends(get_db),
     tenant_id: str = Depends(resolve_public_tenant),
@@ -84,14 +84,30 @@ def current_hospital(
     old hardcoded lib/hospitalConfig.ts. Public (no auth): branding/modules are
     needed to render the login page. Tenant resolves from subdomain.
 
-    Safe to serve wholesale because `hospitals` carries only runtime config and
-    legal identity; the address, licences and billing terms a stranger has no
-    business reading live in the child tables, which this does not touch.
+    Deliberately NOT the whole row. This answers to anyone who can reach the
+    subdomain, and `hospitals` carries legal identity alongside the runtime
+    config — serving it wholesale published every tenant's PAN, GSTIN and
+    registration number on their own login page. See HospitalPublicConfigOut
+    for what survives and why.
     """
     hospital = db.get(models.Hospital, tenant_id)
     if hospital is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Hospital not found")
-    return _hospital_out(db, hospital)
+    profile = _profile_of(db, tenant_id)
+    # Field by field, not model_validate: a column added to `hospitals` later
+    # stays private until someone deliberately adds it here.
+    return schemas.HospitalPublicConfigOut(
+        id=hospital.id,
+        name=hospital.name,
+        subdomain=hospital.subdomain,
+        category=hospital.category,
+        tagline=hospital.tagline or "",
+        currency=hospital.currency or "INR",
+        modules=hospital.modules or {},
+        theme=hospital.theme or {},
+        logo_url=storage.public_url(profile.logo_url if profile else ""),
+        status=hospital.status,
+    )
 
 
 # ----- Helpers ---------------------------------------------------------------
@@ -141,15 +157,6 @@ def _profile_out(row: models.HospitalProfile) -> schemas.HospitalProfileOut:
     out.logo_url = storage.public_url(row.logo_url)
     out.letterhead_url = storage.public_url(row.letterhead_url)
     out.signature_url = storage.public_url(row.signature_url)
-    return out
-
-
-def _hospital_out(db: Session, row: models.Hospital) -> schemas.HospitalOut:
-    """The hospital row plus the one branding asset every page needs."""
-    out = schemas.HospitalOut.model_validate(row)
-    profile = _profile_of(db, row.id)
-    if profile is not None:
-        out.logo_url = storage.public_url(profile.logo_url)
     return out
 
 

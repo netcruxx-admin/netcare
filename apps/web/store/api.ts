@@ -73,9 +73,6 @@ export interface HospitalInfo {
   currency: string;
   modules: Record<string, boolean>;
   theme: Record<string, string>;
-  /** The tenant's own logo, already resolved to a fetchable URL. Empty when
-   *  they have not uploaded one — screens fall back to the platform mark. */
-  logoUrl: string;
   status: string;
 
   // Legal identity — printed on invoices and reports.
@@ -192,6 +189,28 @@ export type HospitalSelfUpdateBody = Pick<
   tagline?: string;
   theme?: Record<string, string>;
 };
+
+/** What GET /hospitals/current returns — a tenant's public branding.
+ *
+ *  Deliberately narrower than HospitalInfo. That endpoint is unauthenticated,
+ *  so it carries no legal identity; mirroring the server allowlist here means
+ *  a component reading `hospital.gstin` fails to compile rather than reading
+ *  undefined at runtime.
+ */
+export interface HospitalPublicConfig {
+  id: string;
+  name: string;
+  subdomain: string;
+  category: string;
+  tagline: string;
+  currency: string;
+  modules: Record<string, boolean>;
+  theme: Record<string, string>;
+  /** Empty when the hospital has not uploaded one — screens fall back to the
+   *  platform mark. */
+  logoUrl: string;
+  status: string;
+}
 
 /** Operational config needed by the booking UI. Public endpoint, no auth. */
 export interface HospitalOperational {
@@ -706,7 +725,7 @@ export const api = createApi({
     }),
 
     // ── Hospitals ────────────────────────────────────────────────────────────
-    getCurrentHospital: build.query<HospitalInfo, void>({
+    getCurrentHospital: build.query<HospitalPublicConfig, void>({
       query: () => '/hospitals/current',
       providesTags: ['Hospital'],
     }),

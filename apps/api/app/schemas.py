@@ -139,6 +139,38 @@ class HospitalPublicOut(OutModel):
     logo_url: str = ""
 
 
+class HospitalPublicConfigOut(OutModel):
+    """What a browser needs to render a tenant's pages, and nothing else.
+
+    `GET /hospitals/current` is unauthenticated — it resolves the tenant from
+    the request host, so anyone who can reach a subdomain gets this. It used to
+    return the whole `hospitals` row on the reasoning that the table holds
+    "only runtime config and legal identity". Legal identity is the problem:
+    that shipped `pan`, `gstin`, `registration_no` and the NABH dates to any
+    stranger who loaded the login page. A GSTIN is semi-public — it is printed
+    on invoices — but a PAN is a tax identifier and has no business here.
+
+    So this is an allowlist, and like HospitalPublicOut it is built field by
+    field rather than by model_validate: a column added to `hospitals` later is
+    private until someone deliberately adds it here.
+    """
+
+    id: str
+    name: str
+    subdomain: str
+    category: HospitalCategory
+    tagline: str = ""
+    currency: str = "INR"
+    #: Which features to show. Not sensitive — the nav reveals the same thing
+    #: one click after signing in.
+    modules: dict = {}
+    theme: dict = {}
+    logo_url: str = ""
+    #: Whether the tenant is live. A suspended hospital's login page has to be
+    #: able to say so rather than silently failing every sign-in.
+    status: HospitalStatus = "active"
+
+
 class HospitalOut(OutModel):
     id: str
     name: str
@@ -148,11 +180,6 @@ class HospitalOut(OutModel):
     currency: str = "INR"
     modules: dict = {}
     theme: dict = {}
-    #: The tenant's own logo, resolved to something a browser can fetch. Lives
-    #: on hospital_profiles with the other branding assets, but is surfaced
-    #: here because it is read on every page — including the login screen,
-    #: before there is a session to read a profile with.
-    logo_url: str = ""
     status: HospitalStatus = "active"
 
     # Legal identity
