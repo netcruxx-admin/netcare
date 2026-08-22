@@ -1326,8 +1326,14 @@ export const api = createApi({
     createMedicationOrder: build.mutation<MedicationOrder, {
       appointmentId: string;
       patientId: string;
+      /** Omit when the caller is the prescribing doctor — the server writes
+       *  their own id. A pharmacist recording someone else's prescription
+       *  must name them. */
+      doctorId?: string;
+      prescriptionId?: string;
       medicineId?: string;
       medicineName: string;
+      quantity: number;
       dosage: string;
       route: string;
       frequency?: string;

@@ -2,6 +2,8 @@
 pharmacists, administered by nurses. Distinct from take-home prescriptions."""
 
 from typing import Optional
+from datetime import date
+
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session, aliased
@@ -72,15 +74,55 @@ def create_medication_order(
     # Without this a row filed here can point at another hospital's records,
     # and the display helpers then resolve that id to a real name.
     assert_body_in_tenant(db, body, tenant_id)
-    doctor = scoped(db, models.Doctor, tenant_id).filter(models.Doctor.user_id == user.id).first()
-    if doctor is None:
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "Only doctors may raise medication orders")
+
+    # Who prescribed this. Previously a hard `if not a doctor: 403`, which made
+    # the grant to pharmacist a lie — they held medication_orders.manage and
+    # were refused anyway. The permission is the authorization; this is only
+    # about whose name goes on the order.
+    caller_doctor = (
+        scoped(db, models.Doctor, tenant_id)
+        .filter(models.Doctor.user_id == user.id)
+        .first()
+    )
+    if caller_doctor is not None:
+        # The caller is the prescriber. Their own id wins over anything the
+        # body claims — a doctor cannot file an order under someone else's name.
+        doctor_id = caller_doctor.id
+    elif body.doctor_id:
+        # A pharmacist recording a prescription written by someone else. The id
+        # is already checked against the tenant by assert_body_in_tenant above.
+        doctor_id = body.doctor_id
+    else:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            "Name the prescribing doctor",
+        )
+
+    # One prescription, one order. Without this, sending the same prescription
+    # to the queue twice would dispense it twice and take the stock twice.
+    if body.prescription_id:
+        clash = (
+            scoped(db, models.MedicationOrder, tenant_id)
+            .filter(
+                models.MedicationOrder.prescription_id == body.prescription_id,
+                models.MedicationOrder.status != "cancelled",
+            )
+            .first()
+        )
+        if clash is not None:
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                "That prescription is already in the dispense queue",
+            )
+
+    fields = body.model_dump()
+    fields.pop("doctor_id", None)
     order = models.MedicationOrder(
         id=new_id("mord"),
         hospital_id=tenant_id,
-        doctor_id=doctor.id,
+        doctor_id=doctor_id,
         ordered_at=now_iso(),
-        **body.model_dump(),
+        **fields,
     )
     db.add(order)
     db.commit()
@@ -101,23 +143,59 @@ def dispense_order(
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Order not found")
     if order.status != "pending":
         raise HTTPException(status.HTTP_409_CONFLICT, f"Order is already {order.status}")
-    order.status = "dispensed"
-    # Deduct stock if medicine_id is set
+    # An order for a catalogued medicine moves stock by the quantity ordered.
+    # This used to deduct exactly 1 whatever the order said, so a ten-tablet
+    # course moved stock by one and inventory drifted from the first dispense.
     if order.medicine_id:
-        med = scoped(db, models.Medicine, tenant_id).filter(models.Medicine.id == order.medicine_id).first()
-        if med and med.stock > 0:
-            med.stock = max(0, med.stock - 1)
-            movement = models.InventoryMovement(
+        med = (
+            scoped(db, models.Medicine, tenant_id)
+            .filter(models.Medicine.id == order.medicine_id)
+            .first()
+        )
+        if med is None:
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                "That medicine is no longer in the catalogue",
+            )
+        # Expired stock must not reach a patient. The date is a plain ISO
+        # string; a blank one means nobody recorded an expiry, which is not the
+        # same as "does not expire" — so it is allowed through rather than
+        # blocking every medicine that predates the field.
+        if med.expiry_date and med.expiry_date < date.today().isoformat():
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                f"{med.name} expired on {med.expiry_date} — it cannot be dispensed. "
+                "Record the expiry as a write-off and restock.",
+            )
+
+        wanted = order.quantity or 1
+        # Refuse rather than dispense what is not there. The previous guard was
+        # `if med.stock > 0`, which silently marked the order dispensed with no
+        # stock movement and no inventory row — a discrepancy with no trace of
+        # where it came from, which is the worst of both outcomes.
+        if med.stock < wanted:
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                f"Only {med.stock} in stock — this order needs {wanted}. "
+                "Restock before dispensing.",
+            )
+        med.stock -= wanted
+        db.add(
+            models.InventoryMovement(
                 id=new_id("inv"),
                 hospital_id=tenant_id,
                 medicine_id=order.medicine_id,
                 movement_type="dispense",
-                quantity=-1,
+                quantity=-wanted,
                 reference_id=order_id,
                 performed_by=user.id,
                 created_at=now_iso(),
             )
-            db.add(movement)
+        )
+
+    # Set last, so a refusal above leaves the order pending and dispensable
+    # once the shelf is restocked.
+    order.status = "dispensed"
     db.commit()
     db.refresh(order)
     return _enrich(db, tenant_id, order)

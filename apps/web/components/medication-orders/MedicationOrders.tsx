@@ -56,6 +56,7 @@ interface NewOrderForm {
   patientId: string;
   medicineId: string;
   medicineName: string;
+  quantity: string;
   dosage: string;
   route: string;
   frequency: string;
@@ -78,6 +79,7 @@ export function MedicationOrders({ session }: RoleViewProps) {
     patientId: '',
     medicineId: '',
     medicineName: '',
+    quantity: '1',
     dosage: '',
     route: 'Oral',
     frequency: '',
@@ -125,12 +127,20 @@ export function MedicationOrders({ session }: RoleViewProps) {
     if (!form.medicineName.trim()) { setFormError('Enter a medicine name'); return; }
     if (!form.dosage.trim()) { setFormError('Enter a dosage'); return; }
     if (!form.route) { setFormError('Select a route'); return; }
+    // The number inventory moves by, so it is worth refusing here rather than
+    // letting the server 422 after the rest of the form is filled in.
+    const quantity = Number(form.quantity);
+    if (!Number.isInteger(quantity) || quantity < 1) {
+      setFormError('Quantity must be a whole number of at least 1');
+      return;
+    }
     // appointmentId is optional — use a placeholder if blank
     const payload = {
       appointmentId: form.appointmentId.trim() || 'direct',
       patientId: form.patientId,
       medicineId: form.medicineId || undefined,
       medicineName: form.medicineName.trim(),
+      quantity,
       dosage: form.dosage.trim(),
       route: form.route,
       frequency: form.frequency.trim(),
@@ -141,7 +151,7 @@ export function MedicationOrders({ session }: RoleViewProps) {
       await createOrder(payload).unwrap();
       toast.success('Medication order created');
       setNewOrderOpen(false);
-      setForm({ appointmentId: '', patientId: '', medicineId: '', medicineName: '', dosage: '', route: 'Oral', frequency: '', duration: '', instructions: '' });
+      setForm({ appointmentId: '', patientId: '', medicineId: '', medicineName: '', quantity: '1', dosage: '', route: 'Oral', frequency: '', duration: '', instructions: '' });
     } catch (err) {
       setFormError(apiError(err, 'Failed to create order'));
     }
@@ -260,6 +270,7 @@ export function MedicationOrders({ session }: RoleViewProps) {
                   <tr className="border-b bg-slate-50">
                     <th className="text-left py-3 px-4 font-semibold text-slate-900">Patient</th>
                     <th className="text-left py-3 px-4 font-semibold text-slate-900">Medicine</th>
+                    <th className="text-right py-3 px-4 font-semibold text-slate-900">Qty</th>
                     <th className="text-left py-3 px-4 font-semibold text-slate-900">Dosage</th>
                     <th className="text-left py-3 px-4 font-semibold text-slate-900">Route</th>
                     <th className="text-left py-3 px-4 font-semibold text-slate-900">Doctor</th>
@@ -278,6 +289,9 @@ export function MedicationOrders({ session }: RoleViewProps) {
                         )}
                       </td>
                       <td className="py-3 px-4 text-slate-700">{order.medicineName}</td>
+                      <td className="py-3 px-4 text-right font-medium text-slate-900 tabular-nums">
+                        {order.quantity}
+                      </td>
                       <td className="py-3 px-4 text-slate-600">{order.dosage}</td>
                       <td className="py-3 px-4 text-slate-600">{order.route}</td>
                       <td className="py-3 px-4 text-slate-600">
@@ -383,7 +397,19 @@ export function MedicationOrders({ session }: RoleViewProps) {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Quantity *</label>
+                  <input
+                    type="number"
+                    min="1"
+                    step="1"
+                    value={form.quantity}
+                    onChange={(e) => setForm((f) => ({ ...f, quantity: e.target.value }))}
+                    className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                  />
+                  <p className="text-xs text-slate-400 mt-1">Units to dispense</p>
+                </div>
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">Dosage *</label>
                   <input

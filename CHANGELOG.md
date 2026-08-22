@@ -4,6 +4,31 @@ Notable changes to CarbonHealth. Format follows [Keep a Changelog](https://keepa
 
 ## [Unreleased]
 
+### Fixed — dispensing moved stock by one unit, whatever the order said
+
+An order for "500mg, twice daily, 5 days" — ten tablets — deducted **one** from
+stock. `dispense_order` had `med.stock - 1` hardcoded, because there was nothing
+else to deduct: dosage, frequency and duration are free text for the label and
+no column held a number. Inventory drifted on the first dispense and never
+recovered, and everything built on that figure (low-stock alerts, reorder
+levels) was wrong by roughly an order of magnitude.
+
+`medication_orders.quantity` (`f3c81a05d7b2`) is that number. Existing rows get
+1, which is what dispensing them would have done anyway, so no history changes.
+
+Two behaviours changed with it:
+
+  * **Short stock is refused, not ignored.** The old guard was
+    `if med.stock > 0`, which marked the order dispensed while moving no stock
+    and writing no inventory row — a discrepancy with nothing to explain it. It
+    now answers 409 naming both numbers.
+  * **Expired stock is refused.** `Medicine.expiry_date` existed and nothing
+    consulted it. A blank expiry still dispenses: nobody recording one is not
+    the same as it having passed.
+
+The status is set *after* the stock check, so a refusal leaves the order
+pending and dispensable once the shelf is restocked.
+
 ### Added — a hospital admin can see their own record and edit what they own
 
 `/dashboard/hospital-settings` existed but only configured the lunch break, and

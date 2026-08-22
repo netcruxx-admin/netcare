@@ -597,8 +597,15 @@ class MedicationOrder(Base):
     appointment_id = Column(String, index=True, nullable=False)
     patient_id = Column(String, index=True, nullable=False)
     doctor_id = Column(String, nullable=False)
+    # The prescription this order was raised from, when it came from one. Null
+    # for an order raised directly (a ward round, an over-the-counter hand-out).
+    prescription_id = Column(String, index=True, nullable=True)
     medicine_id = Column(String, nullable=True)
     medicine_name = Column(String, default="")
+    # How many units to hand over. Dosage/frequency/duration are free text for
+    # the label; this is the number inventory moves by, so it has to be its own
+    # column rather than something parsed back out of "twice daily for 5 days".
+    quantity = Column(Integer, nullable=False, server_default="1", default=1)
     dosage = Column(String, default="")
     route = Column(String, default="")
     frequency = Column(String, default="")

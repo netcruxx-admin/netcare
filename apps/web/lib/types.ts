@@ -194,8 +194,13 @@ export interface MedicationOrder {
   appointmentId: string;
   patientId: string;
   doctorId: string;
+  /** The prescription this order was raised from, when it came from one. */
+  prescriptionId?: string;
   medicineId?: string;
   medicineName: string;
+  /** Units to hand over. Inventory moves by this, not by parsing the free-text
+   *  dosage/frequency/duration below. */
+  quantity: number;
   dosage: string;
   route: string;
   frequency: string;

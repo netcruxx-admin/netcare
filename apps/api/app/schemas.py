@@ -1277,8 +1277,10 @@ class MedicationOrderOut(OutModel):
     appointment_id: str = ""
     patient_id: str
     doctor_id: str
+    prescription_id: Optional[str] = None
     medicine_id: Optional[str] = None
     medicine_name: str = ""
+    quantity: int = 1
     dosage: str = ""
     route: str = ""
     frequency: str = ""
@@ -1295,13 +1297,31 @@ class MedicationOrderOut(OutModel):
 class MedicationOrderCreate(CamelModel):
     appointment_id: str
     patient_id: str
+    #: Who prescribed it. Omitted when the caller is the doctor — the server
+    #: fills in their own id, because the prescriber is a fact about what
+    #: happened rather than something the client asserts. A pharmacist
+    #: recording a prescription someone else wrote must name them.
+    doctor_id: Optional[str] = None
+    #: The prescription this order came from, if it came from one.
+    prescription_id: Optional[str] = None
     medicine_id: Optional[str] = None
     medicine_name: str
+    #: Units to hand over — tablets, vials, bottles. This is what inventory
+    #: moves by, so "twice daily for 5 days" has to arrive here as 10 rather
+    #: than be guessed from the free text below.
+    quantity: int = 1
     dosage: str
     route: str
     frequency: str = ""
     duration: str = ""
     instructions: str = ""
+
+    @field_validator("quantity")
+    @classmethod
+    def _at_least_one(cls, value: int) -> int:
+        if value is None or value < 1:
+            raise ValueError("Quantity must be at least 1")
+        return value
 
 
 class MedicationOrderUpdate(CamelModel):
