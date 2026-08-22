@@ -1,11 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Formik, Form } from 'formik';
 import * as Yup from 'yup';
 import {
   Building2, MapPin, Phone, UserCog, BedDouble, Clock, Image as ImageIcon,
-  ShieldCheck, FileText, CreditCard, Lock,
+  ShieldCheck, FileText, CreditCard, Lock, Upload, Trash2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { DashboardShell } from '@/components/DashboardShell';
@@ -17,6 +17,8 @@ import type { RoleViewProps } from '@/components/RoleView';
 import {
   useGetMyHospitalSettingsQuery,
   useUpdateMyHospitalSettingsMutation,
+  useUploadMyHospitalLogoMutation,
+  useRemoveMyHospitalLogoMutation,
   type HospitalSelfUpdateBody,
 } from '@/store/api';
 
@@ -84,6 +86,9 @@ function ReadOnly({ label, value }: { label: string; value?: string | number | n
 export function HospitalSettings({ session }: RoleViewProps) {
   const { data, isLoading } = useGetMyHospitalSettingsQuery();
   const [save, { isLoading: isSaving }] = useUpdateMyHospitalSettingsMutation();
+  const [uploadLogo, { isLoading: isUploading }] = useUploadMyHospitalLogoMutation();
+  const [removeLogo] = useRemoveMyHospitalLogoMutation();
+  const logoInput = useRef<HTMLInputElement>(null);
   const [error, setError] = useState('');
   const canEdit = hasPermission(session, 'hospital.profile.manage');
 
@@ -128,10 +133,32 @@ export function HospitalSettings({ session }: RoleViewProps) {
     appointmentSlotMinutes: profile?.appointmentSlotMinutes ?? 15,
     lunchBreakStart: profile?.lunchBreakStart ?? '12:00',
     lunchBreakEnd: profile?.lunchBreakEnd ?? '14:00',
-    logoUrl: profile?.logoUrl ?? '',
     letterheadUrl: profile?.letterheadUrl ?? '',
     signatureUrl: profile?.signatureUrl ?? '',
     notes: profile?.notes ?? '',
+  };
+
+  const pickLogo = async (files: FileList | null) => {
+    // Copy before the reset below: `files` is a live FileList owned by the
+    // input, and clearing `value` empties it.
+    const file = Array.from(files ?? [])[0];
+    if (logoInput.current) logoInput.current.value = '';
+    if (!file) return;
+    try {
+      await uploadLogo(file).unwrap();
+      toast.success('Logo updated');
+    } catch (err) {
+      toast.error(apiError(err, 'Could not upload the logo'));
+    }
+  };
+
+  const dropLogo = async () => {
+    try {
+      await removeLogo().unwrap();
+      toast.success('Logo removed');
+    } catch (err) {
+      toast.error(apiError(err, 'Could not remove the logo'));
+    }
   };
 
   const submit = async (values: typeof initialValues) => {
@@ -184,6 +211,60 @@ export function HospitalSettings({ session }: RoleViewProps) {
                 value={hospital?.verifiedAt ? new Date(hospital.verifiedAt).toLocaleDateString() : ''}
               />
             </dl>
+          </Section>
+
+          {/* Outside the form on purpose: a file uploads the moment it is
+              chosen, so pairing it with a Save button would be a lie about
+              when the change lands. */}
+          <Section
+            icon={ImageIcon}
+            title="Logo"
+            blurb="Shown in the sidebar and on your hospital's login page."
+          >
+            <div className="flex flex-wrap items-center gap-5">
+              <div className="w-24 h-24 rounded-xl border border-slate-200 bg-slate-50 flex items-center justify-center overflow-hidden shrink-0">
+                {profile?.logoUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={profile.logoUrl} alt="Hospital logo" className="w-full h-full object-contain" />
+                ) : (
+                  <ImageIcon className="w-8 h-8 text-slate-300" />
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex flex-wrap gap-2">
+                  <input
+                    ref={logoInput}
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp"
+                    className="hidden"
+                    onChange={(e) => pickLogo(e.target.files)}
+                  />
+                  <button
+                    type="button"
+                    disabled={!canEdit || isUploading}
+                    onClick={() => logoInput.current?.click()}
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-slate-300 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 transition"
+                  >
+                    <Upload className="w-4 h-4" />
+                    {isUploading ? 'Uploading…' : profile?.logoUrl ? 'Replace' : 'Upload logo'}
+                  </button>
+                  {profile?.logoUrl && canEdit && (
+                    <button
+                      type="button"
+                      onClick={dropLogo}
+                      className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-slate-200 text-sm font-medium text-slate-500 hover:text-red-600 hover:border-red-200 transition"
+                    >
+                      <Trash2 className="w-4 h-4" /> Remove
+                    </button>
+                  )}
+                </div>
+                <p className="text-xs text-slate-400">
+                  PNG, JPEG or WebP. A square image around 512&times;512 works best —
+                  it is displayed small, so fine detail will not survive.
+                </p>
+              </div>
+            </div>
           </Section>
 
           <Formik initialValues={initialValues} validationSchema={schema} onSubmit={submit} enableReinitialize>
@@ -273,7 +354,6 @@ export function HospitalSettings({ session }: RoleViewProps) {
 
                   <Section icon={ImageIcon} title="Branding assets" blurb="Used on reports and letterheads.">
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <FormField name="logoUrl" label="Logo URL" />
                       <FormField name="letterheadUrl" label="Letterhead URL" />
                       <FormField name="signatureUrl" label="Signature URL" />
                       <FormField name="notes" label="Internal notes" />

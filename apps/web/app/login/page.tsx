@@ -120,7 +120,18 @@ function LoginForm() {
       <div className="bg-white shadow-md border-b-2 border-cyan-100">
         <div className="max-w-6xl mx-auto px-6 py-2 flex items-center gap-3">
           <Link href="/" className="hover:opacity-80 transition">
-            <Image src="/logo/logo-full.png" alt={hospitalName} width={80} height={80} className="w-20 h-20 object-contain" />
+            {/* A hospital's own mark, before anyone has signed in — which is
+                why GET /hospitals/current carries the logo and is public. */}
+            {hospital?.logoUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={hospital.logoUrl}
+                alt={hospitalName}
+                className="w-20 h-20 object-contain"
+              />
+            ) : (
+              <Image src="/logo/logo-full.png" alt={hospitalName} width={80} height={80} className="w-20 h-20 object-contain" />
+            )}
           </Link>
         </div>
       </div>
