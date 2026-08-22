@@ -4,6 +4,43 @@ Notable changes to CarbonHealth. Format follows [Keep a Changelog](https://keepa
 
 ## [Unreleased]
 
+### Added — the pharmacist has a dashboard, and prescriptions reach the queue
+
+**A prescription can be dispensed.** `prescriptions` and `medication_orders`
+were two disconnected systems: a doctor's prescription was something the
+pharmacist could look at and not act on, and getting it dispensed meant
+retyping the drug, dose and frequency as a new order. `medication_orders`
+now carries `prescription_id` (`a4d9e21b6c37`), and the pharmacist's
+prescriptions screen has a *Send to dispense queue* action.
+
+It asks two things the prescription cannot answer: which catalogue medicine
+this is (stock moves against that item, and the name match is only a guess) and
+how many units — a prescription records the dose, not the count. Rows already
+queued show as such, and the server refuses the same prescription twice, since
+queueing it twice would dispense it twice and take the stock twice. Cancelling
+an order frees it again.
+
+**A hardcoded role check became a permission.** `create_medication_order`
+raised *"Only doctors may raise medication orders"* for any caller without a
+Doctor row — so `medication_orders.manage`, granted to pharmacist, returned 403.
+The permission is now the authorization; whose name goes on the order is a
+separate question with a separate answer: the caller's own id when they are a
+doctor (always, over anything the body claims), an explicit `doctorId`
+otherwise, and 422 if neither.
+
+**A pharmacist dashboard.** Every other role had one; pharmacists fell through
+to `GenericDashboard` — a grid of links, functional but generic. Now: to
+dispense / dispensed / low stock / out of stock, a restocking panel, and the
+queue oldest-first. Low stock sits above the queue deliberately — with
+dispensing now refusing on short stock, finding out at the counter is worse
+than knowing before the patient arrives.
+
+**Two grants the screens already assumed.** `/dashboard/inventory` listed admin
+in its route table while admin held no inventory grant, so the nav item was
+filtered out and the URL redirected; admin now holds `inventory.read`, with
+restock and write-off still gated on `inventory.manage`. And superadmin can
+manage medicines, which it could not while supporting a tenant.
+
 ### Fixed — dispensing moved stock by one unit, whatever the order said
 
 An order for "500mg, twice daily, 5 days" — ten tablets — deducted **one** from

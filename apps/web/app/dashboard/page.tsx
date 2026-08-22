@@ -4,11 +4,12 @@ import { RoleView } from '@/components/RoleView';
 import { AdminOverview } from '@/components/home/AdminOverview';
 import { DoctorDashboard } from '@/components/home/DoctorDashboard';
 import { LabDashboard } from '@/components/home/LabDashboard';
+import { PharmacistDashboard } from '@/components/home/PharmacistDashboard';
 import { NurseDashboard } from '@/components/home/NurseDashboard';
 import { PatientDashboard } from '@/components/home/PatientDashboard';
 import { PlatformOverview } from '@/components/home/PlatformOverview';
 import { GenericDashboard } from '@/components/home/GenericDashboard';
-import { adminRole, doctorRole, labRole, nurseRole, patientRole, superadminRole } from '@/lib/roles';
+import { adminRole, doctorRole, labRole, nurseRole, patientRole, pharmacistRole, superadminRole } from '@/lib/roles';
 
 export default function HomePage() {
   return (
@@ -20,6 +21,7 @@ export default function HomePage() {
         [doctorRole]: DoctorDashboard,
         [nurseRole]: NurseDashboard,
         [labRole]: LabDashboard,
+        [pharmacistRole]: PharmacistDashboard,
         [patientRole]: PatientDashboard,
       }}
       // Everyone lands here, including roles created after this code shipped.

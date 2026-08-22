@@ -76,6 +76,12 @@ Every request answers these separately — do not collapse them:
   result timestamps.
 - When a client needs a *fact* derived from records it may not read, answer the question rather than
   hand over the records — `GET /doctors/{id}/availability` returns taken times with no patient on them.
+- Stock moves by `medication_orders.quantity`, never by a number parsed out of "twice daily for 5
+  days". Dispensing refuses on short stock and on expired stock rather than moving what is not
+  there — a silent skip leaves a discrepancy with no inventory row to explain it.
+- The prescriber on a medication order is the caller when the caller is a doctor, and an explicit
+  `doctorId` otherwise. A doctor's own id always wins over the body: whose name is on an order is a
+  fact about what happened.
 
 ## Backend: Fully Wired
 All routers are tenant-scoped and permission-guarded: auth, hospitals, departments, appointments,
@@ -130,15 +136,24 @@ that is history, not a dependency.)
 Keep: `lib/tenant.ts`, `lib/anc.ts`, `lib/baby.ts`, `lib/schedule.ts`, `lib/types.ts`, `lib/lab.ts`,
 `lib/apiError.ts`
 
-## Demo Credentials (auto-seeded by backend on first run)
-| Role        | Email                    | Password     |
-|-------------|--------------------------|--------------|
-| superadmin  | superadmin@platform.com  | password123  |
-| admin       | admin@example.com        | password123  |
-| doctor      | doctor@example.com       | password123  |
-| patient     | patient@example.com      | password123  |
-| nurse       | nurse@example.com        | password123  |
-| lab         | lab@example.com          | password123  |
+## Sign-in (what actually exists on a fresh database)
+`app/seed.py` seeds **one** account — the platform superadmin, from
+`SUPERADMIN_EMAIL` / `SUPERADMIN_PASSWORD` (default `netcruxx@gmail.com` /
+`password123`, refused in production). It seeds nothing else, despite what this
+section used to claim: there are no `admin@example.com` / `doctor@example.com`
+demo logins.
+
+Every other account comes from the real flow:
+
+1. Sign in as the superadmin on the platform host and onboard a hospital — the
+   wizard's last step creates that hospital's first **admin**.
+2. That admin creates doctors, nurses, lab and pharmacist accounts from
+   `/dashboard/users`. The role list there is read live from the catalog, so
+   any role a superadmin invents appears without a deploy.
+
+The login page offers a role tab per built-in role; the tab is a hint for the
+user, not a filter — what you can open is decided by grants, not by which tab
+you picked.
 
 ## Dev Setup
 ```bash

@@ -9,6 +9,7 @@ import { DashboardShell } from '@/components/DashboardShell';
 import { ActionIcon } from '@/components/ActionIcon';
 import { RecordDialog } from '@/components/RecordDialog';
 import type { RoleViewProps } from '@/components/RoleView';
+import { hasPermission } from '@/lib/auth';
 import {
   useListMedicinesPagedQuery,
   useListInventoryMovementsQuery,
@@ -46,6 +47,9 @@ interface AdjustForm {
 }
 
 export function InventoryManagement({ session }: RoleViewProps) {
+  // A hospital admin holds inventory.read so they can see what is on the
+  // shelf; restocking and write-offs stay with the pharmacist.
+  const canManage = hasPermission(session, 'inventory.manage');
   const [activeTab, setActiveTab] = useState<ActiveTab>('stock');
   const [viewing, setViewing] = useState<Medicine | null>(null);
   const [restockMed, setRestockMed] = useState<Medicine | null>(null);
@@ -210,18 +214,22 @@ export function InventoryManagement({ session }: RoleViewProps) {
                         <td className="py-3 px-4 text-right">
                           <div className="flex items-center justify-end gap-2">
                             <ActionIcon icon={Eye} label="View" onClick={() => setViewing(med)} />
-                            <button
-                              onClick={() => openRestock(med)}
-                              className="px-2 py-1 text-xs font-medium bg-green-50 text-green-700 rounded hover:bg-green-100 transition flex items-center gap-1"
-                            >
-                              <TrendingUp className="w-3 h-3" /> Restock
-                            </button>
-                            <button
-                              onClick={() => openAdjust(med)}
-                              className="px-2 py-1 text-xs font-medium bg-slate-50 text-slate-700 rounded hover:bg-slate-100 transition flex items-center gap-1"
-                            >
-                              <TrendingDown className="w-3 h-3" /> Adjust
-                            </button>
+                            {canManage && (
+                              <>
+                                <button
+                                  onClick={() => openRestock(med)}
+                                  className="px-2 py-1 text-xs font-medium bg-green-50 text-green-700 rounded hover:bg-green-100 transition flex items-center gap-1"
+                                >
+                                  <TrendingUp className="w-3 h-3" /> Restock
+                                </button>
+                                <button
+                                  onClick={() => openAdjust(med)}
+                                  className="px-2 py-1 text-xs font-medium bg-slate-50 text-slate-700 rounded hover:bg-slate-100 transition flex items-center gap-1"
+                                >
+                                  <TrendingDown className="w-3 h-3" /> Adjust
+                                </button>
+                              </>
+                            )}
                           </div>
                         </td>
                       </tr>
