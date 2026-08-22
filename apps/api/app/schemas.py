@@ -1348,17 +1348,37 @@ class InventoryMovementOut(OutModel):
 
 class RestockBody(CamelModel):
     medicine_id: str
+    #: Units arriving. Positive by definition — a negative "restock" drove
+    #: stock below zero and filed the movement under `restock`, which made the
+    #: trail say the opposite of what happened. Removing stock is an
+    #: adjustment, and says which kind.
     quantity: int
     lot_number: str = ""
     expiry_date: str = ""
     notes: str = ""
 
+    @field_validator("quantity")
+    @classmethod
+    def _positive(cls, value: int) -> int:
+        if value is None or value < 1:
+            raise ValueError("Restock quantity must be at least 1")
+        return value
+
 
 class InventoryAdjustBody(CamelModel):
     medicine_id: str
+    #: Signed: negative writes stock off, positive corrects a count upwards.
+    #: Zero would write a movement row that records nothing happening.
     quantity: int
     movement_type: InventoryMovementType
     notes: str = ""
+
+    @field_validator("quantity")
+    @classmethod
+    def _not_zero(cls, value: int) -> int:
+        if value is None or value == 0:
+            raise ValueError("An adjustment of zero changes nothing")
+        return value
 
 
 # ---------- Lab test (diagnostics catalog) ----------

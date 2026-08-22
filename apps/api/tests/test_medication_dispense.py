@@ -331,3 +331,48 @@ def test_stock_expiring_in_the_future_dispenses(pharmacy):
     }).json()
     order_id = _order(pharmacy, med, quantity=2).json()["id"]
     assert _dispense(pharmacy, order_id).status_code == 200
+
+
+# ----- Inventory arithmetic -------------------------------------------------
+
+
+def test_a_negative_restock_is_refused(pharmacy):
+    """It drove stock to -90 and filed it under `restock`.
+
+    Stock below zero makes low-stock lists and valuation meaningless, and a
+    movement labelled `restock` that removed stock is a trail saying the
+    opposite of what happened. Removing stock is an adjustment.
+    """
+    med = _medicine(pharmacy, stock=10, name="ProbeDrug")
+    response = pharmacy["client"].post("/inventory/restock", json={
+        "medicineId": med["id"], "quantity": -100,
+    }, headers=pharmacy["dispenser_headers"])
+    assert response.status_code == 422, response.text
+    assert _stock(pharmacy["tenant"], med["id"]) == 10
+
+
+def test_a_restock_of_zero_is_refused(pharmacy):
+    med = _medicine(pharmacy, stock=10, name="ZeroRestock")
+    response = pharmacy["client"].post("/inventory/restock", json={
+        "medicineId": med["id"], "quantity": 0,
+    }, headers=pharmacy["dispenser_headers"])
+    assert response.status_code == 422, response.text
+
+
+def test_a_write_off_is_an_adjustment_and_floors_at_zero(pharmacy):
+    """The supported way to remove stock, and it says which kind."""
+    med = _medicine(pharmacy, stock=10, name="Expired")
+    response = pharmacy["client"].post("/inventory/adjust", json={
+        "medicineId": med["id"], "quantity": -100,
+        "movementType": "expired", "notes": "past expiry",
+    }, headers=pharmacy["dispenser_headers"])
+    assert response.status_code == 201, response.text
+    assert _stock(pharmacy["tenant"], med["id"]) == 0
+
+
+def test_an_adjustment_of_zero_is_refused(pharmacy):
+    med = _medicine(pharmacy, stock=10, name="NoOpAdjust")
+    response = pharmacy["client"].post("/inventory/adjust", json={
+        "medicineId": med["id"], "quantity": 0, "movementType": "adjustment",
+    }, headers=pharmacy["dispenser_headers"])
+    assert response.status_code == 422, response.text

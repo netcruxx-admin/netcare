@@ -4,6 +4,21 @@ Notable changes to CarbonHealth. Format follows [Keep a Changelog](https://keepa
 
 ## [Unreleased]
 
+### Fixed — a negative restock drove stock below zero
+
+`POST /inventory/restock` took any integer. Restocking `-100` returned 201, left
+stock at `-90`, and filed the movement under `restock` — a trail saying the
+opposite of what happened, and a figure that makes low-stock lists and any
+valuation meaningless.
+
+Restock quantity must now be at least 1, and an adjustment may not be zero (it
+would write a movement recording that nothing happened). Removing stock is an
+adjustment, which says *which* kind — `expired`, `returned`, `adjustment` —
+and still floors at zero.
+
+The inventory screen already enforced both rules. Only the API was open, so
+anything not going through that form could corrupt the count.
+
 ### Added — the pharmacist has a dashboard, and prescriptions reach the queue
 
 **A prescription can be dispensed.** `prescriptions` and `medication_orders`
