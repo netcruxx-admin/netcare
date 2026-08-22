@@ -499,6 +499,52 @@ def update_my_hospital_settings(
     return _detail(db, hospital)
 
 
+@router.put("/me/razorpay", response_model=schemas.RazorpaySettingsOut)
+def update_my_razorpay_settings(
+    body: schemas.RazorpaySettingsUpdate,
+    db: Session = Depends(get_db),
+    _: str = Depends(require_permission("hospital.profile.manage")),
+    tenant_id: str = Depends(get_tenant_id),
+):
+    """Store this hospital's own Razorpay Key ID and Key Secret.
+
+    The secret is written to the DB but never returned — only `has_secret`
+    comes back so the UI can show a masked indicator. To rotate, submit new
+    values; to clear, use DELETE /hospitals/me/razorpay (not implemented yet,
+    since no hospital has asked for it).
+    """
+    profile = _profile_of(db, tenant_id)
+    if profile is None:
+        profile = models.HospitalProfile(id=new_id("hprof"), hospital_id=tenant_id)
+        db.add(profile)
+
+    profile.razorpay_key_id = body.key_id.strip()
+    profile.razorpay_key_secret = body.key_secret.strip()
+    profile.updated_at = now_iso()
+    db.commit()
+    db.refresh(profile)
+    audit.record_subject("hospital_profile", profile.id, detail=tenant_id)
+
+    return schemas.RazorpaySettingsOut(
+        key_id=profile.razorpay_key_id,
+        has_secret=bool(profile.razorpay_key_secret),
+    )
+
+
+@router.get("/me/razorpay", response_model=schemas.RazorpaySettingsOut)
+def get_my_razorpay_settings(
+    db: Session = Depends(get_db),
+    _: str = Depends(require_permission("hospital.profile.manage")),
+    tenant_id: str = Depends(get_tenant_id),
+):
+    """Return current Razorpay configuration (key_id + has_secret indicator)."""
+    profile = _profile_of(db, tenant_id)
+    return schemas.RazorpaySettingsOut(
+        key_id=profile.razorpay_key_id if profile and profile.razorpay_key_id else "",
+        has_secret=bool(profile and profile.razorpay_key_secret),
+    )
+
+
 # ----- Operational settings --------------------------------------------------
 # Public read (booking UI needs it before login) + admin write.
 
@@ -520,6 +566,7 @@ def current_operational(
     return schemas.HospitalOperationalOut(
         lunch_break_start=profile.lunch_break_start or "12:00",
         lunch_break_end=profile.lunch_break_end or "14:00",
+        appointment_slot_minutes=profile.appointment_slot_minutes or 15,
     )
 
 

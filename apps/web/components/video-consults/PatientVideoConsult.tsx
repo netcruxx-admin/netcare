@@ -7,20 +7,31 @@ import type { VideoSlot } from '@/lib/types';
 import { apiError } from '@/lib/apiError';
 import {
   useBookVideoSlotMutation,
-  useCreateAppointmentMutation,
   useGetPatientByUserQuery,
+  useInitiatePaymentMutation,
   useListDepartmentsQuery,
   useListDoctorsQuery,
   useListVideoSlotsQuery,
+  useVerifyPaymentMutation,
 } from '@/store/api';
 import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
 
-interface DoctorOption {
-  id: string;
-  name: string;
-  specialization: string;
-  fee: number;
+declare global {
+  interface Window {
+    Razorpay?: new (options: Record<string, unknown>) => { open(): void; close(): void };
+  }
+}
+
+function loadRazorpayScript(): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (window.Razorpay) { resolve(); return; }
+    const script = document.createElement('script');
+    script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error('Failed to load Razorpay script'));
+    document.body.appendChild(script);
+  });
 }
 
 export function PatientVideoConsult({ session }: RoleViewProps) {
@@ -51,8 +62,6 @@ export function PatientVideoConsult({ session }: RoleViewProps) {
   );
 
   // Strip past slots so patients cannot book into the past.
-  // Convert both times to minutes since midnight for a robust numeric comparison
-  // rather than relying on string ordering, which breaks for non-zero-padded hours.
   const slots = useMemo(() => {
     const now = new Date();
     const todayStr = now.toISOString().split('T')[0];
@@ -73,10 +82,9 @@ export function PatientVideoConsult({ session }: RoleViewProps) {
     });
   }, [openSlots]);
 
-  const [createAppointment] = useCreateAppointmentMutation();
+  const [initiatePayment] = useInitiatePaymentMutation();
+  const [verifyPayment] = useVerifyPaymentMutation();
   const [bookVideoSlot] = useBookVideoSlotMutation();
-
-  const loadSlots = (docId: string) => setSelectedDoctor(docId);
 
   const doctorById = useMemo(() => new Map(doctors.map((d) => [d.id, d])), [doctors]);
 
@@ -96,27 +104,82 @@ export function PatientVideoConsult({ session }: RoleViewProps) {
       return;
     }
 
+    const departmentId = deptForDoctor(doc.specialization);
+
     setBooking(true);
     try {
-      const appointment = await createAppointment({
+      // Step 1 — create Razorpay order server-side (amount fixed there, not here).
+      const order = await initiatePayment({
         patientId,
         doctorId: slot.doctorId,
-        departmentId: deptForDoctor(doc.specialization),
+        departmentId,
         date: slot.date,
         time: slot.time,
-        status: 'scheduled',
         mode: 'video',
         reason: 'Video consultation',
         notes: '',
       }).unwrap();
 
-      // Booking the slot also raises the pending invoice, server-side.
-      await bookVideoSlot({ id: slot.id, body: { appointmentId: appointment.id } }).unwrap();
+      // Step 2 — load Razorpay checkout script and open the dialog.
+      await loadRazorpayScript();
 
-      setConfirm(null);
-      setBookedApptId(appointment.id);
+      await new Promise<void>((resolve, reject) => {
+        const rzp = new window.Razorpay!({
+          key: order.keyId,
+          amount: order.amountPaise,
+          currency: order.currency,
+          order_id: order.orderId,
+          name: 'Video Consultation',
+          description: `Dr. ${doc.name} — ${slot.date} ${slot.time}`,
+          prefill: {
+            name: session.user.name,
+            email: session.user.email ?? '',
+          },
+          theme: { color: '#0891b2' },
+          handler: async (response: {
+            razorpay_order_id: string;
+            razorpay_payment_id: string;
+            razorpay_signature: string;
+          }) => {
+            rzp.close();
+            try {
+              // Step 3 — verify HMAC, create appointment + payment atomically.
+              const result = await verifyPayment({
+                razorpayOrderId: response.razorpay_order_id,
+                razorpayPaymentId: response.razorpay_payment_id,
+                razorpaySignature: response.razorpay_signature,
+                patientId,
+                doctorId: slot.doctorId,
+                departmentId,
+                date: slot.date,
+                time: slot.time,
+                mode: 'video',
+                reason: 'Video consultation',
+                notes: '',
+              }).unwrap();
+
+              // Step 4 — mark the video slot as booked.
+              await bookVideoSlot({
+                id: slot.id,
+                body: { appointmentId: result.appointment.id },
+              }).unwrap();
+
+              setConfirm(null);
+              setBookedApptId(result.appointment.id);
+              resolve();
+            } catch (err) {
+              reject(err);
+            }
+          },
+          modal: {
+            ondismiss: () => reject(new Error('Payment cancelled')),
+          },
+        });
+        rzp.open();
+      });
     } catch (err) {
-      setError(apiError(err, 'Could not book that slot'));
+      const msg = apiError(err, 'Could not complete booking');
+      if (msg !== 'Payment cancelled') setError(msg);
     } finally {
       setBooking(false);
     }
@@ -132,7 +195,7 @@ export function PatientVideoConsult({ session }: RoleViewProps) {
           </div>
           <h2 className="text-lg font-semibold text-slate-900">Your video consult is booked</h2>
           <p className="text-sm text-slate-500 mt-2">
-            You&apos;ll find it in your appointments. Join the video room from there at your scheduled time.
+            Payment confirmed. You&apos;ll find it in your appointments. Join the video room from there at your scheduled time.
           </p>
           <div className="flex gap-2 justify-center mt-6">
             <button
@@ -169,7 +232,7 @@ export function PatientVideoConsult({ session }: RoleViewProps) {
             return (
               <button
                 key={d.id}
-                onClick={() => loadSlots(d.id)}
+                onClick={() => setSelectedDoctor(d.id)}
                 className={`w-full text-left rounded-xl border p-3 transition ${
                   active ? 'border-cyan-500 ring-2 ring-cyan-500/20 bg-cyan-50/40' : 'border-slate-200 bg-white hover:border-slate-300'
                 }`}
@@ -252,9 +315,9 @@ export function PatientVideoConsult({ session }: RoleViewProps) {
               disabled={booking}
               className="mt-5 w-full py-2.5 rounded-lg bg-gradient-to-r from-cyan-500 to-brand-teal text-white font-semibold text-sm disabled:opacity-50"
             >
-              {booking ? 'Booking…' : 'Confirm booking'}
+              {booking ? 'Processing…' : `Pay ₹${doctorById.get(confirm.doctorId)?.fee ?? 0} & Book`}
             </button>
-            <p className="text-xs text-slate-400 text-center mt-2">Payment is collected as pending; pay from Payments.</p>
+            <p className="text-xs text-slate-400 text-center mt-2">Secured by Razorpay. Slot is confirmed only after payment.</p>
           </div>
         </div>
       )}

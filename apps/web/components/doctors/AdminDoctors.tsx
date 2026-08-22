@@ -20,9 +20,10 @@ import {
   useListDepartmentsQuery,
 } from '@/store/api';
 
-const exportRow = (d: Doctor) => [
+const exportRow = (d: Doctor, deptName?: string) => [
   d.user?.name ?? '—',
   d.user?.email ?? '—',
+  deptName ?? '—',
   d.specialization,
   d.qualification,
   d.experienceYears,
@@ -31,7 +32,7 @@ const exportRow = (d: Doctor) => [
 ];
 
 export function AdminDoctors({ session }: RoleViewProps) {
-  const [specFilter, setSpecFilter] = useState('all');
+  const [deptFilter, setDeptFilter] = useState('all');
   const [showAddModal, setShowAddModal] = useState(false);
   const [editing, setEditing] = useState<Doctor | null>(null);
   const [deleting, setDeleting] = useState<Doctor | null>(null);
@@ -39,11 +40,11 @@ export function AdminDoctors({ session }: RoleViewProps) {
 
   const canManage = hasPermission(session, 'doctors.manage');
 
-  const table = useServerTable({ filterKey: specFilter });
+  const table = useServerTable({ filterKey: deptFilter });
 
   const listArgs = {
     q: table.q.trim() || undefined,
-    specialization: specFilter === 'all' ? undefined : specFilter,
+    departmentId: deptFilter === 'all' ? undefined : deptFilter,
   };
   const { data: doctorPage, refetch } = useListDoctorsPagedQuery({
     ...listArgs,
@@ -55,12 +56,7 @@ export function AdminDoctors({ session }: RoleViewProps) {
   const [fetchAllForExport] = useLazyListDoctorsPagedQuery();
   const { data: departments = [] } = useListDepartmentsQuery();
 
-  // Options come from the department catalog, not from the doctors on screen:
-  // a filter built from one page would only ever offer that page's values.
-  const specializations = useMemo(
-    () => [...new Set(departments.map((d) => d.name).filter(Boolean))].sort(),
-    [departments],
-  );
+  const deptById = useMemo(() => new Map(departments.map((d) => [d.id, d.name])), [departments]);
 
   return (
     <DashboardShell
@@ -75,25 +71,25 @@ export function AdminDoctors({ session }: RoleViewProps) {
           <input
             value={table.search}
             onChange={(e) => table.setSearch(e.target.value)}
-            placeholder="Search name, email, specialization…"
+            placeholder="Search name, email…"
             className="w-full pl-9 pr-3 py-2 bg-white rounded-lg shadow text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
           />
         </div>
         <select
-          value={specFilter}
-          onChange={(e) => setSpecFilter(e.target.value)}
+          value={deptFilter}
+          onChange={(e) => setDeptFilter(e.target.value)}
           className="bg-white rounded-lg shadow px-3 py-2 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-cyan-500"
         >
-          <option value="all">All Specializations</option>
-          {specializations.map((s) => <option key={s} value={s}>{s}</option>)}
+          <option value="all">All Departments</option>
+          {departments.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
         </select>
         <ExportButton
           filename="doctors"
-          headers={['Name', 'Email', 'Specialization', 'Qualification', 'Experience (yrs)', 'Fee', 'Status']}
-          rows={filtered.map(exportRow)}
+          headers={['Name', 'Email', 'Department', 'Specialization', 'Qualification', 'Experience (yrs)', 'Fee', 'Status']}
+          rows={filtered.map((d) => exportRow(d, deptById.get(d.departmentId ?? '')))}
           getRows={async () => {
             const all = await fetchAllForExport(listArgs).unwrap();
-            return all.items.map(exportRow);
+            return all.items.map((d) => exportRow(d, deptById.get(d.departmentId ?? '')));
           }}
         />
       </div>
@@ -123,7 +119,7 @@ export function AdminDoctors({ session }: RoleViewProps) {
               <thead>
                 <tr className="border-b bg-slate-50">
                   <th className="text-left py-3 px-6 font-semibold text-slate-900">Name</th>
-                  <th className="text-left py-3 px-6 font-semibold text-slate-900">Email</th>
+                  <th className="text-left py-3 px-6 font-semibold text-slate-900">Department</th>
                   <th className="text-left py-3 px-6 font-semibold text-slate-900">Specialization</th>
                   <th className="text-left py-3 px-6 font-semibold text-slate-900">Qualification</th>
                   <th className="text-left py-3 px-6 font-semibold text-slate-900">Experience</th>
@@ -135,9 +131,12 @@ export function AdminDoctors({ session }: RoleViewProps) {
               <tbody>
                 {filtered.map((doctor) => (
                   <tr key={doctor.id} className="border-b hover:bg-slate-50">
-                    <td className="py-3 px-6 font-medium text-slate-900">{doctor.user?.name ?? '—'}</td>
-                    <td className="py-3 px-6 text-slate-600 text-sm">{doctor.user?.email ?? '—'}</td>
-                    <td className="py-3 px-6 font-medium">{doctor.specialization || '—'}</td>
+                    <td className="py-3 px-6">
+                      <p className="font-medium text-slate-900">{doctor.user?.name ?? '—'}</p>
+                      <p className="text-xs text-slate-500 mt-0.5">{doctor.user?.email ?? ''}</p>
+                    </td>
+                    <td className="py-3 px-6 text-slate-600">{deptById.get(doctor.departmentId ?? '') ?? '—'}</td>
+                    <td className="py-3 px-6 text-slate-600">{doctor.specialization || '—'}</td>
                     <td className="py-3 px-6 text-slate-600">{doctor.qualification || '—'}</td>
                     <td className="py-3 px-6 text-slate-600">{doctor.experienceYears} yrs</td>
                     <td className="py-3 px-6 text-slate-600">₹{doctor.consultationFee}</td>

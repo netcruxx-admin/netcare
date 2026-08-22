@@ -1,23 +1,156 @@
 'use client';
 
 import { useState } from 'react';
-import {
-  CreditCard, Download, Eye, Smartphone, Building2, Wallet,
-  ShieldCheck, Loader2, X,
-} from 'lucide-react';
+import { CreditCard, Download, Eye, Banknote, Loader2, X, Smartphone } from 'lucide-react';
 import type { Payment } from '@/lib/types';
 import { fmtDate } from '@/lib/date';
 import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
-import { useGetPatientPaymentsQuery } from '@/store/api';
+import { useGetCurrentHospitalQuery, useGetPatientPaymentsQuery } from '@/store/api';
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function paymentTypeLabel(type?: string) {
+  if (type === 'pharmacy') return 'Pharmacy';
+  if (type === 'lab') return 'Lab';
+  return 'Consultation';
+}
+
+function paymentMethodLabel(method: string) {
+  if (method === 'razorpay') return 'Online (Razorpay)';
+  if (method === 'cash') return 'Cash';
+  if (method === 'card') return 'Card';
+  if (method === 'upi') return 'UPI / QR';
+  if (!method) return '—';
+  return method.charAt(0).toUpperCase() + method.slice(1);
+}
+
+function paymentMethodIcon(method: string) {
+  if (method === 'cash') return <Banknote className="w-4 h-4 inline mr-1 text-slate-400" />;
+  if (method === 'razorpay' || method === 'upi') return <Smartphone className="w-4 h-4 inline mr-1 text-slate-400" />;
+  return <CreditCard className="w-4 h-4 inline mr-1 text-slate-400" />;
+}
+
+// ---------------------------------------------------------------------------
+// PDF download — opens a styled print window and triggers Save as PDF
+// ---------------------------------------------------------------------------
+
+interface HospitalMeta {
+  name: string;
+  legalName?: string;
+  gstin?: string;
+  tagline?: string;
+}
+
+function downloadInvoicePdf(payment: Payment, patientName: string, hospital: HospitalMeta) {
+  const statusColor =
+    payment.status === 'completed' ? '#16a34a' :
+    payment.status === 'pending'   ? '#d97706' : '#dc2626';
+
+  const txRow = payment.gatewayPaymentId
+    ? `<tr><td class="label">Transaction ID</td><td class="value mono">${payment.gatewayPaymentId}</td></tr>`
+    : '';
+
+  const gstRow = hospital.gstin
+    ? `<p class="meta">GSTIN: ${hospital.gstin}</p>`
+    : '';
+
+  const displayName = hospital.legalName || hospital.name;
+  const tagline = hospital.tagline ? `<p class="tagline">${hospital.tagline}</p>` : '';
+
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Invoice — ${displayName}</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', Arial, sans-serif; color: #1e293b; background: #fff; padding: 48px; }
+  .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 40px; }
+  .hospital-name { font-size: 22px; font-weight: 700; color: #0f172a; }
+  .tagline { font-size: 13px; color: #64748b; margin-top: 3px; }
+  .meta { font-size: 12px; color: #94a3b8; margin-top: 2px; }
+  .invoice-label { font-size: 28px; font-weight: 700; color: #0f172a; text-align: right; }
+  .divider { border: none; border-top: 1px solid #e2e8f0; margin: 24px 0; }
+  table { width: 100%; border-collapse: collapse; }
+  td { padding: 10px 0; font-size: 14px; }
+  td.label { color: #64748b; width: 45%; }
+  td.value { font-weight: 600; color: #0f172a; text-align: right; }
+  td.mono { font-family: monospace; font-size: 12px; }
+  .total-row td { font-size: 17px; font-weight: 700; border-top: 2px solid #e2e8f0; padding-top: 16px; }
+  .status { display: inline-block; padding: 2px 10px; border-radius: 99px; font-size: 13px;
+            font-weight: 600; background: ${statusColor}22; color: ${statusColor}; }
+  .footer { margin-top: 48px; font-size: 12px; color: #94a3b8; text-align: center; }
+  @media print {
+    body { padding: 32px; }
+    @page { margin: 1cm; }
+  }
+</style>
+</head>
+<body>
+<div class="header">
+  <div>
+    <div class="hospital-name">${displayName}</div>
+    ${tagline}
+    ${gstRow}
+  </div>
+  <div class="invoice-label">Invoice</div>
+</div>
+
+<table>
+  <tr><td class="label">Patient</td><td class="value">${patientName}</td></tr>
+  <tr><td class="label">Date</td><td class="value">${fmtDate(payment.createdAt)}</td></tr>
+  <tr><td class="label">Invoice No.</td><td class="value mono">${payment.id}</td></tr>
+  <tr><td class="label">Service</td><td class="value">${paymentTypeLabel(payment.paymentType)}</td></tr>
+  <tr><td class="label">Payment Mode</td><td class="value">${paymentMethodLabel(payment.paymentMethod)}</td></tr>
+  ${txRow}
+  <tr>
+    <td class="label">Status</td>
+    <td class="value"><span class="status">${payment.status.charAt(0).toUpperCase() + payment.status.slice(1)}</span></td>
+  </tr>
+</table>
+
+<hr class="divider" />
+
+<table>
+  <tr class="total-row">
+    <td class="label">Total Amount</td>
+    <td class="value">&#8377;${payment.amount}</td>
+  </tr>
+</table>
+
+<div class="footer">
+  ${displayName} &bull; This is a computer-generated invoice and does not require a signature.
+</div>
+
+<script>window.onload = () => { window.print(); }<\/script>
+</body>
+</html>`;
+
+  const win = window.open('', '_blank', 'width=700,height=900');
+  if (!win) return; // popup blocked
+  win.document.write(html);
+  win.document.close();
+}
+
+// ---------------------------------------------------------------------------
+// Component
+// ---------------------------------------------------------------------------
 
 export function PatientPayments({ session }: RoleViewProps) {
   const [invoicePayment, setInvoicePayment] = useState<Payment | null>(null);
-  const [checkout, setCheckout] = useState<Payment | null>(null);
 
   const patientId = session?.patient?.id ?? '';
-  const { data: payments = [], isLoading, refetch } = useGetPatientPaymentsQuery(patientId, { skip: !patientId });
-
+  const { data: payments = [], isLoading } = useGetPatientPaymentsQuery(patientId, { skip: !patientId });
+  const { data: hospitalData } = useGetCurrentHospitalQuery();
+  const hospital: HospitalMeta = {
+    name: hospitalData?.name ?? 'Hospital',
+    legalName: hospitalData?.legalName,
+    gstin: hospitalData?.gstin,
+    tagline: hospitalData?.tagline,
+  };
 
   const totalPaid = payments.filter((p) => p.status === 'completed').reduce((sum, p) => sum + p.amount, 0);
   const pendingAmount = payments.filter((p) => p.status === 'pending').reduce((sum, p) => sum + p.amount, 0);
@@ -43,32 +176,6 @@ export function PatientPayments({ session }: RoleViewProps) {
           <div className="bg-cyan-50 rounded-lg p-6 border border-cyan-200">
             <p className="text-cyan-700 text-sm font-medium mb-2">Total Transactions</p>
             <p className="text-3xl font-bold text-cyan-600">{payments.length}</p>
-          </div>
-        </div>
-
-        {/* Payment Methods */}
-        <div className="bg-white rounded-lg shadow p-6 space-y-4">
-          <h2 className="text-lg font-semibold text-slate-900">Saved Payment Methods</h2>
-          <div className="grid md:grid-cols-2 gap-4">
-            <div className="border-2 border-cyan-600 rounded-lg p-4 space-y-2">
-              <div className="flex items-center gap-3">
-                <CreditCard className="w-6 h-6 text-cyan-600" />
-                <span className="font-semibold text-slate-900">Debit/Credit Card</span>
-              </div>
-              <p className="text-slate-600 text-sm">Visa ending in 4242</p>
-              <div className="flex gap-2 pt-2">
-                <button className="text-cyan-600 hover:text-cyan-700 font-semibold text-sm">Use</button>
-                <button className="text-red-600 hover:text-red-700 font-semibold text-sm">Remove</button>
-              </div>
-            </div>
-            <div className="border border-slate-300 rounded-lg p-4 space-y-2">
-              <div className="flex items-center gap-3">
-                <CreditCard className="w-6 h-6 text-slate-400" />
-                <span className="font-semibold text-slate-900">Add Payment Method</span>
-              </div>
-              <p className="text-slate-600 text-sm">Securely save a new card or UPI</p>
-              <button className="text-cyan-600 hover:text-cyan-700 font-semibold text-sm">Add New</button>
-            </div>
           </div>
         </div>
 
@@ -102,7 +209,13 @@ export function PatientPayments({ session }: RoleViewProps) {
                       <td className="py-3 px-4 text-slate-700">
                         {fmtDate(payment.createdAt)}
                       </td>
-                      <td className="py-3 px-4 text-slate-700">Appointment Consultation</td>
+                      <td className="py-3 px-4 text-slate-700">
+                        <p className="font-medium">{paymentTypeLabel(payment.paymentType)}</p>
+                        <p className="text-xs text-slate-500 mt-0.5">
+                          {paymentMethodIcon(payment.paymentMethod)}
+                          {paymentMethodLabel(payment.paymentMethod)}
+                        </p>
+                      </td>
                       <td className="py-3 px-4 font-semibold text-slate-900">₹{payment.amount}</td>
                       <td className="py-3 px-4">
                         <span
@@ -117,14 +230,9 @@ export function PatientPayments({ session }: RoleViewProps) {
                           {payment.status.charAt(0).toUpperCase() + payment.status.slice(1)}
                         </span>
                       </td>
-                      <td className="py-3 px-4 text-right space-x-2">
-                        {payment.status === 'pending' && (
-                          <button
-                            onClick={() => setCheckout(payment)}
-                            className="inline-flex items-center gap-1 px-3 py-1 rounded-lg bg-gradient-to-r from-cyan-500 to-brand-teal text-white font-semibold text-sm hover:shadow"
-                          >
-                            <CreditCard className="w-4 h-4" /> Pay Now
-                          </button>
+                      <td className="py-3 px-4 text-right space-x-3">
+                        {payment.status === 'pending' && payment.paymentMethod === 'cash' && (
+                          <span className="text-xs text-orange-600 font-medium">Pay at counter</span>
                         )}
                         <button
                           onClick={() => setInvoicePayment(payment)}
@@ -133,7 +241,10 @@ export function PatientPayments({ session }: RoleViewProps) {
                           <Eye className="w-4 h-4 inline mr-1" />
                           View
                         </button>
-                        <button className="text-cyan-600 hover:text-cyan-700 font-semibold text-sm">
+                        <button
+                          onClick={() => downloadInvoicePdf(payment, session.user.name, hospital)}
+                          className="text-cyan-600 hover:text-cyan-700 font-semibold text-sm"
+                        >
                           <Download className="w-4 h-4 inline mr-1" />
                           Download
                         </button>
@@ -146,200 +257,102 @@ export function PatientPayments({ session }: RoleViewProps) {
           )}
         </div>
 
-        {/* Checkout */}
-        {checkout && (
-          <CheckoutModal
-            payment={checkout}
-            onClose={() => setCheckout(null)}
-            onPaid={() => {
-              setCheckout(null);
-              refetch();
-            }}
-          />
-        )}
-
         {/* Invoice Modal */}
         {invoicePayment && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-            <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full p-8 space-y-4">
-              <h2 className="text-2xl font-bold text-slate-900">Invoice</h2>
-              <div className="space-y-4 text-sm text-slate-700">
-                <div className="flex justify-between">
-                  <span>Patient:</span>
-                  <span className="font-semibold">{session.user.name}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Date:</span>
-                  <span className="font-semibold">
-                    {fmtDate(invoicePayment.createdAt)}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Service:</span>
-                  <span className="font-semibold">Appointment Consultation</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Status:</span>
-                  <span className="font-semibold capitalize">{invoicePayment.status}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Amount:</span>
-                  <span className="font-semibold">₹{invoicePayment.amount}</span>
-                </div>
-                <div className="flex justify-between border-t pt-4">
-                  <span className="font-semibold">Total:</span>
-                  <span className="font-bold text-lg">₹{invoicePayment.amount}</span>
-                </div>
-              </div>
-              <div className="flex gap-3 pt-6">
-                <button
-                  onClick={() => setInvoicePayment(null)}
-                  className="flex-1 px-6 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition"
-                >
-                  Close
-                </button>
-                <button className="flex-1 px-6 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg hover:shadow-lg transition">
-                  <Download className="w-4 h-4 inline mr-2" />
-                  Download PDF
-                </button>
-              </div>
-            </div>
-          </div>
+          <InvoiceModal
+            payment={invoicePayment}
+            patientName={session.user.name}
+            hospital={hospital}
+            onClose={() => setInvoicePayment(null)}
+          />
         )}
       </div>
     </DashboardShell>
   );
 }
 
-type Method = 'upi' | 'card' | 'netbanking' | 'wallet';
+// ---------------------------------------------------------------------------
+// Invoice Modal
+// ---------------------------------------------------------------------------
 
-const METHODS: { id: Method; label: string; icon: typeof Smartphone }[] = [
-  { id: 'upi', label: 'UPI', icon: Smartphone },
-  { id: 'card', label: 'Card', icon: CreditCard },
-  { id: 'netbanking', label: 'Netbanking', icon: Building2 },
-  { id: 'wallet', label: 'Wallet', icon: Wallet },
-];
-
-function CheckoutModal({
+function InvoiceModal({
   payment,
+  patientName,
+  hospital,
   onClose,
-  onPaid,
 }: {
   payment: Payment;
+  patientName: string;
+  hospital: HospitalMeta;
   onClose: () => void;
-  onPaid: () => void;
 }) {
-  const [method, setMethod] = useState<Method>('upi');
-  const [processing, setProcessing] = useState(false);
-
-  const pay = () => {
-    setProcessing(true);
-    // TODO (Phase 3): replace with real Razorpay/payment-gateway integration.
-    // The form fields above (UPI ID, card number, etc.) are UI scaffolding only —
-    // their values are intentionally unused until the gateway is wired up.
-    setTimeout(onPaid, 1600);
-  };
-
-  const inputCls = 'w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/30 focus:border-cyan-500';
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/50" onClick={processing ? undefined : onClose} />
-      <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
-        {/* Header */}
-        <div className="bg-gradient-to-r from-cyan-500 to-brand-teal text-white px-5 py-4">
-          <div className="flex items-center justify-between">
-            <span className="text-sm font-medium opacity-90">Secure Checkout</span>
-            {!processing && (
-              <button onClick={onClose} className="opacity-90 hover:opacity-100"><X className="w-5 h-5" /></button>
-            )}
-          </div>
-          <p className="text-3xl font-bold mt-1">₹{payment.amount.toLocaleString('en-IN')}</p>
-          <p className="text-xs opacity-90">Consultation charges</p>
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full p-8 space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-2xl font-bold text-slate-900">Invoice</h2>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
+            <X className="w-5 h-5" />
+          </button>
         </div>
 
-        {processing ? (
-          <div className="py-14 flex flex-col items-center">
-            <Loader2 className="w-10 h-10 text-cyan-600 animate-spin" />
-            <p className="text-sm text-slate-600 mt-4">Processing payment…</p>
-            <p className="text-xs text-slate-400 mt-1">Do not close this window</p>
+        <div className="space-y-3 text-sm text-slate-700">
+          <div className="flex justify-between">
+            <span className="text-slate-500">Patient</span>
+            <span className="font-semibold">{patientName}</span>
           </div>
-        ) : (
-          <div className="p-5">
-            {/* Method tabs */}
-            <div className="grid grid-cols-4 gap-2 mb-4">
-              {METHODS.map((m) => {
-                const Icon = m.icon;
-                const active = m.id === method;
-                return (
-                  <button
-                    key={m.id}
-                    onClick={() => setMethod(m.id)}
-                    className={`flex flex-col items-center gap-1 py-2.5 rounded-lg border text-xs font-medium transition ${
-                      active ? 'border-cyan-500 bg-cyan-50 text-cyan-700' : 'border-slate-200 text-slate-500 hover:border-slate-300'
-                    }`}
-                  >
-                    <Icon className="w-5 h-5" />
-                    {m.label}
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* Method fields (mock) */}
-            <div className="space-y-3 min-h-[96px]">
-              {method === 'upi' && (
-                <label className="block">
-                  <span className="text-xs font-medium text-slate-600">UPI ID</span>
-                  <input placeholder="yourname@upi" className={`mt-1 ${inputCls}`} />
-                </label>
-              )}
-              {method === 'card' && (
-                <>
-                  <label className="block">
-                    <span className="text-xs font-medium text-slate-600">Card number</span>
-                    <input placeholder="1234 5678 9012 3456" className={`mt-1 ${inputCls}`} />
-                  </label>
-                  <div className="grid grid-cols-2 gap-3">
-                    <input placeholder="MM/YY" className={inputCls} />
-                    <input placeholder="CVV" className={inputCls} />
-                  </div>
-                </>
-              )}
-              {method === 'netbanking' && (
-                <label className="block">
-                  <span className="text-xs font-medium text-slate-600">Select bank</span>
-                  <select className={`mt-1 ${inputCls}`}>
-                    <option>HDFC Bank</option>
-                    <option>State Bank of India</option>
-                    <option>ICICI Bank</option>
-                    <option>Axis Bank</option>
-                  </select>
-                </label>
-              )}
-              {method === 'wallet' && (
-                <label className="block">
-                  <span className="text-xs font-medium text-slate-600">Select wallet</span>
-                  <select className={`mt-1 ${inputCls}`}>
-                    <option>Paytm</option>
-                    <option>PhonePe</option>
-                    <option>Amazon Pay</option>
-                  </select>
-                </label>
-              )}
-            </div>
-
-            <button
-              onClick={pay}
-              className="mt-4 w-full py-3 rounded-lg bg-gradient-to-r from-cyan-500 to-brand-teal text-white font-semibold hover:shadow-lg transition"
-            >
-              Pay ₹{payment.amount.toLocaleString('en-IN')}
-            </button>
-            <p className="flex items-center justify-center gap-1.5 text-xs text-slate-400 mt-3">
-              <ShieldCheck className="w-3.5 h-3.5" /> Demo checkout — no real payment is processed
-            </p>
+          <div className="flex justify-between">
+            <span className="text-slate-500">Date</span>
+            <span className="font-semibold">{fmtDate(payment.createdAt)}</span>
           </div>
-        )}
+          <div className="flex justify-between">
+            <span className="text-slate-500">Invoice No.</span>
+            <span className="font-semibold font-mono text-xs">{payment.id}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-slate-500">Service</span>
+            <span className="font-semibold">{paymentTypeLabel(payment.paymentType)}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-slate-500">Payment Mode</span>
+            <span className="font-semibold">{paymentMethodLabel(payment.paymentMethod)}</span>
+          </div>
+          {payment.gatewayPaymentId && (
+            <div className="flex justify-between">
+              <span className="text-slate-500">Transaction ID</span>
+              <span className="font-semibold font-mono text-xs">{payment.gatewayPaymentId}</span>
+            </div>
+          )}
+          <div className="flex justify-between">
+            <span className="text-slate-500">Status</span>
+            <span className={`font-semibold capitalize ${
+              payment.status === 'completed' ? 'text-green-600' :
+              payment.status === 'pending' ? 'text-orange-600' : 'text-red-600'
+            }`}>
+              {payment.status}
+            </span>
+          </div>
+          <div className="flex justify-between border-t pt-3 mt-3">
+            <span className="font-semibold text-slate-900">Total</span>
+            <span className="font-bold text-lg text-slate-900">₹{payment.amount}</span>
+          </div>
+        </div>
+
+        <div className="flex gap-3 pt-4">
+          <button
+            onClick={onClose}
+            className="flex-1 px-6 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition"
+          >
+            Close
+          </button>
+          <button
+            onClick={() => downloadInvoicePdf(payment, patientName, hospital)}
+            className="flex-1 px-6 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg hover:shadow-lg transition"
+          >
+            <Download className="w-4 h-4 inline mr-2" />
+            Download PDF
+          </button>
+        </div>
       </div>
     </div>
   );
