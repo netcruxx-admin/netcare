@@ -5,7 +5,8 @@ import { Formik, Form } from 'formik';
 import * as Yup from 'yup';
 import {
   Building2, MapPin, Phone, UserCog, BedDouble, Clock, Image as ImageIcon,
-  ShieldCheck, FileText, CreditCard, Lock, Upload, Trash2,
+   Upload, Trash2,
+  ShieldCheck, FileText, CreditCard, Lock, Smartphone, CheckCircle2, Eye, EyeOff,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { DashboardShell } from '@/components/DashboardShell';
@@ -19,6 +20,8 @@ import {
   useUpdateMyHospitalSettingsMutation,
   useUploadMyHospitalLogoMutation,
   useRemoveMyHospitalLogoMutation,
+  useGetRazorpaySettingsQuery,
+  useUpdateRazorpaySettingsMutation,
   type HospitalSelfUpdateBody,
 } from '@/store/api';
 
@@ -80,6 +83,138 @@ function ReadOnly({ label, value }: { label: string; value?: string | number | n
         {blank ? '—' : value}
       </dd>
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Razorpay settings section (independent form — separate save cycle)
+// ---------------------------------------------------------------------------
+
+function RazorpaySettingsSection({ canEdit }: { canEdit: boolean }) {
+  const { data: current, isLoading } = useGetRazorpaySettingsQuery();
+  const [save, { isLoading: isSaving }] = useUpdateRazorpaySettingsMutation();
+  const [keyId, setKeyId] = useState('');
+  const [keySecret, setKeySecret] = useState('');
+  const [showSecret, setShowSecret] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleSave = async () => {
+    setError('');
+    if (!keyId.trim() || !keySecret.trim()) {
+      setError('Both Key ID and Key Secret are required');
+      return;
+    }
+    if (!keyId.trim().startsWith('rzp_')) {
+      setError('Key ID should start with rzp_test_ or rzp_live_');
+      return;
+    }
+    try {
+      await save({ keyId: keyId.trim(), keySecret: keySecret.trim() }).unwrap();
+      toast.success('Razorpay settings saved');
+      setKeyId('');
+      setKeySecret('');
+    } catch (err) {
+      const message = apiError(err, 'Could not save Razorpay settings');
+      setError(message);
+      toast.error(message);
+    }
+  };
+
+  return (
+    <Section
+      icon={Smartphone}
+      title="Payment gateway (Razorpay)"
+      blurb="Connect your hospital's own Razorpay account. Payments from patients will go directly to your account."
+    >
+      {isLoading ? (
+        <p className="text-sm text-slate-400">Loading…</p>
+      ) : (
+        <div className="space-y-4">
+          {/* Current status */}
+          {current?.keyId ? (
+            <div className="flex items-center gap-3 bg-green-50 border border-green-200 rounded-lg px-4 py-3 text-sm">
+              <CheckCircle2 className="w-4 h-4 text-green-600 shrink-0" />
+              <div>
+                <p className="font-medium text-green-800">Razorpay connected</p>
+                <p className="text-green-700 font-mono text-xs mt-0.5">{current.keyId}</p>
+                <p className="text-green-600 text-xs">
+                  Secret: {current.hasSecret ? '●●●●●●●●●●●● (configured)' : 'not set'}
+                </p>
+              </div>
+            </div>
+          ) : (
+            <div className="bg-slate-50 border border-slate-200 rounded-lg px-4 py-3 text-sm text-slate-500">
+              No Razorpay account connected yet.
+              {' '}Payments currently fall back to the platform keys.
+            </div>
+          )}
+
+          {/* Update form */}
+          {canEdit && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Key ID <span className="text-xs text-slate-400">(rzp_test_… or rzp_live_…)</span>
+                </label>
+                <input
+                  type="text"
+                  value={keyId}
+                  onChange={(e) => setKeyId(e.target.value)}
+                  placeholder={current?.keyId ? 'Enter new Key ID to rotate' : 'rzp_live_xxxxxxxxxxxx'}
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-400"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Key Secret
+                </label>
+                <div className="relative">
+                  <input
+                    type={showSecret ? 'text' : 'password'}
+                    value={keySecret}
+                    onChange={(e) => setKeySecret(e.target.value)}
+                    placeholder={current?.hasSecret ? 'Enter new secret to rotate' : 'Your Razorpay key secret'}
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-400"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowSecret((v) => !v)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                  >
+                    {showSecret ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {error && (
+            <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+              {error}
+            </p>
+          )}
+
+          {canEdit && (
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={handleSave}
+                disabled={isSaving || !keyId || !keySecret}
+                className="px-5 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white text-sm font-semibold rounded-lg shadow hover:opacity-95 disabled:opacity-50 transition"
+              >
+                {isSaving ? 'Saving…' : current?.keyId ? 'Update keys' : 'Connect Razorpay'}
+              </button>
+            </div>
+          )}
+
+          <p className="text-xs text-slate-400">
+            Get your API keys from the{' '}
+            <span className="font-medium">Razorpay Dashboard → Settings → API Keys</span>.
+            The secret is stored encrypted and is never shown again after saving.
+          </p>
+        </div>
+      )}
+    </Section>
   );
 }
 
@@ -436,6 +571,8 @@ export function HospitalSettings({ session }: RoleViewProps) {
               </dl>
             </Section>
           )}
+
+          <RazorpaySettingsSection canEdit={canEdit} />
         </div>
       )}
     </DashboardShell>

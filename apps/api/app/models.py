@@ -199,6 +199,12 @@ class HospitalProfile(Base):
     notes = Column(Text, default="")
     updated_at = Column(String, default="")
 
+    # --- Payment gateway (per-hospital Razorpay account) -----------------
+    # Nullable: hospitals that have not connected a gateway use the platform
+    # fallback keys (or get a 503 if those are also absent).
+    razorpay_key_id = Column(String, nullable=True)
+    razorpay_key_secret = Column(String, nullable=True)
+
 
 class HospitalLicence(Base):
     """One statutory licence or registration held by a hospital.
@@ -524,11 +530,22 @@ class Payment(Base):
 
     id = Column(String, primary_key=True)
     hospital_id = Column(String, ForeignKey("hospitals.id", ondelete="CASCADE"), index=True, nullable=False)
-    appointment_id = Column(String, index=True, nullable=False)
+    # appointment_id is nullable: pharmacy and lab payments are not tied to an appointment.
+    appointment_id = Column(String, index=True, nullable=True)
+    # medication_order_id is set for pharmacy billing.
+    medication_order_id = Column(String, index=True, nullable=True)
     patient_id = Column(String, index=True, nullable=False)
     amount = Column(Float, nullable=False)
+    # consultation | pharmacy | lab
+    payment_type = Column(String, default="consultation")
     status = Column(String, default="pending")  # pending | completed | failed
-    payment_method = Column(String, default="")
+    payment_method = Column(String, default="")  # cash | razorpay
+    # Gateway fields — only populated for online (Razorpay) payments.
+    # gateway_order_id is written at initiate time (server-created Razorpay order).
+    # gateway_payment_id is written at verify time (Razorpay payment id from the
+    # checkout callback), and the presence of both confirms the signature was checked.
+    gateway_order_id = Column(String, nullable=True)
+    gateway_payment_id = Column(String, nullable=True)
     created_at = Column(String, nullable=False)
 
 
@@ -594,7 +611,8 @@ class MedicationOrder(Base):
 
     id = Column(String, primary_key=True)
     hospital_id = Column(String, ForeignKey("hospitals.id", ondelete="CASCADE"), index=True, nullable=False)
-    appointment_id = Column(String, index=True, nullable=False)
+    # Nullable: orders may be raised directly (ward round, OTC) without an appointment.
+    appointment_id = Column(String, index=True, nullable=True)
     patient_id = Column(String, index=True, nullable=False)
     doctor_id = Column(String, nullable=False)
     # The prescription this order was raised from, when it came from one. Null

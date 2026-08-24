@@ -452,6 +452,7 @@ class HospitalOperationalOut(CamelModel):
     """The operational settings the booking UI needs — public, no auth."""
     lunch_break_start: str = "12:00"
     lunch_break_end: str = "14:00"
+    appointment_slot_minutes: int = 15
 
 
 class HospitalOperationalUpdate(CamelModel):
@@ -1175,21 +1176,110 @@ class MedicalRecordOut(OutModel):
 
 # ---------- Payment ----------
 class PaymentCreate(CamelModel):
-    appointment_id: str
+    appointment_id: Optional[str] = None
+    medication_order_id: Optional[str] = None
     patient_id: str
     amount: float
     payment_method: str = ""
+    payment_type: str = "consultation"
     status: PaymentStatus = "pending"
 
 
 class PaymentOut(OutModel):
     id: str
-    appointment_id: str
+    appointment_id: Optional[str] = None
+    medication_order_id: Optional[str] = None
     patient_id: str
     amount: float
+    payment_type: str = "consultation"
     status: PaymentStatus = "pending"
     payment_method: str = ""
+    gateway_order_id: Optional[str] = None
+    gateway_payment_id: Optional[str] = None
     created_at: str
+
+
+class PharmacyBillBody(CamelModel):
+    """Pharmacist chooses how payment was collected when billing a dispensed order."""
+    payment_method: str = "cash"  # cash | razorpay
+
+
+class PharmacyBillOut(OutModel):
+    payment: PaymentOut
+    amount: float
+    medicine_name: str
+    quantity: int
+    unit_price: float
+
+
+# --- Online payment: initiate → Razorpay checkout → verify ---
+
+class PaymentInitiateBody(CamelModel):
+    """What the frontend sends to start an online payment before booking.
+
+    The backend fetches the doctor's consultation_fee from the DB so the amount
+    cannot be tampered with on the client. The appointment fields are carried
+    along so /payments/verify can create the appointment atomically on success.
+    """
+    doctor_id: str
+    patient_id: str
+    department_id: str
+    date: str
+    time: str
+    reason: str = ""
+    notes: str = ""
+    mode: AppointmentMode = "in-person"
+    follow_up_of: Optional[str] = None
+
+
+class PaymentInitiateOut(OutModel):
+    """Everything the frontend needs to open the Razorpay checkout."""
+    order_id: str       # rzp order id — pass to Razorpay checkout as `order_id`
+    amount: float       # INR (not paise) — display in the UI
+    amount_paise: int   # paise — pass to Razorpay checkout as `amount`
+    currency: str = "INR"
+    key_id: str         # rzp_test_... or rzp_live_... — pass as `key`
+
+
+class PaymentVerifyBody(CamelModel):
+    """Razorpay callback values + original booking details.
+
+    The three gateway fields come straight from the Razorpay handler callback
+    object. Everything else is the same payload the initiate call received, so
+    the server can create the appointment after confirming the payment.
+    """
+    # Razorpay handler callback fields
+    razorpay_order_id: str
+    razorpay_payment_id: str
+    razorpay_signature: str
+    # Booking details (mirroring PaymentInitiateBody)
+    doctor_id: str
+    patient_id: str
+    department_id: str
+    date: str
+    time: str
+    reason: str = ""
+    notes: str = ""
+    mode: AppointmentMode = "in-person"
+    follow_up_of: Optional[str] = None
+
+
+class PaymentVerifyOut(OutModel):
+    """Returned on successful verification: the newly-created appointment and payment."""
+    appointment: AppointmentOut
+    payment: PaymentOut
+
+
+class RazorpaySettingsUpdate(CamelModel):
+    """Admin submits their hospital's Razorpay credentials."""
+    key_id: str
+    key_secret: str
+
+
+class RazorpaySettingsOut(OutModel):
+    """What is returned after saving — the secret is never echoed back."""
+    key_id: str
+    has_secret: bool   # True when a secret is stored; the value itself is withheld
 
 
 # ---------- Prescription ----------
@@ -1306,7 +1396,7 @@ class MedicineOut(OutModel):
 class MedicationOrderOut(OutModel):
     id: str
     hospital_id: Optional[str] = None
-    appointment_id: str = ""
+    appointment_id: Optional[str] = None
     patient_id: str
     doctor_id: str
     prescription_id: Optional[str] = None
@@ -1324,10 +1414,14 @@ class MedicationOrderOut(OutModel):
     patient_name: Optional[str] = None
     patient_phone: Optional[str] = None
     doctor_name: Optional[str] = None
+    # Populated server-side from medicine.price so the pharmacist can preview
+    # the bill amount without a separate medicine fetch.
+    unit_price: float = 0.0
+    already_billed: bool = False
 
 
 class MedicationOrderCreate(CamelModel):
-    appointment_id: str
+    appointment_id: Optional[str] = None
     patient_id: str
     #: Who prescribed it. Omitted when the caller is the doctor — the server
     #: fills in their own id, because the prescriber is a fact about what

@@ -67,6 +67,14 @@ class Settings(BaseSettings):
     # Per-file ceiling. Registration scans are photographs of certificates; 10MB
     # is generous for one and small enough that a truncated read is cheap.
     max_upload_mb: int = 10
+    # --- Razorpay payment gateway ---
+    # Obtain from the Razorpay dashboard → Settings → API Keys. Test-mode keys
+    # (prefix rzp_test_) work without real money and are safe in development.
+    # Leave empty to disable the online-payment flow at runtime; cash payments
+    # do not use these at all.
+    razorpay_key_id: str = ""
+    razorpay_key_secret: str = ""
+
     # Bootstrap credentials for the platform superadmin, created on first boot.
     # The default password is a demo convenience and is refused in production —
     # set SUPERADMIN_PASSWORD (and ideally SUPERADMIN_EMAIL) before deploying.

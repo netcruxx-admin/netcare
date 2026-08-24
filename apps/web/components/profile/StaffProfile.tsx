@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { Formik, Form } from 'formik';
+import { Formik, Form, Field } from 'formik';
 import * as Yup from 'yup';
 import { Award, HeartPulse, Loader2, Mail, Phone, Stethoscope } from 'lucide-react';
 import { toast } from 'sonner';
@@ -66,13 +66,10 @@ export function StaffProfile({ session }: RoleViewProps) {
   const [updateDoctor] = useUpdateDoctorMutation();
   const [updateOwnAccount] = useUpdateOwnAccountMutation();
 
-  const specializationOptions = useMemo(() => {
-    const names = departments.map((d) => d.name);
-    if (doctor?.specialization && !names.includes(doctor.specialization)) {
-      names.unshift(doctor.specialization);
-    }
-    return names.map((name) => ({ value: name, label: name }));
-  }, [departments, doctor]);
+  const departmentOptions = useMemo(
+    () => departments.map((d) => ({ value: d.id, label: d.name })),
+    [departments],
+  );
 
   const schema = useMemo(() => {
     const base = baseFields();
@@ -136,11 +133,12 @@ export function StaffProfile({ session }: RoleViewProps) {
         {/* Edit form */}
         <div className="bg-white rounded-lg shadow p-6">
           <h3 className="font-semibold text-slate-900 mb-4">Edit Profile</h3>
-          <Formik<{name: string; email: string; phone: string; specialization: string; qualification: string; experienceYears: string; consultationFee: string}>
+          <Formik<{name: string; email: string; phone: string; departmentId: string; specialization: string; qualification: string; experienceYears: string; consultationFee: string}>
             initialValues={{
               name: currentUser?.name ?? '',
               email: currentUser?.email ?? '',
               phone: toPhoneDigits(currentUser?.phone ?? ''),
+              departmentId: doctor?.departmentId ?? '',
               specialization: doctor?.specialization ?? '',
               qualification: doctor?.qualification ?? '',
               experienceYears: String(doctor?.experienceYears ?? ''),
@@ -162,6 +160,7 @@ export function StaffProfile({ session }: RoleViewProps) {
                       name,
                       email,
                       phone,
+                      departmentId: values.departmentId || undefined,
                       specialization: values.specialization,
                       qualification: values.qualification.trim(),
                       experienceYears: Number(values.experienceYears),
@@ -200,13 +199,27 @@ export function StaffProfile({ session }: RoleViewProps) {
               <PhoneField name="phone" label="Phone Number" required />
               {isDoctor && (
                 <>
-                  <div className="sm:col-span-2">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Department</label>
+                    <Field name="departmentId">
+                      {({ field }: { field: { value: string; onChange: React.ChangeEventHandler; onBlur: React.FocusEventHandler } }) => (
+                        <select
+                          {...field}
+                          className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-cyan-500 bg-white"
+                        >
+                          <option value="">Select department…</option>
+                          {departmentOptions.map((o) => (
+                            <option key={o.value} value={o.value}>{o.label}</option>
+                          ))}
+                        </select>
+                      )}
+                    </Field>
+                  </div>
+                  <div>
                     <FormField
                       name="specialization"
                       label="Specialization"
-                      as="select"
-                      placeholder="Select a department"
-                      options={specializationOptions}
+                      placeholder="e.g. Interventional Cardiology"
                       required
                     />
                   </div>
