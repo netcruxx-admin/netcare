@@ -545,9 +545,6 @@ LOGO_CONTENT_TYPES = {
 @router.put("/me/logo", response_model=schemas.HospitalProfileOut)
 def upload_my_logo(
     file: UploadFile = File(...),
-@router.put("/me/razorpay", response_model=schemas.RazorpaySettingsOut)
-def update_my_razorpay_settings(
-    body: schemas.RazorpaySettingsUpdate,
     db: Session = Depends(get_db),
     _: str = Depends(require_permission("hospital.profile.manage")),
     tenant_id: str = Depends(get_tenant_id),
@@ -566,13 +563,6 @@ def update_my_razorpay_settings(
             "A logo must be a JPEG, PNG or WebP image",
         )
 
-    """Store this hospital's own Razorpay Key ID and Key Secret.
-
-    The secret is written to the DB but never returned — only `has_secret`
-    comes back so the UI can show a masked indicator. To rotate, submit new
-    values; to clear, use DELETE /hospitals/me/razorpay (not implemented yet,
-    since no hospital has asked for it).
-    """
     profile = _profile_of(db, tenant_id)
     if profile is None:
         profile = models.HospitalProfile(id=new_id("hprof"), hospital_id=tenant_id)
@@ -601,6 +591,50 @@ def update_my_razorpay_settings(
 
 @router.delete("/me/logo", response_model=schemas.HospitalProfileOut)
 def remove_my_logo(
+    db: Session = Depends(get_db),
+    _: str = Depends(require_permission("hospital.profile.manage")),
+    tenant_id: str = Depends(get_tenant_id),
+):
+    """Clear the logo. Screens fall back to the platform mark."""
+    profile = _profile_of(db, tenant_id)
+    if profile is None or not profile.logo_url:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "No logo to remove")
+
+    previous = profile.logo_url
+    profile.logo_url = ""
+    profile.updated_at = now_iso()
+    db.commit()
+    db.refresh(profile)
+    storage.delete_file(previous)
+    audit.record_subject("hospital_profile", profile.id, detail="logo removed")
+    return _profile_out(profile)
+
+
+# ----- Payment gateway credentials -------------------------------------------
+#
+# Each hospital settles into its own Razorpay account, so the keys live on the
+# tenant rather than in platform config. The secret is write-only: it goes in
+# and never comes back out — see RazorpaySettingsOut.
+
+
+@router.put("/me/razorpay", response_model=schemas.RazorpaySettingsOut)
+def update_my_razorpay_settings(
+    body: schemas.RazorpaySettingsUpdate,
+    db: Session = Depends(get_db),
+    _: str = Depends(require_permission("hospital.profile.manage")),
+    tenant_id: str = Depends(get_tenant_id),
+):
+    """Store this hospital's own Razorpay Key ID and Key Secret.
+
+    The secret is written to the DB but never returned — only `has_secret`
+    comes back so the UI can show a masked indicator. To rotate, submit new
+    values; to clear, use DELETE /hospitals/me/razorpay (not implemented yet,
+    since no hospital has asked for it).
+    """
+    profile = _profile_of(db, tenant_id)
+    if profile is None:
+        profile = models.HospitalProfile(id=new_id("hprof"), hospital_id=tenant_id)
+        db.add(profile)
 
     profile.razorpay_key_id = body.key_id.strip()
     profile.razorpay_key_secret = body.key_secret.strip()
@@ -621,19 +655,6 @@ def get_my_razorpay_settings(
     _: str = Depends(require_permission("hospital.profile.manage")),
     tenant_id: str = Depends(get_tenant_id),
 ):
-    """Clear the logo. Screens fall back to the platform mark."""
-    profile = _profile_of(db, tenant_id)
-    if profile is None or not profile.logo_url:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "No logo to remove")
-
-    previous = profile.logo_url
-    profile.logo_url = ""
-    profile.updated_at = now_iso()
-    db.commit()
-    db.refresh(profile)
-    storage.delete_file(previous)
-    audit.record_subject("hospital_profile", profile.id, detail="logo removed")
-    return _profile_out(profile)
     """Return current Razorpay configuration (key_id + has_secret indicator)."""
     profile = _profile_of(db, tenant_id)
     return schemas.RazorpaySettingsOut(
