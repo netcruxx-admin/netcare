@@ -245,7 +245,10 @@ def verify_payment(
     """Step 2 of the online booking flow (called from the Razorpay handler callback).
 
     Verifies the HMAC-SHA256 signature Razorpay sends with every successful
-    payment. A forged or replayed signature is rejected with 400.
+    payment. A forged signature is rejected with 400. A *replayed* one is not
+    rejected — it is answered with the appointment that payment already bought,
+    because the gateway retries and users double-click. Either way it can never
+    buy a second booking.
 
     On success, creates the appointment and payment record in a single
     transaction. If either insert fails the whole thing rolls back — no
@@ -270,6 +273,39 @@ def verify_payment(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Payment signature verification failed. Do not retry — contact support.",
+        )
+
+    # Already recorded? Then this is a repeat of a payment we have seen, and
+    # the answer is the booking it already bought.
+    #
+    # A Razorpay signature is a deterministic HMAC, so it never stops being
+    # valid — without this, re-POSTing one successful checkout response minted
+    # a fresh appointment every time. Returning the original rather than
+    # refusing is deliberate: the gateway's callback can fire twice on a flaky
+    # connection and a double-click must not cost the patient a second booking,
+    # nor see them told their completed payment failed.
+    existing = (
+        scoped(db, models.Payment, tenant_id)
+        .filter(models.Payment.gateway_payment_id == body.razorpay_payment_id)
+        .first()
+    )
+    if existing is not None:
+        prior = (
+            scoped(db, models.Appointment, tenant_id)
+            .filter(models.Appointment.id == existing.appointment_id)
+            .first()
+        )
+        if prior is not None:
+            return schemas.PaymentVerifyOut(
+                appointment=schemas.AppointmentOut.model_validate(prior),
+                payment=schemas.PaymentOut.model_validate(existing),
+            )
+        # A payment whose appointment has since been deleted. Re-creating one
+        # from a replayed callback would resurrect a cancelled booking, so say
+        # so rather than quietly booking again.
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="This payment has already been used and its appointment no longer exists.",
         )
 
     # Tenant-scope all three ids (same as create_appointment).

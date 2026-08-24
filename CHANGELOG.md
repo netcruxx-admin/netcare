@@ -4,6 +4,29 @@ Notable changes to CarbonHealth. Format follows [Keep a Changelog](https://keepa
 
 ## [Unreleased]
 
+### Fixed — one Razorpay payment could buy any number of appointments
+
+`/payments/verify` checked the HMAC signature and inserted, with nothing looking
+for a payment id it had already recorded. A Razorpay signature is a
+deterministic HMAC over `<order_id>|<payment_id>`, so it stays valid forever:
+re-POSTing one successful checkout response minted a fresh appointment and a
+fresh `completed` payment row every time. Reproduced before the fix — three
+replays of a single payment produced three appointments. The handler's
+docstring claimed replays were rejected; they were not.
+
+Verify is now idempotent. A payment id already on file returns the appointment
+it bought rather than an error, because Razorpay's callback fires twice on a
+flaky connection and users double-click — telling someone their completed
+payment failed is worse than telling them what it bought. A unique partial
+index on `payments.gateway_payment_id` (`t5u6v7w8x9y0`) sits under that check,
+since two concurrent verifies race past an application-level lookup and only
+the database can settle it. The migration collapses any duplicates already
+recorded, leaving the appointments they created alone — cancelling a real
+booking from a migration is not a migration's call.
+
+Six tests, including that the guard is tenant-scoped so two hospitals cannot
+collide on a payment id, and that a forged signature is still refused outright.
+
 ### Fixed — the public tenant endpoint published every hospital's PAN
 
 `GET /hospitals/current` resolves a tenant from the request host and answers
