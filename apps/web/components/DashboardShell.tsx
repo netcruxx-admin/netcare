@@ -205,6 +205,21 @@ export function DashboardShell({
             <Link
               key={item.href}
               href={navHref(item.href)}
+              /* The sidebar lists every route the caller may reach — up to 31,
+                 all mounted at once — and a prefetch is keyed by the router
+                 state tree. Navigating changes that tree, so the whole menu
+                 re-prefetches on every page change: five navigations showed up
+                 as five copies of each route in the network log. Superadmins pay
+                 twice over, since ?h= rewrites all 31 hrefs on hospital switch.
+
+                 Prefetch would be worth it if the route payload were the slow
+                 part. It is not — every screen fetches its own data through RTK
+                 Query on mount, so the round trip the user waits on happens
+                 after navigation either way.
+
+                 In development it also triggers compilation of each uncompiled
+                 route (~2s cold vs ~25ms warm). */
+              prefetch={false}
               onClick={() => setOpen(false)}
               className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition ${active
                   ? 'bg-gradient-to-r from-cyan-500 to-brand-teal text-white shadow'
