@@ -215,6 +215,45 @@ export interface HospitalPublicConfig {
   status: string;
 }
 
+/** One bill, assembled server-side.
+ *
+ *  The seller block is why this exists: a bill needs the hospital's legal name
+ *  and GSTIN, which the public `/hospitals/current` deliberately no longer
+ *  carries. A signed-in patient can be answered properly.
+ */
+export interface InvoiceSeller {
+  name: string;
+  legalName: string;
+  gstin: string;
+  address: string;
+  phone: string;
+  email: string;
+  letterheadUrl: string;
+  logoUrl: string;
+}
+
+export interface InvoiceLine {
+  description: string;
+  quantity: number;
+  unitPrice: number;
+  amount: number;
+}
+
+export interface Invoice {
+  paymentId: string;
+  number: string;
+  issuedAt: string;
+  paymentType: string;
+  paymentMethod: string;
+  status: string;
+  currency: string;
+  seller: InvoiceSeller;
+  patientName: string;
+  patientPhone: string;
+  lines: InvoiceLine[];
+  total: number;
+}
+
 /** Operational config needed by the booking UI. Public endpoint, no auth. */
 export interface HospitalOperational {
   lunchBreakStart: string;
@@ -794,6 +833,21 @@ export const api = createApi({
     }),
     removeMyHospitalLogo: build.mutation<HospitalProfile, void>({
       query: () => ({ url: '/hospitals/me/logo', method: 'DELETE' }),
+      invalidatesTags: ['Hospital'],
+    }),
+    getInvoice: build.query<Invoice, string>({
+      query: (paymentId) => `/payments/${paymentId}/invoice`,
+    }),
+    uploadMyLetterhead: build.mutation<HospitalProfile, File>({
+      query: (file) => {
+        const form = new FormData();
+        form.append('file', file);
+        return { url: '/hospitals/me/letterhead', method: 'PUT', body: form };
+      },
+      invalidatesTags: ['Hospital'],
+    }),
+    removeMyLetterhead: build.mutation<HospitalProfile, void>({
+      query: () => ({ url: '/hospitals/me/letterhead', method: 'DELETE' }),
       invalidatesTags: ['Hospital'],
     }),
     getMyHospitalSettings: build.query<HospitalDetail, void>({
@@ -1692,6 +1746,9 @@ export const {
   useListHospitalsQuery,
   useGetHospitalDetailQuery,
   useGetMyHospitalSettingsQuery,
+  useLazyGetInvoiceQuery,
+  useUploadMyLetterheadMutation,
+  useRemoveMyLetterheadMutation,
   useUploadMyHospitalLogoMutation,
   useRemoveMyHospitalLogoMutation,
   useUpdateMyHospitalSettingsMutation,

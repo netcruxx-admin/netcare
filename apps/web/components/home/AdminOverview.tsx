@@ -123,7 +123,14 @@ export function AdminOverview({ session }: RoleViewProps) {
 
     const scoped = appointments.filter((a) => deptMatch(a) && inWindow(a.date));
     const scopedIds = new Set(scoped.map((a) => a.id));
-    const scopedPay = payments.filter((p) => scopedIds.has(p.appointmentId));
+    // A pharmacy payment has no appointment — it is a counter sale. Matching on
+    // appointment id alone dropped that revenue from the dashboard entirely,
+    // which is worse than attributing it loosely: money taken is money taken.
+    // It is counted whenever the view is not narrowed to one department, since
+    // there is no department to attribute it to.
+    const scopedPay = payments.filter((p) =>
+      p.appointmentId ? scopedIds.has(p.appointmentId) : deptId === 'all',
+    );
 
     const byStatus = (s: string) => scoped.filter((a) => a.status === s).length;
     const revenue = scopedPay.filter((p) => p.status === 'completed').reduce((x, p) => x + p.amount, 0);
@@ -167,7 +174,11 @@ export function AdminOverview({ session }: RoleViewProps) {
     const revenueByDept = deptScope.map((dep) => ({
       name: dep.name,
       amount: scopedPay
-        .filter((p) => p.status === 'completed' && apptById.get(p.appointmentId)?.departmentId === dep.id)
+        .filter((p) =>
+          p.status === 'completed'
+          && !!p.appointmentId
+          && apptById.get(p.appointmentId)?.departmentId === dep.id,
+        )
         .reduce((x, p) => x + p.amount, 0),
     }));
 

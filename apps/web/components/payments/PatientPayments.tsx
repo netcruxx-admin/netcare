@@ -6,7 +6,13 @@ import type { Payment } from '@/lib/types';
 import { fmtDate } from '@/lib/date';
 import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
-import { useGetCurrentHospitalQuery, useGetPatientPaymentsQuery } from '@/store/api';
+import {
+  useGetCurrentHospitalQuery,
+  useGetPatientPaymentsQuery,
+  useLazyGetInvoiceQuery,
+} from '@/store/api';
+import { toast } from 'sonner';
+import { apiError } from '@/lib/apiError';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -42,6 +48,11 @@ interface HospitalMeta {
   legalName?: string;
   gstin?: string;
   tagline?: string;
+  address?: string;
+  phone?: string;
+  /** Printed across the top when the hospital has uploaded one. */
+  letterheadUrl?: string;
+  number?: string;
 }
 
 function downloadInvoicePdf(payment: Payment, patientName: string, hospital: HospitalMeta) {
@@ -145,11 +156,28 @@ export function PatientPayments({ session }: RoleViewProps) {
   const patientId = session?.patient?.id ?? '';
   const { data: payments = [], isLoading } = useGetPatientPaymentsQuery(patientId, { skip: !patientId });
   const { data: hospitalData } = useGetCurrentHospitalQuery();
-  const hospital: HospitalMeta = {
-    name: hospitalData?.name ?? 'Hospital',
-    legalName: hospitalData?.legalName,
-    gstin: hospitalData?.gstin,
-    tagline: hospitalData?.tagline,
+  // The seller block — legal name, GSTIN, letterhead — is fetched per bill
+  // from GET /payments/{id}/invoice. It cannot come from the hospital config
+  // here: that endpoint is public, and a PAN or GSTIN has no business being
+  // readable by anyone who loads the login page.
+  const [fetchInvoice] = useLazyGetInvoiceQuery();
+
+  const printInvoice = async (payment: Payment, name: string) => {
+    try {
+      const invoice = await fetchInvoice(payment.id).unwrap();
+      downloadInvoicePdf(payment, name, {
+        name: invoice.seller.name || hospitalData?.name || 'Hospital',
+        legalName: invoice.seller.legalName,
+        gstin: invoice.seller.gstin,
+        tagline: hospitalData?.tagline,
+        address: invoice.seller.address,
+        phone: invoice.seller.phone,
+        letterheadUrl: invoice.seller.letterheadUrl,
+        number: invoice.number,
+      });
+    } catch (err) {
+      toast.error(apiError(err, 'Could not prepare the invoice'));
+    }
   };
 
   const totalPaid = payments.filter((p) => p.status === 'completed').reduce((sum, p) => sum + p.amount, 0);
@@ -242,7 +270,7 @@ export function PatientPayments({ session }: RoleViewProps) {
                           View
                         </button>
                         <button
-                          onClick={() => downloadInvoicePdf(payment, session.user.name, hospital)}
+                          onClick={() => printInvoice(payment, session.user.name)}
                           className="text-cyan-600 hover:text-cyan-700 font-semibold text-sm"
                         >
                           <Download className="w-4 h-4 inline mr-1" />
@@ -262,7 +290,7 @@ export function PatientPayments({ session }: RoleViewProps) {
           <InvoiceModal
             payment={invoicePayment}
             patientName={session.user.name}
-            hospital={hospital}
+            onPrint={printInvoice}
             onClose={() => setInvoicePayment(null)}
           />
         )}
@@ -278,12 +306,13 @@ export function PatientPayments({ session }: RoleViewProps) {
 function InvoiceModal({
   payment,
   patientName,
-  hospital,
+  onPrint,
   onClose,
 }: {
   payment: Payment;
   patientName: string;
-  hospital: HospitalMeta;
+  /** Fetches the seller block and opens the printable bill. */
+  onPrint: (payment: Payment, patientName: string) => void;
   onClose: () => void;
 }) {
   return (
@@ -346,7 +375,7 @@ function InvoiceModal({
             Close
           </button>
           <button
-            onClick={() => downloadInvoicePdf(payment, patientName, hospital)}
+            onClick={() => onPrint(payment, patientName)}
             className="flex-1 px-6 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg hover:shadow-lg transition"
           >
             <Download className="w-4 h-4 inline mr-2" />

@@ -5,13 +5,14 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.orm import Session
 
-from .. import consent as consent_lib, models, schemas
+from .. import consent as consent_lib, models, schemas, storage
 from ..auth import get_current_user
 from ..authz import SCOPE_OWN, caller_patient_id, own_record_filter, require_permission
 from ..config import settings
 from ..database import get_db
 from ..tenancy import assert_body_in_tenant, assert_in_tenant, get_tenant_id, scoped
 from ..utils import ListQuery, list_params, new_id, now_iso, paginate, text_search
+from ..utils import doctor_display, patient_display
 
 router = APIRouter(prefix="/payments", tags=["payments"])
 
@@ -101,6 +102,127 @@ def list_payments(
     query = text_search(query, [models.Payment.payment_method, models.Payment.id], params.q)
     query = query.order_by(models.Payment.created_at.desc(), models.Payment.id)
     return paginate(query, response, params.limit, params.offset).all()
+
+
+@router.get("/{payment_id}/invoice", response_model=schemas.InvoiceOut)
+def get_invoice(
+    payment_id: str,
+    db: Session = Depends(get_db),
+    user: models.User = Depends(get_current_user),
+    scope: str = Depends(require_permission("payments.read")),
+    tenant_id: str = Depends(get_tenant_id),
+):
+    """One bill, assembled server-side.
+
+    The seller block is the reason this endpoint exists. A bill carries the
+    hospital's legal name and GSTIN, and those are exactly what
+    `GET /hospitals/current` stopped serving when it was narrowed — that
+    endpoint is unauthenticated. The patient reading their own bill *is*
+    signed in, so the answer belongs here rather than in a public response
+    everyone can read.
+
+    Scope `own` restricts a patient to their own bills, the same filter the
+    list endpoint uses; a bill that is not yours is 404, not 403.
+    """
+    query = scoped(db, models.Payment, tenant_id).filter(models.Payment.id == payment_id)
+    if scope == SCOPE_OWN:
+        query = query.filter(own_record_filter(db, user, models.Payment))
+    payment = query.first()
+    if payment is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Invoice not found")
+
+    hospital = db.get(models.Hospital, tenant_id)
+    profile = (
+        db.query(models.HospitalProfile)
+        .filter(models.HospitalProfile.hospital_id == tenant_id)
+        .first()
+    )
+    address = ", ".join(
+        part for part in (
+            getattr(profile, "address_line1", "") or "",
+            getattr(profile, "address_line2", "") or "",
+            getattr(profile, "city", "") or "",
+            getattr(profile, "state", "") or "",
+            getattr(profile, "pincode", "") or "",
+        ) if part
+    ) if profile else ""
+
+    seller = schemas.InvoiceSeller(
+        name=hospital.name if hospital else "",
+        legal_name=(hospital.legal_name or "") if hospital else "",
+        gstin=(hospital.gstin or "") if hospital else "",
+        address=address,
+        phone=(profile.phone_primary or "") if profile else "",
+        email=(profile.email or "") if profile else "",
+        letterhead_url=storage.public_url(profile.letterhead_url if profile else ""),
+        logo_url=storage.public_url(profile.logo_url if profile else ""),
+    )
+
+    # Both helpers take an iterable and answer with a dict — one query, and the
+    # tenant is passed so a foreign id can never be resolved to a real name.
+    patient_name, patient_phone = patient_display(
+        db, [payment.patient_id], tenant_id
+    ).get(payment.patient_id, ("", ""))
+
+    # One line per bill today: a consultation, or one dispensed medicine. The
+    # shape is a list because a pharmacy bill covering several medicines is the
+    # obvious next step, and a caller that already handles a list will not need
+    # changing for it.
+    lines: list[schemas.InvoiceLine] = []
+    if payment.payment_type == "pharmacy" and payment.medication_order_id:
+        order = (
+            scoped(db, models.MedicationOrder, tenant_id)
+            .filter(models.MedicationOrder.id == payment.medication_order_id)
+            .first()
+        )
+        quantity = (order.quantity or 1) if order else 1
+        description = (order.medicine_name if order else "") or "Medicines"
+        if order and order.dosage:
+            description = f"{description} ({order.dosage})"
+        lines.append(schemas.InvoiceLine(
+            description=description,
+            quantity=quantity,
+            unit_price=round(payment.amount / quantity, 2) if quantity else payment.amount,
+            amount=payment.amount,
+        ))
+    else:
+        description = "Consultation"
+        if payment.appointment_id:
+            appointment = (
+                scoped(db, models.Appointment, tenant_id)
+                .filter(models.Appointment.id == payment.appointment_id)
+                .first()
+            )
+            if appointment is not None:
+                # doctor_display maps id -> name; patient_display maps
+                # id -> (name, phone). Different shapes, same one-query idea.
+                doctor_name = doctor_display(
+                    db, [appointment.doctor_id], tenant_id
+                ).get(appointment.doctor_id, "")
+                if doctor_name:
+                    description = f"Consultation — Dr. {doctor_name}"
+        lines.append(schemas.InvoiceLine(
+            description=description, quantity=1,
+            unit_price=payment.amount, amount=payment.amount,
+        ))
+
+    return schemas.InvoiceOut(
+        payment_id=payment.id,
+        # Derived from the id rather than a counter: a real invoice series has
+        # to be gapless and sequential per financial year, which is a schema
+        # change and a policy decision, not a format string.
+        number=payment.id.replace("pay-", "INV-").upper(),
+        issued_at=payment.created_at,
+        payment_type=payment.payment_type or "consultation",
+        payment_method=payment.payment_method or "",
+        status=payment.status,
+        currency=(hospital.currency or "INR") if hospital else "INR",
+        seller=seller,
+        patient_name=patient_name,
+        patient_phone=patient_phone,
+        lines=lines,
+        total=payment.amount,
+    )
 
 
 @router.post("", response_model=schemas.PaymentOut, status_code=status.HTTP_201_CREATED)

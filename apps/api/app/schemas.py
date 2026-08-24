@@ -1220,6 +1220,59 @@ class PaymentOut(OutModel):
     created_at: str
 
 
+class InvoiceSeller(OutModel):
+    """Who issued the bill. Assembled server-side from the hospital record.
+
+    Not read from `GET /hospitals/current`: that endpoint is public and
+    deliberately carries no legal identity, while a bill needs the legal name
+    and — for a GST invoice — the GSTIN. The patient is signed in, so the
+    server can answer properly instead of the browser scraping a public page.
+    """
+
+    name: str = ""
+    legal_name: str = ""
+    gstin: str = ""
+    address: str = ""
+    phone: str = ""
+    email: str = ""
+    #: Printed across the top when set; otherwise the bill falls back to the
+    #: name and address as text.
+    letterhead_url: str = ""
+    logo_url: str = ""
+
+
+class InvoiceLine(OutModel):
+    description: str
+    quantity: int = 1
+    unit_price: float = 0.0
+    amount: float = 0.0
+
+
+class InvoiceOut(OutModel):
+    """Everything needed to render one bill, and nothing the caller must fetch
+    separately.
+
+    A caveat worth knowing: the seller block is resolved when the invoice is
+    read, not snapshotted when the payment was taken. Rename the hospital and
+    an old bill reprints under the new name. Correct behaviour needs snapshot
+    columns on `payments`; until then a reissued bill is not guaranteed
+    byte-identical to the one handed over at the counter.
+    """
+
+    payment_id: str
+    number: str
+    issued_at: str
+    payment_type: str = "consultation"
+    payment_method: str = ""
+    status: PaymentStatus = "pending"
+    currency: str = "INR"
+    seller: InvoiceSeller
+    patient_name: str = ""
+    patient_phone: str = ""
+    lines: List[InvoiceLine] = []
+    total: float = 0.0
+
+
 class PharmacyBillBody(CamelModel):
     """Pharmacist chooses how payment was collected when billing a dispensed order."""
     payment_method: str = "cash"  # cash | razorpay

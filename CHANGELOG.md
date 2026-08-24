@@ -4,6 +4,42 @@ Notable changes to CarbonHealth. Format follows [Keep a Changelog](https://keepa
 
 ## [Unreleased]
 
+### Fixed — the bill lost its GSTIN, and pharmacy revenue vanished from the dashboard
+
+Both were live consequences of earlier changes, and both were only visible as
+type errors that `typescript.ignoreBuildErrors` was hiding from the build.
+
+**The invoice.** `PatientPayments` read the hospital's legal name and GSTIN off
+`GET /hospitals/current`, which stopped carrying them when it was narrowed —
+correctly, since that endpoint is unauthenticated. At runtime it degraded
+quietly: the bill fell back to the display name and printed **no GSTIN**, which
+is not a valid GST invoice.
+
+New `GET /payments/{id}/invoice` assembles the bill server-side — seller,
+buyer, lines and total — behind `payments.read`, with scope `own` so a patient
+gets their own and a stranger's is 404 rather than 403. A signed-in patient can
+be answered properly; a public endpoint cannot.
+
+One caveat, stated in the schema: the seller block is resolved when the invoice
+is *read*, not snapshotted when the payment was taken. Rename the hospital and
+an old bill reprints under the new name. Correct behaviour needs snapshot
+columns on `payments`.
+
+**The dashboard.** `Payment.appointmentId` became nullable for pharmacy
+billing, and the revenue chart matched payments to appointments by id — so
+counter sales were dropped from admin revenue entirely. They now count toward
+the total whenever the view is not narrowed to a single department, since there
+is no department to attribute them to.
+
+### Added — letterhead upload
+
+Mirrors the logo: `PUT`/`DELETE /hospitals/me/letterhead`, images only, old file
+deleted only after the new one commits. Logo, letterhead and signature now share
+one implementation differing only in which column they land on.
+
+The bill prints the letterhead when there is one and falls back to the
+hospital's name and address as text when there is not.
+
 ### Changed — prescribing puts it in the dispense queue
 
 A doctor's prescription was something the pharmacist could read and not act on.
