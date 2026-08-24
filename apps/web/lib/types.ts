@@ -128,12 +128,39 @@ export interface MedicalRecord {
 export interface Payment {
   id: string;
   hospitalId?: string;
-  appointmentId: string;
+  appointmentId?: string | null;
+  medicationOrderId?: string | null;
   patientId: string;
   amount: number;
+  paymentType: 'consultation' | 'pharmacy' | 'lab';
   status: 'pending' | 'completed' | 'failed';
   paymentMethod: string;
+  gatewayOrderId?: string | null;
+  gatewayPaymentId?: string | null;
   createdAt: string;
+}
+
+export interface PharmacyBillOut {
+  payment: Payment;
+  amount: number;
+  medicineName: string;
+  quantity: number;
+  unitPrice: number;
+}
+
+/** Returned by POST /payments/initiate — everything needed to open Razorpay checkout. */
+export interface PaymentInitiateOut {
+  orderId: string;
+  amount: number;       // INR, for display
+  amountPaise: number;  // paise, passed to Razorpay as `amount`
+  currency: string;
+  keyId: string;
+}
+
+/** Returned by POST /payments/verify — the newly-created appointment and payment. */
+export interface PaymentVerifyOut {
+  appointment: Appointment;
+  payment: Payment;
 }
 
 export interface Prescription {
@@ -191,7 +218,7 @@ export type MedicationOrderStatus = 'pending' | 'dispensed' | 'administered' | '
 export interface MedicationOrder {
   id: string;
   hospitalId?: string;
-  appointmentId: string;
+  appointmentId?: string | null;
   patientId: string;
   doctorId: string;
   /** The prescription this order was raised from, when it came from one. */
@@ -212,6 +239,10 @@ export interface MedicationOrder {
   patientName?: string;
   patientPhone?: string;
   doctorName?: string;
+  /** Unit price from medicine catalogue; 0 for free-text orders. */
+  unitPrice: number;
+  /** True when a pharmacy payment record already exists for this order. */
+  alreadyBilled: boolean;
 }
 
 export type InventoryMovementType = 'restock' | 'dispense' | 'expired' | 'returned' | 'adjustment';

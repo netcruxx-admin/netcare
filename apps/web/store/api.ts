@@ -17,6 +17,9 @@ import type {
   Medicine,
   Patient,
   Payment,
+  PaymentInitiateOut,
+  PaymentVerifyOut,
+  PharmacyBillOut,
   PregnancyRecord,
   Prescription,
   ScheduleBlock,
@@ -193,10 +196,33 @@ export type HospitalSelfUpdateBody = Pick<
   theme?: Record<string, string>;
 };
 
+/** What GET /hospitals/current returns — a tenant's public branding.
+ *
+ *  Deliberately narrower than HospitalInfo. That endpoint is unauthenticated,
+ *  so it carries no legal identity; mirroring the server allowlist here means
+ *  a component reading `hospital.gstin` fails to compile rather than reading
+ *  undefined at runtime.
+ */
+export interface HospitalPublicConfig {
+  id: string;
+  name: string;
+  subdomain: string;
+  category: string;
+  tagline: string;
+  currency: string;
+  modules: Record<string, boolean>;
+  theme: Record<string, string>;
+  /** Empty when the hospital has not uploaded one — screens fall back to the
+   *  platform mark. */
+  logoUrl: string;
+  status: string;
+}
+
 /** Operational config needed by the booking UI. Public endpoint, no auth. */
 export interface HospitalOperational {
   lunchBreakStart: string;
   lunchBreakEnd: string;
+  appointmentSlotMinutes: number;
 }
 
 export type LicenceStatus = 'pending' | 'active' | 'expired' | 'rejected';
@@ -465,6 +491,31 @@ export interface PaymentCreateBody {
   paymentMethod?: string;
   status?: 'pending' | 'completed' | 'failed';
 }
+export interface PaymentInitiateBody {
+  doctorId: string;
+  patientId: string;
+  departmentId: string;
+  date: string;
+  time: string;
+  reason?: string;
+  notes?: string;
+  mode?: 'in-person' | 'video';
+  followUpOf?: string;
+}
+export interface PaymentVerifyBody {
+  razorpayOrderId: string;
+  razorpayPaymentId: string;
+  razorpaySignature: string;
+  doctorId: string;
+  patientId: string;
+  departmentId: string;
+  date: string;
+  time: string;
+  reason?: string;
+  notes?: string;
+  mode?: 'in-person' | 'video';
+  followUpOf?: string;
+}
 export interface VitalsCreateBody {
   appointmentId: string;
   patientId: string;
@@ -476,6 +527,14 @@ export interface VitalsCreateBody {
   weight?: number;
   height?: number;
   notes?: string;
+}
+export interface RazorpaySettingsUpdate {
+  keyId: string;
+  keySecret: string;
+}
+export interface RazorpaySettingsOut {
+  keyId: string;
+  hasSecret: boolean;
 }
 /** A permission the superadmin can hand to a role. Catalog is backend-owned. */
 export interface PermissionInfo {
@@ -706,7 +765,7 @@ export const api = createApi({
     }),
 
     // ── Hospitals ────────────────────────────────────────────────────────────
-    getCurrentHospital: build.query<HospitalInfo, void>({
+    getCurrentHospital: build.query<HospitalPublicConfig, void>({
       query: () => '/hospitals/current',
       providesTags: ['Hospital'],
     }),
@@ -982,7 +1041,7 @@ export const api = createApi({
     }),
     listDoctorsPaged: build.query<
       Paged<Doctor>,
-      PageArgs & { specialization?: string; verificationStatus?: string }
+      PageArgs & { departmentId?: string; specialization?: string; verificationStatus?: string }
     >({
       query: (params) => ({ url: '/doctors', params: cleanParams(params) }),
       transformResponse: pageOf<Doctor>,
@@ -1251,6 +1310,31 @@ export const api = createApi({
       query: (body) => ({ url: '/payments', method: 'POST', body }),
       invalidatesTags: [{ type: 'Payment', id: 'LIST' }],
     }),
+    // Step 1 of online booking: creates a Razorpay order server-side and
+    // returns the order_id + key_id needed to open the checkout dialog.
+    // The appointment is NOT created here — only on a successful verify.
+    initiatePayment: build.mutation<PaymentInitiateOut, PaymentInitiateBody>({
+      query: (body) => ({ url: '/payments/initiate', method: 'POST', body }),
+    }),
+    // Step 2 of online booking: verifies the Razorpay HMAC signature and
+    // atomically creates the appointment + payment record.
+    verifyPayment: build.mutation<PaymentVerifyOut, PaymentVerifyBody>({
+      query: (body) => ({ url: '/payments/verify', method: 'POST', body }),
+      invalidatesTags: [
+        { type: 'Appointment', id: 'LIST' },
+        { type: 'Payment', id: 'LIST' },
+      ],
+    }),
+
+    // ── Razorpay settings (per-hospital gateway config) ─────────────────────
+    getRazorpaySettings: build.query<RazorpaySettingsOut, void>({
+      query: () => '/hospitals/me/razorpay',
+      providesTags: [{ type: 'Hospital', id: 'RAZORPAY' }],
+    }),
+    updateRazorpaySettings: build.mutation<RazorpaySettingsOut, RazorpaySettingsUpdate>({
+      query: (body) => ({ url: '/hospitals/me/razorpay', method: 'PUT', body }),
+      invalidatesTags: [{ type: 'Hospital', id: 'RAZORPAY' }],
+    }),
 
     // ── Users (staff provisioning; guarded by users.manage) ──────────────────
     listUsers: build.query<User[], void>({
@@ -1340,7 +1424,7 @@ export const api = createApi({
       providesTags: [{ type: 'MedicationOrder', id: 'LIST' }],
     }),
     createMedicationOrder: build.mutation<MedicationOrder, {
-      appointmentId: string;
+      appointmentId?: string;
       patientId: string;
       /** Omit when the caller is the prescribing doctor — the server writes
        *  their own id. A pharmacist recording someone else's prescription
@@ -1369,6 +1453,14 @@ export const api = createApi({
     }),
     cancelMedicationOrder: build.mutation<MedicationOrder, string>({
       query: (id) => ({ url: `/medication-orders/${id}/cancel`, method: 'PATCH' }),
+      invalidatesTags: [{ type: 'MedicationOrder', id: 'LIST' }],
+    }),
+    billMedicationOrder: build.mutation<PharmacyBillOut, { id: string; paymentMethod: string }>({
+      query: ({ id, paymentMethod }) => ({
+        url: `/medication-orders/${id}/bill`,
+        method: 'POST',
+        body: { paymentMethod },
+      }),
       invalidatesTags: [{ type: 'MedicationOrder', id: 'LIST' }],
     }),
 
@@ -1668,6 +1760,10 @@ export const {
   useListPaymentsPagedQuery,
   useLazyListPaymentsPagedQuery,
   useCreatePaymentMutation,
+  useInitiatePaymentMutation,
+  useVerifyPaymentMutation,
+  useGetRazorpaySettingsQuery,
+  useUpdateRazorpaySettingsMutation,
   useListVitalsQuery,
   useListVitalsPagedQuery,
   useLazyListVitalsPagedQuery,
@@ -1693,6 +1789,7 @@ export const {
   useDispenseMedicationOrderMutation,
   useAdministerMedicationOrderMutation,
   useCancelMedicationOrderMutation,
+  useBillMedicationOrderMutation,
   useListInventoryMovementsQuery,
   useListLowStockQuery,
   useRestockMedicineMutation,

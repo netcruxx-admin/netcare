@@ -4,6 +4,34 @@ Notable changes to CarbonHealth. Format follows [Keep a Changelog](https://keepa
 
 ## [Unreleased]
 
+### Fixed — the public tenant endpoint published every hospital's PAN
+
+`GET /hospitals/current` resolves a tenant from the request host and answers
+without a session, because a hospital's login page has to brand itself before
+anyone signs in. It returned the whole `hospitals` row — so anyone who could
+reach a subdomain could read that hospital's `pan`, `gstin`, `registration_no`,
+`hfr_id` and NABH dates. The docstring justified it as "only runtime config and
+legal identity"; legal identity was the problem.
+
+It now returns `HospitalPublicConfigOut`: id, name, subdomain, category,
+tagline, currency, modules, theme, logo and status — what a browser needs to
+render the page, and nothing else. Built field by field rather than from the ORM
+row, like `/hospitals/public` already was, so a column added to `hospitals`
+later stays private until someone deliberately adds it here.
+
+`status` is kept deliberately: a suspended tenant's login page has to be able to
+say so rather than silently failing every sign-in.
+
+The frontend mirrors the boundary. `HospitalPublicConfig` is a separate, narrower
+type from `HospitalInfo`, so a component reading `hospital.gstin` off the public
+endpoint fails to compile instead of reading `undefined` at runtime — which is
+how `useActiveHospital` was caught still typed on the full shape. Authenticated
+platform reads (`GET /hospitals/{id}`, the superadmin console) are unchanged and
+still see everything.
+
+Six tests, including one asserting the response key set exactly: if it grows,
+someone chose that.
+
 ### Added — a hospital's own logo, on their own subdomain
 
 Every tenant saw the NetCare mark. `DashboardShell` and the login page both

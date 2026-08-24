@@ -4,20 +4,21 @@ import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Formik, Form } from 'formik';
 import * as Yup from 'yup';
-import { CheckCircle, AlertCircle } from 'lucide-react';
+import { CheckCircle, AlertCircle, CreditCard, Loader2 } from 'lucide-react';
 import type { Doctor, ScheduleBlock } from '@/lib/types';
 import { apiError } from '@/lib/apiError';
 import { fmtDate } from '@/lib/date';
 import {
-  useCreateAppointmentMutation,
   useGetDoctorAvailabilityQuery,
   useGetPatientByUserQuery,
+  useInitiatePaymentMutation,
   useListDepartmentsQuery,
   useListDoctorsQuery,
   useListScheduleBlocksQuery,
+  useVerifyPaymentMutation,
 } from '@/store/api';
 import { blockedSlotSet } from '@/lib/schedule';
-import { useBreakSlots } from '@/hooks/useBreakSlots';
+import { useHospitalSlots } from '@/hooks/useBreakSlots';
 import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
 import { FormField } from '@/components/form/FormField';
@@ -44,15 +45,35 @@ function slotToMinutes(slot: string) {
 
 const today = toDateStr(new Date());
 
-const SLOTS = [
-  '09:00 AM', '09:30 AM', '10:00 AM', '10:30 AM', '11:00 AM', '11:30 AM',
-  '12:00 PM', '01:00 PM', '02:00 PM', '02:30 PM', '03:00 PM', '03:30 PM',
-  '04:00 PM', '04:30 PM',
-];
-
 // Maximum number of dept doctors to fetch availability for in parallel.
 // 5 covers virtually all real departments; hooks must be a fixed count.
 const MAX_DEPT = 5;
+
+// ---------------------------------------------------------------------------
+// Razorpay script loader
+// ---------------------------------------------------------------------------
+
+// Minimal type for what we use from window.Razorpay.
+declare global {
+  interface Window {
+    Razorpay?: new (options: Record<string, unknown>) => { open(): void; close(): void };
+  }
+}
+
+function loadRazorpayScript(): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (typeof window !== 'undefined' && window.Razorpay) {
+      resolve();
+      return;
+    }
+    const script = document.createElement('script');
+    script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+    script.async = true;
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error('Could not load payment gateway. Check your internet connection.'));
+    document.body.appendChild(script);
+  });
+}
 
 // ---------------------------------------------------------------------------
 // Multi-doctor availability helpers
@@ -72,6 +93,7 @@ function getDeptSlotStatus(
   deptDoctors: Doctor[],
   allAv: AvailabilityData[],
   breakSlots: Set<string>,
+  slots: string[],
 ): SlotStatus {
   if (breakSlots.has(slot)) return 'blocked';
   if (date === today) {
@@ -82,7 +104,7 @@ function getDeptSlotStatus(
     const av = allAv[i];
     if (!av) continue; // not loaded yet — optimistic
     const booked = new Set(av.taken ?? []);
-    const blocked = blockedSlotSet(av.blocks ?? [], deptDoctors[i].id, date, SLOTS);
+    const blocked = blockedSlotSet(av.blocks ?? [], deptDoctors[i].id, date, slots);
     if (!booked.has(slot) && !blocked.has(slot)) return 'available';
   }
   // All data loaded and no doctor is free
@@ -98,13 +120,14 @@ function pickLeastBusy(
   date: string,
   deptDoctors: Doctor[],
   allAv: AvailabilityData[],
+  slots: string[],
 ): string {
   const candidates: Array<{ id: string; takenCount: number }> = [];
   for (let i = 0; i < deptDoctors.length; i++) {
     const av = allAv[i];
     if (!av) continue;
     const booked = new Set(av.taken ?? []);
-    const blocked = blockedSlotSet(av.blocks ?? [], deptDoctors[i].id, date, SLOTS);
+    const blocked = blockedSlotSet(av.blocks ?? [], deptDoctors[i].id, date, slots);
     if (!booked.has(slot) && !blocked.has(slot)) {
       candidates.push({ id: deptDoctors[i].id, takenCount: (av.taken ?? []).length });
     }
@@ -132,13 +155,15 @@ export function PatientBook({ session }: RoleViewProps) {
   const [step, setStep] = useState(1);
   const [submitError, setSubmitError] = useState('');
   const [success, setSuccess] = useState(false);
+  const [paymentStatus, setPaymentStatus] = useState<'idle' | 'initiating' | 'checkout' | 'verifying'>('idle');
   const [selection, setSelection] = useState({ department: '', date: '' });
 
   const { data: departments = [] } = useListDepartmentsQuery();
   const { data: doctors = [] } = useListDoctorsQuery();
   const { data: patient } = useGetPatientByUserQuery(session.user.id);
-  const [createAppointment] = useCreateAppointmentMutation();
-  const breakSlots = useBreakSlots(SLOTS);
+  const [initiatePayment] = useInitiatePaymentMutation();
+  const [verifyPayment] = useVerifyPaymentMutation();
+  const { slots: SLOTS, breakSlots } = useHospitalSlots();
 
   // Doctors in the selected department, capped at MAX_DEPT so hook count is fixed.
   const deptDoctors = useMemo<Doctor[]>(() => {
@@ -210,7 +235,7 @@ export function PatientBook({ session }: RoleViewProps) {
           {success && (
             <div className="bg-green-50 border border-green-200 rounded-lg p-4 flex items-start gap-3">
               <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
-              <p className="text-green-700">Appointment booked successfully! Redirecting...</p>
+              <p className="text-green-700">Payment successful! Appointment booked. Redirecting…</p>
             </div>
           )}
 
@@ -226,33 +251,90 @@ export function PatientBook({ session }: RoleViewProps) {
                 }
 
                 // Assign the least-busy doctor who is free at the chosen slot.
-                const doctorId = pickLeastBusy(values.time, values.date, deptDoctors, allAv);
+                const doctorId = pickLeastBusy(values.time, values.date, deptDoctors, allAv, SLOTS);
                 if (!doctorId) {
                   setSubmitError('No doctor is available for that slot. Please pick another time.');
                   return;
                 }
 
                 // Guard against the slot being taken between page load and submit.
-                const st = getDeptSlotStatus(values.time, values.date, deptDoctors, allAv, breakSlots);
+                const st = getDeptSlotStatus(values.time, values.date, deptDoctors, allAv, breakSlots, SLOTS);
                 if (st !== 'available') {
                   setSubmitError('That time slot is no longer available. Please pick another.');
                   return;
                 }
 
-                await createAppointment({
-                  patientId: patient.id,
+                // ── Step 1: create a Razorpay order server-side ──────────────
+                setPaymentStatus('initiating');
+                const orderData = await initiatePayment({
                   doctorId,
+                  patientId: patient.id,
                   departmentId: values.department,
                   date: values.date,
                   time: values.time,
-                  status: 'scheduled',
                   reason: values.reason,
                   notes: '',
                 }).unwrap();
+
+                // ── Step 2: load the Razorpay checkout script ────────────────
+                await loadRazorpayScript();
+                setPaymentStatus('checkout');
+
+                // ── Step 3: open the checkout dialog ────────────────────────
+                await new Promise<void>((resolve, reject) => {
+                  if (!window.Razorpay) {
+                    reject(new Error('Payment gateway failed to load. Please refresh and try again.'));
+                    return;
+                  }
+
+                  const deptName = departments.find((d) => d.id === values.department)?.name ?? 'Consultation';
+                  const rzp = new window.Razorpay({
+                    key: orderData.keyId,
+                    amount: orderData.amountPaise,
+                    currency: orderData.currency,
+                    order_id: orderData.orderId,
+                    name: 'Hospital Appointment',
+                    description: `${deptName} — ${values.date} ${values.time}`,
+                    handler: async (response: {
+                      razorpay_order_id: string;
+                      razorpay_payment_id: string;
+                      razorpay_signature: string;
+                    }) => {
+                      // ── Step 4: verify signature + create appointment ──────
+                      setPaymentStatus('verifying');
+                      rzp.close();
+                      try {
+                        await verifyPayment({
+                          razorpayOrderId: response.razorpay_order_id,
+                          razorpayPaymentId: response.razorpay_payment_id,
+                          razorpaySignature: response.razorpay_signature,
+                          doctorId,
+                          patientId: patient.id,
+                          departmentId: values.department,
+                          date: values.date,
+                          time: values.time,
+                          reason: values.reason,
+                          notes: '',
+                        }).unwrap();
+                        resolve();
+                      } catch (err) {
+                        reject(err);
+                      }
+                    },
+                    modal: {
+                      ondismiss: () => reject(new Error('Payment was cancelled. Your appointment has not been booked.')),
+                    },
+                    theme: { color: '#0891b2' },
+                  });
+                  rzp.open();
+                });
+
+                setPaymentStatus('idle');
                 setSuccess(true);
                 setTimeout(() => router.push('/dashboard'), 2000);
               } catch (err) {
-                setSubmitError(apiError(err, 'Failed to book appointment. Please try again.'));
+                setPaymentStatus('idle');
+                setSubmitError(apiError(err, 'Payment failed. Please try again.'));
               }
             }}
           >
@@ -261,9 +343,40 @@ export function PatientBook({ session }: RoleViewProps) {
               // can see who they'll see — but only after they've picked a time.
               const assignedDoc = (() => {
                 if (!values.time || !values.date) return null;
-                const docId = pickLeastBusy(values.time, values.date, deptDoctors, allAv);
+                const docId = pickLeastBusy(values.time, values.date, deptDoctors, allAv, SLOTS);
                 const doc = doctors.find((d) => d.id === docId);
                 return doc?.user?.name ? `Dr. ${doc.user.name}` : null;
+              })();
+
+              // Consultation fee for the assigned doctor (exact once slot is chosen).
+              const consultationFee = (() => {
+                if (values.time && values.date) {
+                  const docId = pickLeastBusy(values.time, values.date, deptDoctors, allAv, SLOTS);
+                  const fee = doctors.find((d) => d.id === docId)?.consultationFee;
+                  return fee != null ? fee : null;
+                }
+                const fees = deptDoctors
+                  .map((d) => d.consultationFee)
+                  .filter((f): f is number => f != null);
+                return fees.length > 0 ? fees : null;
+              })();
+
+              const feeDisplay = (() => {
+                if (consultationFee === null) return '—';
+                if (Array.isArray(consultationFee)) {
+                  const min = Math.min(...consultationFee);
+                  const max = Math.max(...consultationFee);
+                  return min === max ? `₹${min}` : `₹${min}–₹${max}`;
+                }
+                return `₹${consultationFee}`;
+              })();
+
+              // Label for the pay button based on current payment flow stage.
+              const payBtnContent = (() => {
+                if (paymentStatus === 'initiating') return <><Loader2 className="w-4 h-4 animate-spin" /> Preparing payment…</>;
+                if (paymentStatus === 'checkout') return <><Loader2 className="w-4 h-4 animate-spin" /> Opening checkout…</>;
+                if (paymentStatus === 'verifying') return <><Loader2 className="w-4 h-4 animate-spin" /> Confirming payment…</>;
+                return <><CreditCard className="w-4 h-4" /> Pay {typeof consultationFee === 'number' ? `₹${consultationFee}` : ''} &amp; Book</>;
               })();
 
               return (
@@ -370,7 +483,7 @@ export function PatientBook({ session }: RoleViewProps) {
                               </div>
                               <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                                 {SLOTS.map((slot) => {
-                                  const st = getDeptSlotStatus(slot, values.date, deptDoctors, allAv, breakSlots);
+                                  const st = getDeptSlotStatus(slot, values.date, deptDoctors, allAv, breakSlots, SLOTS);
                                   const selected = values.time === slot;
                                   const cls = selected
                                     ? 'bg-cyan-600 text-white border-cyan-600'
@@ -428,10 +541,10 @@ export function PatientBook({ session }: RoleViewProps) {
                     </div>
                   )}
 
-                  {/* Step 3: Reason & Confirmation */}
+                  {/* Step 3: Reason, summary & payment */}
                   {step === 3 && (
                     <div className="space-y-4">
-                      <h2 className="text-2xl font-bold text-slate-900">Reason &amp; Confirmation</h2>
+                      <h2 className="text-2xl font-bold text-slate-900">Reason &amp; Payment</h2>
                       <FormField
                         name="reason"
                         label="Reason for Visit (Optional)"
@@ -440,6 +553,7 @@ export function PatientBook({ session }: RoleViewProps) {
                         rows={4}
                       />
 
+                      {/* Appointment summary */}
                       <div className="bg-slate-50 rounded-lg p-4 space-y-3">
                         <h3 className="font-semibold text-slate-900">Appointment Summary</h3>
                         <div className="space-y-2 text-sm">
@@ -457,9 +571,7 @@ export function PatientBook({ session }: RoleViewProps) {
                           )}
                           <div className="flex justify-between">
                             <span className="text-slate-600">Date:</span>
-                            <span className="font-semibold">
-                              {fmtDate(values.date)}
-                            </span>
+                            <span className="font-semibold">{fmtDate(values.date)}</span>
                           </div>
                           <div className="flex justify-between">
                             <span className="text-slate-600">Time:</span>
@@ -467,42 +579,35 @@ export function PatientBook({ session }: RoleViewProps) {
                           </div>
                           <div className="border-t pt-2 flex justify-between">
                             <span className="font-semibold text-slate-900">Consultation Fee:</span>
-                            <span className="font-semibold text-cyan-600">
-                              {(() => {
-                                // If a slot is chosen, show the exact assigned doctor's fee.
-                                if (values.time && values.date) {
-                                  const docId = pickLeastBusy(values.time, values.date, deptDoctors, allAv);
-                                  const fee = doctors.find((d) => d.id === docId)?.consultationFee;
-                                  return fee != null ? `₹${fee}` : '—';
-                                }
-                                // Otherwise show the range of fees in this department.
-                                const fees = deptDoctors
-                                  .map((d) => d.consultationFee)
-                                  .filter((f): f is number => f != null);
-                                if (fees.length === 0) return '—';
-                                const min = Math.min(...fees);
-                                const max = Math.max(...fees);
-                                return min === max ? `₹${min}` : `₹${min}–₹${max}`;
-                              })()}
-                            </span>
+                            <span className="font-semibold text-cyan-600">{feeDisplay}</span>
                           </div>
                         </div>
+                      </div>
+
+                      {/* Payment notice */}
+                      <div className="flex items-start gap-3 bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-800">
+                        <CreditCard className="w-4 h-4 shrink-0 mt-0.5" />
+                        <span>
+                          You will be redirected to a secure payment page. The appointment is confirmed
+                          only after the payment is successful.
+                        </span>
                       </div>
 
                       <div className="flex gap-3">
                         <button
                           type="button"
                           onClick={() => setStep(2)}
-                          className="flex-1 px-6 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition"
+                          disabled={paymentStatus !== 'idle'}
+                          className="flex-1 px-6 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition disabled:opacity-40"
                         >
                           Back
                         </button>
                         <button
                           type="submit"
-                          disabled={isSubmitting}
-                          className="flex-1 px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition font-semibold disabled:opacity-50"
+                          disabled={isSubmitting || paymentStatus !== 'idle' || success}
+                          className="flex-1 px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition font-semibold disabled:opacity-50 flex items-center justify-center gap-2"
                         >
-                          Confirm Booking
+                          {payBtnContent}
                         </button>
                       </div>
                     </div>

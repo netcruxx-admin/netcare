@@ -98,11 +98,14 @@ export function AdminOverview({ session }: RoleViewProps) {
 
     const doctorLabel = (id: string) => {
       const doc = doctorById.get(id);
-      return doc ? `Dr. (${doc.specialization || id.slice(-6)})` : '—';
+      if (!doc) return '—';
+      const name = doc.user?.name ?? '';
+      return name ? `Dr. ${name}` : `Dr. (${doc.specialization || id.slice(-6)})`;
     };
     const patientLabel = (id: string) => {
       const pat = patientById.get(id);
-      return pat?.phone ? pat.phone : `#${id.slice(-6)}`;
+      if (!pat) return '—';
+      return pat.user?.name ?? pat.phone ?? `#${id.slice(-6)}`;
     };
 
     let chartStart: string;

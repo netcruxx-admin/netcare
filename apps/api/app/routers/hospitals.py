@@ -75,7 +75,7 @@ def list_public_hospitals(db: Session = Depends(get_db)):
     ]
 
 
-@router.get("/current", response_model=schemas.HospitalOut)
+@router.get("/current", response_model=schemas.HospitalPublicConfigOut)
 def current_hospital(
     db: Session = Depends(get_db),
     tenant_id: str = Depends(resolve_public_tenant),
@@ -84,14 +84,30 @@ def current_hospital(
     old hardcoded lib/hospitalConfig.ts. Public (no auth): branding/modules are
     needed to render the login page. Tenant resolves from subdomain.
 
-    Safe to serve wholesale because `hospitals` carries only runtime config and
-    legal identity; the address, licences and billing terms a stranger has no
-    business reading live in the child tables, which this does not touch.
+    Deliberately NOT the whole row. This answers to anyone who can reach the
+    subdomain, and `hospitals` carries legal identity alongside the runtime
+    config — serving it wholesale published every tenant's PAN, GSTIN and
+    registration number on their own login page. See HospitalPublicConfigOut
+    for what survives and why.
     """
     hospital = db.get(models.Hospital, tenant_id)
     if hospital is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Hospital not found")
-    return _hospital_out(db, hospital)
+    profile = _profile_of(db, tenant_id)
+    # Field by field, not model_validate: a column added to `hospitals` later
+    # stays private until someone deliberately adds it here.
+    return schemas.HospitalPublicConfigOut(
+        id=hospital.id,
+        name=hospital.name,
+        subdomain=hospital.subdomain,
+        category=hospital.category,
+        tagline=hospital.tagline or "",
+        currency=hospital.currency or "INR",
+        modules=hospital.modules or {},
+        theme=hospital.theme or {},
+        logo_url=storage.public_url(profile.logo_url if profile else ""),
+        status=hospital.status,
+    )
 
 
 # ----- Helpers ---------------------------------------------------------------
@@ -141,15 +157,6 @@ def _profile_out(row: models.HospitalProfile) -> schemas.HospitalProfileOut:
     out.logo_url = storage.public_url(row.logo_url)
     out.letterhead_url = storage.public_url(row.letterhead_url)
     out.signature_url = storage.public_url(row.signature_url)
-    return out
-
-
-def _hospital_out(db: Session, row: models.Hospital) -> schemas.HospitalOut:
-    """The hospital row plus the one branding asset every page needs."""
-    out = schemas.HospitalOut.model_validate(row)
-    profile = _profile_of(db, row.id)
-    if profile is not None:
-        out.logo_url = storage.public_url(profile.logo_url)
     return out
 
 
@@ -603,6 +610,59 @@ def remove_my_logo(
     return _profile_out(profile)
 
 
+# ----- Payment gateway credentials -------------------------------------------
+#
+# Each hospital settles into its own Razorpay account, so the keys live on the
+# tenant rather than in platform config. The secret is write-only: it goes in
+# and never comes back out — see RazorpaySettingsOut.
+
+
+@router.put("/me/razorpay", response_model=schemas.RazorpaySettingsOut)
+def update_my_razorpay_settings(
+    body: schemas.RazorpaySettingsUpdate,
+    db: Session = Depends(get_db),
+    _: str = Depends(require_permission("hospital.profile.manage")),
+    tenant_id: str = Depends(get_tenant_id),
+):
+    """Store this hospital's own Razorpay Key ID and Key Secret.
+
+    The secret is written to the DB but never returned — only `has_secret`
+    comes back so the UI can show a masked indicator. To rotate, submit new
+    values; to clear, use DELETE /hospitals/me/razorpay (not implemented yet,
+    since no hospital has asked for it).
+    """
+    profile = _profile_of(db, tenant_id)
+    if profile is None:
+        profile = models.HospitalProfile(id=new_id("hprof"), hospital_id=tenant_id)
+        db.add(profile)
+
+    profile.razorpay_key_id = body.key_id.strip()
+    profile.razorpay_key_secret = body.key_secret.strip()
+    profile.updated_at = now_iso()
+    db.commit()
+    db.refresh(profile)
+    audit.record_subject("hospital_profile", profile.id, detail=tenant_id)
+
+    return schemas.RazorpaySettingsOut(
+        key_id=profile.razorpay_key_id,
+        has_secret=bool(profile.razorpay_key_secret),
+    )
+
+
+@router.get("/me/razorpay", response_model=schemas.RazorpaySettingsOut)
+def get_my_razorpay_settings(
+    db: Session = Depends(get_db),
+    _: str = Depends(require_permission("hospital.profile.manage")),
+    tenant_id: str = Depends(get_tenant_id),
+):
+    """Return current Razorpay configuration (key_id + has_secret indicator)."""
+    profile = _profile_of(db, tenant_id)
+    return schemas.RazorpaySettingsOut(
+        key_id=profile.razorpay_key_id if profile and profile.razorpay_key_id else "",
+        has_secret=bool(profile and profile.razorpay_key_secret),
+    )
+
+
 # ----- Operational settings --------------------------------------------------
 # Public read (booking UI needs it before login) + admin write.
 
@@ -624,6 +684,7 @@ def current_operational(
     return schemas.HospitalOperationalOut(
         lunch_break_start=profile.lunch_break_start or "12:00",
         lunch_break_end=profile.lunch_break_end or "14:00",
+        appointment_slot_minutes=profile.appointment_slot_minutes or 15,
     )
 
 

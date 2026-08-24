@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { toast } from 'sonner';
-import { ClipboardList, Plus, X, AlertTriangle, Search } from 'lucide-react';
+import { ClipboardList, Plus, X, AlertTriangle, Search, Receipt } from 'lucide-react';
 import { apiError } from '@/lib/apiError';
 import type { MedicationOrder, MedicationOrderStatus } from '@/lib/types';
 import { DashboardShell } from '@/components/DashboardShell';
@@ -14,6 +14,7 @@ import {
   useDispenseMedicationOrderMutation,
   useAdministerMedicationOrderMutation,
   useCancelMedicationOrderMutation,
+  useBillMedicationOrderMutation,
   useListMedicinesQuery,
   useListPatientsQuery,
 } from '@/store/api';
@@ -73,6 +74,9 @@ export function MedicationOrders({ session }: RoleViewProps) {
   const [administerNotes, setAdministerNotes] = useState('');
   const [administerSite, setAdministerSite] = useState('');
   const [formError, setFormError] = useState('');
+  const [billOrder, setBillOrder] = useState<MedicationOrder | null>(null);
+  const [billMethod, setBillMethod] = useState<'cash' | 'card' | 'upi'>('cash');
+  const [isBilling, setIsBilling] = useState(false);
 
   const [form, setForm] = useState<NewOrderForm>({
     appointmentId: '',
@@ -101,6 +105,7 @@ export function MedicationOrders({ session }: RoleViewProps) {
   const [dispenseOrder] = useDispenseMedicationOrderMutation();
   const [administerOrderMut] = useAdministerMedicationOrderMutation();
   const [cancelOrder] = useCancelMedicationOrderMutation();
+  const [billMedicationOrder] = useBillMedicationOrderMutation();
 
   const canCreate = hasPermission(session, 'medication_orders.manage');
   const canDispense = hasPermission(session, 'medication_orders.dispense');
@@ -134,9 +139,8 @@ export function MedicationOrders({ session }: RoleViewProps) {
       setFormError('Quantity must be a whole number of at least 1');
       return;
     }
-    // appointmentId is optional — use a placeholder if blank
     const payload = {
-      appointmentId: form.appointmentId.trim() || 'direct',
+      ...(form.appointmentId.trim() && { appointmentId: form.appointmentId.trim() }),
       patientId: form.patientId,
       medicineId: form.medicineId || undefined,
       medicineName: form.medicineName.trim(),
@@ -157,12 +161,25 @@ export function MedicationOrders({ session }: RoleViewProps) {
     }
   };
 
-  const handleDispense = async (id: string) => {
+  const openDispenseModal = (order: MedicationOrder) => {
+    setBillOrder(order);
+    setBillMethod('cash');
+  };
+
+  const handleDispenseAndBill = async () => {
+    if (!billOrder) return;
+    setIsBilling(true);
     try {
-      await dispenseOrder(id).unwrap();
-      toast.success('Order dispensed');
+      // 1. Dispense (moves stock, marks order dispensed)
+      await dispenseOrder(billOrder.id).unwrap();
+      // 2. Bill (creates Payment record)
+      await billMedicationOrder({ id: billOrder.id, paymentMethod: billMethod }).unwrap();
+      toast.success('Order dispensed and billed');
+      setBillOrder(null);
     } catch (err) {
-      toast.error(apiError(err, 'Failed to dispense order'));
+      toast.error(apiError(err, 'Failed to dispense/bill order'));
+    } finally {
+      setIsBilling(false);
     }
   };
 
@@ -271,6 +288,7 @@ export function MedicationOrders({ session }: RoleViewProps) {
                     <th className="text-left py-3 px-4 font-semibold text-slate-900">Patient</th>
                     <th className="text-left py-3 px-4 font-semibold text-slate-900">Medicine</th>
                     <th className="text-right py-3 px-4 font-semibold text-slate-900">Qty</th>
+                    {canDispense && <th className="text-right py-3 px-4 font-semibold text-slate-900">Total</th>}
                     <th className="text-left py-3 px-4 font-semibold text-slate-900">Dosage</th>
                     <th className="text-left py-3 px-4 font-semibold text-slate-900">Route</th>
                     <th className="text-left py-3 px-4 font-semibold text-slate-900">Doctor</th>
@@ -292,6 +310,13 @@ export function MedicationOrders({ session }: RoleViewProps) {
                       <td className="py-3 px-4 text-right font-medium text-slate-900 tabular-nums">
                         {order.quantity}
                       </td>
+                      {canDispense && (
+                        <td className="py-3 px-4 text-right tabular-nums text-slate-700">
+                          {order.unitPrice > 0
+                            ? `₹${(order.unitPrice * order.quantity).toFixed(2)}`
+                            : '—'}
+                        </td>
+                      )}
                       <td className="py-3 px-4 text-slate-600">{order.dosage}</td>
                       <td className="py-3 px-4 text-slate-600">{order.route}</td>
                       <td className="py-3 px-4 text-slate-600">
@@ -311,10 +336,20 @@ export function MedicationOrders({ session }: RoleViewProps) {
                         <div className="flex items-center justify-end gap-2">
                           {canDispense && order.status === 'pending' && (
                             <button
-                              onClick={() => handleDispense(order.id)}
-                              className="px-2 py-1 text-xs font-medium bg-blue-50 text-blue-700 rounded hover:bg-blue-100 transition"
+                              onClick={() => openDispenseModal(order)}
+                              className="flex items-center gap-1 px-2 py-1 text-xs font-medium bg-blue-50 text-blue-700 rounded hover:bg-blue-100 transition"
                             >
-                              Dispense
+                              <Receipt className="w-3 h-3" />
+                              Dispense & Bill
+                            </button>
+                          )}
+                          {canDispense && order.status === 'dispensed' && !order.alreadyBilled && (
+                            <button
+                              onClick={() => setBillOrder(order)}
+                              className="flex items-center gap-1 px-2 py-1 text-xs font-medium bg-amber-50 text-amber-700 rounded hover:bg-amber-100 transition"
+                            >
+                              <Receipt className="w-3 h-3" />
+                              Bill
                             </button>
                           )}
                           {canAdminister && order.status === 'dispensed' && (
@@ -486,6 +521,109 @@ export function MedicationOrders({ session }: RoleViewProps) {
                   {isCreating ? 'Creating…' : 'Create Order'}
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Dispense & Bill Modal */}
+      {billOrder && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg shadow-2xl max-w-md w-full p-6">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-bold text-slate-900">Dispense &amp; Bill</h3>
+              <button onClick={() => setBillOrder(null)} className="text-slate-500 hover:text-slate-900" disabled={isBilling}>
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Order summary */}
+            <div className="bg-slate-50 rounded-lg p-4 mb-4 space-y-1 text-sm">
+              <div className="flex justify-between">
+                <span className="text-slate-500">Patient</span>
+                <span className="font-medium text-slate-900">{billOrder.patientName ?? billOrder.patientId}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500">Medicine</span>
+                <span className="font-medium text-slate-900">{billOrder.medicineName}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500">Quantity</span>
+                <span className="font-medium text-slate-900">{billOrder.quantity}</span>
+              </div>
+              {billOrder.unitPrice > 0 && (
+                <>
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">Unit Price</span>
+                    <span className="text-slate-900">₹{billOrder.unitPrice.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between border-t pt-2 mt-2">
+                    <span className="font-semibold text-slate-900">Total</span>
+                    <span className="font-bold text-lg text-cyan-700">₹{(billOrder.unitPrice * billOrder.quantity).toFixed(2)}</span>
+                  </div>
+                </>
+              )}
+              {billOrder.unitPrice === 0 && (
+                <p className="text-xs text-amber-600 mt-1">
+                  No catalogue price — bill records ₹0. Update the medicine price to auto-calculate.
+                </p>
+              )}
+            </div>
+
+            {/* Payment method */}
+            <div className="mb-5">
+              <p className="text-sm font-medium text-slate-700 mb-2">Payment Method</p>
+              <div className="flex gap-3">
+                {([
+                  { value: 'cash', label: 'Cash' },
+                  { value: 'upi', label: 'UPI / QR' },
+                  { value: 'card', label: 'Card' },
+                ] as const).map((m) => (
+                  <button
+                    key={m.value}
+                    onClick={() => setBillMethod(m.value)}
+                    className={`flex-1 py-2 rounded-lg border text-sm font-medium transition ${
+                      billMethod === m.value
+                        ? 'border-cyan-500 bg-cyan-50 text-cyan-700'
+                        : 'border-slate-200 text-slate-600 hover:border-slate-300'
+                    }`}
+                  >
+                    {m.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setBillOrder(null)}
+                disabled={isBilling}
+                className="flex-1 px-4 py-2 bg-slate-200 text-slate-700 rounded hover:bg-slate-300 transition disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={billOrder.status === 'pending' ? handleDispenseAndBill : async () => {
+                  setIsBilling(true);
+                  try {
+                    await billMedicationOrder({ id: billOrder.id, paymentMethod: billMethod }).unwrap();
+                    toast.success('Order billed');
+                    setBillOrder(null);
+                  } catch (err) {
+                    toast.error(apiError(err, 'Failed to bill order'));
+                  } finally {
+                    setIsBilling(false);
+                  }
+                }}
+                disabled={isBilling}
+                className="flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded hover:shadow-lg font-semibold transition disabled:opacity-50"
+              >
+                {isBilling
+                  ? 'Processing…'
+                  : billOrder.status === 'pending'
+                  ? 'Dispense & Bill'
+                  : 'Bill'}
+              </button>
             </div>
           </div>
         </div>
