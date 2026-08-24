@@ -99,7 +99,7 @@ const bookingSchema = Yup.object({
   doctorId: Yup.string().required('Select a doctor'),
   date: Yup.string().required('Pick a date'),
   time: Yup.string().required('Select a time slot'),
-  reason: Yup.string(),
+  reason: Yup.string().trim().required('Tell us why the appointment is needed'),
 });
 
 // ---------------------------------------------------------------------------
@@ -410,7 +410,8 @@ function AdminBookForm({ session }: RoleViewProps) {
 
                   <FormField
                     name="reason"
-                    label="Reason for Visit (Optional)"
+                    label="Reason for Visit"
+                    required
                     as="textarea"
                     placeholder="Describe the reason for the appointment"
                     rows={3}

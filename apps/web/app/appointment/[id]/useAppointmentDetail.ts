@@ -84,6 +84,13 @@ export function useAppointmentDetail() {
       if (confirmAction === 'complete') {
         await updateAppointment({ id: appointmentId, body: { status: 'completed' } }).unwrap();
         toast.success('Appointment marked complete');
+        // Back to the list: a finished consultation is done being looked at,
+        // and the next one is on that page. `push` rather than `back()` — the
+        // route here may have been reached from a patient chart or a search,
+        // and "complete" should land somewhere predictable either way.
+        setConfirmAction(null);
+        router.push('/dashboard/appointments');
+        return;
       } else if (confirmAction === 'cancel') {
         await updateAppointment({ id: appointmentId, body: { status: 'cancelled' } }).unwrap();
         toast.success('Appointment cancelled');

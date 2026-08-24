@@ -145,7 +145,7 @@ const bookingSchema = Yup.object({
   department: Yup.string().required('Please select a department'),
   date: Yup.string().required('Date is required'),
   time: Yup.string().required('Please select a time slot'),
-  reason: Yup.string(),
+  reason: Yup.string().trim().required('Tell us why the appointment is needed'),
 });
 
 const initialValues = { department: '', date: '', time: '', reason: '' };
@@ -547,7 +547,8 @@ export function PatientBook({ session }: RoleViewProps) {
                       <h2 className="text-2xl font-bold text-slate-900">Reason &amp; Payment</h2>
                       <FormField
                         name="reason"
-                        label="Reason for Visit (Optional)"
+                        label="Reason for Visit"
+                        required
                         as="textarea"
                         placeholder="Describe your symptoms or reason for visit"
                         rows={4}

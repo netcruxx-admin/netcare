@@ -1091,13 +1091,34 @@ class DepartmentUpdate(CamelModel):
 
 
 # ---------- Appointment ----------
+def _require_reason(value: str) -> str:
+    """Why the patient is coming, and it is not optional.
+
+    It is the only free-text the clinician sees before the consultation, it
+    drives triage, and an appointment list of blank reasons is unreadable. The
+    check lives here rather than in one router because three request bodies
+    create appointments — the direct one and the two halves of the online
+    payment flow — and a rule enforced on only one of them is not a rule.
+    """
+    value = (value or "").strip()
+    if not value:
+        raise ValueError("Reason for the appointment is required")
+    return value
+
+
 class AppointmentCreate(CamelModel):
     patient_id: str
     doctor_id: str
     department_id: str
     date: str
     time: str
-    reason: str = ""
+    reason: str
+
+    @field_validator("reason")
+    @classmethod
+    def _reason_present(cls, value: str) -> str:
+        return _require_reason(value)
+
     notes: str = ""
     status: AppointmentStatus = "scheduled"
     mode: AppointmentMode = "in-person"
@@ -1226,7 +1247,13 @@ class PaymentInitiateBody(CamelModel):
     department_id: str
     date: str
     time: str
-    reason: str = ""
+    reason: str
+
+    @field_validator("reason")
+    @classmethod
+    def _reason_present(cls, value: str) -> str:
+        return _require_reason(value)
+
     notes: str = ""
     mode: AppointmentMode = "in-person"
     follow_up_of: Optional[str] = None
@@ -1258,7 +1285,13 @@ class PaymentVerifyBody(CamelModel):
     department_id: str
     date: str
     time: str
-    reason: str = ""
+    reason: str
+
+    @field_validator("reason")
+    @classmethod
+    def _reason_present(cls, value: str) -> str:
+        return _require_reason(value)
+
     notes: str = ""
     mode: AppointmentMode = "in-person"
     follow_up_of: Optional[str] = None
@@ -1446,6 +1479,29 @@ class MedicationOrderCreate(CamelModel):
     @classmethod
     def _at_least_one(cls, value: int) -> int:
         if value is None or value < 1:
+            raise ValueError("Quantity must be at least 1")
+        return value
+
+
+class MedicationDispenseBody(CamelModel):
+    """What the pharmacist confirms at the moment of dispensing.
+
+    An order raised from a prescription arrives as a starting point: quantity 1
+    and a catalogue match guessed from a free-text medicine name. Counting the
+    tablets is what settles both, so both can be corrected here — and stock
+    moves by what is confirmed, not by the guess.
+
+    Omitting a field leaves the order's own value alone, so a ward-round order
+    that was already exact needs no body at all.
+    """
+
+    quantity: Optional[int] = None
+    medicine_id: Optional[str] = None
+
+    @field_validator("quantity")
+    @classmethod
+    def _at_least_one(cls, value: Optional[int]) -> Optional[int]:
+        if value is not None and value < 1:
             raise ValueError("Quantity must be at least 1")
         return value
 

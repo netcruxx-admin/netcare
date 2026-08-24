@@ -1,6 +1,7 @@
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Query, Response, status
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from .. import models, schemas
@@ -85,6 +86,44 @@ def create_prescription(
         **body.model_dump(),
     )
     db.add(prescription)
+    db.flush()
+
+    # Prescribing puts it in front of the pharmacist. Until this existed the
+    # two tables were unconnected: a prescription was something pharmacy could
+    # read and not act on, and reaching the dispense queue meant someone
+    # retyping the drug by hand — so in practice the queue stayed empty.
+    #
+    # The order is a *starting point*, not a finished instruction. A
+    # prescription records the dose, never the count, and its medicine is free
+    # text that may or may not name something stocked. So quantity starts at 1
+    # and the catalogue match is a guess; the pharmacist confirms both when
+    # dispensing, which is the moment someone is actually counting tablets.
+    match = (
+        scoped(db, models.Medicine, tenant_id)
+        .filter(func.lower(models.Medicine.name) == (body.medicine_name or "").strip().lower())
+        .first()
+    )
+    db.add(
+        models.MedicationOrder(
+            id=new_id("mord"),
+            hospital_id=tenant_id,
+            appointment_id=prescription.appointment_id,
+            patient_id=prescription.patient_id,
+            doctor_id=prescription.doctor_id,
+            prescription_id=prescription.id,
+            medicine_id=match.id if match else None,
+            medicine_name=prescription.medicine_name,
+            quantity=1,
+            dosage=prescription.dosage,
+            route="Oral",
+            frequency=prescription.frequency,
+            duration=prescription.duration,
+            instructions=prescription.instructions,
+            status="pending",
+            ordered_at=now_iso(),
+        )
+    )
+
     db.commit()
     db.refresh(prescription)
     return prescription

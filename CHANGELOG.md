@@ -4,6 +4,45 @@ Notable changes to CarbonHealth. Format follows [Keep a Changelog](https://keepa
 
 ## [Unreleased]
 
+### Changed — prescribing puts it in the dispense queue
+
+A doctor's prescription was something the pharmacist could read and not act on.
+Reaching the dispense queue meant a pharmacist retyping the drug by hand from
+the prescriptions screen, so in practice the queue stayed empty.
+
+Writing a prescription now raises the medication order. The order is a starting
+point rather than a finished instruction: a prescription records the dose and
+never the count, and its medicine is free text that may not name anything
+stocked — so quantity starts at 1 and the catalogue match is a guess from the
+name.
+
+**The pharmacist confirms both at the counter.** `PATCH .../dispense` takes an
+optional body with `quantity` and `medicineId`, applied before the stock check.
+Without it, auto-raising at quantity 1 would have reintroduced exactly the bug
+that made a ten-tablet course move stock by one. Omitting the body leaves the
+order alone, so a ward-round order raised directly needs no confirmation.
+
+The manual "Send to dispense queue" action stays for prescriptions written
+before this and for re-queueing after a cancellation; sending one that is
+already queued still refuses.
+
+### Changed — an appointment has to say why
+
+`reason` was optional. It is the only free text a clinician sees before the
+consultation, it drives triage, and a list of blank reasons is unreadable.
+
+Enforced in `schemas.py` across **all three** bodies that create an
+appointment — the direct one and both halves of the online payment flow.
+Enforcing it on one would have left the payment path as a way around it. The
+three booking forms mark the field required and validate before submitting.
+
+### Changed — completing an appointment returns to the list
+
+A finished consultation is done being looked at, and the next one is on the
+appointments page. `push` rather than `back()`: the detail route can be reached
+from a patient chart or a search, and completing should land somewhere
+predictable either way.
+
 ### Fixed — one Razorpay payment could buy any number of appointments
 
 `/payments/verify` checked the HMAC signature and inserted, with nothing looking
