@@ -18,7 +18,6 @@ import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
 import { GRID_SLOTS } from '@/lib/schedule';
 import { fmtDate } from '@/lib/date';
-import { Spinner } from '@/components/ui/spinner';
 
 const todayStr = () => new Date().toISOString().split('T')[0];
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { Loader2, ShieldCheck } from 'lucide-react';
+import { ShieldCheck } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import {
   useCreateConsentMutation,
@@ -237,8 +237,7 @@ export function ConsentSettings({ dateOfBirth }: Props) {
           disabled={!hasChanges || busy}
           className="px-6 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg font-semibold hover:shadow-lg transition disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2"
         >
-          {saving && <Loader2 className="w-4 h-4 animate-spin" />}
-          {saving ? 'Saving…' : 'Save Preferences'}
+          {saving ? <Spinner size="sm" label="Saving…" /> : 'Save Preferences'}
         </button>
       </div>
     </div>

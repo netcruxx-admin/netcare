@@ -2,6 +2,7 @@
 
 import { Trash2 } from 'lucide-react';
 import { Modal } from './Modal';
+import { Spinner } from '@/components/ui/spinner';
 
 interface Props {
   title: string;
@@ -42,9 +43,9 @@ export function ConfirmDeleteModal({
         <button
           onClick={onConfirm}
           disabled={loading}
-          className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-semibold transition disabled:opacity-50"
+          className="inline-flex items-center justify-center gap-2 flex-1 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-semibold transition disabled:opacity-50"
         >
-          {loading ? 'Deleting…' : confirmLabel}
+          {loading ? <Spinner size="sm" label="Deleting…" /> : confirmLabel}
         </button>
       </div>
     </Modal>

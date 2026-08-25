@@ -289,9 +289,9 @@ export function StaffProfile({ session }: RoleViewProps) {
                   <button
                     type="submit"
                     disabled={isSubmitting}
-                    className="px-6 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg hover:shadow-lg font-semibold transition disabled:opacity-50"
+                    className="inline-flex items-center justify-center gap-2 px-6 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg hover:shadow-lg font-semibold transition disabled:opacity-50"
                   >
-                    {isSubmitting ? 'Saving…' : 'Save Changes'}
+                    {isSubmitting ? <Spinner size="sm" label="Saving…" /> : 'Save Changes'}
                   </button>
                 </div>
               </Form>

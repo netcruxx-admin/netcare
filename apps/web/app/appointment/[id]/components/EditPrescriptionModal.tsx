@@ -8,6 +8,7 @@ import { FormField } from '@/components/form/FormField';
 import { Modal } from './Modal';
 import { rxSchema } from '../appointmentSchemas';
 import type { Prescription } from '@/lib/types';
+import { Spinner } from '@/components/ui/spinner';
 
 interface Props {
   prescription: Prescription;
@@ -57,7 +58,7 @@ export function EditPrescriptionModal({ prescription, medicineOptions, onClose, 
           }
         }}
       >
-        {({ status }) => (
+        {({ status, isSubmitting }) => (
           <Form className="grid sm:grid-cols-2 gap-4">
             <div className="sm:col-span-2">
               <FormField name="medicineName" label="Medicine" as="select" placeholder="Select a medicine" options={medicineOptions} required />
@@ -76,8 +77,12 @@ export function EditPrescriptionModal({ prescription, medicineOptions, onClose, 
               <button type="button" onClick={onClose} className="flex-1 px-4 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition">
                 Cancel
               </button>
-              <button type="submit" className="flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg hover:shadow-lg font-semibold transition">
-                Save Changes
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className="inline-flex items-center justify-center gap-2 flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg hover:shadow-lg font-semibold transition disabled:opacity-50"
+              >
+                {isSubmitting ? <Spinner size="sm" label="Saving…" /> : 'Save Changes'}
               </button>
             </div>
           </Form>

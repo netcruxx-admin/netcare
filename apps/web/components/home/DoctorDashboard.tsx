@@ -21,7 +21,6 @@ import {
 import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
 import { fmtDate } from '@/lib/date';
-import { Spinner } from '@/components/ui/spinner';
 
 function toDateStr(d: Date) {
   const y = d.getFullYear();

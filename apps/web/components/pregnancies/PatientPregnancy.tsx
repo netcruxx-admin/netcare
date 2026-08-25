@@ -27,7 +27,6 @@ import {
   progressPercent,
   trimester,
 } from '@/lib/anc';
-import { Spinner } from '@/components/ui/spinner';
 
 export function PatientPregnancy({ session }: RoleViewProps) {
   const { data: patient, isLoading: loadingPatient } = useGetPatientByUserQuery(session.user.id);

@@ -12,7 +12,6 @@ import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
 import { ORDER_STATUS_LABEL, ORDER_STATUS_STYLE } from '@/lib/lab';
 import { fmtDate } from '@/lib/date';
-import { Spinner } from '@/components/ui/spinner';
 
 export function PatientMedicalHistory({ session }: RoleViewProps) {
   const { data: patient, isLoading: loadingPatient } = useGetPatientByUserQuery(session.user.id);

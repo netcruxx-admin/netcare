@@ -8,7 +8,6 @@ import { useListPatientsQuery, useListTestOrdersQuery } from '@/store/api';
 import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
 import { ORDER_STATUS_LABEL, ORDER_STATUS_STYLE } from '@/lib/lab';
-import { Spinner } from '@/components/ui/spinner';
 
 export function LabDashboard({ session }: RoleViewProps) {
   const { data: orders = [], isLoading } = useListTestOrdersQuery();

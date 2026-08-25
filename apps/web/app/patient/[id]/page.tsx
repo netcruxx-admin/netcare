@@ -37,7 +37,6 @@ import {
 } from '@/store/api';
 import { DashboardShell } from '@/components/DashboardShell';
 import { ORDER_STATUS_LABEL, ORDER_STATUS_STYLE, isAbnormal } from '@/lib/lab';
-import { Spinner } from '@/components/ui/spinner';
 
 const todayStr = new Date().toISOString().split('T')[0];
 

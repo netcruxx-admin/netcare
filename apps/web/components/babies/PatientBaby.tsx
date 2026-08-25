@@ -15,7 +15,6 @@ import {
 import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
 import { ageDisplay, ageInMonths, immStatus, whoWeightForAge, type ImmStatus } from '@/lib/baby';
-import { Spinner } from '@/components/ui/spinner';
 
 const STATUS_STYLE: Record<ImmStatus, string> = {
   given: 'bg-green-100 text-green-700',

@@ -5,7 +5,6 @@ import { fmtDate } from '@/lib/date';
 import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
 import { useGetPatientPrescriptionsQuery, useGetPatientVitalsQuery } from '@/store/api';
-import { Spinner } from '@/components/ui/spinner';
 
 export function PatientRecords({ session }: RoleViewProps) {
   const patientId = session?.patient?.id ?? '';

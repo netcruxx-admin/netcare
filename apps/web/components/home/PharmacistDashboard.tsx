@@ -13,7 +13,6 @@ import {
 import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
 import { fmtDate } from '@/lib/date';
-import { Spinner } from '@/components/ui/spinner';
 
 export function PharmacistDashboard({ session }: RoleViewProps) {
   const { data: orders = [], isLoading } = useListMedicationOrdersQuery();

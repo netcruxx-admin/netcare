@@ -8,6 +8,7 @@ import { FormField } from '@/components/form/FormField';
 import { Modal } from './Modal';
 import { vitalsSchema } from '../appointmentSchemas';
 import type { Vitals } from '@/lib/types';
+import { Spinner } from '@/components/ui/spinner';
 
 interface Props {
   vitals: Vitals;
@@ -60,7 +61,7 @@ export function EditVitalsModal({ vitals, onClose, onSaved }: Props) {
           }
         }}
       >
-        {({ status }) => (
+        {({ status, isSubmitting }) => (
           <Form className="grid grid-cols-2 gap-4">
             <FormField name="temperature" label="Temperature (°C)" type="number" placeholder="36.8" />
             <FormField name="bloodPressure" label="Blood Pressure" placeholder="120/80" />
@@ -78,8 +79,12 @@ export function EditVitalsModal({ vitals, onClose, onSaved }: Props) {
               <button type="button" onClick={onClose} className="flex-1 px-4 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition">
                 Cancel
               </button>
-              <button type="submit" className="flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg hover:shadow-lg font-semibold transition">
-                Save Changes
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className="inline-flex items-center justify-center gap-2 flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg hover:shadow-lg font-semibold transition disabled:opacity-50"
+              >
+                {isSubmitting ? <Spinner size="sm" label="Saving…" /> : 'Save Changes'}
               </button>
             </div>
           </Form>

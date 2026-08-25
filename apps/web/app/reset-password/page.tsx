@@ -10,6 +10,7 @@ import { Lock, AlertCircle, CheckCircle } from 'lucide-react';
 import { FormField } from '@/components/form/FormField';
 import { useResetPasswordMutation, useGetCurrentHospitalQuery } from '@/store/api';
 import { currentSubdomain } from '@/lib/tenant';
+import { Spinner } from '@/components/ui/spinner';
 
 const schema = Yup.object({
   newPassword: Yup.string()
@@ -135,9 +136,9 @@ function ResetPasswordForm() {
                 <button
                   type="submit"
                   disabled={formik.isSubmitting || !token}
-                  className="w-full bg-gradient-to-r from-cyan-500 to-brand-teal text-white py-2 rounded-lg font-semibold hover:shadow-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="inline-flex items-center justify-center gap-2 w-full bg-gradient-to-r from-cyan-500 to-brand-teal text-white py-2 rounded-lg font-semibold hover:shadow-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {formik.isSubmitting ? 'Saving…' : 'Set new password'}
+                  {formik.isSubmitting ? <Spinner size="sm" label="Saving…" /> : 'Set new password'}
                 </button>
 
                 <div className="text-center">

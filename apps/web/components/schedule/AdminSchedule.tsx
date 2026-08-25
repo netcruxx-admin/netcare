@@ -20,7 +20,6 @@ import type { RoleViewProps } from '@/components/RoleView';
 import { BlockModal } from '@/components/BlockModal';
 import { BLOCK_LABEL, BLOCK_CELL_STYLE, blockAtMinute, GRID_SLOTS } from '@/lib/schedule';
 import { useBreakSlots } from '@/hooks/useBreakSlots';
-import { Spinner } from '@/components/ui/spinner';
 
 const toDateStr = (d: Date) => {
   const y = d.getFullYear();

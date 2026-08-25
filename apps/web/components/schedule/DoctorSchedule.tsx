@@ -16,7 +16,6 @@ import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
 import { BlockModal } from '@/components/BlockModal';
 import { BLOCK_LABEL, BLOCK_CELL_STYLE, blockAtMinute } from '@/lib/schedule';
-import { Spinner } from '@/components/ui/spinner';
 
 function toDateStr(d: Date) {
   const y = d.getFullYear();

@@ -13,7 +13,6 @@ import {
 } from '@/store/api';
 import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
-import { Spinner } from '@/components/ui/spinner';
 
 const todayStr = new Date().toISOString().split('T')[0];
 

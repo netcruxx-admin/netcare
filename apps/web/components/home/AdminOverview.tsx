@@ -42,7 +42,6 @@ import {
 } from '@/store/api';
 import type { Appointment } from '@/lib/types';
 import { fmtDate } from '@/lib/date';
-import { Spinner } from '@/components/ui/spinner';
 
 interface Kpi {
   label: string;

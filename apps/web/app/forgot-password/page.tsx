@@ -9,6 +9,7 @@ import { Mail, AlertCircle, CheckCircle, ArrowLeft } from 'lucide-react';
 import { FormField } from '@/components/form/FormField';
 import { useForgotPasswordMutation, useGetCurrentHospitalQuery } from '@/store/api';
 import { currentSubdomain } from '@/lib/tenant';
+import { Spinner } from '@/components/ui/spinner';
 
 const schema = Yup.object({
   email: Yup.string().email('Please enter a valid email').required('Email is required'),
@@ -106,9 +107,9 @@ export default function ForgotPasswordPage() {
                 <button
                   type="submit"
                   disabled={formik.isSubmitting}
-                  className="w-full bg-gradient-to-r from-cyan-500 to-brand-teal text-white py-2 rounded-lg font-semibold hover:shadow-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="inline-flex items-center justify-center gap-2 w-full bg-gradient-to-r from-cyan-500 to-brand-teal text-white py-2 rounded-lg font-semibold hover:shadow-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {formik.isSubmitting ? 'Sending…' : 'Send reset link'}
+                  {formik.isSubmitting ? <Spinner size="sm" label="Sending…" /> : 'Send reset link'}
                 </button>
 
                 <div className="text-center">
