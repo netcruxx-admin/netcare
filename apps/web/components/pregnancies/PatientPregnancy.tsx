@@ -27,10 +27,11 @@ import {
   progressPercent,
   trimester,
 } from '@/lib/anc';
+import { Spinner } from '@/components/ui/spinner';
 
 export function PatientPregnancy({ session }: RoleViewProps) {
-  const { data: patient } = useGetPatientByUserQuery(session.user.id);
-  const { data: pregnancies = [] } = useListPregnanciesQuery(
+  const { data: patient, isLoading: loadingPatient } = useGetPatientByUserQuery(session.user.id);
+  const { data: pregnancies = [], isLoading: loadingPregnancies } = useListPregnanciesQuery(
     { patientId: patient?.id, status: 'active' },
     { skip: !patient },
   );
@@ -41,9 +42,14 @@ export function PatientPregnancy({ session }: RoleViewProps) {
     { skip: !record },
   );
 
-  if (!record) {
+  if (loadingPatient || loadingPregnancies || !record) {
     return (
-      <DashboardShell role={session.user.role} userName={session.user.name} title="Pregnancy Tracker">
+      <DashboardShell
+        role={session.user.role}
+        userName={session.user.name}
+        title="Pregnancy Tracker"
+        loading={loadingPatient || loadingPregnancies}
+      >
         <div className="max-w-md mx-auto text-center py-16">
           <div className="w-16 h-16 rounded-full bg-cyan-100 flex items-center justify-center mx-auto mb-4">
             <Baby className="w-8 h-8 text-cyan-600" />

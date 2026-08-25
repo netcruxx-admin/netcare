@@ -16,6 +16,7 @@ import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
 import { BlockModal } from '@/components/BlockModal';
 import { BLOCK_LABEL, BLOCK_CELL_STYLE, blockAtMinute } from '@/lib/schedule';
+import { Spinner } from '@/components/ui/spinner';
 
 function toDateStr(d: Date) {
   const y = d.getFullYear();
@@ -70,11 +71,11 @@ export function DoctorSchedule({ session }: RoleViewProps) {
   const [blockOpen, setBlockOpen] = useState(false);
   const [error, setError] = useState('');
 
-  const { data: doctor } = useGetDoctorByUserQuery(session.user.id);
+  const { data: doctor, isLoading: loadingDoctor } = useGetDoctorByUserQuery(session.user.id);
   // Both are already limited to this doctor by the API's "own" scope.
-  const { data: appointments = [] } = useListAppointmentsQuery();
-  const { data: patients = [] } = useListPatientsQuery();
-  const { data: blocks = [] } = useListScheduleBlocksQuery();
+  const { data: appointments = [], isLoading: loadingAppointments } = useListAppointmentsQuery();
+  const { data: patients = [], isLoading: loadingPatients } = useListPatientsQuery();
+  const { data: blocks = [], isLoading: loadingBlocks } = useListScheduleBlocksQuery();
   const [deleteScheduleBlock] = useDeleteScheduleBlockMutation();
 
   const model = useMemo(() => {
@@ -122,7 +123,13 @@ export function DoctorSchedule({ session }: RoleViewProps) {
   if (!model) return null;
 
   return (
-    <DashboardShell role={session.user.role} userName={session.user.name} title="Schedule" subtitle="Your weekly appointment board">
+    <DashboardShell
+      role={session.user.role}
+      userName={session.user.name}
+      title="Schedule"
+      subtitle="Your weekly appointment board"
+      loading={loadingDoctor || loadingAppointments || loadingPatients || loadingBlocks}
+    >
       <div className="space-y-5">
         {/* Toolbar */}
         <div className="flex flex-wrap items-center justify-between gap-3">

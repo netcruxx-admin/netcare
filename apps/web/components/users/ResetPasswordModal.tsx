@@ -5,6 +5,7 @@ import { AlertTriangle, Check, Copy, KeyRound } from 'lucide-react';
 import { apiError } from '@/lib/apiError';
 import { useResetUserPasswordMutation } from '@/store/api';
 import type { User } from '@/lib/types';
+import { Spinner } from '@/components/ui/spinner';
 
 // Issuing a temporary password for someone who cannot sign in.
 //
@@ -94,9 +95,9 @@ export function ResetPasswordModal({
                 type="button"
                 onClick={run}
                 disabled={isLoading}
-                className="flex-1 rounded-lg bg-amber-600 px-4 py-2 font-semibold text-white hover:bg-amber-700 disabled:opacity-50"
+                className="inline-flex items-center justify-center gap-2 flex-1 rounded-lg bg-amber-600 px-4 py-2 font-semibold text-white hover:bg-amber-700 disabled:opacity-50"
               >
-                {isLoading ? 'Resetting…' : 'Reset password'}
+                {isLoading ? <Spinner size="sm" label="Resetting…" /> : 'Reset password'}
               </button>
             </div>
           </>

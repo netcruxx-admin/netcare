@@ -4,7 +4,7 @@ import { Suspense, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Formik, Form } from 'formik';
 import * as Yup from 'yup';
-import { CheckCircle, AlertCircle, Banknote, CreditCard, Loader2 } from 'lucide-react';
+import { CheckCircle, AlertCircle, Banknote, CreditCard } from 'lucide-react';
 import type { Doctor } from '@/lib/types';
 import { apiError } from '@/lib/apiError';
 import { blockedSlotSet } from '@/lib/schedule';
@@ -22,6 +22,7 @@ import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
 import { FormField } from '@/components/form/FormField';
 import { Calendar } from '@/components/ui/calendar';
+import { Spinner } from '@/components/ui/spinner';
 
 // ---------------------------------------------------------------------------
 // Razorpay script loader (same helper as PatientBook)
@@ -69,7 +70,6 @@ function slotToMinutes(slot: string) {
 
 const today = toDateStr(new Date());
 
-
 type SlotStatus = 'available' | 'booked' | 'blocked';
 
 function slotStatus(slot: string, date: string, booked: Set<string>, blocked: Set<string>, breakSlots: Set<string>): SlotStatus {
@@ -114,8 +114,8 @@ function AdminBookForm({ session }: RoleViewProps) {
   const [paymentMode, setPaymentMode] = useState<'cash' | 'online'>('cash');
   const [paymentStatus, setPaymentStatus] = useState<'idle' | 'initiating' | 'checkout' | 'verifying'>('idle');
 
-  const { data: patients = [] } = useListPatientsQuery();
-  const { data: doctors = [] } = useListDoctorsQuery();
+  const { data: patients = [], isLoading: loadingPatients } = useListPatientsQuery();
+  const { data: doctors = [], isLoading: loadingDoctors } = useListDoctorsQuery();
   const [createAppointment] = useCreateAppointmentMutation();
   const [createPayment] = useCreatePaymentMutation();
   const [initiatePayment] = useInitiatePaymentMutation();
@@ -136,7 +136,9 @@ function AdminBookForm({ session }: RoleViewProps) {
     doctorId: prefill.doctorId,
     date: prefill.date,
   });
-  const { data: availability } = useGetDoctorAvailabilityQuery(
+  // Until availability lands, every slot would draw as free — which is not a
+  // slower answer but a wrong one, so the grid waits instead of guessing.
+  const { data: availability, isFetching: loadingAvailability } = useGetDoctorAvailabilityQuery(
     { doctorId: selection.doctorId, date: selection.date },
     { skip: !selection.doctorId || !selection.date },
   );
@@ -299,9 +301,9 @@ function AdminBookForm({ session }: RoleViewProps) {
 
               // Label for the submit button based on flow state.
               const submitLabel = (() => {
-                if (paymentStatus === 'initiating') return <><Loader2 className="w-4 h-4 animate-spin" /> Preparing payment…</>;
-                if (paymentStatus === 'checkout') return <><Loader2 className="w-4 h-4 animate-spin" /> Opening checkout…</>;
-                if (paymentStatus === 'verifying') return <><Loader2 className="w-4 h-4 animate-spin" /> Confirming…</>;
+                if (paymentStatus === 'initiating') return <Spinner size="sm" label="Preparing payment…" />;
+                if (paymentStatus === 'checkout') return <Spinner size="sm" label="Opening checkout…" />;
+                if (paymentStatus === 'verifying') return <Spinner size="sm" label="Confirming…" />;
                 if (paymentMode === 'cash') return 'Book Appointment';
                 return `Pay ₹${fee} & Book`;
               })();
@@ -366,6 +368,8 @@ function AdminBookForm({ session }: RoleViewProps) {
                         <div className="min-h-[220px] flex items-center justify-center text-slate-400 text-sm border border-dashed border-slate-300 rounded-lg text-center px-4">
                           {values.doctorId ? 'Pick a date to see slots' : 'Select a doctor and date to see slots'}
                         </div>
+                      ) : loadingAvailability ? (
+                        <Spinner variant="block" className="py-0 min-h-[220px] border border-dashed border-slate-300 rounded-lg" label="Checking availability…" />
                       ) : (
                         <>
                           <div className="flex flex-wrap gap-4 mb-3 text-xs text-slate-600">

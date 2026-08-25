@@ -18,6 +18,7 @@ import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
 import { GRID_SLOTS } from '@/lib/schedule';
 import { fmtDate } from '@/lib/date';
+import { Spinner } from '@/components/ui/spinner';
 
 const todayStr = () => new Date().toISOString().split('T')[0];
 
@@ -27,12 +28,12 @@ export function DoctorVideoConsults({ session }: RoleViewProps) {
   const [picked, setPicked] = useState<Set<string>>(new Set());
 
   const router = useRouter();
-  const { data: doctor } = useGetDoctorByUserQuery(session.user.id);
+  const { data: doctor, isLoading: loadingDoctor } = useGetDoctorByUserQuery(session.user.id);
   const doctorId = doctor?.id ?? '';
 
-  const { data: slots = [] } = useListVideoSlotsQuery({ doctorId }, { skip: !doctorId });
-  const { data: allAppointments = [] } = useListAppointmentsQuery();
-  const { data: patients = [] } = useListPatientsQuery();
+  const { data: slots = [], isLoading: loadingSlots } = useListVideoSlotsQuery({ doctorId }, { skip: !doctorId });
+  const { data: allAppointments = [], isLoading: loadingAppointments } = useListAppointmentsQuery();
+  const { data: patients = [], isLoading: loadingPatients } = useListPatientsQuery();
   const [createVideoSlot] = useCreateVideoSlotMutation();
   const [deleteVideoSlot] = useDeleteVideoSlotMutation();
 
@@ -95,12 +96,14 @@ export function DoctorVideoConsults({ session }: RoleViewProps) {
   }, {});
   const dates = Object.keys(byDate).sort();
 
+
   return (
     <DashboardShell
       role={session.user.role}
       userName={session.user.name}
       title="Video Consultations"
       subtitle="Publish your availability — patients book these slots online"
+      loading={loadingDoctor || loadingSlots || loadingAppointments || loadingPatients}
     >
       <div className="space-y-6">
         {/* Publish availability */}

@@ -13,6 +13,7 @@ import {
 } from '@/store/api';
 import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
+import { Spinner } from '@/components/ui/spinner';
 
 const todayStr = new Date().toISOString().split('T')[0];
 
@@ -55,7 +56,6 @@ export function NurseDashboard({ session }: RoleViewProps) {
     return { kpis, todaysAppts };
   }, [appointments, patients, doctors, vitals]);
 
-  if (isLoading) return null;
 
   const cards: { label: string; value: number; icon: LucideIcon; tint: string }[] = [
     { label: "Today's Appointments", value: model.kpis.todaysAppts, icon: CalendarDays, tint: 'text-cyan-600 bg-cyan-50' },
@@ -65,7 +65,7 @@ export function NurseDashboard({ session }: RoleViewProps) {
   ];
 
   return (
-    <DashboardShell role={session.user.role} userName={session.user.name} title="Nursing Station" subtitle="Daily overview">
+    <DashboardShell role={session.user.role} userName={session.user.name} title="Nursing Station" subtitle="Daily overview" loading={isLoading}>
       <div className="space-y-6">
         <div className="bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg p-6 flex items-center justify-between gap-4">
           <div>

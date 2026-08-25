@@ -4,7 +4,7 @@ import { ChangePasswordForm } from '@/components/auth/ChangePasswordForm';
 import { useState } from 'react';
 import { Formik, Form, useFormikContext } from 'formik';
 import * as Yup from 'yup';
-import { ChevronRight, Loader2 } from 'lucide-react';
+import { ChevronRight } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiError } from '@/lib/apiError';
 import { DashboardShell } from '@/components/DashboardShell';
@@ -17,6 +17,7 @@ import {
 import { FormField } from '@/components/form/FormField';
 import { PhoneField, toPhoneDigits, withPrefix } from '@/components/form/PhoneField';
 import { ConsentSettings } from './ConsentSettings';
+import { Spinner } from '@/components/ui/spinner';
 
 interface FormValues {
   name: string;
@@ -224,9 +225,9 @@ function WizardContent({ isSaving }: { isSaving: boolean }) {
             key="submit"
             type="submit"
             disabled={isSubmitting || isSaving}
-            className="flex-1 px-6 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white font-semibold rounded-lg hover:shadow-lg transition disabled:opacity-50"
+            className="inline-flex items-center justify-center gap-2 flex-1 px-6 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white font-semibold rounded-lg hover:shadow-lg transition disabled:opacity-50"
           >
-            {isSubmitting || isSaving ? 'Saving…' : 'Save Profile'}
+            {isSubmitting || isSaving ? <Spinner size="sm" label="Saving…" /> : 'Save Profile'}
           </button>
         )}
       </div>
@@ -255,20 +256,6 @@ export function PatientProfile({ session }: RoleViewProps) {
     insuranceNumber: patient?.insuranceNumber ?? '',
   };
 
-  if (isLoading) {
-    return (
-      <DashboardShell
-        role={session.user.role}
-        userName={session.user.name}
-        title="Profile"
-        subtitle="Your health profile"
-      >
-        <div className="flex items-center justify-center py-16">
-          <Loader2 className="w-8 h-8 animate-spin text-cyan-500" />
-        </div>
-      </DashboardShell>
-    );
-  }
 
   return (
     <DashboardShell
@@ -276,6 +263,7 @@ export function PatientProfile({ session }: RoleViewProps) {
       userName={session.user.name}
       title="Profile"
       subtitle="Manage your health information"
+      loading={isLoading}
     >
       <div className="max-w-2xl mx-auto space-y-6">
         <div className="w-full bg-white rounded-lg shadow-xl p-8 space-y-8">

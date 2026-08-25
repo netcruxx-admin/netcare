@@ -16,6 +16,7 @@ import {
 } from '@/store/api';
 import type { HospitalInfo, RoleOption } from '@/store/api';
 import type { User } from '@/lib/types';
+import { Spinner } from '@/components/ui/spinner';
 
 const EMPTY_ROLES: RoleOption[] = [];
 
@@ -202,9 +203,9 @@ export function AddUserModal({
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="flex-1 px-4 py-2.5 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg text-sm font-semibold hover:shadow-lg transition disabled:opacity-50"
+                  className="inline-flex items-center justify-center gap-2 flex-1 px-4 py-2.5 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg text-sm font-semibold hover:shadow-lg transition disabled:opacity-50"
                 >
-                  {isSubmitting ? 'Saving…' : isEditing ? 'Save Changes' : 'Add User'}
+                  {isSubmitting ? <Spinner size="sm" label="Saving…" /> : isEditing ? 'Save Changes' : 'Add User'}
                 </button>
               </div>
             </Form>

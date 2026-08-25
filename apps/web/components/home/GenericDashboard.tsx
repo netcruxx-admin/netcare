@@ -7,6 +7,7 @@ import { useGetCurrentHospitalQuery } from '@/store/api';
 import { currentSubdomain } from '@/lib/tenant';
 import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
+import { Spinner } from '@/components/ui/spinner';
 
 /**
  * The landing page for a role the product doesn't ship a dashboard for —
@@ -18,7 +19,7 @@ import type { RoleViewProps } from '@/components/RoleView';
  * isn't.
  */
 export function GenericDashboard({ session }: RoleViewProps) {
-  const { data: hospital } = useGetCurrentHospitalQuery(undefined, { skip: !currentSubdomain() });
+  const { data: hospital, isLoading } = useGetCurrentHospitalQuery(undefined, { skip: !currentSubdomain() });
   const role = session.user.role;
 
   const routes = navRoutesForRole(role, {
@@ -35,7 +36,9 @@ export function GenericDashboard({ session }: RoleViewProps) {
       title={`Welcome, ${session.user.name}`}
       subtitle={`Signed in as ${roleLabel}`}
     >
-      {routes.length === 0 ? (
+      {isLoading ? (
+        <Spinner variant="block" />
+      ) : routes.length === 0 ? (
         <div className="bg-white rounded-xl border border-slate-100 shadow-sm py-16 px-6 text-center">
           <p className="text-slate-900 font-medium mb-1">No screens are available yet.</p>
           <p className="text-sm text-slate-500">

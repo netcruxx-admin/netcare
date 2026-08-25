@@ -10,13 +10,14 @@ import { TablePagination } from '@/components/TablePagination';
 import { ExportButton } from '@/components/ExportButton';
 import { useServerTable } from '@/hooks/useServerTable';
 import type { RoleViewProps } from '@/components/RoleView';
+import { Spinner } from '@/components/ui/spinner';
 
 export function DoctorCompleted({ session }: RoleViewProps) {
   const table = useServerTable();
 
   // Filtered server-side — no client-side filtering of the full appointment list.
   const listArgs = { status: 'completed' };
-  const { data: page } = useListAppointmentsPagedQuery({
+  const { data: page, isLoading } = useListAppointmentsPagedQuery({
     ...listArgs,
     limit: table.limit,
     offset: table.offset,
@@ -50,7 +51,9 @@ export function DoctorCompleted({ session }: RoleViewProps) {
             <h3 className="font-semibold text-slate-900">Completed ({total})</h3>
           </div>
 
-          {appointments.length === 0 ? (
+          {isLoading ? (
+            <Spinner variant="block" />
+          ) : appointments.length === 0 ? (
             <div className="text-center py-16">
               <CheckCircle className="w-16 h-16 text-slate-300 mx-auto mb-4" />
               <p className="text-slate-600">No completed visits yet.</p>

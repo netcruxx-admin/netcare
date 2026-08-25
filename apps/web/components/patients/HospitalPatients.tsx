@@ -20,6 +20,7 @@ import {
   useListPatientsPagedQuery,
   useLazyListPatientsPagedQuery,
 } from '@/store/api';
+import { Spinner } from '@/components/ui/spinner';
 
 /**
  * The patient directory for hospital staff — one component for admin, doctor and
@@ -184,7 +185,7 @@ export function HospitalPatients({ session }: RoleViewProps) {
   // the page (withStats) rather than being derived from every appointment in
   // the hospital.
   const listArgs = { q: table.q.trim() || undefined, withStats: true };
-  const { data: patientPage, refetch } = useListPatientsPagedQuery({
+  const { data: patientPage, isLoading, refetch } = useListPatientsPagedQuery({
     ...listArgs,
     limit: table.limit,
     offset: table.offset,
@@ -263,7 +264,10 @@ export function HospitalPatients({ session }: RoleViewProps) {
               </button>
             )}
           </div>
-          {rows.length === 0 ? (
+
+          {isLoading ? (
+            <Spinner variant="block" />
+          ) : rows.length === 0 ? (
             <div className="text-center py-16">
               <UserRound className="w-16 h-16 text-slate-300 mx-auto mb-4" />
               <p className="text-slate-600">No patients found.</p>

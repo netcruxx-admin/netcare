@@ -12,6 +12,7 @@ import { TablePagination } from '@/components/TablePagination';
 import { useServerTable } from '@/hooks/useServerTable';
 import { ORDER_STATUS_LABEL, ORDER_STATUS_STYLE } from '@/lib/lab';
 import { fmtDate } from '@/lib/date';
+import { Spinner } from '@/components/ui/spinner';
 
 /** A published report is an order in one of these two states. */
 const PUBLISHED = 'completed,reviewed';
@@ -36,7 +37,7 @@ export function LabReports({ session }: RoleViewProps) {
   const table = useServerTable();
 
   const listArgs = { q: table.q.trim() || undefined, status: PUBLISHED };
-  const { data: orderPage } = useListTestOrdersPagedQuery({
+  const { data: orderPage, isLoading } = useListTestOrdersPagedQuery({
     ...listArgs,
     limit: table.limit,
     offset: table.offset,
@@ -74,7 +75,10 @@ export function LabReports({ session }: RoleViewProps) {
           <div className="px-6 py-4 border-b">
             <h3 className="font-semibold text-slate-900">Published Reports ({totalReports})</h3>
           </div>
-          {rows.length === 0 ? (
+
+          {isLoading ? (
+            <Spinner variant="block" />
+          ) : rows.length === 0 ? (
             <div className="text-center py-16">
               <FileBarChart className="w-16 h-16 text-slate-300 mx-auto mb-4" />
               <p className="text-slate-600">No published reports yet.</p>

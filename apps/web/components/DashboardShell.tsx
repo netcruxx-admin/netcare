@@ -23,12 +23,14 @@ import {
 } from '@/store/api';
 import { CommandPalette } from '@/components/CommandPalette';
 import { useCareContext } from '@/hooks/useCareContext';
+import { Spinner } from '@/components/ui/spinner';
 
 export function DashboardShell({
   role,
   userName,
   title,
   subtitle,
+  loading,
   children,
 }: {
   /** Role code of the signed-in user; drives the sidebar via the route table. */
@@ -36,7 +38,14 @@ export function DashboardShell({
   userName: string;
   title: string;
   subtitle?: string;
-  children: React.ReactNode;
+  /**
+   * Renders the spinner in place of `children`. The chrome — sidebar, header,
+   * title — is already known before the data is, so a screen that is still
+   * loading sets this instead of returning a second, duplicate shell.
+   */
+  loading?: boolean;
+  /** Optional: a shell that is only ever `loading` has nothing to wrap. */
+  children?: React.ReactNode;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -345,7 +354,9 @@ export function DashboardShell({
           </header>
 
           <main className="p-4 sm:p-6 lg:p-8">
-            <div className="max-w-6xl mx-auto">{children}</div>
+            <div className="max-w-6xl mx-auto">
+              {loading ? <Spinner variant="block" /> : children}
+            </div>
           </main>
         </div>
       </div>

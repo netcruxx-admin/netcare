@@ -1,9 +1,10 @@
 'use client';
 
 import { useState } from 'react';
-import { Search, Building2, ChevronRight, Loader2 } from 'lucide-react';
+import { Search, Building2, ChevronRight } from 'lucide-react';
 import { useListPublicHospitalsQuery } from '@/store/api';
 import type { HospitalPublicInfo } from '@/store/api';
+import { Spinner } from '@/components/ui/spinner';
 
 interface Props {
   onSelect: (hospital: HospitalPublicInfo) => void;
@@ -39,9 +40,8 @@ export function HospitalStep({ onSelect }: Props) {
       </div>
 
       {isLoading && (
-        <div className="flex items-center justify-center py-8 text-slate-500 gap-2">
-          <Loader2 className="w-5 h-5 animate-spin" />
-          <span className="text-sm">Loading hospitals...</span>
+        <div className="flex items-center justify-center py-8 text-slate-500 gap-2 text-sm">
+          <Spinner size="md" label="Loading hospitals…" />
         </div>
       )}
 

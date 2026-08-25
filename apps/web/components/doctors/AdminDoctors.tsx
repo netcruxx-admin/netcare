@@ -19,6 +19,7 @@ import {
   useListDoctorsPagedQuery,
   useListDepartmentsQuery,
 } from '@/store/api';
+import { Spinner } from '@/components/ui/spinner';
 
 const exportRow = (d: Doctor, deptName?: string) => [
   d.user?.name ?? '—',
@@ -46,7 +47,7 @@ export function AdminDoctors({ session }: RoleViewProps) {
     q: table.q.trim() || undefined,
     departmentId: deptFilter === 'all' ? undefined : deptFilter,
   };
-  const { data: doctorPage, refetch } = useListDoctorsPagedQuery({
+  const { data: doctorPage, isLoading, refetch } = useListDoctorsPagedQuery({
     ...listArgs,
     limit: table.limit,
     offset: table.offset,
@@ -108,7 +109,9 @@ export function AdminDoctors({ session }: RoleViewProps) {
           )}
         </div>
 
-        {filtered.length === 0 ? (
+        {isLoading ? (
+          <Spinner variant="block" />
+        ) : filtered.length === 0 ? (
           <div className="text-center py-16">
             <Stethoscope className="w-16 h-16 text-slate-300 mx-auto mb-4" />
             <p className="text-slate-600">No doctors found</p>

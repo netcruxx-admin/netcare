@@ -15,6 +15,7 @@ import {
 } from '@/store/api';
 import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
+import { Spinner } from '@/components/ui/spinner';
 
 declare global {
   interface Window {
@@ -55,7 +56,7 @@ export function PatientVideoConsult({ session }: RoleViewProps) {
       fee: d.consultationFee,
     }));
 
-  const { data: openSlots = [] } = useListVideoSlotsQuery(
+  const { data: openSlots = [], isLoading: loadingSlots } = useListVideoSlotsQuery(
     { doctorId: selectedDoctor, status: 'open' },
     { skip: !selectedDoctor },
   );
@@ -86,7 +87,6 @@ export function PatientVideoConsult({ session }: RoleViewProps) {
   const [bookVideoSlot] = useBookVideoSlotMutation();
 
   const doctorById = useMemo(() => new Map(doctors.map((d) => [d.id, d])), [doctors]);
-
 
   const book = async (slot: VideoSlot) => {
     setError('');
@@ -260,6 +260,8 @@ export function PatientVideoConsult({ session }: RoleViewProps) {
               <Video className="w-10 h-10 mx-auto mb-3 text-slate-300" />
               <p className="text-sm">Select a doctor to see their available video-consult times.</p>
             </div>
+          ) : loadingSlots ? (
+            <Spinner variant="block" />
           ) : slots.length === 0 ? (
             <div className="rounded-xl border border-dashed border-slate-300 p-10 text-center text-slate-500">
               <CalendarX className="w-10 h-10 mx-auto mb-3 text-slate-300" />
@@ -319,9 +321,9 @@ export function PatientVideoConsult({ session }: RoleViewProps) {
             <button
               onClick={() => book(confirm)}
               disabled={booking}
-              className="mt-5 w-full py-2.5 rounded-lg bg-gradient-to-r from-cyan-500 to-brand-teal text-white font-semibold text-sm disabled:opacity-50"
+              className="inline-flex items-center justify-center gap-2 mt-5 w-full py-2.5 rounded-lg bg-gradient-to-r from-cyan-500 to-brand-teal text-white font-semibold text-sm disabled:opacity-50"
             >
-              {booking ? 'Processing…' : `Pay ₹${doctorById.get(confirm.doctorId)?.fee ?? 0} & Book`}
+              {booking ? <Spinner size="sm" label="Processing…" /> : `Pay ₹${doctorById.get(confirm.doctorId)?.fee ?? 0} & Book`}
             </button>
             <p className="text-xs text-slate-400 text-center mt-2">Secured by Razorpay. Slot is confirmed only after payment.</p>
           </div>

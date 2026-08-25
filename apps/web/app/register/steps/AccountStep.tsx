@@ -5,6 +5,7 @@ import { Lock, Mail, User } from 'lucide-react';
 import { FormField } from '@/components/form/FormField';
 import { PhoneField } from '@/components/form/PhoneField';
 import type { FormValues } from '../registrationSchemas';
+import { Spinner } from '@/components/ui/spinner';
 
 interface AccountStepProps {
   formik: FormikProps<FormValues>;
@@ -29,9 +30,9 @@ export function AccountStep({ formik, needsDetails, hasVerify, onBack }: Account
       <button
         type="submit"
         disabled={formik.isSubmitting}
-        className="w-full bg-gradient-to-r from-cyan-500 to-brand-teal text-white py-2 rounded-lg font-semibold hover:shadow-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
+        className="inline-flex items-center justify-center gap-2 w-full bg-gradient-to-r from-cyan-500 to-brand-teal text-white py-2 rounded-lg font-semibold hover:shadow-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
       >
-        {formik.isSubmitting ? 'Please wait...' : needsDetails ? 'Continue' : 'Create Account'}
+        {formik.isSubmitting ? <Spinner size="sm" label="Please wait…" /> : needsDetails ? 'Continue' : 'Create Account'}
       </button>
 
       <button

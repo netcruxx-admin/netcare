@@ -10,6 +10,7 @@ import { OnboardHospitalWizard } from '@/components/hospitals/OnboardHospitalWiz
 import { hasPermission } from '@/lib/auth';
 import { fmtDate } from '@/lib/date';
 import { useGetSuperadminOverviewQuery, useListHospitalsQuery } from '@/store/api';
+import { Spinner } from '@/components/ui/spinner';
 
 export function PlatformOverview({ session }: RoleViewProps) {
   const router = useRouter();
@@ -74,7 +75,7 @@ export function PlatformOverview({ session }: RoleViewProps) {
             )}
           </div>
           {isLoading ? (
-            <div className="py-12 text-center text-slate-400 text-sm">Loading…</div>
+            <Spinner variant="block" />
           ) : hospitals.length === 0 ? (
             <div className="py-12 text-center text-slate-400 text-sm">No hospitals found.</div>
           ) : (

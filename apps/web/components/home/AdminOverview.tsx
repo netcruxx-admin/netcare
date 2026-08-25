@@ -42,6 +42,7 @@ import {
 } from '@/store/api';
 import type { Appointment } from '@/lib/types';
 import { fmtDate } from '@/lib/date';
+import { Spinner } from '@/components/ui/spinner';
 
 interface Kpi {
   label: string;
@@ -83,11 +84,16 @@ export function AdminOverview({ session }: RoleViewProps) {
   const [period, setPeriod] = useState<number | null>(null);
   const [deptId, setDeptId] = useState<string>('all');
 
-  const { data: appointments = [] } = useListAppointmentsQuery();
-  const { data: payments = [] } = useListPaymentsQuery();
-  const { data: departments = [] } = useListDepartmentsQuery();
-  const { data: doctors = [] } = useListDoctorsQuery();
-  const { data: patients = [] } = useListPatientsQuery();
+  const { data: appointments = [], isLoading: loadingAppointments } = useListAppointmentsQuery();
+  const { data: payments = [], isLoading: loadingPayments } = useListPaymentsQuery();
+  const { data: departments = [], isLoading: loadingDepartments } = useListDepartmentsQuery();
+  const { data: doctors = [], isLoading: loadingDoctors } = useListDoctorsQuery();
+  const { data: patients = [], isLoading: loadingPatients } = useListPatientsQuery();
+
+  // Every tile on this page is derived from all five lists, so a partial answer
+  // would render KPIs that are wrong rather than merely incomplete.
+  const isLoading =
+    loadingAppointments || loadingPayments || loadingDepartments || loadingDoctors || loadingPatients;
 
   const data = useMemo(() => {
     const today = new Date().toISOString().split('T')[0];
@@ -232,12 +238,14 @@ export function AdminOverview({ session }: RoleViewProps) {
     };
   }, [appointments, payments, departments, doctors, patients, period, deptId]);
 
+
   return (
     <DashboardShell
       role={session.user.role}
       userName={session.user.name}
       title="Admin Panel"
       subtitle="Hospital operations at a glance"
+      loading={isLoading}
     >
       <div className="space-y-8">
         {/* Filter bar */}

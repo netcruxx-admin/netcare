@@ -32,6 +32,7 @@ import {
   FLAG_LABEL,
   type ResultFlag,
 } from '@/lib/lab';
+import { Spinner } from '@/components/ui/spinner';
 
 interface DraftRow extends TestResultParameter {
   low?: number;
@@ -60,7 +61,7 @@ function LabOrdersInner({ session }: RoleViewProps) {
   // Filter, search and page on the server: with only one page in hand, doing it
   // here would search 20 rows and present that as the whole result.
   const debouncedQuery = useDebounced(query);
-  const { data: orderPage } = useListTestOrdersPagedQuery({
+  const { data: orderPage, isLoading } = useListTestOrdersPagedQuery({
     q: debouncedQuery.trim() || undefined,
     status: statusFilter === 'all' ? undefined : statusFilter,
     limit: PAGE_SIZE,
@@ -264,7 +265,10 @@ function LabOrdersInner({ session }: RoleViewProps) {
           <div className="px-6 py-4 border-b">
             <h3 className="font-semibold text-slate-900">Orders ({totalOrders})</h3>
           </div>
-          {rows.length === 0 ? (
+
+          {isLoading ? (
+            <Spinner variant="block" />
+          ) : rows.length === 0 ? (
             <div className="text-center py-16">
               <ClipboardList className="w-16 h-16 text-slate-300 mx-auto mb-4" />
               <p className="text-slate-600">No orders match your filters.</p>

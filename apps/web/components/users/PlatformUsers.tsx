@@ -21,6 +21,7 @@ import {
   useListAssignableRolesQuery,
 } from '@/store/api';
 import type { RoleOption } from '@/store/api';
+import { Spinner } from '@/components/ui/spinner';
 
 const ROLE_STYLES: Record<string, string> = {
   admin: 'bg-violet-100 text-violet-700',
@@ -109,7 +110,7 @@ export function PlatformUsers({ session }: RoleViewProps) {
           )}
         </div>
         {isLoading ? (
-          <div className="py-16 text-center text-slate-400 text-sm">Loading…</div>
+          <Spinner variant="block" />
         ) : users.length === 0 ? (
           <div className="py-16 text-center">
             <Users className="w-16 h-16 text-slate-200 mx-auto mb-4" />

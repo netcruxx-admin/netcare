@@ -19,6 +19,7 @@ import { AddClinicalNotesModal } from './components/AddClinicalNotesModal';
 import { OrderTestModal } from './components/OrderTestModal';
 import { ConfirmActionModal } from './components/ConfirmActionModal';
 import { useActiveHospital } from '@/hooks/useActiveHospital';
+import { Spinner } from '@/components/ui/spinner';
 
 type OpenModal = 'reschedule' | 'edit' | 'vitals' | 'rx' | 'notes' | 'laborder' | 'followup' | null;
 
@@ -73,10 +74,7 @@ export default function AppointmentDetailPage() {
     return (
       <Chrome>
         <div className="flex-1 flex items-center justify-center">
-          <div className="text-center">
-            <div className="w-12 h-12 rounded-full border-4 border-cyan-200 border-t-cyan-600 animate-spin mx-auto mb-4"></div>
-            <p className="text-slate-600">Loading appointment details...</p>
-          </div>
+          <Spinner variant="block" label="Loading appointment details…" />
         </div>
       </Chrome>
     );

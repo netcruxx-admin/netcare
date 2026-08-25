@@ -15,6 +15,7 @@ import {
 import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
 import { ageDisplay, ageInMonths, immStatus, whoWeightForAge, type ImmStatus } from '@/lib/baby';
+import { Spinner } from '@/components/ui/spinner';
 
 const STATUS_STYLE: Record<ImmStatus, string> = {
   given: 'bg-green-100 text-green-700',
@@ -25,8 +26,8 @@ const STATUS_STYLE: Record<ImmStatus, string> = {
 const STATUS_LABEL: Record<ImmStatus, string> = { given: 'Given', overdue: 'Overdue', due: 'Due now', upcoming: 'Upcoming' };
 
 export function PatientBaby({ session }: RoleViewProps) {
-  const { data: patient } = useGetPatientByUserQuery(session.user.id);
-  const { data: babies = [] } = useListBabiesQuery(
+  const { data: patient, isLoading: loadingPatient } = useGetPatientByUserQuery(session.user.id);
+  const { data: babies = [], isLoading: loadingBabies } = useListBabiesQuery(
     { motherPatientId: patient?.id },
     { skip: !patient },
   );
@@ -47,9 +48,14 @@ export function PatientBaby({ session }: RoleViewProps) {
     [baby, measurements],
   );
 
-  if (!baby) {
+  if (loadingPatient || loadingBabies || !baby) {
     return (
-      <DashboardShell role={session.user.role} userName={session.user.name} title="My Baby">
+      <DashboardShell
+        role={session.user.role}
+        userName={session.user.name}
+        title="My Baby"
+        loading={loadingPatient || loadingBabies}
+      >
         <div className="max-w-md mx-auto text-center py-16">
           <div className="w-16 h-16 rounded-full bg-cyan-100 flex items-center justify-center mx-auto mb-4">
             <BabyIcon className="w-8 h-8 text-cyan-600" />

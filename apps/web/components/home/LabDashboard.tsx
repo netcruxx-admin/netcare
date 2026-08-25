@@ -2,12 +2,13 @@
 
 import { useMemo } from 'react';
 import Link from 'next/link';
-import { Inbox, FlaskConical, CheckCircle2, AlertTriangle, ArrowRight, Loader2 } from 'lucide-react';
+import { Inbox, FlaskConical, CheckCircle2, AlertTriangle, ArrowRight } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useListPatientsQuery, useListTestOrdersQuery } from '@/store/api';
 import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
 import { ORDER_STATUS_LABEL, ORDER_STATUS_STYLE } from '@/lib/lab';
+import { Spinner } from '@/components/ui/spinner';
 
 export function LabDashboard({ session }: RoleViewProps) {
   const { data: orders = [], isLoading } = useListTestOrdersQuery();
@@ -36,15 +37,6 @@ export function LabDashboard({ session }: RoleViewProps) {
     return { kpis, queue };
   }, [orders, patients]);
 
-  if (isLoading) {
-    return (
-      <DashboardShell role={session.user.role} userName={session.user.name} title="Laboratory" subtitle="Test processing overview">
-        <div className="flex items-center justify-center py-24">
-          <Loader2 className="w-8 h-8 animate-spin text-cyan-500" />
-        </div>
-      </DashboardShell>
-    );
-  }
 
   const cards: { label: string; value: number; icon: LucideIcon; tint: string }[] = [
     { label: 'New Orders', value: model.kpis.newOrders, icon: Inbox, tint: 'text-slate-600 bg-slate-100' },
@@ -54,7 +46,7 @@ export function LabDashboard({ session }: RoleViewProps) {
   ];
 
   return (
-    <DashboardShell role={session.user.role} userName={session.user.name} title="Laboratory" subtitle="Test processing overview">
+    <DashboardShell role={session.user.role} userName={session.user.name} title="Laboratory" subtitle="Test processing overview" loading={isLoading}>
       <div className="space-y-6">
         <div className="bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg p-6 flex items-center justify-between gap-4">
           <div>

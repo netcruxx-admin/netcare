@@ -13,6 +13,7 @@ import {
 } from '@/components/ui/command';
 import { useListDoctorsQuery, useListPatientsQuery } from '@/store/api';
 import { adminRole, labRole, staffRoles } from '@/lib/roles';
+import { Spinner } from '@/components/ui/spinner';
 
 // A role code from the backend catalog (roles are runtime data, see
 // lib/roles.ts). Only compared against known codes below, so an unrecognised
@@ -41,8 +42,8 @@ export function CommandPalette({
   // Only fetched while the palette is open to a staff user; the API returns
   // whatever that role may see, so the search can't surface hidden records.
   const skip = !open || !staff;
-  const { data: patientRecords = [] } = useListPatientsQuery(undefined, { skip });
-  const { data: doctorRecords = [] } = useListDoctorsQuery(undefined, { skip });
+  const { data: patientRecords = [], isLoading: loadingPatients } = useListPatientsQuery(undefined, { skip });
+  const { data: doctorRecords = [], isLoading: loadingDoctors } = useListDoctorsQuery(undefined, { skip });
 
   const patients = useMemo(
     () =>
@@ -72,7 +73,11 @@ export function CommandPalette({
     <CommandDialog open={open} onOpenChange={onOpenChange} title="Search" description="Jump to a page, patient, or doctor">
       <CommandInput placeholder="Search pages, patients, doctors…" />
       <CommandList>
-        <CommandEmpty>No results found.</CommandEmpty>
+        {loadingPatients || loadingDoctors ? (
+          <Spinner variant="block" />
+        ) : (
+          <CommandEmpty>No results found.</CommandEmpty>
+        )}
 
         <CommandGroup heading="Pages">
           {navItems.map((n) => (

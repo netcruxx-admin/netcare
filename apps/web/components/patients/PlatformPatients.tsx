@@ -18,6 +18,7 @@ import {
   useGetSuperadminPatientsPagedQuery,
   useListHospitalsQuery,
 } from '@/store/api';
+import { Spinner } from '@/components/ui/spinner';
 
 export function PlatformPatients({ session }: RoleViewProps) {
   const searchParams = useSearchParams();
@@ -80,7 +81,7 @@ export function PlatformPatients({ session }: RoleViewProps) {
           )}
         </div>
         {isLoading ? (
-          <div className="py-16 text-center text-slate-400 text-sm">Loading…</div>
+          <Spinner variant="block" />
         ) : patients.length === 0 ? (
           <div className="py-16 text-center">
             <UserRound className="w-16 h-16 text-slate-200 mx-auto mb-4" />

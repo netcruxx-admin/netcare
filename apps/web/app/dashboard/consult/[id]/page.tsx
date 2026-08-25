@@ -15,6 +15,7 @@ import {
   useUpdateAppointmentMutation,
 } from '@/store/api';
 import { adminRole, doctorRole } from '@/lib/roles';
+import { Spinner } from '@/components/ui/spinner';
 
 interface ChatMsg { from: 'me' | 'them'; text: string; }
 type Phase = 'lobby' | 'call' | 'ended';
@@ -127,7 +128,13 @@ export default function ConsultRoomPage() {
 
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
 
-  if (!session || !ready) return null;
+  if (!session) return null;
+
+  if (!ready) {
+    return (
+      <Spinner variant="page" dark label="Preparing your consultation room…" />
+    );
+  }
 
   const sendMessage = () => {
     if (!draft.trim()) return;
@@ -247,7 +254,7 @@ export default function ConsultRoomPage() {
             </div>
             {remote === 'connecting' && (
               <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-900/50">
-                <div className="w-8 h-8 rounded-full border-2 border-slate-500 border-t-white animate-spin mb-3" />
+                <Spinner size="lg" className="text-white mb-3" />
                 <p className="text-sm text-slate-300">Connecting to {otherName}…</p>
               </div>
             )}

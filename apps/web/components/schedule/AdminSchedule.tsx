@@ -20,6 +20,7 @@ import type { RoleViewProps } from '@/components/RoleView';
 import { BlockModal } from '@/components/BlockModal';
 import { BLOCK_LABEL, BLOCK_CELL_STYLE, blockAtMinute, GRID_SLOTS } from '@/lib/schedule';
 import { useBreakSlots } from '@/hooks/useBreakSlots';
+import { Spinner } from '@/components/ui/spinner';
 
 const toDateStr = (d: Date) => {
   const y = d.getFullYear();
@@ -74,10 +75,11 @@ export function AdminSchedule({ session }: RoleViewProps) {
 
   const canManageBlocks = hasPermission(session, 'schedule.read');
 
-  const { data: allDoctors = [] } = useListDoctorsQuery();
-  const { data: allPatients = [] } = useListPatientsQuery();
-  const { data: allAppointments = [], refetch: refetchAppointments } = useListAppointmentsQuery();
-  const { data: allBlocks = [], refetch: refetchBlocks } = useListScheduleBlocksQuery();
+  const { data: allDoctors = [], isLoading: loadingDoctors } = useListDoctorsQuery();
+  const { data: allPatients = [], isLoading: loadingPatients } = useListPatientsQuery();
+  const { data: allAppointments = [], isLoading: loadingAppointments, refetch: refetchAppointments } =
+    useListAppointmentsQuery();
+  const { data: allBlocks = [], isLoading: loadingBlocks, refetch: refetchBlocks } = useListScheduleBlocksQuery();
   const [deleteScheduleBlock] = useDeleteScheduleBlockMutation();
 
   // Dynamic break window — fetched from hospital operational config.
@@ -123,7 +125,6 @@ export function AdminSchedule({ session }: RoleViewProps) {
     return { doctors, rowMins: [...mins].sort((x, y) => x - y), cellMap, blocksByDoctor };
   }, [date, allDoctors, allPatients, allAppointments, allBlocks]);
 
-
   const shiftDay = (delta: number) =>
     setDate(toDateStr(new Date(new Date(`${date}T00:00:00`).getTime() + delta * 86400000)));
 
@@ -136,12 +137,14 @@ export function AdminSchedule({ session }: RoleViewProps) {
     }
   };
 
+
   return (
     <DashboardShell
       role={session.user.role}
       userName={session.user.name}
       title="Schedule"
       subtitle="Daily appointment board by doctor"
+      loading={loadingDoctors || loadingPatients || loadingAppointments || loadingBlocks}
     >
       <div className="space-y-5">
         {/* Toolbar */}

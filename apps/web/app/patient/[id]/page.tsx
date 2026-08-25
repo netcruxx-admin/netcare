@@ -37,6 +37,7 @@ import {
 } from '@/store/api';
 import { DashboardShell } from '@/components/DashboardShell';
 import { ORDER_STATUS_LABEL, ORDER_STATUS_STYLE, isAbnormal } from '@/lib/lab';
+import { Spinner } from '@/components/ui/spinner';
 
 const todayStr = new Date().toISOString().split('T')[0];
 
@@ -67,7 +68,7 @@ export default function PatientDetailPage() {
 
   // The API decides what this caller may see: a patient they don't treat 404s,
   // and each sub-resource is narrowed by the same "own" scope.
-  const { data: patient, isError: notFound } = useGetPatientQuery(patientId, {
+  const { data: patient, isLoading, isError: notFound } = useGetPatientQuery(patientId, {
     skip: !patientId || !session,
   });
   const { data: rawAppointments = [] } = useGetPatientAppointmentsQuery(patientId, { skip: !patient });
@@ -159,7 +160,11 @@ export default function PatientDetailPage() {
     );
   }
 
-  if (!session || !model) return null;
+  if (!session) return null;
+
+  if (isLoading || !model) {
+    return <DashboardShell role={role} userName={session.user.name} title="Patient Details" loading />;
+  }
 
   const { patient: patientRecord, patientUser } = model;
   const name = patientUser?.name ?? 'Patient';

@@ -1,8 +1,9 @@
 'use client';
 
 import { useState } from 'react';
-import { Download, Loader2 } from 'lucide-react';
+import { Download } from 'lucide-react';
 import { downloadCsv } from '@/lib/export';
+import { Spinner } from '@/components/ui/spinner';
 
 type Rows = (string | number | null | undefined)[][];
 
@@ -49,7 +50,7 @@ export function ExportButton({
       disabled={busy || (!getRows && rows.length === 0)}
       className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-slate-300 text-slate-700 rounded-lg text-sm font-semibold hover:bg-slate-50 transition disabled:opacity-50 disabled:cursor-not-allowed"
     >
-      {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+      {busy ? <Spinner size="sm" /> : <Download className="w-4 h-4" />}
       {busy ? 'Preparing…' : label}
     </button>
   );

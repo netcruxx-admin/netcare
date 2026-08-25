@@ -2,11 +2,12 @@
 
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Calendar, Plus, User, Clock, FileText, Loader2 } from 'lucide-react';
+import { Calendar, Plus, User, Clock, FileText } from 'lucide-react';
 import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
 import { useListAppointmentsQuery, useListDepartmentsQuery } from '@/store/api';
 import { hasPermission } from '@/lib/auth';
+import { Spinner } from '@/components/ui/spinner';
 
 export function PatientDashboard({ session }: RoleViewProps) {
   const router = useRouter();
@@ -71,9 +72,7 @@ export function PatientDashboard({ session }: RoleViewProps) {
           </div>
           <div className="p-6 space-y-4">
             {isLoading ? (
-              <div className="flex items-center justify-center py-12">
-                <Loader2 className="w-8 h-8 animate-spin text-cyan-500" />
-              </div>
+              <Spinner variant="block" />
             ) : upcomingAppointments.length === 0 ? (
               <div className="text-center py-12">
                 <Calendar className="w-16 h-16 text-slate-300 mx-auto mb-4" />

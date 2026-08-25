@@ -13,6 +13,7 @@ import {
 import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
 import { fmtDate } from '@/lib/date';
+import { Spinner } from '@/components/ui/spinner';
 
 export function PharmacistDashboard({ session }: RoleViewProps) {
   const { data: orders = [], isLoading } = useListMedicationOrdersQuery();
@@ -37,15 +38,6 @@ export function PharmacistDashboard({ session }: RoleViewProps) {
     };
   }, [orders, lowStock]);
 
-  if (isLoading) {
-    return (
-      <DashboardShell role={session.user.role} userName={session.user.name} title="Pharmacy" subtitle="Dispensing and stock overview">
-        <div className="flex items-center justify-center py-24">
-          <Loader2 className="w-8 h-8 animate-spin text-cyan-500" />
-        </div>
-      </DashboardShell>
-    );
-  }
 
   const cards: { label: string; value: number; icon: LucideIcon; tint: string; href: string }[] = [
     { label: 'To Dispense', value: model.kpis.toDispense, icon: Pill, tint: 'text-slate-600 bg-slate-100', href: '/dashboard/medication-orders' },
@@ -55,7 +47,7 @@ export function PharmacistDashboard({ session }: RoleViewProps) {
   ];
 
   return (
-    <DashboardShell role={session.user.role} userName={session.user.name} title="Pharmacy" subtitle="Dispensing and stock overview">
+    <DashboardShell role={session.user.role} userName={session.user.name} title="Pharmacy" subtitle="Dispensing and stock overview" loading={isLoading}>
       <div className="space-y-6">
         <div className="bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg p-6 flex items-center justify-between gap-4">
           <div>

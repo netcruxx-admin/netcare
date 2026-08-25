@@ -12,6 +12,7 @@ import { loginRoleTabs, resolveHomePath } from '@/lib/roles';
 import { FormField } from '@/components/form/FormField';
 import { useGetCurrentHospitalQuery, useLoginMutation } from '@/store/api';
 import { currentSubdomain } from '@/lib/tenant';
+import { Spinner } from '@/components/ui/spinner';
 
 type LoginType = (typeof loginRoleTabs)[number];
 
@@ -42,7 +43,6 @@ function LoginFallback() {
     </div>
   );
 }
-
 
 function LoginForm() {
   const router = useRouter();
@@ -194,7 +194,6 @@ function LoginForm() {
             </div>
           )}
 
-
           <FormikProvider value={formik}>
             <form onSubmit={formik.handleSubmit} className="space-y-4" noValidate>
               <FormField name="email" label="Email" type="email" placeholder="your.email@example.com" icon={Mail} required />
@@ -203,9 +202,9 @@ function LoginForm() {
               <button
                 type="submit"
                 disabled={isLoading || formik.isSubmitting}
-                className="w-full bg-gradient-to-r from-cyan-500 to-brand-teal text-white py-2 rounded-lg font-semibold hover:shadow-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full inline-flex items-center justify-center gap-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white py-2 rounded-lg font-semibold hover:shadow-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {isLoading || formik.isSubmitting ? 'Signing in...' : 'Sign In'}
+                {isLoading || formik.isSubmitting ? <Spinner size="sm" label="Signing in…" /> : 'Sign In'}
               </button>
             </form>
           </FormikProvider>
@@ -225,7 +224,6 @@ function LoginForm() {
     </div>
   );
 }
-
 
 // `useSearchParams` opts the subtree into client-side rendering, and Next
 // refuses to prerender a page that reaches for it without a boundary — which

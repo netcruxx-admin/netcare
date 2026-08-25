@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { X, CalendarPlus, AlertCircle } from 'lucide-react';
 import { Calendar } from '@/components/ui/calendar';
+import { Spinner } from '@/components/ui/spinner';
 import type { Appointment } from '@/lib/types';
 import { apiError } from '@/lib/apiError';
 import {
@@ -74,8 +75,8 @@ export function FollowUpModal({
   const [error, setError] = useState('');
 
   const [createAppointment] = useCreateAppointmentMutation();
-  const { data: appointments = [] } = useListAppointmentsQuery({ doctorId: appointment.doctorId });
-  const { data: blocks = [] } = useListScheduleBlocksQuery({ doctorId: appointment.doctorId });
+  const { data: appointments = [], isLoading: loadingAppointments } = useListAppointmentsQuery({ doctorId: appointment.doctorId });
+  const { data: blocks = [], isLoading: loadingBlocks } = useListScheduleBlocksQuery({ doctorId: appointment.doctorId });
 
   const booked = bookedSlotsFrom(appointments, appointment.doctorId, date);
   const blocked = blockedSlotSet(blocks, appointment.doctorId, date, SLOTS);
@@ -142,6 +143,8 @@ export function FollowUpModal({
               <label className="block text-sm font-medium text-slate-700 mb-2">Time slot <span className="text-red-500">*</span></label>
               {!date ? (
                 <div className="min-h-[180px] flex items-center justify-center text-slate-400 text-sm border border-dashed border-slate-300 rounded-lg">Pick a date</div>
+              ) : loadingAppointments || loadingBlocks ? (
+                <Spinner variant="block" className="py-0 min-h-[180px] border border-dashed border-slate-300 rounded-lg" label="Checking availability…" />
               ) : (
                 <div className="grid grid-cols-2 gap-2">
                   {SLOTS.map((slot) => {

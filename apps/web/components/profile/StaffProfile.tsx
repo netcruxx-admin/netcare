@@ -4,7 +4,7 @@ import { ChangePasswordForm } from '@/components/auth/ChangePasswordForm';
 import { useMemo, useState } from 'react';
 import { Formik, Form, Field } from 'formik';
 import * as Yup from 'yup';
-import { Award, HeartPulse, Loader2, Mail, Phone, Stethoscope } from 'lucide-react';
+import { Award, HeartPulse, Mail, Phone, Stethoscope } from 'lucide-react';
 import { toast } from 'sonner';
 import { authStorage } from '@/lib/auth';
 import { apiError } from '@/lib/apiError';
@@ -20,6 +20,7 @@ import { FormField } from '@/components/form/FormField';
 import { PhoneField, toPhoneDigits, withPrefix } from '@/components/form/PhoneField';
 import { doctorRole } from '@/lib/roles';
 import type { AuthSession } from '@/lib/types';
+import { Spinner } from '@/components/ui/spinner';
 
 /**
  * The account form shared by clinical staff. The doctor and nurse pages this
@@ -81,15 +82,6 @@ export function StaffProfile({ session }: RoleViewProps) {
   const currentUser = currentSession.user;
 
   // Wait for the doctor record before offering fields that belong to it.
-  if (isDoctor && !doctor) {
-    return (
-      <DashboardShell role={session.user.role} userName={session.user.name} title="Profile" subtitle="Your professional details">
-        <div className="flex items-center justify-center py-16">
-          <Loader2 className="w-8 h-8 animate-spin text-cyan-500" />
-        </div>
-      </DashboardShell>
-    );
-  }
 
   const heading = isDoctor ? `Dr. ${currentSession.user.name}` : currentSession.user.name;
 
@@ -99,6 +91,7 @@ export function StaffProfile({ session }: RoleViewProps) {
       userName={currentSession.user.name}
       title="Profile"
       subtitle={isDoctor ? 'Your professional details' : 'Your account details'}
+      loading={isDoctor && !doctor}
     >
       <div className="max-w-3xl mx-auto space-y-6">
         {/* Summary card */}
@@ -235,9 +228,9 @@ export function StaffProfile({ session }: RoleViewProps) {
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="px-6 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg hover:shadow-lg font-semibold transition disabled:opacity-50"
+                  className="inline-flex items-center justify-center gap-2 px-6 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg hover:shadow-lg font-semibold transition disabled:opacity-50"
                 >
-                  {isSubmitting ? 'Saving…' : 'Save Changes'}
+                  {isSubmitting ? <Spinner size="sm" label="Saving…" /> : 'Save Changes'}
                 </button>
               </div>
             </Form>

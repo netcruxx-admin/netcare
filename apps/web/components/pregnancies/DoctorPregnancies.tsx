@@ -17,6 +17,7 @@ import type { RoleViewProps } from '@/components/RoleView';
 import { TablePagination } from '@/components/TablePagination';
 import { useServerTable } from '@/hooks/useServerTable';
 import { eddFromLmp, evaluateRisks, formatGA, gestationalAge, trimester } from '@/lib/anc';
+import { Spinner } from '@/components/ui/spinner';
 
 const today = () => new Date().toISOString().split('T')[0];
 
@@ -30,7 +31,7 @@ export function DoctorPregnancies({ session }: RoleViewProps) {
   // The mother's name, the visit count and the newest visit's readings all
   // arrive on the record, so this screen no longer holds every patient and
   // every antenatal visit in the hospital in memory.
-  const { data: pregnancyPage } = useListPregnanciesPagedQuery({
+  const { data: pregnancyPage, isLoading } = useListPregnanciesPagedQuery({
     q: table.q.trim() || undefined,
     status: statusFilter === 'all' ? undefined : statusFilter,
     limit: table.limit,
@@ -77,7 +78,9 @@ export function DoctorPregnancies({ session }: RoleViewProps) {
           </button>
         </div>
 
-        {records.length === 0 ? (
+        {isLoading ? (
+          <Spinner variant="block" />
+        ) : records.length === 0 ? (
           <div className="text-center py-16 text-slate-500">
             <Baby className="w-10 h-10 mx-auto mb-3 text-slate-300" />
             <p className="text-sm">No pregnancy records yet. Create one to start antenatal tracking.</p>

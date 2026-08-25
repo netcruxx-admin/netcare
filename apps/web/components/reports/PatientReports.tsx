@@ -13,12 +13,13 @@ import { fmtDate } from '@/lib/date';
 import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
 import { ORDER_STATUS_LABEL, ORDER_STATUS_STYLE, isAbnormal } from '@/lib/lab';
+import { Spinner } from '@/components/ui/spinner';
 
 export function PatientReports({ session }: RoleViewProps) {
   // All three are already narrowed to this patient by the API's "own" scope.
-  const { data: orders = [], refetch: refetchOrders, isFetching: fetchingOrders } = useListTestOrdersQuery();
-  const { data: results = [], refetch: refetchResults } = useListTestResultsQuery();
-  const { data: doctors = [] } = useListDoctorsQuery();
+  const { data: orders = [], refetch: refetchOrders, isLoading: loadingOrders, isFetching: fetchingOrders } = useListTestOrdersQuery();
+  const { data: results = [], refetch: refetchResults, isLoading: loadingResults } = useListTestResultsQuery();
+  const { data: doctors = [], isLoading: loadingDoctors } = useListDoctorsQuery();
 
   const refresh = () => { refetchOrders(); refetchResults(); };
 
@@ -59,12 +60,19 @@ export function PatientReports({ session }: RoleViewProps) {
               disabled={fetchingOrders}
               className="inline-flex items-center gap-2 text-sm text-slate-500 hover:text-cyan-600 disabled:opacity-50 transition"
             >
-              <RefreshCw className={`w-4 h-4 ${fetchingOrders ? 'animate-spin' : ''}`} />
-              {fetchingOrders ? 'Checking…' : 'Check for updates'}
+              {fetchingOrders ? (
+                <Spinner size="sm" label="Checking…" />
+              ) : (
+                <>
+                  <RefreshCw className="w-4 h-4" /> Check for updates
+                </>
+              )}
             </button>
           </div>
         )}
-        {rows.length === 0 ? (
+        {loadingOrders || loadingResults || loadingDoctors ? (
+          <Spinner variant="block" />
+        ) : rows.length === 0 ? (
           <div className="bg-white rounded-lg shadow text-center py-16">
             <FileBarChart className="w-16 h-16 text-slate-300 mx-auto mb-4" />
             <p className="text-slate-600">No lab tests ordered yet.</p>

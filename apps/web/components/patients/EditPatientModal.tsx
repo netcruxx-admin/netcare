@@ -9,6 +9,7 @@ import { PhoneField, toPhoneDigits, withPrefix } from '@/components/form/PhoneFi
 import { apiError } from '@/lib/apiError';
 import { useUpdatePatientMutation } from '@/store/api';
 import type { Patient } from '@/lib/types';
+import { Spinner } from '@/components/ui/spinner';
 
 const GENDER_OPTIONS = [
   { value: 'male', label: 'Male' },
@@ -129,9 +130,9 @@ export function EditPatientModal({ patient, onClose, onSuccess, hospitalId }: Pr
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="flex-1 px-4 py-2.5 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg text-sm font-semibold hover:shadow-lg transition disabled:opacity-50"
+                  className="inline-flex items-center justify-center gap-2 flex-1 px-4 py-2.5 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg text-sm font-semibold hover:shadow-lg transition disabled:opacity-50"
                 >
-                  {isSubmitting ? 'Saving…' : 'Save Changes'}
+                  {isSubmitting ? <Spinner size="sm" label="Saving…" /> : 'Save Changes'}
                 </button>
               </div>
             </Form>

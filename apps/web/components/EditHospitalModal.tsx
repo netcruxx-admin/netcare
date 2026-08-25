@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import { FormField } from '@/components/form/FormField';
 import { useGetOnboardingMetaQuery, useUpdateHospitalMutation } from '@/store/api';
 import type { HospitalInfo } from '@/store/api';
+import { Spinner } from '@/components/ui/spinner';
 
 const CATEGORY_THEMES: Record<string, { primary: string; primaryDark: string }> = {
   maternity: { primary: '#0891b2', primaryDark: '#0d9488' },
@@ -68,7 +69,7 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
 
 export function EditHospitalModal({ open, hospital, onClose, onSuccess }: Props) {
   const [updateHospital] = useUpdateHospitalMutation();
-  const { data: meta } = useGetOnboardingMetaQuery(hospital.category, { skip: !open });
+  const { data: meta, isLoading: loadingMeta } = useGetOnboardingMetaQuery(hospital.category, { skip: !open });
 
   if (!open) return null;
 
@@ -100,6 +101,7 @@ export function EditHospitalModal({ open, hospital, onClose, onSuccess }: Props)
         </div>
 
         <div className="px-6 py-5">
+          {loadingMeta && <Spinner variant="block" />}
           <Formik
             initialValues={{
               // Basic
@@ -362,9 +364,9 @@ export function EditHospitalModal({ open, hospital, onClose, onSuccess }: Props)
                   <button
                     type="submit"
                     disabled={isSubmitting}
-                    className="flex-1 px-4 py-2.5 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg font-semibold text-sm hover:shadow-lg transition disabled:opacity-50"
+                    className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg font-semibold text-sm hover:shadow-lg transition disabled:opacity-50"
                   >
-                    {isSubmitting ? 'Saving…' : 'Save Changes'}
+                    {isSubmitting ? <Spinner size="sm" label="Saving…" /> : 'Save Changes'}
                   </button>
                 </div>
               </Form>

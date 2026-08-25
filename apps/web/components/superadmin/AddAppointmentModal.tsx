@@ -5,6 +5,7 @@ import { X } from 'lucide-react';
 import { superadminPost, superadminGet } from '@/lib/superadminFetch';
 import type { HospitalInfo } from '@/store/api';
 import type { Patient, Doctor, Department } from '@/lib/types';
+import { Spinner } from '@/components/ui/spinner';
 
 interface Props {
   open: boolean;
@@ -158,7 +159,7 @@ export function AddAppointmentModal({ open, onClose, onSuccess, preselectedHospi
           {error && <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</p>}
           <div className="flex gap-3 pt-1">
             <button type="button" onClick={handleClose} className="flex-1 px-4 py-2.5 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 text-sm font-medium transition">Cancel</button>
-            <button type="submit" disabled={loading || !hospitalId} className="flex-1 px-4 py-2.5 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg text-sm font-semibold hover:shadow-lg transition disabled:opacity-50">{loading ? 'Booking…' : 'Book Appointment'}</button>
+            <button type="submit" disabled={loading || !hospitalId} className="inline-flex items-center justify-center gap-2 flex-1 px-4 py-2.5 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg text-sm font-semibold hover:shadow-lg transition disabled:opacity-50">{loading ? <Spinner size="sm" label="Booking…" /> : 'Book Appointment'}</button>
           </div>
         </form>
       </div>

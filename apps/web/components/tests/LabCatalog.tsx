@@ -10,11 +10,12 @@ import type { RoleViewProps } from '@/components/RoleView';
 import type { LabTest } from '@/lib/types';
 import { TablePagination } from '@/components/TablePagination';
 import { useServerTable } from '@/hooks/useServerTable';
+import { Spinner } from '@/components/ui/spinner';
 
 export function LabCatalog({ session }: RoleViewProps) {
   const [viewing, setViewing] = useState<LabTest | null>(null);
   const table = useServerTable();
-  const { data: testPage } = useListLabTestsPagedQuery({
+  const { data: testPage, isLoading } = useListLabTestsPagedQuery({
     q: table.q.trim() || undefined,
     limit: table.limit,
     offset: table.offset,
@@ -39,7 +40,10 @@ export function LabCatalog({ session }: RoleViewProps) {
           <div className="px-6 py-4 border-b">
             <h3 className="font-semibold text-slate-900">Tests ({totalTests})</h3>
           </div>
-          {rows.length === 0 ? (
+
+          {isLoading ? (
+            <Spinner variant="block" />
+          ) : rows.length === 0 ? (
             <div className="text-center py-16">
               <FlaskConical className="w-16 h-16 text-slate-300 mx-auto mb-4" />
               <p className="text-slate-600">No tests found.</p>

@@ -1,6 +1,6 @@
 'use client';
 
-import { Loader2, ShieldCheck } from 'lucide-react';
+import { ShieldCheck } from 'lucide-react';
 import { useState } from 'react';
 import {
   useCreateConsentMutation,
@@ -11,6 +11,7 @@ import {
 import { apiError } from '@/lib/apiError';
 import { fmtDate } from '@/lib/date';
 import { ageFromDateOfBirth, AGE_OF_MAJORITY } from '@/app/register/registrationSchemas';
+import { Spinner } from '@/components/ui/spinner';
 
 // What you have agreed to, and the switch to take it back.
 //
@@ -87,7 +88,7 @@ export function ConsentSettings({ dateOfBirth }: Props) {
   if (loadingPurposes || loadingConsents) {
     return (
       <div className="flex items-center gap-2 py-6 text-slate-500">
-        <Loader2 className="h-4 w-4 animate-spin" /> Loading your consents…
+        <Spinner label="Loading your consents…" />
       </div>
     );
   }

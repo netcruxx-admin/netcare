@@ -5,6 +5,7 @@ import { Calendar, Droplet } from 'lucide-react';
 import { FormField } from '@/components/form/FormField';
 import { PhoneField } from '@/components/form/PhoneField';
 import { BLOOD_GROUPS, FormValues, GENDERS } from '../registrationSchemas';
+import { Spinner } from '@/components/ui/spinner';
 
 interface DetailsStepProps {
   formik: FormikProps<FormValues>;
@@ -42,7 +43,7 @@ export function DetailsStep({ formik, onBack }: DetailsStepProps) {
         disabled={formik.isSubmitting}
         className="w-full bg-gradient-to-r from-cyan-500 to-brand-teal text-white py-2 rounded-lg font-semibold hover:shadow-lg transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
       >
-        {formik.isSubmitting ? 'Creating account...' : 'Create Account'}
+        {formik.isSubmitting ? <Spinner size="sm" label="Creating account…" /> : 'Create Account'}
       </button>
 
       <button

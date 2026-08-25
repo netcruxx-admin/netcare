@@ -20,6 +20,7 @@ import {
   useListHospitalsQuery,
   useDeleteDepartmentMutation,
 } from '@/store/api';
+import { Spinner } from '@/components/ui/spinner';
 
 export function PlatformDepartments({ session }: RoleViewProps) {
   const searchParams = useSearchParams();
@@ -99,7 +100,7 @@ export function PlatformDepartments({ session }: RoleViewProps) {
         </div>
 
         {isLoading ? (
-          <div className="py-16 text-center text-slate-400 text-sm">Loading…</div>
+          <Spinner variant="block" />
         ) : departments.length === 0 ? (
           <div className="py-16 text-center">
             <Globe className="w-16 h-16 text-slate-200 mx-auto mb-4" />

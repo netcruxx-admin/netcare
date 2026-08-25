@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { CreditCard, Download, Eye, Banknote, Loader2, X, Smartphone } from 'lucide-react';
+import { CreditCard, Download, Eye, Banknote, X, Smartphone } from 'lucide-react';
 import type { Payment } from '@/lib/types';
 import { fmtDate } from '@/lib/date';
 import { DashboardShell } from '@/components/DashboardShell';
@@ -13,6 +13,7 @@ import {
 } from '@/store/api';
 import { toast } from 'sonner';
 import { apiError } from '@/lib/apiError';
+import { Spinner } from '@/components/ui/spinner';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -211,9 +212,7 @@ export function PatientPayments({ session }: RoleViewProps) {
         <div className="bg-white rounded-lg shadow p-6 space-y-4">
           <h2 className="text-lg font-semibold text-slate-900">Transaction History</h2>
           {isLoading ? (
-            <div className="flex items-center justify-center py-12">
-              <Loader2 className="w-8 h-8 animate-spin text-cyan-500" />
-            </div>
+            <Spinner variant="block" />
           ) : payments.length === 0 ? (
             <div className="text-center py-12">
               <CreditCard className="w-16 h-16 text-slate-300 mx-auto mb-4" />

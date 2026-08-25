@@ -21,6 +21,7 @@ import {
   useListUsersPagedQuery,
 } from '@/store/api';
 import type { RoleOption } from '@/store/api';
+import { Spinner } from '@/components/ui/spinner';
 
 // Badge colours for the roles that ship with the product.
 const roleStyle: Record<string, string> = {
@@ -140,7 +141,9 @@ export function AdminUsers({ session }: RoleViewProps) {
             <tbody>
               {isLoading && (
                 <tr>
-                  <td colSpan={canManage ? 5 : 4} className="py-10 text-center text-slate-400 text-sm">Loading…</td>
+                  <td colSpan={canManage ? 5 : 4}>
+                    <Spinner variant="block" />
+                  </td>
                 </tr>
               )}
               {!isLoading && filtered.length === 0 && (

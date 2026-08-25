@@ -32,6 +32,7 @@ import {
   useDeleteAppointmentMutation,
   useCreateVitalsMutation,
 } from '@/store/api';
+import { Spinner } from '@/components/ui/spinner';
 
 const STATUS_STYLES: Record<string, string> = {
   scheduled: 'bg-blue-100 text-blue-700',
@@ -270,7 +271,7 @@ export function PlatformAppointments({ session }: RoleViewProps) {
           )}
         </div>
         {isLoading ? (
-          <div className="py-16 text-center text-slate-400 text-sm">Loading…</div>
+          <Spinner variant="block" />
         ) : appointments.length === 0 ? (
           <div className="py-16 text-center">
             <CalendarDays className="w-16 h-16 text-slate-200 mx-auto mb-4" />
@@ -334,7 +335,6 @@ export function PlatformAppointments({ session }: RoleViewProps) {
           </div>
         )}
       </div>
-
 
       {/* Edit modal */}
       {editing && (

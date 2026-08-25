@@ -12,17 +12,22 @@ import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
 import { ORDER_STATUS_LABEL, ORDER_STATUS_STYLE } from '@/lib/lab';
 import { fmtDate } from '@/lib/date';
+import { Spinner } from '@/components/ui/spinner';
 
 export function PatientMedicalHistory({ session }: RoleViewProps) {
-  const { data: patient } = useGetPatientByUserQuery(session.user.id);
+  const { data: patient, isLoading: loadingPatient } = useGetPatientByUserQuery(session.user.id);
   const patientId = patient?.id ?? '';
 
-  const { data: records = [] } = useGetPatientMedicalRecordsQuery(patientId, { skip: !patientId });
-  const { data: prescriptions = [] } = useGetPatientPrescriptionsQuery(patientId, { skip: !patientId });
-  const { data: testOrders = [] } = useListTestOrdersQuery(
+  const { data: records = [], isLoading: loadingRecords } = useGetPatientMedicalRecordsQuery(patientId, { skip: !patientId });
+  const { data: prescriptions = [], isLoading: loadingPrescriptions } = useGetPatientPrescriptionsQuery(patientId, { skip: !patientId });
+  const { data: testOrders = [], isLoading: loadingOrders } = useListTestOrdersQuery(
     { patientId },
     { skip: !patientId },
   );
+
+  // The three below are skipped until the patient record names an id, so this
+  // stays true across both hops rather than flashing an empty history between.
+  const isLoading = loadingPatient || loadingRecords || loadingPrescriptions || loadingOrders;
 
   const sorted = {
     records: [...records].sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1)),
@@ -30,12 +35,14 @@ export function PatientMedicalHistory({ session }: RoleViewProps) {
     testOrders: [...testOrders].sort((a, b) => (a.orderedAt < b.orderedAt ? 1 : -1)),
   };
 
+
   return (
     <DashboardShell
       role={session.user.role}
       userName={session.user.name}
       title="Medical History"
       subtitle="Your diagnoses, prescriptions and lab reports"
+      loading={isLoading}
     >
       <div className="space-y-8">
         {/* Summary */}

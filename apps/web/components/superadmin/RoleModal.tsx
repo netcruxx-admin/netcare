@@ -5,6 +5,7 @@ import { X } from 'lucide-react';
 import { useCreateRoleMutation, useListPermissionsQuery, useUpdateRoleMutation } from '@/store/api';
 import type { PermissionGrant, RoleInfo } from '@/store/api';
 import { PermissionMatrix } from '@/components/roles/PermissionMatrix';
+import { Spinner } from '@/components/ui/spinner';
 
 interface Props {
   open: boolean;
@@ -159,8 +160,8 @@ export function RoleModal({ open, onClose, onSuccess, role }: Props) {
           {/* Sticky footer buttons */}
           <div className="flex gap-3 px-6 py-4 border-t border-slate-100 shrink-0">
             <button type="button" onClick={onClose} className="flex-1 px-4 py-2.5 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 text-sm font-medium transition">Cancel</button>
-            <button type="submit" disabled={loading} className="flex-1 px-4 py-2.5 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg text-sm font-semibold hover:shadow-lg transition disabled:opacity-50">
-              {loading ? 'Saving…' : isEdit ? 'Save Changes' : 'Add Role'}
+            <button type="submit" disabled={loading} className="inline-flex items-center justify-center gap-2 flex-1 px-4 py-2.5 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg text-sm font-semibold hover:shadow-lg transition disabled:opacity-50">
+              {loading ? <Spinner size="sm" label="Saving…" /> : isEdit ? 'Save Changes' : 'Add Role'}
             </button>
           </div>
         </form>
