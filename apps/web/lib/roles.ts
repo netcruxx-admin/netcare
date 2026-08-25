@@ -98,6 +98,16 @@ export function portalTitleForRole(role: string): string {
 
 /** A patient's care context, used to hide screens for care they aren't receiving. */
 export interface PatientContext {
+  /**
+   * What the patient is being seen *for*: the specialization and the department
+   * name of every doctor they have an appointment with. Both go in the same
+   * list because the keywords tested against it ("gynec", "neonat") describe a
+   * field of care, and a hospital may record that as either one.
+   *
+   * It is what lets a screen appear before the first record exists — a woman
+   * booked with an obstetrician sees Pregnancy before anyone has filed an
+   * antenatal record for her.
+   */
   specializations: string[];
   hasPregnancy: boolean;
   hasBaby: boolean;
@@ -138,7 +148,15 @@ export interface DashboardRoute {
   labelByRole?: Record<string, string>;
   /** Hidden unless the hospital has this module enabled. */
   module?: keyof HospitalModules;
-  /** Doctors only: shown when the doctor's specialization matches a keyword. */
+  /**
+   * Doctors only: shown when a keyword matches the doctor's specialization *or*
+   * their department name. Both are checked because the two fields answer
+   * different questions and neither is reliably filled: `department_id` is the
+   * FK appointments are filed into, while `specialization` is free text and
+   * often finer-grained ("Fetal Medicine" inside "Obstetrics & Gynecology") or
+   * simply blank. Matching only one of them hides the screen from half the
+   * clinicians who should have it.
+   */
   specialties?: string[];
   /** Patients only: shown when the patient's care context matches. */
   patientVisible?: (ctx: PatientContext) => boolean;
@@ -488,15 +506,19 @@ export function navRoutesForRole(
     /** A module the hospital hasn't enabled is simply absent, which reads as
      *  off — the safe direction for a feature flag. */
     modules: Partial<HospitalModules>;
+    /** The doctor's free-text specialization, e.g. "Fetal Medicine". */
     specialization?: string;
+    /** The name of the department the doctor belongs to, e.g. "Obstetrics &
+     *  Gynecology". Matched alongside `specialization` — see `specialties`. */
+    department?: string;
     patientContext?: PatientContext;
     /** Resolved grants from the session. Without them nothing is shown beyond
      *  the always-open routes — an empty menu is the safe direction to fail. */
     permissions?: PermissionGrant[];
   },
 ): DashboardRoute[] {
-  const { modules, specialization = '', patientContext, permissions } = options;
-  const spec = specialization.toLowerCase();
+  const { modules, specialization = '', department = '', patientContext, permissions } = options;
+  const spec = `${specialization} ${department}`.toLowerCase();
   const isShippedRole = builtInRoleCodes.includes(role);
 
   return dashboardRoutes.filter((route) => {

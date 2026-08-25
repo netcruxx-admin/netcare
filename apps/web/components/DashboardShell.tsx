@@ -13,7 +13,6 @@ import {
   portalTitleForRole,
   routeLabel,
   superadminRole,
-  type PatientContext,
   type PermissionGrant,
 } from '@/lib/roles';
 import {
@@ -23,6 +22,7 @@ import {
   useMeQuery,
 } from '@/store/api';
 import { CommandPalette } from '@/components/CommandPalette';
+import { useCareContext } from '@/hooks/useCareContext';
 
 export function DashboardShell({
   role,
@@ -46,17 +46,14 @@ export function DashboardShell({
   const [cmdOpen, setCmdOpen] = useState(false);
   // Read the session synchronously so the sidebar is correct on the very first
   // render — no useEffect delay, no blank-then-populated flash.
-  const [storedGrants] = useState<PermissionGrant[] | undefined>(
-    () => authStorage.getSession()?.permissions,
-  );
+  const [storedSession] = useState(() => authStorage.getSession());
+  const storedGrants: PermissionGrant[] | undefined = storedSession?.permissions;
 
   // Live permissions from the server. Refetched when the cached copy is older
   // than 30s or the window refocuses, so a revoked permission leaves the sidebar
   // without a re-login — without re-fetching on every single navigation. The
   // backend re-checks on every request regardless; this only drives the menu.
   const { data: meData } = useMeQuery(undefined, { refetchOnMountOrArgChange: 30, refetchOnFocus: true });
-  const specialization = '';
-  const patientCtx: PatientContext = { specializations: [], hasPregnancy: false, hasBaby: false };
 
   // Hospital selector for superadmin — preserves ?h= across nav clicks.
   const { data: allHospitals = [] } = useListHospitalsQuery(undefined, { skip: role !== superadminRole });
@@ -116,6 +113,17 @@ export function DashboardShell({
   // Enabled modules come from the real hospital config fetched from the backend.
   const modules = hospital.modules;
 
+  // What this user is clinically for. Specialty screens — Pregnancies,
+  // Newborns — are hidden from clinicians and patients the care doesn't apply
+  // to, and that judgement needs the doctor's department and specialization, or
+  // the patient's. Neither travels on the session, so it is fetched here.
+  const { specialization, department, patientContext } = useCareContext({
+    role,
+    userId: meData?.user.id ?? storedSession?.user.id,
+    patientId: meData?.patient?.id ?? storedSession?.patient?.id,
+    ancEnabled: !!modules.anc,
+  });
+
   // The sidebar is the route table filtered to this role — no menu is defined
   // here, so adding a screen means adding one route in lib/roles.ts.
   // Grants from the session render the menu on first paint; the live ones from
@@ -124,7 +132,8 @@ export function DashboardShell({
   const navItems = navRoutesForRole(role, {
     modules,
     specialization,
-    patientContext: patientCtx,
+    department,
+    patientContext,
     permissions: meData?.permissions ?? storedGrants,
   }).map((route) => ({
     label: routeLabel(route, role),

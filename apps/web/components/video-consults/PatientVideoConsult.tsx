@@ -9,7 +9,6 @@ import {
   useBookVideoSlotMutation,
   useGetPatientByUserQuery,
   useInitiatePaymentMutation,
-  useListDepartmentsQuery,
   useListDoctorsQuery,
   useListVideoSlotsQuery,
   useVerifyPaymentMutation,
@@ -46,13 +45,13 @@ export function PatientVideoConsult({ session }: RoleViewProps) {
   const patientId = patient?.id ?? '';
 
   const { data: allDoctors = [] } = useListDoctorsQuery();
-  const { data: departments = [] } = useListDepartmentsQuery();
   const doctors = allDoctors
     .filter((d) => d.verificationStatus !== 'rejected')
     .map((d) => ({
       id: d.id,
       name: d.user?.name ?? 'Doctor',
       specialization: d.specialization,
+      departmentId: d.departmentId ?? '',
       fee: d.consultationFee,
     }));
 
@@ -88,9 +87,6 @@ export function PatientVideoConsult({ session }: RoleViewProps) {
 
   const doctorById = useMemo(() => new Map(doctors.map((d) => [d.id, d])), [doctors]);
 
-  const deptForDoctor = (spec: string) =>
-    departments.find((d) => d.name === spec || spec.includes(d.name.split(' ')[0]))?.id ??
-    departments[0]?.id;
 
   const book = async (slot: VideoSlot) => {
     setError('');
@@ -104,7 +100,17 @@ export function PatientVideoConsult({ session }: RoleViewProps) {
       return;
     }
 
-    const departmentId = deptForDoctor(doc.specialization);
+    // The department is the doctor's own FK, exactly as every other booking
+    // path reads it. It used to be guessed by string-matching the free-text
+    // specialization against department names, falling back to whichever
+    // department happened to be first — which quietly filed video consults
+    // under the wrong department. A doctor with no department is a data
+    // problem to report, not one to paper over with a wrong answer.
+    const departmentId = doc.departmentId;
+    if (!departmentId) {
+      setError('This doctor is not assigned to a department yet. Please contact the hospital.');
+      return;
+    }
 
     setBooking(true);
     try {
