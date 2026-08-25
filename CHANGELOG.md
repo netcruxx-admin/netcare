@@ -4,6 +4,24 @@ Notable changes to CarbonHealth. Format follows [Keep a Changelog](https://keepa
 
 ## [Unreleased]
 
+### Fixed — counter sales escaped the dashboard's date filter
+
+The fix for pharmacy revenue vanishing (`427439a`) counted a payment with no
+appointment whenever the view was not narrowed to a department — but with no
+date filter, because the window was only ever applied to appointment dates.
+A counter sale has no appointment whose date it could borrow, so every pharmacy
+sale ever taken counted toward "Last 7 days".
+
+On a realistic mix that turned a ₹300 undercount into a ₹9,000 overcount: the
+7-day figure read ₹9,800 against a true ₹800. An overcount is the worse failure
+of the two — a clinic reconciling the day's takings against a number that
+includes last year's is chasing a discrepancy that does not exist.
+
+Counter sales are now dated by their own `createdAt`. The all-time view also
+takes payment dates into account when sizing the chart axis, so a hospital whose
+pharmacy opened before its first booking, or one taking pharmacy money on a day
+with no clinic, still sees that revenue plotted.
+
 ### Fixed — the bill lost its GSTIN, and pharmacy revenue vanished from the dashboard
 
 Both were live consequences of earlier changes, and both were only visible as

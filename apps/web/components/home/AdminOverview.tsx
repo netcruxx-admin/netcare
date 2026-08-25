@@ -114,7 +114,15 @@ export function AdminOverview({ session }: RoleViewProps) {
       chartStart = dayFmt(-(period - 1));
       chartEnd = today;
     } else {
-      const dates = appointments.map((a) => a.date).sort();
+      // Payment dates count towards the span too, not just appointment dates.
+      // A counter sale has no appointment, so a hospital whose pharmacy opened
+      // before its first booking — or one taking pharmacy money on a day with
+      // no clinic — would otherwise have that revenue fall outside the chart's
+      // own axis and never be drawn.
+      const dates = [
+        ...appointments.map((a) => a.date),
+        ...payments.map((p) => p.createdAt.split('T')[0]),
+      ].sort();
       chartStart = dates[0] ?? today;
       chartEnd = dates[dates.length - 1] ?? today;
     }
@@ -128,8 +136,15 @@ export function AdminOverview({ session }: RoleViewProps) {
     // which is worse than attributing it loosely: money taken is money taken.
     // It is counted whenever the view is not narrowed to one department, since
     // there is no department to attribute it to.
+    //
+    // It is dated by its own `createdAt`, because it has no appointment whose
+    // date it could borrow. Without that it fell outside the period filter
+    // entirely, so "Last 7 days" counted every counter sale ever taken —
+    // turning the original undercount into a larger overcount.
     const scopedPay = payments.filter((p) =>
-      p.appointmentId ? scopedIds.has(p.appointmentId) : deptId === 'all',
+      p.appointmentId
+        ? scopedIds.has(p.appointmentId)
+        : deptId === 'all' && inWindow(p.createdAt.split('T')[0]),
     );
 
     const byStatus = (s: string) => scoped.filter((a) => a.status === s).length;
