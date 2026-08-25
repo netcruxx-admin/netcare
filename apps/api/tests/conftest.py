@@ -138,13 +138,38 @@ class Tenant:
 
 
 def _login(client: TestClient, hospital_id: str, email: str) -> str:
+    """Sign in, completing a forced password change if one is pending.
+
+    Every account created by somebody else — the provisioned admin, and every
+    staff account — lands with `must_change_password` set and is refused by all
+    permission-guarded endpoints until it is cleared. So the fixtures do what a
+    real clinician does on their first morning, which has the pleasant side
+    effect of exercising that flow on every single test run.
+    """
     response = client.post(
         "/auth/login",
         headers={"X-Hospital-Id": hospital_id},
-        json={"email": email, "password": "Passw0rd!test"},
+        json={"email": email, "password": PROVISIONED_PASSWORD},
     )
     assert response.status_code == 200, response.text
-    return response.json()["token"]
+    payload = response.json()
+    if not payload.get("mustChangePassword"):
+        return payload["token"]
+
+    changed = client.post(
+        "/auth/change-password",
+        headers={
+            "Authorization": f"Bearer {payload['token']}",
+            "X-Hospital-Id": hospital_id,
+        },
+        json={
+            "currentPassword": PROVISIONED_PASSWORD,
+            "newPassword": SETTLED_PASSWORD,
+        },
+    )
+    assert changed.status_code == 200, changed.text
+    assert changed.json()["mustChangePassword"] is False
+    return changed.json()["token"]
 
 
 def _superadmin_token(client: TestClient) -> str:
@@ -158,6 +183,12 @@ def _superadmin_token(client: TestClient) -> str:
     assert response.status_code == 200, response.text
     return response.json()["token"]
 
+
+# The password an account is provisioned with, and the one its owner chooses on
+# first sign-in. Kept distinct so a test that accidentally reuses the first would
+# fail rather than pass by coincidence.
+PROVISIONED_PASSWORD = "Passw0rd!test"
+SETTLED_PASSWORD = "Chosen!byMe2026"
 
 REQUIRED_CONSENTS = ["treatment", "billing", "communications.service"]
 
@@ -188,13 +219,11 @@ def _build_tenant(client: TestClient, name: str, subdomain: str, category: str) 
     payload = response.json()
     hospital = payload.get("hospital", payload)
 
-    login = client.post(
-        "/auth/login",
-        headers={"X-Hospital-Id": hospital["id"]},
-        json={"email": f"admin@{subdomain}.test", "password": "Passw0rd!test"},
-    )
-    assert login.status_code == 200, login.text
-    tenant = Tenant(client, hospital, login.json()["token"])
+    # Through _login, because the provisioned admin also lands with a forced
+    # password change — the platform operator chose that password, so it is a
+    # way in and nothing more.
+    admin_token = _login(client, hospital["id"], f"admin@{subdomain}.test")
+    tenant = Tenant(client, hospital, admin_token)
 
     # A doctor.
     doctor_user = tenant.post(
@@ -202,7 +231,7 @@ def _build_tenant(client: TestClient, name: str, subdomain: str, category: str) 
         {
             "name": f"Dr {subdomain}",
             "email": f"doctor@{subdomain}.test",
-            "password": "Passw0rd!test",
+            "password": PROVISIONED_PASSWORD,
             "role": "doctor",
             "specialization": "Obstetrics & Gynecology",
         },
@@ -220,7 +249,7 @@ def _build_tenant(client: TestClient, name: str, subdomain: str, category: str) 
         {
             "name": f"Nurse {subdomain}",
             "email": f"nurse@{subdomain}.test",
-            "password": "Passw0rd!test",
+            "password": PROVISIONED_PASSWORD,
             "role": "nurse",
         },
     )
@@ -234,7 +263,7 @@ def _build_tenant(client: TestClient, name: str, subdomain: str, category: str) 
         json={
             "name": f"Patient {subdomain}",
             "email": f"patient@{subdomain}.test",
-            "password": "Passw0rd!test",
+            "password": PROVISIONED_PASSWORD,
             "phone": "9000000000",
             "role": "patient",
             "dateOfBirth": "1990-01-01",

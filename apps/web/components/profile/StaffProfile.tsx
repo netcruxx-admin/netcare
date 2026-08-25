@@ -1,5 +1,6 @@
 'use client';
 
+import { ChangePasswordForm } from '@/components/auth/ChangePasswordForm';
 import { useMemo, useState } from 'react';
 import { Formik, Form, Field } from 'formik';
 import * as Yup from 'yup';
@@ -243,8 +244,31 @@ export function StaffProfile({ session }: RoleViewProps) {
             )}
           </Formik>
         </div>
+
+        <PasswordCard />
       </div>
 
     </DashboardShell>
+  );
+}
+
+/** The voluntary change, for someone who simply wants a new password rather
+ *  than one that was handed to them. Its own card because it is a security
+ *  action, not a profile field: it ends every other session, and burying it
+ *  inside a form with one Save button would misstate when that happens. */
+function PasswordCard() {
+  return (
+    <div className="bg-white rounded-lg shadow-lg p-6 space-y-4">
+      <div>
+        <h2 className="font-bold text-lg text-slate-900">Password</h2>
+        <p className="text-sm text-slate-500">
+          Changing it signs you out on every other device, and keeps you signed
+          in here.
+        </p>
+      </div>
+      <div className="max-w-md">
+        <ChangePasswordForm />
+      </div>
+    </div>
   );
 }

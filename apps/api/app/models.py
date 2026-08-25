@@ -418,6 +418,12 @@ class User(Base):
     phone = Column(String, default="")
     # superadmin | admin | doctor | nurse | lab | patient (see Role above)
     role = Column(String, ForeignKey("roles.code"), index=True, nullable=False)
+    # Set when someone else chose this password — an admin reset, or the initial
+    # password a staff account was provisioned with. The holder must replace it
+    # before doing anything else, because until they do, their password is known
+    # to whoever typed it and the audit trail cannot honestly attribute their
+    # actions to them.
+    must_change_password = Column(Boolean, nullable=False, default=False)
     created_at = Column(String, nullable=False)
 
     __table_args__ = (

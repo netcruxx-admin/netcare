@@ -34,6 +34,13 @@ export function useDashboardGuard(path?: string): AuthSession | null {
       router.push('/login');
       return;
     }
+    // A password somebody else chose gets the holder one screen and no others.
+    // Checked here as well as at login, because a tab left open from before the
+    // reset would otherwise render a dashboard whose every request 403s.
+    if (s.mustChangePassword) {
+      router.replace('/change-password');
+      return;
+    }
     // Signed in but not entitled to this screen: send them to their own
     // dashboard rather than the login page, which would look like a logout.
     // Judged on the grants stored at login; the effect below re-judges on the

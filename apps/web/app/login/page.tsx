@@ -93,8 +93,17 @@ function LoginForm() {
           permissions: result.permissions,
           token: result.token,
           refreshToken: result.refreshToken,
+          mustChangePassword: result.mustChangePassword,
           isAuthenticated: true,
         });
+
+        // A password somebody else chose gets the holder exactly one screen.
+        // The API refuses everything else anyway, so sending them to a
+        // dashboard would only produce a wall of 403s.
+        if (result.mustChangePassword) {
+          router.push('/change-password');
+          return;
+        }
 
         // The role itself declares where it lands, so a new role needs no code
         // change here (see lib/roles.ts).

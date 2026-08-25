@@ -56,6 +56,7 @@ def _build_response(
         token=create_token(user.id, user.hospital_id, user.role, session.id),
         refresh_token=refresh_token,
         expires_in=settings.access_token_minutes * 60,
+        must_change_password=bool(user.must_change_password),
         is_authenticated=True,
     )
 
@@ -354,6 +355,61 @@ def logout_all(
     audit.record_action("logout_all")
     audit.record_subject("user", user.id, detail=f"{count} session(s) ended")
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post("/change-password", response_model=schemas.AuthResponse)
+def change_password(
+    body: schemas.ChangePasswordRequest,
+    request: Request,
+    user: models.User = Depends(get_current_user),
+    session: models.Session = Depends(get_current_session),
+    db: Session = Depends(get_db),
+):
+    """Change your own password.
+
+    Guarded by `get_current_user` alone, deliberately: it must stay reachable by
+    someone who is mid-forced-change and therefore refused by every
+    permission-guarded endpoint. That is the whole point of the exception.
+
+    The current password is required even though the caller is authenticated —
+    a token left behind on a shared machine would otherwise be enough to lock
+    the real owner out of their own account.
+
+    Every *other* session is ended. A password change is what someone does when
+    they think their account is compromised, so leaving the attacker's session
+    running would defeat it. The caller's own session survives so they are not
+    signed out by the act of securing themselves.
+    """
+    if not verify_password(body.current_password, user.password):
+        audit.record_action("password_change_failed")
+        audit.record_subject("user", user.id)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Your current password is not correct.",
+        )
+
+    if verify_password(body.new_password, user.password):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="The new password must be different from the current one.",
+        )
+
+    user.password = hash_password(body.new_password)
+    # Cleared here rather than by the reset: this is the moment the password
+    # stops being one somebody else knows.
+    user.must_change_password = False
+    revoked = sessions.revoke_all_for_user(
+        db,
+        user.id,
+        reason=sessions.REVOKED_PASSWORD_CHANGE,
+        except_session_id=session.id,
+    )
+    db.commit()
+    db.refresh(user)
+
+    audit.record_action("password_changed")
+    audit.record_subject("user", user.id, detail=f"{revoked} other session(s) ended")
+    return _build_response(db, user, session=session, refresh_token=None)
 
 
 @router.get("/me", response_model=schemas.AuthResponse)

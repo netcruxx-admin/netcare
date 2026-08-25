@@ -1,5 +1,3 @@
-from typing import Optional
-
 """Staff provisioning — creating accounts for people who work at a hospital.
 
 Split out from /auth/register deliberately. Registration is public, so it may
@@ -8,16 +6,33 @@ nurse would inherit that role's access to other people's records. Staff accounts
 are therefore created here, by someone who already holds `users.manage`.
 """
 
+import secrets
+from typing import Optional
+
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.orm import Session
 
-from .. import models, schemas
+from .. import audit, models, schemas, sessions
 from ..auth import get_current_user, hash_password
-from .. import sessions
 from ..authz import SCOPE_OWN, require_any_permission, require_permission
 from ..database import get_db
 from ..tenancy import assert_body_in_tenant, get_tenant_id, scoped
 from ..utils import ListQuery, list_params, new_id, now_iso, paginate, text_search
+
+# Ambiguous characters are left out on purpose: this password gets read aloud
+# across a reception desk or written on a slip, and "was that a 1 or an l?" is a
+# support call. Length carries the entropy instead.
+_TEMP_ALPHABET = "abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+
+
+def _generate_temporary_password(length: int = 12) -> str:
+    """A password nobody had to invent.
+
+    `secrets`, not `random`: the latter is seeded predictably and is not safe
+    for anything anyone signs in with.
+    """
+    return "".join(secrets.choice(_TEMP_ALPHABET) for _ in range(length))
+
 
 router = APIRouter(prefix="/users", tags=["users"])
 
@@ -132,6 +147,11 @@ def create_user(
         hospital_id=tenant_id,
         email=body.email,
         password=hash_password(body.password),
+        # Someone else chose this password, so it is a way in and nothing more.
+        # A clinician's first act is to replace it — otherwise the person who
+        # provisioned the account can sign in as them, and the audit trail
+        # cannot say which of the two wrote a note.
+        must_change_password=True,
         name=body.name,
         phone=body.phone,
         role=body.role,
@@ -254,3 +274,67 @@ def delete_user(
     db.query(models.Patient).filter(models.Patient.user_id == user_id).delete()
     db.delete(user)
     db.commit()
+
+@router.post(
+    "/{user_id}/reset-password",
+    response_model=schemas.ResetPasswordOut,
+    status_code=status.HTTP_201_CREATED,
+)
+def reset_user_password(
+    user_id: str,
+    body: schemas.ResetPasswordRequest,
+    db: Session = Depends(get_db),
+    actor: models.User = Depends(get_current_user),
+    _: str = Depends(require_permission("users.manage")),
+    tenant_id: str = Depends(get_tenant_id),
+):
+    """Issue a temporary password for someone who cannot sign in.
+
+    This is the whole password-recovery story until there is an email or SMS
+    provider, and for a single clinic it is a workable one: the person is
+    usually standing at the desk, or on the phone with someone who can identify
+    them. What it is *not* is self-service — recovery still requires a human who
+    can vouch for the person asking, which is the right default for a system
+    holding medical records and the wrong one for a consumer app.
+
+    The temporary password is returned once and never stored in plaintext. A
+    second reset issues a different one, which is the correct answer to "I lost
+    the note" — there is nothing to look up.
+
+    The account is flagged `must_change_password`, so the temporary password
+    buys exactly one thing: the ability to choose a real one. Until then every
+    permission-guarded endpoint refuses, because an action taken under a
+    password the front desk also knows cannot be honestly attributed to its
+    owner in the audit trail.
+    """
+    user = _get_or_404(db, user_id, tenant_id)
+
+    # Resetting your own this way would skip the current-password check that
+    # /auth/change-password exists to enforce, and would lock you out of every
+    # endpoint until you completed a change you could have done directly.
+    if user.id == actor.id:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "Use /auth/change-password to change your own password.",
+        )
+
+    temporary = body.new_password or _generate_temporary_password()
+    user.password = hash_password(temporary)
+    user.must_change_password = True
+
+    # Every session the account had, including any an attacker holds. A reset is
+    # what gets done *because* an account is suspected compromised, so leaving
+    # those alive would make the reset theatre.
+    revoked = sessions.revoke_all_for_user(
+        db, user.id, reason=sessions.REVOKED_PASSWORD_CHANGE
+    )
+    db.commit()
+
+    audit.record_action("password_reset")
+    audit.record_subject("user", user.id, detail=f"{revoked} session(s) ended")
+    return schemas.ResetPasswordOut(
+        user_id=user.id,
+        email=user.email,
+        temporary_password=temporary,
+        must_change_password=True,
+    )

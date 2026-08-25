@@ -4,6 +4,65 @@ Notable changes to CarbonHealth. Format follows [Keep a Changelog](https://keepa
 
 ## [Unreleased]
 
+### Added — people can change their own password, and staff can reset one
+
+Before this, nobody could change their own password. Not a patient, not a
+clinician, not an admin for themselves — the only mechanism was one admin
+editing another user's row through `PUT /users/{id}`. Someone who forgot their
+password had no way back, and someone who suspected their account was
+compromised had no way to act on it.
+
+**`POST /auth/change-password`** — your own. The current password is required
+even though the caller is authenticated: an access token left on a shared
+machine would otherwise be enough to lock the real owner out. Every *other*
+session ends, since a password change is what someone does when they think
+they are compromised; the caller's own survives, so securing yourself does not
+sign you out of doing it.
+
+**`POST /users/{id}/reset-password`** — somebody else's, gated on
+`users.manage`. Returns a generated temporary password once; it is never stored
+in plaintext and cannot be retrieved again, so "I lost the note" is answered by
+another reset. Every session the account had is ended, because a reset is what
+gets done *because* an account is suspected compromised. Resetting your own is
+refused — it would skip the current-password check.
+
+This is deliberately not self-service. Recovery still needs a human who can
+vouch for the person asking, which is the right default for a system holding
+medical records and the wrong one for a consumer app. When an email or SMS
+provider exists, a token flow can sit alongside this rather than replace it.
+
+**`must_change_password`** marks a password somebody else chose — an admin
+reset, or the one a staff account was provisioned with, including the first
+admin created at onboarding. Until the holder replaces it, every
+permission-guarded endpoint refuses: an action taken under a password the front
+desk also knows cannot be honestly attributed to its owner in the audit trail.
+Enforced in `require_permission`, which every data endpoint passes through,
+while `/auth/me`, logout and the change call itself deliberately do not — that
+leaves exactly enough room to fix the situation and nothing else.
+
+Existing users are untouched. Backfilling the flag would lock every current user
+out of a running system to fix a risk they are already living with.
+
+Frontend: login diverts to `/change-password`, the dashboard guard diverts a
+stale tab, both profiles gained a password card, and the users table gained a
+reset action showing the temporary password once.
+
+Eighteen tests, including that the old password stops working, that other
+devices are evicted while the caller's own session survives, that a nurse cannot
+reset anyone, and that one hospital cannot reset another's staff.
+
+### Fixed — changing SUPERADMIN_EMAIL crashed the app on every boot
+
+`seed_database` checked whether the superadmin existed **by email** but inserted
+with a fixed primary key. Rotating `SUPERADMIN_EMAIL` on a running deployment
+meant the lookup found nothing, the insert reused `user-superadmin`, and startup
+died on a duplicate-key violation — every boot, until the variable was put back.
+
+Keyed on the primary key now. An address change is honoured, because an operator
+who edits that variable means it. The password deliberately is not re-applied:
+that would make the env var a standing backdoor and would silently undo a
+password the superadmin had since chosen.
+
 ### Fixed — counter sales escaped the dashboard's date filter
 
 The fix for pharmacy revenue vanishing (`427439a`) counted a payment with no

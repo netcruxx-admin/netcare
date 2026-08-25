@@ -1955,6 +1955,11 @@ class AuthResponse(CamelModel):
     # Absent on /auth/me, which reports an existing session rather than opening
     # one and so has no new refresh token to hand out.
     refresh_token: Optional[str] = None
+    # True when this password was chosen by someone else (an admin reset, or the
+    # one a staff account was provisioned with). The client diverts to the change
+    # screen; the API refuses everything else until it is done, so a client that
+    # ignores this gets 403s rather than access.
+    must_change_password: bool = False
     # Seconds until `token` expires, so a client can refresh ahead of a 401
     # instead of discovering it mid-request.
     expires_in: int = 0
@@ -1963,6 +1968,77 @@ class AuthResponse(CamelModel):
 
 class RefreshRequest(CamelModel):
     refresh_token: str
+
+
+# ---------- Passwords ----------
+# Shared so the rules cannot drift between the three places a password is set:
+# self-service change, admin reset, and account creation.
+MIN_PASSWORD_LENGTH = 8
+
+
+def _validate_password(value: str) -> str:
+    """Length only, deliberately.
+
+    Composition rules ("one uppercase, one digit, one symbol") push people
+    towards `Passw0rd!` and are no longer recommended by anyone who measures
+    outcomes. Length is what actually costs an attacker. The real defences are
+    elsewhere and already built: bcrypt, per-address login throttling, and
+    sessions that can be revoked the moment something looks wrong.
+    """
+    if len(value or "") < MIN_PASSWORD_LENGTH:
+        raise ValueError(
+            f"Password must be at least {MIN_PASSWORD_LENGTH} characters"
+        )
+    return value
+
+
+class ChangePasswordRequest(CamelModel):
+    """Change your own password.
+
+    The current password is required even though the caller is already
+    authenticated: an access token can be left behind on a shared machine, and
+    without this, whoever finds one could lock the real owner out of their own
+    account.
+    """
+
+    current_password: str
+    new_password: str
+
+    @field_validator("new_password")
+    @classmethod
+    def _check(cls, value: str) -> str:
+        return _validate_password(value)
+
+
+class ResetPasswordRequest(CamelModel):
+    """Reset someone else's password, as staff.
+
+    `new_password` is optional: omit it and the server generates one. Generated
+    is the better path — it is high-entropy and nobody has to invent a password
+    on the spot, which is where "Welcome123" comes from.
+    """
+
+    new_password: Optional[str] = None
+
+    @field_validator("new_password")
+    @classmethod
+    def _check(cls, value: Optional[str]) -> Optional[str]:
+        return None if value is None else _validate_password(value)
+
+
+class ResetPasswordOut(CamelModel):
+    """What the person doing the reset reads out to the account's owner.
+
+    The only time the password is ever in a response body. It is not stored in
+    plaintext anywhere and cannot be retrieved again — a second reset issues a
+    new one, which is the correct answer to "I lost the note".
+    """
+
+    user_id: str
+    email: str
+    temporary_password: str
+    must_change_password: bool = True
+
 
 
 # ---------- Audit trail ----------

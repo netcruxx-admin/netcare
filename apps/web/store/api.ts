@@ -49,6 +49,11 @@ export interface ApiAuthResponse {
    *  one and so has no new refresh token to hand out. */
   refreshToken?: string;
   expiresIn?: number;
+  /** True when this password was chosen by somebody else — an admin reset, or
+   *  the one a staff account was provisioned with. The API refuses every
+   *  permission-guarded endpoint until it is replaced, so the client must divert
+   *  to the change screen rather than treating the sign-in as finished. */
+  mustChangePassword?: boolean;
   isAuthenticated: boolean;
 }
 
@@ -430,6 +435,20 @@ export interface OnboardingMeta {
 // Request body types
 // ---------------------------------------------------------------------------
 export interface LoginBody { email: string; password: string }
+export interface ChangePasswordBody {
+  currentPassword: string;
+  newPassword: string;
+}
+/** Omit `newPassword` to have the server generate one — the better path, since
+ *  it is high-entropy and nobody has to invent a password on the spot. */
+export interface ResetPasswordBody { newPassword?: string }
+export interface ResetPasswordResult {
+  userId: string;
+  email: string;
+  /** Shown once and never retrievable again. A second reset issues a new one. */
+  temporaryPassword: string;
+  mustChangePassword: boolean;
+}
 export interface RegisterBody {
   email: string;
   password: string;
@@ -976,6 +995,24 @@ export const api = createApi({
     // Ends this session server-side. Clearing localStorage alone would leave a
     // live session behind on a shared machine — the token would keep working
     // for anyone who recovered it.
+    // Changing your own. Returns a fresh session, so the caller stays signed in
+    // on this device while every other one is ended.
+    changePassword: build.mutation<ApiAuthResponse, ChangePasswordBody>({
+      query: (body) => ({ url: '/auth/change-password', method: 'POST', body }),
+    }),
+    // Staff issuing a temporary password for someone who cannot sign in. The
+    // whole recovery story until there is an email or SMS provider.
+    resetUserPassword: build.mutation<
+      ResetPasswordResult,
+      { userId: string; body: ResetPasswordBody }
+    >({
+      query: ({ userId, body }) => ({
+        url: `/users/${userId}/reset-password`,
+        method: 'POST',
+        body,
+      }),
+      invalidatesTags: ['User'],
+    }),
     logout: build.mutation<void, void>({
       query: () => ({ url: '/auth/logout', method: 'POST' }),
       invalidatesTags: ['Me'],
@@ -1765,6 +1802,8 @@ export const {
   useReplaceHospitalSubscriptionMutation,
   useLoginMutation,
   useRegisterMutation,
+  useChangePasswordMutation,
+  useResetUserPasswordMutation,
   useLogoutMutation,
   useLogoutAllMutation,
   useListConsentPurposesQuery,

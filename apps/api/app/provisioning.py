@@ -152,6 +152,11 @@ def provision_hospital(
             hospital_id=hid,
             email=admin_email or f"admin@{subdomain}.example.com",
             password=hash_password(admin_password),
+            # The platform operator typed this password, so it is a way in and
+            # nothing more — the same rule staff accounts get. Consistency
+            # matters here: an exception for the one account that can create
+            # every other account is the wrong place to make one.
+            must_change_password=True,
             name=admin_name or f"{name} Admin",
             phone=admin_phone or "",
             role="admin",

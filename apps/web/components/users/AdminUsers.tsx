@@ -1,11 +1,12 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { Users, Plus, Search, Pencil, Trash2, Eye } from 'lucide-react';
+import { Users, Plus, Search, Pencil, Trash2, Eye, KeyRound } from 'lucide-react';
 import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
 import { AddUserModal } from '@/components/superadmin/AddUserModal';
 import { DeleteUserModal } from '@/components/users/DeleteUserModal';
+import { ResetPasswordModal } from '@/components/users/ResetPasswordModal';
 import { ActionIcon } from '@/components/ActionIcon';
 import { RecordDialog } from '@/components/RecordDialog';
 import { fmtDate } from '@/lib/date';
@@ -37,6 +38,7 @@ export function AdminUsers({ session }: RoleViewProps) {
   const [editing, setEditing] = useState<User | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [deleting, setDeleting] = useState<User | null>(null);
+  const [resetting, setResetting] = useState<User | null>(null);
   const [viewing, setViewing] = useState<User | null>(null);
   const [roleFilter, setRoleFilter] = useState<string>('all');
 
@@ -170,6 +172,18 @@ export function AdminUsers({ session }: RoleViewProps) {
                         {canManage && (
                           <>
                             <ActionIcon icon={Pencil} label="Edit" onClick={() => openEdit(user)} />
+                            {/* Not offered for yourself: the server refuses it,
+                                because resetting your own would skip the
+                                current-password check and lock you out of
+                                everything until you completed a change you
+                                could have done directly from your profile. */}
+                            {!isSelf && (
+                              <ActionIcon
+                                icon={KeyRound}
+                                label="Reset password"
+                                onClick={() => setResetting(user)}
+                              />
+                            )}
                             {isSelf ? (
                               <span className="p-2 text-slate-300 cursor-not-allowed" title="Cannot delete yourself">
                                 <Trash2 className="w-4 h-4" />
@@ -206,6 +220,9 @@ export function AdminUsers({ session }: RoleViewProps) {
         onClose={() => setDeleting(null)}
         onSuccess={refetch}
       />
+      {resetting && (
+        <ResetPasswordModal user={resetting} onClose={() => setResetting(null)} />
+      )}
       <RecordDialog
         open={viewing !== null}
         onClose={() => setViewing(null)}
