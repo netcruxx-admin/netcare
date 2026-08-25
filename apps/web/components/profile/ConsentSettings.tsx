@@ -1,7 +1,7 @@
 'use client';
 
 import { Loader2, ShieldCheck } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   useCreateConsentMutation,
   useListConsentPurposesQuery,
@@ -11,18 +11,8 @@ import {
 import { apiError } from '@/lib/apiError';
 import { fmtDate } from '@/lib/date';
 import { ageFromDateOfBirth, AGE_OF_MAJORITY } from '@/app/register/registrationSchemas';
+import { toast } from 'sonner';
 
-// What you have agreed to, and the switch to take it back.
-//
-// This panel is the reason the sign-up form's promise ("you can withdraw any
-// optional consent later") is true. DPDP requires withdrawal to be as easy as
-// granting was, which rules out asking staff or sending an email — a signed-in
-// person flips the switch here and it takes effect on the next request, because
-// the backend resolves consent per request rather than caching it in the token.
-//
-// Required purposes are shown but not switchable: withdrawing consent to be
-// treated is a request to close the account, not a toggle, and the backend
-// refuses it for the same reason.
 interface Props {
   dateOfBirth?: string;
 }
@@ -34,16 +24,33 @@ export function ConsentSettings({ dateOfBirth }: Props) {
   const [createConsent, { isLoading: granting }] = useCreateConsentMutation();
   const [withdrawConsent, { isLoading: withdrawing }] = useWithdrawConsentMutation();
   const [error, setError] = useState('');
+  const [saving, setSaving] = useState(false);
 
-  // Prefill from the most recent consent that recorded a guardian — covers patients
-  // who registered via /register (guardian info is on their consent rows) and avoids
-  // asking the same parent to re-type their name every time.
+  // Local draft of which optional consents are ticked.
+  const [draft, setDraft] = useState<Record<string, boolean>>({});
+  const [draftReady, setDraftReady] = useState(false);
+
   const existingGuardian = consents.find((c) => c.guardianName);
   const [guardianName, setGuardianName] = useState('');
   const [guardianRelationship, setGuardianRelationship] = useState('');
-
-  // Sync once consents arrive (they load async after mount).
   const [prefilled, setPrefilled] = useState(false);
+
+  const age = ageFromDateOfBirth(dateOfBirth ?? '');
+  const isMinor = age !== null && age < AGE_OF_MAJORITY;
+
+  const standing = purposes.filter((p) => p.cadence === 'per_person');
+  const live = new Map(consents.map((c) => [c.purposeCode, c]));
+
+  // Initialise draft from live consents once they load.
+  useEffect(() => {
+    if (loadingConsents || loadingPurposes) return;
+    const initial: Record<string, boolean> = {};
+    standing.forEach((p) => { initial[p.code] = Boolean(live.get(p.code)); });
+    setDraft(initial);
+    setDraftReady(true);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loadingConsents, loadingPurposes]);
+
   if (!prefilled && consents.length > 0) {
     if (existingGuardian) {
       setGuardianName(existingGuardian.guardianName ?? '');
@@ -52,35 +59,44 @@ export function ConsentSettings({ dateOfBirth }: Props) {
     setPrefilled(true);
   }
 
-  const age = ageFromDateOfBirth(dateOfBirth ?? '');
-  const isMinor = age !== null && age < AGE_OF_MAJORITY;
-
-  const busy = granting || withdrawing;
-  // Per-event purposes are answered at the consultation, not here, so showing a
-  // standing switch for one would misrepresent how it actually works.
-  const standing = purposes.filter((p) => p.cadence === 'per_person');
-  const live = new Map(consents.map((c) => [c.purposeCode, c]));
-
   const missingRequired = standing.filter((p) => p.required && !live.get(p.code));
 
-  const toggle = async (code: string, on: boolean) => {
+  // Whether draft differs from what's saved.
+  const hasChanges = draftReady && standing.some((p) => {
+    const savedOn = Boolean(live.get(p.code));
+    return draft[p.code] !== savedOn;
+  });
+
+  const handleSave = async () => {
     setError('');
-    if (on && isMinor && !guardianName.trim()) {
+
+    if (isMinor && !guardianName.trim()) {
       setError('Please enter the guardian name before granting consent for a minor.');
       return;
     }
+
+    setSaving(true);
     try {
-      if (on) {
-        await createConsent({
-          purposeCode: code,
-          guardianName: isMinor ? guardianName.trim() : undefined,
-          guardianRelationship: isMinor ? guardianRelationship.trim() : undefined,
-        }).unwrap();
-      } else {
-        await withdrawConsent({ purposeCode: code }).unwrap();
+      for (const p of standing) {
+        const savedOn = Boolean(live.get(p.code));
+        const draftOn = Boolean(draft[p.code]);
+        if (draftOn === savedOn) continue;
+
+        if (draftOn) {
+          await createConsent({
+            purposeCode: p.code,
+            guardianName: isMinor ? guardianName.trim() : undefined,
+            guardianRelationship: isMinor ? guardianRelationship.trim() : undefined,
+          }).unwrap();
+        } else {
+          await withdrawConsent({ purposeCode: p.code }).unwrap();
+        }
       }
+      toast.success('Consent preferences saved');
     } catch (err) {
-      setError(apiError(err, 'Could not update your consent. Please try again.'));
+      setError(apiError(err, 'Could not save your consent preferences. Please try again.'));
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -92,8 +108,10 @@ export function ConsentSettings({ dateOfBirth }: Props) {
     );
   }
 
+  const busy = granting || withdrawing || saving;
+
   return (
-    <div className="bg-white dark:bg-slate-900 rounded-lg shadow-lg p-6 space-y-4">
+    <div id="consent-section" className="bg-white dark:bg-slate-900 rounded-lg shadow p-6 space-y-4">
       <div className="flex items-start gap-2">
         <ShieldCheck className="h-5 w-5 shrink-0 text-cyan-600 mt-0.5" />
         <div>
@@ -102,7 +120,7 @@ export function ConsentSettings({ dateOfBirth }: Props) {
           </h2>
           <p className="text-sm text-slate-500">
             What you have agreed to let us do with your information. Turning off
-            an optional consent never affects your care. Changes save automatically.
+            an optional consent never affects your care.
           </p>
         </div>
       </div>
@@ -153,19 +171,27 @@ export function ConsentSettings({ dateOfBirth }: Props) {
       <div className="space-y-2">
         {standing.map((p) => {
           const consent = live.get(p.code);
-          const on = Boolean(consent);
+          const on = Boolean(draft[p.code]);
+          const savedOn = Boolean(consent);
+          const changed = on !== savedOn;
+
           return (
             <label
               key={p.code}
-              className={`flex gap-3 items-start p-3 rounded-lg border border-slate-200 dark:border-slate-700 ${
-                (p.required && on) || busy ? 'cursor-default' : 'cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800'
+              className={`flex gap-3 items-start p-3 rounded-lg border transition ${
+                changed ? 'border-cyan-300 bg-cyan-50/40' : 'border-slate-200 dark:border-slate-700'
+              } ${
+                (p.required && savedOn) || busy ? 'cursor-default' : 'cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800'
               }`}
             >
               <input
                 type="checkbox"
                 checked={on}
-                disabled={(p.required && on) || busy}
-                onChange={() => toggle(p.code, !on)}
+                disabled={(p.required && savedOn) || busy}
+                onChange={() => {
+                  if (p.required && savedOn) return;
+                  setDraft((d) => ({ ...d, [p.code]: !d[p.code] }));
+                }}
                 className="mt-1 h-4 w-4 shrink-0 accent-cyan-600 disabled:opacity-50"
               />
               <div className="text-sm">
@@ -201,6 +227,18 @@ export function ConsentSettings({ dateOfBirth }: Props) {
             </label>
           );
         })}
+      </div>
+
+      <div className="flex justify-end pt-2">
+        <button
+          type="button"
+          onClick={handleSave}
+          disabled={!hasChanges || busy}
+          className="px-6 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg font-semibold hover:shadow-lg transition disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2"
+        >
+          {saving && <Loader2 className="w-4 h-4 animate-spin" />}
+          {saving ? 'Saving…' : 'Save Preferences'}
+        </button>
       </div>
     </div>
   );

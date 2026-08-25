@@ -3,13 +3,14 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { LogOut, Menu, X, Search } from 'lucide-react';
+import { LogOut, Menu, ShieldCheck, X, Search } from 'lucide-react';
 import Image from 'next/image';
 import { authStorage } from '@/lib/auth';
 import type { HospitalModules } from '@/lib/types';
 import {
   doctorRole,
   navRoutesForRole,
+  patientRole,
   portalTitleForRole,
   routeLabel,
   superadminRole,
@@ -18,6 +19,8 @@ import {
 } from '@/lib/roles';
 import {
   useGetCurrentHospitalQuery,
+  useListConsentPurposesQuery,
+  useListConsentsQuery,
   useListHospitalsQuery,
   useLogoutMutation,
   useMeQuery,
@@ -70,7 +73,7 @@ export function DashboardShell({
   };
 
   // Active tenant branding from the real backend (skipped for superadmin).
-  const { data: hospitalData } = useGetCurrentHospitalQuery(undefined, { skip: role === superadminRole });
+  const { data: hospitalData, isLoading: hospitalLoading } = useGetCurrentHospitalQuery(undefined, { skip: role === superadminRole });
   const hospital = role === superadminRole
     // The platform wordmark is our own: navy → teal, exactly as "Net"/"Care" render in the logo.
     // The platform console is ours; a tenant's logo would be wrong here even
@@ -113,8 +116,29 @@ export function DashboardShell({
     return () => document.removeEventListener('keydown', onKey);
   }, []);
 
+  // ── Consent gate (patients only) ─────────────────────────────────────────
+  // If a patient is missing required consents (e.g. created by admin without
+  // going through /register), block all pages except /dashboard/profile so
+  // they complete the consents before using the system.
+  const isPatient = role === patientRole;
+  const { data: consentPurposes = [] } = useListConsentPurposesQuery(undefined, { skip: !isPatient });
+  const { data: activeConsents = [] } = useListConsentsQuery(undefined, { skip: !isPatient });
+
+  const missingRequiredConsents = isPatient
+    ? consentPurposes.filter(
+        (p) => p.required && p.cadence === 'per_person' && !activeConsents.some((c) => c.purposeCode === p.code)
+      )
+    : [];
+
+  const consentGateActive = missingRequiredConsents.length > 0 && pathname !== '/dashboard/profile';
+
   // Enabled modules come from the real hospital config fetched from the backend.
-  const modules = hospital.modules;
+  // While the hospital data is still loading, treat all modules as enabled so
+  // permission-gated routes appear immediately from stored grants — otherwise
+  // the sidebar shows only non-module-gated routes until the fetch resolves.
+  const modules = hospitalLoading ? Object.fromEntries(
+    ['anc', 'lab', 'pharmacy', 'nursing', 'telemedicine', 'payments', 'medicalRecords'].map((k) => [k, true])
+  ) as Partial<HospitalModules> : hospital.modules;
 
   // The sidebar is the route table filtered to this role — no menu is defined
   // here, so adding a screen means adding one route in lib/roles.ts.
@@ -253,6 +277,38 @@ export function DashboardShell({
       </div>
     </>
   );
+
+  if (consentGateActive) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6">
+        <div className="bg-white rounded-xl shadow-lg max-w-md w-full p-8 text-center space-y-5">
+          <div className="w-14 h-14 rounded-full bg-amber-100 flex items-center justify-center mx-auto">
+            <ShieldCheck className="w-7 h-7 text-amber-600" />
+          </div>
+          <div>
+            <h2 className="text-xl font-bold text-slate-900 mb-2">Action required before you continue</h2>
+            <p className="text-sm text-slate-600">
+              Your account needs you to agree to {missingRequiredConsents.length} required consent{missingRequiredConsents.length > 1 ? 's' : ''} before you can use the portal. These are legally required to provide your care.
+            </p>
+          </div>
+          <ul className="text-left space-y-1">
+            {missingRequiredConsents.map((p) => (
+              <li key={p.code} className="flex items-center gap-2 text-sm text-slate-700">
+                <span className="w-2 h-2 rounded-full bg-amber-400 shrink-0" />
+                {p.label}
+              </li>
+            ))}
+          </ul>
+          <Link
+            href="/dashboard/profile#consent-section"
+            className="block w-full py-2.5 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg font-semibold hover:shadow-lg transition text-sm"
+          >
+            Go to Profile &amp; complete consents
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-50">

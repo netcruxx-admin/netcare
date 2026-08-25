@@ -199,6 +199,38 @@ def review_test_order(
     return order
 
 
+@router.post("/test-orders/{order_id}/cancel", status_code=status.HTTP_204_NO_CONTENT)
+def cancel_test_order(
+    order_id: str,
+    db: Session = Depends(get_db),
+    user: models.User = Depends(get_current_user),
+    scope: str = Depends(require_permission("lab_orders.create")),
+    tenant_id: str = Depends(get_tenant_id),
+):
+    """Doctor cancels (deletes) an order they placed by mistake.
+
+    Only allowed while the order is still `ordered` — once the lab has collected
+    a sample or started processing, the order is theirs to handle.  The doctor's
+    own scope is enforced: they can only cancel orders they raised.
+    """
+    from ..authz import SCOPE_OWN
+    order = _get_order(db, order_id, tenant_id)
+
+    if scope == SCOPE_OWN:
+        doctor = db.query(models.Doctor).filter(models.Doctor.user_id == user.id).first()
+        if not doctor or order.doctor_id != doctor.id:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Order not found")
+
+    if order.status != "ordered":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="This order is already being processed by the lab and cannot be cancelled. Contact the lab directly.",
+        )
+
+    db.delete(order)
+    db.commit()
+
+
 @router.delete("/test-orders/{order_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_test_order(
     order_id: str,

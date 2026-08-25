@@ -14,13 +14,21 @@ import { ClinicalSections } from './components/ClinicalSections';
 import { RescheduleModal } from './components/RescheduleModal';
 import { EditAppointmentModal } from './components/EditAppointmentModal';
 import { RecordVitalsModal } from './components/RecordVitalsModal';
+import { EditVitalsModal } from './components/EditVitalsModal';
 import { AddPrescriptionModal } from './components/AddPrescriptionModal';
+import { EditPrescriptionModal } from './components/EditPrescriptionModal';
 import { AddClinicalNotesModal } from './components/AddClinicalNotesModal';
 import { OrderTestModal } from './components/OrderTestModal';
 import { ConfirmActionModal } from './components/ConfirmActionModal';
+import { ConfirmDeleteModal } from './components/ConfirmDeleteModal';
 import { useActiveHospital } from '@/hooks/useActiveHospital';
+import {
+  useDeletePrescriptionMutation,
+  useCancelTestOrderMutation,
+  useDeleteVitalsMutation,
+} from '@/store/api';
 
-type OpenModal = 'reschedule' | 'edit' | 'vitals' | 'rx' | 'notes' | 'laborder' | 'followup' | null;
+type OpenModal = 'reschedule' | 'edit' | 'vitals' | 'edit-vitals' | 'rx' | 'edit-rx' | 'notes' | 'laborder' | 'followup' | null;
 
 // Reused page shell for the loading / error states.
 function Chrome({ children }: { children: React.ReactNode }) {
@@ -61,12 +69,76 @@ export default function AppointmentDetailPage() {
   } = useAppointmentDetail();
 
   const [modal, setModal] = useState<OpenModal>(null);
-  const closeModal = () => setModal(null);
+  const [editRx, setEditRx] = useState<any>(null);
+  const [editVitals, setEditVitals] = useState<any>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{
+    type: 'rx' | 'vitals' | 'order';
+    id: string;
+    title: string;
+    body: string;
+    confirmLabel: string;
+  } | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const closeModal = () => { setModal(null); setEditRx(null); setEditVitals(null); };
   // Close a modal and refresh the page data with a toast.
   const afterSave = (msg: string) => {
     reloadDetails();
     closeModal();
     toast.success(msg);
+  };
+
+  const [deletePrescription] = useDeletePrescriptionMutation();
+  const [cancelTestOrder] = useCancelTestOrderMutation();
+  const [deleteVitals] = useDeleteVitalsMutation();
+
+  const handleDeletePrescription = (id: string) => {
+    setDeleteTarget({
+      type: 'rx', id,
+      title: 'Delete Prescription',
+      body: 'This will also remove the pending pharmacy order. This cannot be undone.',
+      confirmLabel: 'Delete Prescription',
+    });
+  };
+
+  const handleCancelTestOrder = (id: string) => {
+    setDeleteTarget({
+      type: 'order', id,
+      title: 'Cancel Lab Order',
+      body: 'Cancel this lab order? If the lab has already started processing it, cancellation will be blocked.',
+      confirmLabel: 'Cancel Order',
+    });
+  };
+
+  const handleDeleteVitals = (id: string) => {
+    setDeleteTarget({
+      type: 'vitals', id,
+      title: 'Delete Vitals',
+      body: 'Permanently delete this vitals record? This cannot be undone.',
+      confirmLabel: 'Delete Vitals',
+    });
+  };
+
+  const runDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleteLoading(true);
+    try {
+      if (deleteTarget.type === 'rx') {
+        await deletePrescription(deleteTarget.id).unwrap();
+        toast.success('Prescription deleted');
+      } else if (deleteTarget.type === 'order') {
+        await cancelTestOrder(deleteTarget.id).unwrap();
+        toast.success('Lab order cancelled');
+      } else {
+        await deleteVitals(deleteTarget.id).unwrap();
+        toast.success('Vitals deleted');
+      }
+      setDeleteTarget(null);
+    } catch (err: any) {
+      toast.error(err?.data?.detail ?? 'Could not complete the action');
+      setDeleteTarget(null);
+    } finally {
+      setDeleteLoading(false);
+    }
   };
 
   if (loading) {
@@ -194,6 +266,12 @@ export default function AppointmentDetailPage() {
           vitals={details.vitals}
           medicalRecords={details.medicalRecords}
           testOrders={details.testOrders}
+          canManage={canManage}
+          onEditPrescription={(rx) => { setEditRx(rx); setModal('edit-rx'); }}
+          onDeletePrescription={handleDeletePrescription}
+          onEditVitals={(v) => { setEditVitals(v); setModal('edit-vitals'); }}
+          onDeleteVitals={handleDeleteVitals}
+          onDeleteTestOrder={handleCancelTestOrder}
         />
       </div>
 
@@ -250,6 +328,23 @@ export default function AppointmentDetailPage() {
         />
       )}
 
+      {modal === 'edit-rx' && editRx && (
+        <EditPrescriptionModal
+          prescription={editRx}
+          medicineOptions={medicineOptions}
+          onClose={closeModal}
+          onSaved={afterSave}
+        />
+      )}
+
+      {modal === 'edit-vitals' && editVitals && (
+        <EditVitalsModal
+          vitals={editVitals}
+          onClose={closeModal}
+          onSaved={afterSave}
+        />
+      )}
+
       {modal === 'laborder' && (
         <OrderTestModal
           appointmentId={appointmentId}
@@ -262,6 +357,17 @@ export default function AppointmentDetailPage() {
 
       {confirmAction && (
         <ConfirmActionModal action={confirmAction} onCancel={() => setConfirmAction(null)} onConfirm={runConfirm} />
+      )}
+
+      {deleteTarget && (
+        <ConfirmDeleteModal
+          title={deleteTarget.title}
+          body={deleteTarget.body}
+          confirmLabel={deleteTarget.confirmLabel}
+          loading={deleteLoading}
+          onCancel={() => setDeleteTarget(null)}
+          onConfirm={runDelete}
+        />
       )}
 
       {modal === 'followup' && (

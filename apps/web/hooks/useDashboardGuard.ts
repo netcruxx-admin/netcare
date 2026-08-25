@@ -34,14 +34,9 @@ export function useDashboardGuard(path?: string): AuthSession | null {
       router.push('/login');
       return;
     }
-    // Signed in but not entitled to this screen: send them to their own
-    // dashboard rather than the login page, which would look like a logout.
-    // Judged on the grants stored at login; the effect below re-judges on the
-    // live ones, so a grant revoked since then still takes effect.
-    if (!canAccessPath(s.permissions, guardedPath)) {
-      router.replace(homePathForSession(s));
-      return;
-    }
+    // Always set stored so the /auth/me fetch starts immediately. The live
+    // permissions are the authoritative check — the stored ones may be stale
+    // (e.g. a grant added after the user last logged in).
     setStored(s);
   }, [router, guardedPath]);
 
@@ -53,9 +48,9 @@ export function useDashboardGuard(path?: string): AuthSession | null {
     refetchOnFocus: true,
   });
 
-  // Once live permissions arrive, re-check the route. If the permission that
-  // gates this page was revoked, redirect away — direct URL access is blocked
-  // the same way as sidebar removal.
+  // Once live permissions arrive, enforce access. This is the authoritative
+  // check — both grants added since login (allow) and revoked grants (deny)
+  // are handled here without requiring a re-login.
   useEffect(() => {
     if (!stored || !meData?.permissions) return;
     if (!canAccessPath(meData.permissions, guardedPath)) {

@@ -1,9 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Formik, Form, useFormikContext } from 'formik';
 import * as Yup from 'yup';
-import { ChevronRight, Loader2 } from 'lucide-react';
+import { ChevronRight, Loader2, Pencil, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiError } from '@/lib/apiError';
 import { DashboardShell } from '@/components/DashboardShell';
@@ -238,6 +238,19 @@ export function PatientProfile({ session }: RoleViewProps) {
   const [updatePatient, { isLoading: isSavingPatient }] = useUpdatePatientMutation();
   const [updateOwnAccount, { isLoading: isSavingAccount }] = useUpdateOwnAccountMutation();
   const isSaving = isSavingPatient || isSavingAccount;
+  const [isEditing, setIsEditing] = useState(false);
+
+  // Scroll to consent section if navigated here with #consent-section hash
+  // (e.g. from the consent gate on other pages).
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (window.location.hash === '#consent-section') {
+      const el = document.getElementById('consent-section');
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }
+  }, [isLoading]);
 
   const initialValues: FormValues = {
     name: session.user.name ?? '',
@@ -277,52 +290,143 @@ export function PatientProfile({ session }: RoleViewProps) {
       subtitle="Manage your health information"
     >
       <div className="max-w-2xl mx-auto space-y-6">
-        <div className="w-full bg-white rounded-lg shadow-xl p-8 space-y-8">
-          <div className="text-center">
-            <h2 className="text-3xl font-bold text-slate-900">Your Profile</h2>
-            <p className="text-slate-600 mt-2">Keep your health information up to date</p>
+        <div className="w-full bg-white rounded-lg shadow p-6 space-y-6">
+          {/* Header with edit toggle */}
+          <div className="flex items-center justify-between">
+            <h2 className="font-semibold text-slate-900">{isEditing ? 'Edit Profile' : 'Profile Details'}</h2>
+            <div className="relative group">
+              <button
+                type="button"
+                onClick={() => setIsEditing((v) => !v)}
+                className="p-1.5 rounded-md text-slate-400 hover:text-cyan-600 hover:bg-cyan-50 transition"
+              >
+                {isEditing ? <X className="w-4 h-4" /> : <Pencil className="w-4 h-4" />}
+              </button>
+              <div className="absolute right-0 top-full mt-1.5 px-2 py-1 text-xs text-white bg-slate-700 rounded shadow-md whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-10">
+                {isEditing ? 'Cancel editing' : 'Edit profile'}
+              </div>
+            </div>
           </div>
 
-          <Formik
-            initialValues={initialValues}
-            enableReinitialize
-            validationSchema={schema}
-            onSubmit={async (values, { setSubmitting }) => {
-              if (!patient) return;
-              try {
-                await Promise.all([
-                  updatePatient({
-                    id: patient.id,
-                    body: {
-                      dateOfBirth: values.dateOfBirth || undefined,
-                      gender: values.gender || undefined,
-                      bloodGroup: values.bloodGroup || undefined,
-                      allergies: values.allergies || undefined,
-                      chronicDiseases: values.chronicDiseases || undefined,
-                      emergencyContact: values.emergencyContact || undefined,
-                      emergencyPhone: withPrefix(values.emergencyPhone) || undefined,
-                      insuranceProvider: values.insuranceProvider || undefined,
-                      insuranceNumber: values.insuranceNumber || undefined,
-                    },
-                  }).unwrap(),
-                  updateOwnAccount({
-                    name: values.name.trim() || undefined,
-                    email: values.email.trim() || undefined,
-                    phone: withPrefix(values.phone) || undefined,
-                  }).unwrap(),
-                ]);
-                toast.success('Profile updated');
-              } catch (err) {
-                toast.error(apiError(err, 'Could not save your profile. Please try again.'));
-              } finally {
-                setSubmitting(false);
-              }
-            }}
-          >
-            <Form className="space-y-6">
-              <WizardContent isSaving={isSaving} />
-            </Form>
-          </Formik>
+          {!isEditing ? (
+            /* ── Read-only view ── */
+            <div className="space-y-6">
+              <div>
+                <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-3">Personal Information</h3>
+                <dl className="grid sm:grid-cols-2 gap-x-8 gap-y-4 text-sm">
+                  <div>
+                    <dt className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-0.5">Full Name</dt>
+                    <dd className="text-slate-800 font-medium">{session.user.name || 'None'}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-0.5">Email</dt>
+                    <dd className="text-slate-800 font-medium">{session.user.email || 'None'}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-0.5">Date of Birth</dt>
+                    <dd className="text-slate-800 font-medium">{patient?.dateOfBirth || 'None'}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-0.5">Gender</dt>
+                    <dd className="text-slate-800 font-medium capitalize">{patient?.gender || 'None'}</dd>
+                  </div>
+                </dl>
+              </div>
+
+              <div className="border-t border-slate-100 pt-5">
+                <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-3">Contact Details</h3>
+                <dl className="grid sm:grid-cols-2 gap-x-8 gap-y-4 text-sm">
+                  <div>
+                    <dt className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-0.5">Phone Number</dt>
+                    <dd className="text-slate-800 font-medium">{patient?.phone || session.user.phone || 'None'}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-0.5">Emergency Contact</dt>
+                    <dd className="text-slate-800 font-medium">{patient?.emergencyContact || 'None'}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-0.5">Emergency Phone</dt>
+                    <dd className="text-slate-800 font-medium">{patient?.emergencyPhone || 'None'}</dd>
+                  </div>
+                </dl>
+              </div>
+
+              <div className="border-t border-slate-100 pt-5">
+                <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-3">Medical Information</h3>
+                <dl className="grid sm:grid-cols-2 gap-x-8 gap-y-4 text-sm">
+                  <div>
+                    <dt className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-0.5">Blood Group</dt>
+                    <dd className="text-slate-800 font-medium">{patient?.bloodGroup || 'None'}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-0.5">Allergies</dt>
+                    <dd className="text-slate-800 font-medium">{patient?.allergies || 'None'}</dd>
+                  </div>
+                  <div className="sm:col-span-2">
+                    <dt className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-0.5">Chronic Diseases</dt>
+                    <dd className="text-slate-800 font-medium">{patient?.chronicDiseases || 'None'}</dd>
+                  </div>
+                </dl>
+              </div>
+
+              <div className="border-t border-slate-100 pt-5">
+                <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-3">Insurance</h3>
+                <dl className="grid sm:grid-cols-2 gap-x-8 gap-y-4 text-sm">
+                  <div>
+                    <dt className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-0.5">Insurance Provider</dt>
+                    <dd className="text-slate-800 font-medium">{patient?.insuranceProvider || 'None'}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-0.5">Insurance Number</dt>
+                    <dd className="text-slate-800 font-medium">{patient?.insuranceNumber || 'None'}</dd>
+                  </div>
+                </dl>
+              </div>
+            </div>
+          ) : (
+            /* ── Edit form (wizard) ── */
+            <Formik
+              initialValues={initialValues}
+              enableReinitialize
+              validationSchema={schema}
+              onSubmit={async (values, { setSubmitting }) => {
+                if (!patient) return;
+                try {
+                  await Promise.all([
+                    updatePatient({
+                      id: patient.id,
+                      body: {
+                        dateOfBirth: values.dateOfBirth || undefined,
+                        gender: values.gender || undefined,
+                        bloodGroup: values.bloodGroup || undefined,
+                        allergies: values.allergies || undefined,
+                        chronicDiseases: values.chronicDiseases || undefined,
+                        emergencyContact: values.emergencyContact || undefined,
+                        emergencyPhone: withPrefix(values.emergencyPhone) || undefined,
+                        insuranceProvider: values.insuranceProvider || undefined,
+                        insuranceNumber: values.insuranceNumber || undefined,
+                      },
+                    }).unwrap(),
+                    updateOwnAccount({
+                      name: values.name.trim() || undefined,
+                      email: values.email.trim() || undefined,
+                      phone: withPrefix(values.phone) || undefined,
+                    }).unwrap(),
+                  ]);
+                  toast.success('Profile updated');
+                  setIsEditing(false);
+                } catch (err) {
+                  toast.error(apiError(err, 'Could not save your profile. Please try again.'));
+                } finally {
+                  setSubmitting(false);
+                }
+              }}
+            >
+              <Form className="space-y-6">
+                <WizardContent isSaving={isSaving} />
+              </Form>
+            </Formik>
+          )}
         </div>
 
         {/* Consent is a persistent setting, not a one-time setup step. */}

@@ -75,6 +75,11 @@ const rawBaseQuery = fetchBaseQuery({
       if (tenantHint && !headers.has('X-Hospital-Id')) {
         headers.set('X-Hospital-Id', tenantHint);
       }
+      // Tell the backend which URL the browser is on. The API runs on :8000
+      // so request.url.host is always the API host, not the browser's tab URL.
+      // The backend uses this to build password-reset links on the correct
+      // hospital subdomain (e.g. http://sunrise.localhost:3000).
+      headers.set('X-Frontend-Origin', window.location.origin);
     }
     return headers;
   },
