@@ -961,6 +961,28 @@ class LoginRequest(CamelModel):
     password: str
 
 
+class ForgotPasswordRequest(CamelModel):
+    email: str
+
+
+# ---------- FCM tokens ----------
+class FcmTokenRegister(CamelModel):
+    token: str
+    device_label: str = ""
+
+
+class ResetPasswordRequest(CamelModel):
+    token: str
+    new_password: str
+
+    @field_validator("new_password")
+    @classmethod
+    def _min_length(cls, v: str) -> str:
+        if len(v) < 8:
+            raise ValueError("Password must be at least 8 characters")
+        return v
+
+
 class UserOut(OutModel):
     id: str
     hospital_id: Optional[str] = None
@@ -1380,6 +1402,14 @@ class PrescriptionCreate(CamelModel):
     instructions: str = ""
 
 
+class PrescriptionUpdate(CamelModel):
+    medicine_name: Optional[str] = None
+    dosage: Optional[str] = None
+    frequency: Optional[str] = None
+    duration: Optional[str] = None
+    instructions: Optional[str] = None
+
+
 class PrescriptionOut(OutModel):
     id: str
     appointment_id: str
@@ -1396,6 +1426,16 @@ class PrescriptionOut(OutModel):
 
 
 # ---------- Vitals ----------
+class VitalsUpdate(CamelModel):
+    temperature: Optional[float] = None
+    blood_pressure: Optional[str] = None
+    heart_rate: Optional[int] = None
+    respiratory_rate: Optional[int] = None
+    weight: Optional[float] = None
+    height: Optional[float] = None
+    notes: Optional[str] = None
+
+
 class VitalsCreate(CamelModel):
     appointment_id: str
     patient_id: str

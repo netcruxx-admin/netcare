@@ -23,3 +23,6 @@ razorpay>=1.3
 # invisible, so these run before any release that touches a query.
 pytest>=8.0
 httpx2>=2.0
+
+# Firebase Admin SDK — push notifications (requires firebase-service-account.json)
+firebase-admin>=6.0

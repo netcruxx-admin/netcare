@@ -1022,6 +1022,26 @@ export const api = createApi({
       query: () => ({ url: '/auth/logout-all', method: 'POST' }),
       invalidatesTags: ['Me'],
     }),
+    // Sends a reset link to the address if it is registered. Always 200.
+    forgotPassword: build.mutation<{ message: string }, { email: string }>({
+      query: (body) => ({ url: '/auth/forgot-password', method: 'POST', body }),
+    }),
+    // Consumes the one-time token and sets a new password.
+    resetPassword: build.mutation<{ message: string }, { token: string; newPassword: string }>({
+      query: ({ token, newPassword }) => ({
+        url: '/auth/reset-password',
+        method: 'POST',
+        body: { token, newPassword },
+      }),
+    }),
+
+    // ── FCM / Push notifications ──────────────────────────────────────────────
+    registerFcmToken: build.mutation<void, { token: string; device_label: string }>({
+      query: (body) => ({ url: '/notifications/token', method: 'POST', body }),
+    }),
+    unregisterFcmToken: build.mutation<void, { token: string; device_label: string }>({
+      query: (body) => ({ url: '/notifications/token', method: 'DELETE', body }),
+    }),
 
     // ── Consent ──────────────────────────────────────────────────────────────
     // The notice. Unauthenticated on purpose: the sign-up form has to show it
@@ -1385,6 +1405,14 @@ export const api = createApi({
       query: (body) => ({ url: '/prescriptions', method: 'POST', body }),
       invalidatesTags: [{ type: 'Prescription', id: 'LIST' }],
     }),
+    updatePrescription: build.mutation<Prescription, { id: string; body: Partial<PrescriptionCreateBody> }>({
+      query: ({ id, body }) => ({ url: `/prescriptions/${id}`, method: 'PUT', body }),
+      invalidatesTags: [{ type: 'Prescription', id: 'LIST' }],
+    }),
+    deletePrescription: build.mutation<void, string>({
+      query: (id) => ({ url: `/prescriptions/${id}`, method: 'DELETE' }),
+      invalidatesTags: [{ type: 'Prescription', id: 'LIST' }],
+    }),
 
     // ── Payments ──────────────────────────────────────────────────────────────
     listPayments: build.query<
@@ -1629,6 +1657,10 @@ export const api = createApi({
       query: (id) => ({ url: `/test-orders/${id}`, method: 'DELETE' }),
       invalidatesTags: [{ type: 'TestOrder', id: 'LIST' }],
     }),
+    cancelTestOrder: build.mutation<void, string>({
+      query: (id) => ({ url: `/test-orders/${id}/cancel`, method: 'POST' }),
+      invalidatesTags: [{ type: 'TestOrder', id: 'LIST' }],
+    }),
     listTestResults: build.query<TestResult[], { orderId?: string } | void>({
       query: (params) => ({ url: '/test-results', params: params ?? undefined }),
       providesTags: [{ type: 'TestResult', id: 'LIST' }],
@@ -1749,6 +1781,17 @@ export const api = createApi({
         { type: 'Appointment', id: 'LIST' },
       ],
     }),
+    updateVitals: build.mutation<Vitals, { id: string; body: Partial<VitalsCreateBody> }>({
+      query: ({ id, body }) => ({ url: `/vitals/${id}`, method: 'PUT', body }),
+      invalidatesTags: [{ type: 'Vitals', id: 'LIST' }],
+    }),
+    deleteVitals: build.mutation<void, string>({
+      query: (id) => ({ url: `/vitals/${id}`, method: 'DELETE' }),
+      invalidatesTags: [
+        { type: 'Vitals', id: 'LIST' },
+        { type: 'Appointment', id: 'LIST' },
+      ],
+    }),
   }),
 });
 
@@ -1806,6 +1849,13 @@ export const {
   useResetUserPasswordMutation,
   useLogoutMutation,
   useLogoutAllMutation,
+  useForgotPasswordMutation,
+  useResetPasswordMutation,
+  useUpdatePrescriptionMutation,
+  useDeletePrescriptionMutation,
+  useCancelTestOrderMutation,
+  useUpdateVitalsMutation,
+  useDeleteVitalsMutation,
   useListConsentPurposesQuery,
   useListConsentsQuery,
   useCreateConsentMutation,
@@ -1927,4 +1977,6 @@ export const {
   useListImmunizationsQuery,
   useCreateImmunizationMutation,
   useMarkImmunizationGivenMutation,
+  useRegisterFcmTokenMutation,
+  useUnregisterFcmTokenMutation,
 } = api;

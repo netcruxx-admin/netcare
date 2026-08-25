@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useFormik, FormikProvider } from 'formik';
 import * as Yup from 'yup';
-import { Mail, Lock, AlertCircle, CheckCircle } from 'lucide-react';
+import { Mail, Lock, AlertCircle, CheckCircle, KeyRound } from 'lucide-react';
 import Image from 'next/image';
 import { authStorage } from '@/lib/auth';
 import { loginRoleTabs, resolveHomePath } from '@/lib/roles';
@@ -48,6 +48,7 @@ function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const justRegistered = searchParams.get('registered') === '1';
+  const justReset = searchParams.get('reset') === '1';
   const isHospitalSubdomain = !!currentSubdomain();
   const { data: hospital } = useGetCurrentHospitalQuery(undefined, { skip: !isHospitalSubdomain });
   const [loginMutation, { isLoading }] = useLoginMutation();
@@ -186,11 +187,11 @@ function LoginForm() {
             </div>
           )}
 
-          {/* Error Message */}
-          {error && (
-            <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-start gap-3">
-              <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
-              <p className="text-red-700 text-sm">{error}</p>
+          {/* Password-reset success banner */}
+          {justReset && (
+            <div className="bg-green-50 border border-green-200 rounded-xl p-4 flex items-start gap-3">
+              <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
+              <p className="text-green-700 text-sm">Password updated! Sign in with your new password.</p>
             </div>
           )}
 
@@ -198,6 +199,25 @@ function LoginForm() {
             <form onSubmit={formik.handleSubmit} className="space-y-4" noValidate>
               <FormField name="email" label="Email" type="email" placeholder="your.email@example.com" icon={Mail} required />
               <FormField name="password" label="Password" type="password" placeholder="••••••••" icon={Lock} required />
+
+              {/* Forgot password link — only on hospital subdomains; superadmin
+                  has no self-service reset path from the platform root. */}
+              {isHospitalSubdomain && (
+                <div className="flex justify-end -mt-2">
+                  <Link href="/forgot-password" className="text-xs text-cyan-600 hover:text-teal-600 flex items-center gap-1">
+                    <KeyRound className="w-3 h-3" />
+                    Forgot password?
+                  </Link>
+                </div>
+              )}
+
+              {/* Error Message — sits right above the button so it's closest to the action */}
+              {error && (
+                <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3 flex items-center gap-2.5">
+                  <AlertCircle className="w-4 h-4 text-red-500 shrink-0" />
+                  <p className="text-red-700 text-sm">{error}</p>
+                </div>
+              )}
 
               <button
                 type="submit"

@@ -60,9 +60,9 @@ export function useDashboardGuard(path?: string): AuthSession | null {
     refetchOnFocus: true,
   });
 
-  // Once live permissions arrive, re-check the route. If the permission that
-  // gates this page was revoked, redirect away — direct URL access is blocked
-  // the same way as sidebar removal.
+  // Once live permissions arrive, enforce access. This is the authoritative
+  // check — both grants added since login (allow) and revoked grants (deny)
+  // are handled here without requiring a re-login.
   useEffect(() => {
     if (!stored || !meData?.permissions) return;
     if (!canAccessPath(meData.permissions, guardedPath)) {

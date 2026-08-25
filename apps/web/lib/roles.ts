@@ -364,16 +364,6 @@ export const dashboardRoutes: DashboardRoute[] = [
     module: 'payments',
   },
 
-  // ── Account ───────────────────────────────────────────────────────────────
-  {
-    path: '/dashboard/profile',
-    label: 'Profile',
-    icon: User,
-    viewRoles: [...clinicalRoles, labRole, patientRole],
-    permission: 'profile.manage',
-    viewRolesOnly: true,
-  },
-
   // ── Administration ────────────────────────────────────────────────────────
   {
     path: '/dashboard/departments',
@@ -393,6 +383,16 @@ export const dashboardRoutes: DashboardRoute[] = [
     permission: 'medicines.read',
     module: 'pharmacy',
   },
+  // ── Account ───────────────────────────────────────────────────────────────
+  {
+    path: '/dashboard/profile',
+    label: 'Profile',
+    icon: User,
+    viewRoles: [...clinicalRoles, labRole, pharmacistRole, patientRole],
+    permission: 'profile.manage',
+    viewRolesOnly: true,
+  },
+
   { path: '/dashboard/users', label: 'Users', icon: Users, viewRoles: [superadminRole, adminRole], permission: 'users.read' },
   { path: '/dashboard/roles', label: 'Roles', icon: ShieldCheck, viewRoles: [superadminRole], permission: 'roles.manage' },
   { path: '/dashboard/setup', label: 'Hospital Setup', icon: Settings, viewRoles: [superadminRole], permission: 'hospital.settings.manage' },
