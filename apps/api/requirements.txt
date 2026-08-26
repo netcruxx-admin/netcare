@@ -31,3 +31,4 @@ firebase-admin>=6.0
 # missing certifi takes the whole API down, not just mail — on macOS Python's
 # bundled SSL has no usable root store, which is why it is not optional.
 certifi>=2024.2.2
+resend>=2.0
