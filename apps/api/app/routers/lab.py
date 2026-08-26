@@ -235,7 +235,7 @@ def cancel_test_order(
 def delete_test_order(
     order_id: str,
     db: Session = Depends(get_db),
-    _: str = Depends(require_permission("lab_orders.process")),
+    _: str = Depends(require_permission("lab_orders.delete")),
     tenant_id: str = Depends(get_tenant_id),
 ):
     order = _get_order(db, order_id, tenant_id)

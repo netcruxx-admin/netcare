@@ -319,7 +319,7 @@ export function PlatformAppointments({ session }: RoleViewProps) {
                         {hasPermission(session, 'appointments.manage') && <ActionIcon icon={CalendarClock} label="Reschedule" onClick={() => openReschedule(a)} />}
                         {hasPermission(session, 'appointments.manage') && <ActionIcon icon={CalendarPlus} label="Schedule Follow-Up" onClick={() => setFollowUp(a)} />}
                         {hasPermission(session, 'appointments.manage') && <ActionIcon icon={Activity} label="Add Vitals" onClick={() => { setVitalsError(''); setAddingVitals(a); }} />}
-                        {hasPermission(session, 'appointments.manage') && <ActionIcon icon={Trash2} label="Delete" tone="danger" onClick={() => setDeleting(a)} />}
+                        {hasPermission(session, 'appointments.delete') && <ActionIcon icon={Trash2} label="Delete" tone="danger" onClick={() => setDeleting(a)} />}
                       </div>
                     </td>
                   </tr>

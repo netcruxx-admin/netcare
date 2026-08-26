@@ -177,6 +177,9 @@ export function HospitalPatients({ session }: RoleViewProps) {
   const [deleting, setDeleting] = useState<Patient | null>(null);
 
   const canManage = hasPermission(session, 'patients.manage');
+  // Deletion is a platform capability: hospital staff create and edit, the
+  // platform owner is the one who can erase. See migration x9y0z1a2b3c4.
+  const canDelete = hasPermission(session, 'patients.delete');
 
   // No appointments fetch here any more: a doctor's `patients.read` grant is
   // already scoped to the patients they treat, and the visit columns arrive
@@ -205,7 +208,9 @@ export function HospitalPatients({ session }: RoleViewProps) {
           <ActionIcon icon={Eye} label="View" />
         </Link>
         <ActionIcon icon={Pencil} label="Edit" onClick={() => setEditing(row._raw)} />
-        <ActionIcon icon={Trash2} label="Delete" tone="danger" onClick={() => setDeleting(row._raw)} />
+        {canDelete && (
+          <ActionIcon icon={Trash2} label="Delete" tone="danger" onClick={() => setDeleting(row._raw)} />
+        )}
       </div>
     ),
   };

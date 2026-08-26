@@ -15,6 +15,8 @@ Two conventions the assertions rely on:
 
 import pytest
 
+from tests.conftest import _superadmin_token
+
 
 # (collection path, the key in Tenant.ids holding a row id in that collection)
 COLLECTIONS = [
@@ -64,11 +66,25 @@ def test_detail_of_other_tenants_record_is_404(hospital_a, hospital_b, path, key
         ("/prescriptions", "prescription"),
     ],
 )
-def test_cannot_modify_other_tenants_record(hospital_a, hospital_b, path, key):
+def test_cannot_modify_other_tenants_record(client, hospital_a, hospital_b, path, key):
     """Writes are scoped too. A leak that only blocks reads still corrupts data."""
     target = f"{path}/{hospital_b.ids[key]}"
-    assert hospital_a.put(target, {"notes": "tampered"}).status_code in (404, 405, 422)
-    assert hospital_a.delete(target).status_code in (404, 405)
+
+    # 403 is an honest refusal here as much as 404 is: an admin holds no
+    # `prescriptions.manage` at all (that grant is the doctor's), so the request
+    # never reaches the row. What must never happen is a 2xx.
+    assert hospital_a.put(target, {"notes": "tampered"}).status_code in (403, 404, 405, 422)
+
+    # Deletion is asked as the superadmin, presenting *hospital_a's* header:
+    # since x9y0z1a2b3c4 no hospital role holds `*.delete`, so an admin would be
+    # turned away by the permission gate and this would stop testing tenant
+    # scoping at all. The superadmin gets past the gate — and must still be
+    # scoped to the hospital its header names.
+    su = {
+        "Authorization": f"Bearer {_superadmin_token(client)}",
+        "X-Hospital-Id": hospital_a.id,
+    }
+    assert client.delete(target, headers=su).status_code in (404, 405)
 
     # And the row is untouched from its owner's side. Asserted through the
     # collection rather than the detail route, because several of these

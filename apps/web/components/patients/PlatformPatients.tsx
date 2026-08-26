@@ -118,7 +118,7 @@ export function PlatformPatients({ session }: RoleViewProps) {
                       <div className="flex items-center justify-end gap-1">
                         <ActionIcon icon={Eye} label="View" href={`/patient/${p.id}${p.hospitalId ? `?h=${p.hospitalId}` : ''}`} />
                         {hasPermission(session, 'patients.manage') && <ActionIcon icon={Pencil} label="Edit" onClick={() => setEditing(p)} />}
-                        {hasPermission(session, 'patients.manage') && <ActionIcon icon={Trash2} label="Delete" tone="danger" onClick={() => setDeleting(p)} />}
+                        {hasPermission(session, 'patients.delete') && <ActionIcon icon={Trash2} label="Delete" tone="danger" onClick={() => setDeleting(p)} />}
                       </div>
                     </td>
                   </tr>

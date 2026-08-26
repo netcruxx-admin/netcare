@@ -58,6 +58,9 @@ export function AdminMedicines({ session }: RoleViewProps) {
   const [categoryFilter, setCategoryFilter] = useState('all');
 
   const canManage = hasPermission(session, 'medicines.manage');
+  // Deletion is a platform capability: hospital staff create and edit, the
+  // platform owner is the one who can erase. See migration x9y0z1a2b3c4.
+  const canDelete = hasPermission(session, 'medicines.delete');
 
   const table = useServerTable({ filterKey: categoryFilter });
 
@@ -191,12 +194,8 @@ export function AdminMedicines({ session }: RoleViewProps) {
                     <td className="py-3 px-6 text-right">
                       <div className="flex items-center justify-end gap-1">
                         <ActionIcon icon={Eye} label="View" onClick={() => setViewing(m)} />
-                        {canManage && (
-                          <>
-                            <ActionIcon icon={Pencil} label="Edit" onClick={() => openEdit(m)} />
-                            <ActionIcon icon={Trash2} label="Delete" tone="danger" onClick={() => setDeleting(m)} />
-                          </>
-                        )}
+                        {canManage && <ActionIcon icon={Pencil} label="Edit" onClick={() => openEdit(m)} />}
+                        {canDelete && <ActionIcon icon={Trash2} label="Delete" tone="danger" onClick={() => setDeleting(m)} />}
                       </div>
                     </td>
                   </tr>

@@ -17,6 +17,7 @@ import {
 } from '@/store/api';
 import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
+import { hasPermission } from '@/lib/auth';
 import { ExportButton } from '@/components/ExportButton';
 import { TablePagination } from '@/components/TablePagination';
 import { useDebounced } from '@/hooks/useDebounced';
@@ -57,6 +58,10 @@ function LabOrdersInner({ session }: RoleViewProps) {
   const [resultsOrder, setResultsOrder] = useState<TestOrder | null>(null);
   const [draft, setDraft] = useState<DraftTest[]>([]);
   const [deleting, setDeleting] = useState<TestOrder | null>(null);
+
+  // Deletion is a platform capability: lab staff process orders, the platform
+  // owner is the one who can erase one. See migration x9y0z1a2b3c4.
+  const canDelete = hasPermission(session, 'lab_orders.delete');
 
   // Filter, search and page on the server: with only one page in hand, doing it
   // here would search 20 rows and present that as the whole result.
@@ -338,14 +343,16 @@ function LabOrdersInner({ session }: RoleViewProps) {
                                 <FileText className="w-4 h-4" />
                               </Link>
                             )}
-                            <button
-                              onClick={() => setDeleting(r.order)}
-                              title="Delete Order"
-                              aria-label="Delete Order"
-                              className="p-2 rounded-lg text-slate-500 hover:text-red-600 hover:bg-red-50 transition"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
+                            {canDelete && (
+                              <button
+                                onClick={() => setDeleting(r.order)}
+                                title="Delete Order"
+                                aria-label="Delete Order"
+                                className="p-2 rounded-lg text-slate-500 hover:text-red-600 hover:bg-red-50 transition"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            )}
                           </div>
                         </td>
                       </tr>

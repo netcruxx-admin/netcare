@@ -51,6 +51,9 @@ export function AdminTests({ session }: RoleViewProps) {
   const [categoryFilter, setCategoryFilter] = useState('all');
 
   const canManage = hasPermission(session, 'lab_tests.manage');
+  // Deletion is a platform capability: hospital staff create and edit, the
+  // platform owner is the one who can erase. See migration x9y0z1a2b3c4.
+  const canDelete = hasPermission(session, 'lab_tests.delete');
 
   const table = useServerTable({ filterKey: categoryFilter });
 
@@ -171,12 +174,8 @@ export function AdminTests({ session }: RoleViewProps) {
                     <td className="py-3 px-6 text-right">
                       <div className="flex items-center justify-end gap-1">
                         <ActionIcon icon={Eye} label="View" onClick={() => setViewing(t)} />
-                        {canManage && (
-                          <>
-                            <ActionIcon icon={Pencil} label="Edit" onClick={() => openEdit(t)} />
-                            <ActionIcon icon={Trash2} label="Delete" tone="danger" onClick={() => setDeleting(t)} />
-                          </>
-                        )}
+                        {canManage && <ActionIcon icon={Pencil} label="Edit" onClick={() => openEdit(t)} />}
+                        {canDelete && <ActionIcon icon={Trash2} label="Delete" tone="danger" onClick={() => setDeleting(t)} />}
                       </div>
                     </td>
                   </tr>

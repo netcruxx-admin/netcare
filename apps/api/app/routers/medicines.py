@@ -70,7 +70,7 @@ def update_medicine(
 def delete_medicine(
     medicine_id: str,
     db: Session = Depends(get_db),
-    _: str = Depends(require_permission("medicines.manage")),
+    _: str = Depends(require_permission("medicines.delete")),
     tenant_id: str = Depends(get_tenant_id),
 ):
     medicine = (

@@ -194,7 +194,7 @@ def delete_prescription(
     prescription_id: str,
     db: Session = Depends(get_db),
     user: models.User = Depends(get_current_user),
-    scope: str = Depends(require_permission("prescriptions.manage")),
+    scope: str = Depends(require_permission("prescriptions.delete")),
     tenant_id: str = Depends(get_tenant_id),
 ):
     rx = _get_prescription(db, prescription_id, tenant_id)

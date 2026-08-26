@@ -10,7 +10,7 @@
 import { useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { toast } from 'sonner';
-import { authStorage } from '@/lib/auth';
+import { authStorage, hasPermission } from '@/lib/auth';
 import { apiError } from '@/lib/apiError';
 import {
   useDeleteAppointmentMutation,
@@ -118,6 +118,13 @@ export function useAppointmentDetail() {
   const isOwningDoctor = role === 'doctor';
   const canManage = isAdmin || isOwningDoctor;
 
+  // Deletion split off from canManage: clinical staff amend their records, the
+  // platform owner is the one who can erase them. Each row is its own
+  // capability because each hits a different endpoint. See x9y0z1a2b3c4.
+  const canDeletePrescription = hasPermission(session, 'prescriptions.delete');
+  const canDeleteVitals = hasPermission(session, 'vitals.delete');
+  const canDeleteTestOrder = hasPermission(session, 'lab_orders.delete');
+
   const isPast = !!appointment && appointment.date < today;
   const notCancelled = appointment?.status !== 'cancelled';
   const canReschedule =
@@ -151,6 +158,9 @@ export function useAppointmentDetail() {
     isPatient,
     isAdmin,
     canManage,
+    canDeletePrescription,
+    canDeleteVitals,
+    canDeleteTestOrder,
     canReschedule,
     canComplete,
     canCancel,

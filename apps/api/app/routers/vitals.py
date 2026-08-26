@@ -120,7 +120,7 @@ def delete_vitals(
     vitals_id: str,
     db: Session = Depends(get_db),
     user: models.User = Depends(get_current_user),
-    scope: str = Depends(require_permission("vitals.record")),
+    scope: str = Depends(require_permission("vitals.delete")),
     tenant_id: str = Depends(get_tenant_id),
 ):
     v = _get_vitals(db, vitals_id, tenant_id)

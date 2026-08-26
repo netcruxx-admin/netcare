@@ -51,7 +51,7 @@ function ActionButtons({
   onDelete,
 }: {
   onEdit?: () => void;
-  onDelete: () => void;
+  onDelete?: () => void;
 }) {
   return (
     <td className="py-2 px-3 whitespace-nowrap">
@@ -65,13 +65,15 @@ function ActionButtons({
             <Pencil className="w-3.5 h-3.5" />
           </button>
         )}
-        <button
-          onClick={onDelete}
-          title="Delete"
-          className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition"
-        >
-          <Trash2 className="w-3.5 h-3.5" />
-        </button>
+        {onDelete && (
+          <button
+            onClick={onDelete}
+            title="Delete"
+            className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+          </button>
+        )}
       </div>
     </td>
   );
@@ -83,6 +85,9 @@ export function ClinicalSections({
   medicalRecords,
   testOrders = [],
   canManage = false,
+  canDeletePrescription = false,
+  canDeleteVitals = false,
+  canDeleteTestOrder = false,
   onEditPrescription,
   onDeletePrescription,
   onEditVitals,
@@ -94,6 +99,9 @@ export function ClinicalSections({
   medicalRecords: any[];
   testOrders?: any[];
   canManage?: boolean;
+  canDeletePrescription?: boolean;
+  canDeleteVitals?: boolean;
+  canDeleteTestOrder?: boolean;
   onEditPrescription?: (rx: any) => void;
   onDeletePrescription?: (id: string) => void;
   onEditVitals?: (v: any) => void;
@@ -123,7 +131,7 @@ export function ClinicalSections({
                         <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-700">Urgent</span>
                       )}
                       <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${statusInfo.cls}`}>{statusInfo.label}</span>
-                      {canManage && (
+                      {canDeleteTestOrder && (
                         <button
                           onClick={() => onDeleteTestOrder?.(order.id)}
                           title="Cancel order"
@@ -177,7 +185,7 @@ export function ClinicalSections({
                 {canManage && (
                   <ActionButtons
                     onEdit={() => onEditPrescription?.(rx)}
-                    onDelete={() => onDeletePrescription?.(rx.id)}
+                    onDelete={canDeletePrescription ? () => onDeletePrescription?.(rx.id) : undefined}
                   />
                 )}
               </tr>
@@ -202,7 +210,7 @@ export function ClinicalSections({
                 {canManage && (
                   <ActionButtons
                     onEdit={() => onEditVitals?.(v)}
-                    onDelete={() => onDeleteVitals?.(v.id)}
+                    onDelete={canDeleteVitals ? () => onDeleteVitals?.(v.id) : undefined}
                   />
                 )}
               </tr>

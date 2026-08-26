@@ -175,6 +175,9 @@ export function AdminAppointments({ session }: RoleViewProps) {
   const [createVitals] = useCreateVitalsMutation();
 
   const canManage = hasPermission(session, 'appointments.manage');
+  // Deletion is a platform capability: hospital staff create and edit, the
+  // platform owner is the one who can erase. See migration x9y0z1a2b3c4.
+  const canDelete = hasPermission(session, 'appointments.delete');
 
   const [status, setStatus] = useState<'all' | Appointment['status']>('all');
   const [deptId, setDeptId] = useState('all');
@@ -453,8 +456,10 @@ export function AdminAppointments({ session }: RoleViewProps) {
                                 <ActionIcon icon={CalendarClock} label="Reschedule" onClick={() => openReschedule(r.appt)} />
                                 <ActionIcon icon={CalendarPlus} label="Schedule Follow-Up" onClick={() => setFollowUp(r.appt)} />
                                 <ActionIcon icon={Activity} label="Add Vitals" onClick={() => setAddingVitals(r.appt)} />
-                                <ActionIcon icon={Trash2} label="Delete" tone="danger" onClick={() => setDeleting(r.appt)} />
                               </>
+                            )}
+                            {canDelete && (
+                              <ActionIcon icon={Trash2} label="Delete" tone="danger" onClick={() => setDeleting(r.appt)} />
                             )}
                           </div>
                         </td>

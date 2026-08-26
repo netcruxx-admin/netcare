@@ -44,6 +44,9 @@ export function AdminUsers({ session }: RoleViewProps) {
   const [roleFilter, setRoleFilter] = useState<string>('all');
 
   const canManage = hasPermission(session, 'users.manage');
+  // Deletion is a platform capability: hospital staff create and edit, the
+  // platform owner is the one who can erase. See migration x9y0z1a2b3c4.
+  const canDelete = hasPermission(session, 'users.delete');
 
   const table = useServerTable({ filterKey: roleFilter });
 
@@ -187,13 +190,13 @@ export function AdminUsers({ session }: RoleViewProps) {
                                 onClick={() => setResetting(user)}
                               />
                             )}
-                            {isSelf ? (
+                            {canDelete && (isSelf ? (
                               <span className="p-2 text-slate-300 cursor-not-allowed" title="Cannot delete yourself">
                                 <Trash2 className="w-4 h-4" />
                               </span>
                             ) : (
                               <ActionIcon icon={Trash2} label="Delete" tone="danger" onClick={() => setDeleting(user)} />
-                            )}
+                            ))}
                           </>
                         )}
                       </div>

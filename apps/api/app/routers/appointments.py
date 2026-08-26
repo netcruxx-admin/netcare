@@ -258,7 +258,7 @@ def delete_appointment(
     appointment_id: str,
     db: Session = Depends(get_db),
     user: models.User = Depends(get_current_user),
-    scope: str = Depends(require_permission("appointments.manage")),
+    scope: str = Depends(require_permission("appointments.delete")),
     tenant_id: str = Depends(get_tenant_id),
 ):
     query = scoped(db, models.Appointment, tenant_id).filter(

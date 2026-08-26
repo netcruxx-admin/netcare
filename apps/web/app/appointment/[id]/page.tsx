@@ -63,6 +63,9 @@ export default function AppointmentDetailPage() {
     isPatient,
     isAdmin,
     canManage,
+    canDeletePrescription,
+    canDeleteVitals,
+    canDeleteTestOrder,
     canReschedule,
     canComplete,
     canCancel,
@@ -265,6 +268,9 @@ export default function AppointmentDetailPage() {
           medicalRecords={details.medicalRecords}
           testOrders={details.testOrders}
           canManage={canManage}
+          canDeletePrescription={canDeletePrescription}
+          canDeleteVitals={canDeleteVitals}
+          canDeleteTestOrder={canDeleteTestOrder}
           onEditPrescription={(rx) => { setEditRx(rx); setModal('edit-rx'); }}
           onDeletePrescription={handleDeletePrescription}
           onEditVitals={(v) => { setEditVitals(v); setModal('edit-vitals'); }}

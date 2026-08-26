@@ -258,7 +258,7 @@ def delete_user(
     user_id: str,
     db: Session = Depends(get_db),
     actor: models.User = Depends(get_current_user),
-    _: str = Depends(require_permission("users.manage")),
+    _: str = Depends(require_permission("users.delete")),
     tenant_id: str = Depends(get_tenant_id),
 ):
     user = _get_or_404(db, user_id, tenant_id)
