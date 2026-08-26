@@ -57,6 +57,7 @@ import {
   PaginationNext,
   PaginationEllipsis,
 } from '@/components/ui/pagination';
+import { Spinner } from '@/components/ui/spinner';
 
 const PAGE_SIZE = 20;
 
@@ -174,6 +175,9 @@ export function AdminAppointments({ session }: RoleViewProps) {
   const [createVitals] = useCreateVitalsMutation();
 
   const canManage = hasPermission(session, 'appointments.manage');
+  // Deletion is a platform capability: hospital staff create and edit, the
+  // platform owner is the one who can erase. See migration x9y0z1a2b3c4.
+  const canDelete = hasPermission(session, 'appointments.delete');
 
   const [status, setStatus] = useState<'all' | Appointment['status']>('all');
   const [deptId, setDeptId] = useState('all');
@@ -188,7 +192,7 @@ export function AdminAppointments({ session }: RoleViewProps) {
     departmentId: deptId === 'all' ? undefined : deptId,
     date: date || undefined,
   };
-  const { data: page_ } = useListAppointmentsPagedQuery({
+  const { data: page_, isLoading } = useListAppointmentsPagedQuery({
     ...listArgs,
     limit: PAGE_SIZE,
     offset: (page - 1) * PAGE_SIZE,
@@ -397,7 +401,9 @@ export function AdminAppointments({ session }: RoleViewProps) {
             <h3 className="font-semibold text-slate-900">Appointments ({totalRows})</h3>
             {totalPages > 1 && <span className="text-sm text-slate-500">Page {page} of {totalPages}</span>}
           </div>
-          {rows.length === 0 ? (
+          {isLoading ? (
+            <Spinner variant="block" />
+          ) : rows.length === 0 ? (
             <div className="text-center py-16">
               <CalendarDays className="w-16 h-16 text-slate-300 mx-auto mb-4" />
               <p className="text-slate-600">No appointments match your filters.</p>
@@ -450,8 +456,10 @@ export function AdminAppointments({ session }: RoleViewProps) {
                                 <ActionIcon icon={CalendarClock} label="Reschedule" onClick={() => openReschedule(r.appt)} />
                                 <ActionIcon icon={CalendarPlus} label="Schedule Follow-Up" onClick={() => setFollowUp(r.appt)} />
                                 <ActionIcon icon={Activity} label="Add Vitals" onClick={() => setAddingVitals(r.appt)} />
-                                <ActionIcon icon={Trash2} label="Delete" tone="danger" onClick={() => setDeleting(r.appt)} />
                               </>
+                            )}
+                            {canDelete && (
+                              <ActionIcon icon={Trash2} label="Delete" tone="danger" onClick={() => setDeleting(r.appt)} />
                             )}
                           </div>
                         </td>
@@ -550,9 +558,9 @@ export function AdminAppointments({ session }: RoleViewProps) {
                     <button
                       type="submit"
                       disabled={isSubmitting}
-                      className="flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded hover:shadow-lg font-semibold transition disabled:opacity-50"
+                      className="inline-flex items-center justify-center gap-2 flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded hover:shadow-lg font-semibold transition disabled:opacity-50"
                     >
-                      {isSubmitting ? 'Saving…' : 'Save Changes'}
+                      {isSubmitting ? <Spinner size="sm" label="Saving…" /> : 'Save Changes'}
                     </button>
                   </div>
                 </Form>
@@ -616,9 +624,9 @@ export function AdminAppointments({ session }: RoleViewProps) {
               <button
                 onClick={saveReschedule}
                 disabled={!reDate || !reTime || reSaving}
-                className="flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded hover:shadow-lg font-semibold transition disabled:opacity-50"
+                className="inline-flex items-center justify-center gap-2 flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded hover:shadow-lg font-semibold transition disabled:opacity-50"
               >
-                {reSaving ? 'Saving…' : 'Reschedule'}
+                {reSaving ? <Spinner size="sm" label="Saving…" /> : 'Reschedule'}
               </button>
             </div>
           </div>
@@ -683,9 +691,9 @@ export function AdminAppointments({ session }: RoleViewProps) {
                     <button
                       type="submit"
                       disabled={isSubmitting}
-                      className="flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded hover:shadow-lg font-semibold transition disabled:opacity-50"
+                      className="inline-flex items-center justify-center gap-2 flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded hover:shadow-lg font-semibold transition disabled:opacity-50"
                     >
-                      {isSubmitting ? 'Saving…' : 'Save Vitals'}
+                      {isSubmitting ? <Spinner size="sm" label="Saving…" /> : 'Save Vitals'}
                     </button>
                   </div>
                 </Form>
@@ -714,8 +722,8 @@ export function AdminAppointments({ session }: RoleViewProps) {
               <button onClick={() => setDeleting(null)} disabled={isDeleting} className="flex-1 px-4 py-2 bg-slate-200 text-slate-700 rounded hover:bg-slate-300 transition disabled:opacity-50">
                 Cancel
               </button>
-              <button onClick={confirmDelete} disabled={isDeleting} className="flex-1 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 font-semibold transition disabled:opacity-50">
-                {isDeleting ? 'Deleting…' : 'Delete'}
+              <button onClick={confirmDelete} disabled={isDeleting} className="inline-flex items-center justify-center gap-2 flex-1 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 font-semibold transition disabled:opacity-50">
+                {isDeleting ? <Spinner size="sm" label="Deleting…" /> : 'Delete'}
               </button>
             </div>
           </div>

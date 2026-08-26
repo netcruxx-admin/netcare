@@ -15,6 +15,7 @@ import { ActionIcon } from '@/components/ActionIcon';
 import { TablePagination } from '@/components/TablePagination';
 import { useServerTable } from '@/hooks/useServerTable';
 import { fmtDate } from '@/lib/date';
+import { Spinner } from '@/components/ui/spinner';
 
 const todayStr = new Date().toISOString().split('T')[0];
 
@@ -58,7 +59,7 @@ export function NurseAppointments({ session }: RoleViewProps) {
     status: status === 'all' ? undefined : status,
     date: date || undefined,
   };
-  const { data: appointmentPage } = useListAppointmentsPagedQuery({
+  const { data: appointmentPage, isLoading } = useListAppointmentsPagedQuery({
     ...listArgs,
     limit: table.limit,
     offset: table.offset,
@@ -119,7 +120,10 @@ export function NurseAppointments({ session }: RoleViewProps) {
           <div className="px-6 py-4 border-b">
             <h3 className="font-semibold text-slate-900">Appointments ({totalAppointments})</h3>
           </div>
-          {rows.length === 0 ? (
+
+          {isLoading ? (
+            <Spinner variant="block" />
+          ) : rows.length === 0 ? (
             <div className="text-center py-16">
               <CalendarDays className="w-16 h-16 text-slate-300 mx-auto mb-4" />
               <p className="text-slate-600">No appointments match these filters.</p>

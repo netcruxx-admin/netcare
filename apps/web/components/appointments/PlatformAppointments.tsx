@@ -32,6 +32,7 @@ import {
   useDeleteAppointmentMutation,
   useCreateVitalsMutation,
 } from '@/store/api';
+import { Spinner } from '@/components/ui/spinner';
 
 const STATUS_STYLES: Record<string, string> = {
   scheduled: 'bg-blue-100 text-blue-700',
@@ -270,7 +271,7 @@ export function PlatformAppointments({ session }: RoleViewProps) {
           )}
         </div>
         {isLoading ? (
-          <div className="py-16 text-center text-slate-400 text-sm">Loading…</div>
+          <Spinner variant="block" />
         ) : appointments.length === 0 ? (
           <div className="py-16 text-center">
             <CalendarDays className="w-16 h-16 text-slate-200 mx-auto mb-4" />
@@ -318,7 +319,7 @@ export function PlatformAppointments({ session }: RoleViewProps) {
                         {hasPermission(session, 'appointments.manage') && <ActionIcon icon={CalendarClock} label="Reschedule" onClick={() => openReschedule(a)} />}
                         {hasPermission(session, 'appointments.manage') && <ActionIcon icon={CalendarPlus} label="Schedule Follow-Up" onClick={() => setFollowUp(a)} />}
                         {hasPermission(session, 'appointments.manage') && <ActionIcon icon={Activity} label="Add Vitals" onClick={() => { setVitalsError(''); setAddingVitals(a); }} />}
-                        {hasPermission(session, 'appointments.manage') && <ActionIcon icon={Trash2} label="Delete" tone="danger" onClick={() => setDeleting(a)} />}
+                        {hasPermission(session, 'appointments.delete') && <ActionIcon icon={Trash2} label="Delete" tone="danger" onClick={() => setDeleting(a)} />}
                       </div>
                     </td>
                   </tr>
@@ -334,7 +335,6 @@ export function PlatformAppointments({ session }: RoleViewProps) {
           </div>
         )}
       </div>
-
 
       {/* Edit modal */}
       {editing && (

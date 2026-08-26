@@ -21,6 +21,7 @@ import {
   useListAssignableRolesQuery,
 } from '@/store/api';
 import type { RoleOption } from '@/store/api';
+import { Spinner } from '@/components/ui/spinner';
 
 const ROLE_STYLES: Record<string, string> = {
   admin: 'bg-violet-100 text-violet-700',
@@ -62,6 +63,8 @@ export function PlatformUsers({ session }: RoleViewProps) {
 
   const showHospital = !selectedHospitalId;
   const canManage = hasPermission(session, 'users.manage');
+  // Deletion is a platform capability: see migration x9y0z1a2b3c4.
+  const canDelete = hasPermission(session, 'users.delete');
 
   return (
     <DashboardShell
@@ -109,7 +112,7 @@ export function PlatformUsers({ session }: RoleViewProps) {
           )}
         </div>
         {isLoading ? (
-          <div className="py-16 text-center text-slate-400 text-sm">Loading…</div>
+          <Spinner variant="block" />
         ) : users.length === 0 ? (
           <div className="py-16 text-center">
             <Users className="w-16 h-16 text-slate-200 mx-auto mb-4" />
@@ -153,7 +156,7 @@ export function PlatformUsers({ session }: RoleViewProps) {
                         <div className="flex items-center justify-end gap-1">
                           <ActionIcon icon={Eye} label="View" onClick={() => setViewing(u)} />
                           {canManage && <ActionIcon icon={Pencil} label="Edit" onClick={() => { setEditing(u); setModalOpen(true); }} />}
-                          {canManage && (isSelf ? (
+                          {canDelete && (isSelf ? (
                             <span className="p-2 text-slate-300 cursor-not-allowed" title="Cannot delete yourself">
                               <Trash2 className="w-4 h-4" />
                             </span>

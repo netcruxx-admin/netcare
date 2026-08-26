@@ -6,6 +6,7 @@
  * fallback is only for transport failures that carry no body.
  */
 export function apiError(error: unknown, fallback: string): string {
+  // RTK Query errors: { data: { detail: string | [{msg}] } }
   const detail = (error as { data?: { detail?: unknown } })?.data?.detail;
   if (typeof detail === 'string') return detail;
   // FastAPI validation errors arrive as a list of {msg, loc}.
@@ -13,5 +14,7 @@ export function apiError(error: unknown, fallback: string): string {
     const first = detail[0] as { msg?: string };
     if (first?.msg) return first.msg;
   }
+  // Plain Error objects (e.g. from superadminFetch helpers).
+  if (error instanceof Error && error.message) return error.message;
   return fallback;
 }

@@ -49,6 +49,11 @@ export interface ApiAuthResponse {
    *  one and so has no new refresh token to hand out. */
   refreshToken?: string;
   expiresIn?: number;
+  /** True when this password was chosen by somebody else — an admin reset, or
+   *  the one a staff account was provisioned with. The API refuses every
+   *  permission-guarded endpoint until it is replaced, so the client must divert
+   *  to the change screen rather than treating the sign-in as finished. */
+  mustChangePassword?: boolean;
   isAuthenticated: boolean;
 }
 
@@ -216,6 +221,45 @@ export interface HospitalPublicConfig {
    *  platform mark. */
   logoUrl: string;
   status: string;
+}
+
+/** One bill, assembled server-side.
+ *
+ *  The seller block is why this exists: a bill needs the hospital's legal name
+ *  and GSTIN, which the public `/hospitals/current` deliberately no longer
+ *  carries. A signed-in patient can be answered properly.
+ */
+export interface InvoiceSeller {
+  name: string;
+  legalName: string;
+  gstin: string;
+  address: string;
+  phone: string;
+  email: string;
+  letterheadUrl: string;
+  logoUrl: string;
+}
+
+export interface InvoiceLine {
+  description: string;
+  quantity: number;
+  unitPrice: number;
+  amount: number;
+}
+
+export interface Invoice {
+  paymentId: string;
+  number: string;
+  issuedAt: string;
+  paymentType: string;
+  paymentMethod: string;
+  status: string;
+  currency: string;
+  seller: InvoiceSeller;
+  patientName: string;
+  patientPhone: string;
+  lines: InvoiceLine[];
+  total: number;
 }
 
 /** Operational config needed by the booking UI. Public endpoint, no auth. */
@@ -394,6 +438,20 @@ export interface OnboardingMeta {
 // Request body types
 // ---------------------------------------------------------------------------
 export interface LoginBody { email: string; password: string }
+export interface ChangePasswordBody {
+  currentPassword: string;
+  newPassword: string;
+}
+/** Omit `newPassword` to have the server generate one — the better path, since
+ *  it is high-entropy and nobody has to invent a password on the spot. */
+export interface ResetPasswordBody { newPassword?: string }
+export interface ResetPasswordResult {
+  userId: string;
+  email: string;
+  /** Shown once and never retrievable again. A second reset issues a new one. */
+  temporaryPassword: string;
+  mustChangePassword: boolean;
+}
 export interface RegisterBody {
   email: string;
   password: string;
@@ -799,6 +857,21 @@ export const api = createApi({
       query: () => ({ url: '/hospitals/me/logo', method: 'DELETE' }),
       invalidatesTags: ['Hospital'],
     }),
+    getInvoice: build.query<Invoice, string>({
+      query: (paymentId) => `/payments/${paymentId}/invoice`,
+    }),
+    uploadMyLetterhead: build.mutation<HospitalProfile, File>({
+      query: (file) => {
+        const form = new FormData();
+        form.append('file', file);
+        return { url: '/hospitals/me/letterhead', method: 'PUT', body: form };
+      },
+      invalidatesTags: ['Hospital'],
+    }),
+    removeMyLetterhead: build.mutation<HospitalProfile, void>({
+      query: () => ({ url: '/hospitals/me/letterhead', method: 'DELETE' }),
+      invalidatesTags: ['Hospital'],
+    }),
     getMyHospitalSettings: build.query<HospitalDetail, void>({
       query: () => '/hospitals/me/settings',
       providesTags: ['Hospital'],
@@ -925,6 +998,24 @@ export const api = createApi({
     // Ends this session server-side. Clearing localStorage alone would leave a
     // live session behind on a shared machine — the token would keep working
     // for anyone who recovered it.
+    // Changing your own. Returns a fresh session, so the caller stays signed in
+    // on this device while every other one is ended.
+    changePassword: build.mutation<ApiAuthResponse, ChangePasswordBody>({
+      query: (body) => ({ url: '/auth/change-password', method: 'POST', body }),
+    }),
+    // Staff issuing a temporary password for someone who cannot sign in. The
+    // whole recovery story until there is an email or SMS provider.
+    resetUserPassword: build.mutation<
+      ResetPasswordResult,
+      { userId: string; body: ResetPasswordBody }
+    >({
+      query: ({ userId, body }) => ({
+        url: `/users/${userId}/reset-password`,
+        method: 'POST',
+        body,
+      }),
+      invalidatesTags: ['User'],
+    }),
     logout: build.mutation<void, void>({
       query: () => ({ url: '/auth/logout', method: 'POST' }),
       invalidatesTags: ['Me'],
@@ -933,6 +1024,26 @@ export const api = createApi({
     logoutAll: build.mutation<void, void>({
       query: () => ({ url: '/auth/logout-all', method: 'POST' }),
       invalidatesTags: ['Me'],
+    }),
+    // Sends a reset link to the address if it is registered. Always 200.
+    forgotPassword: build.mutation<{ message: string }, { email: string }>({
+      query: (body) => ({ url: '/auth/forgot-password', method: 'POST', body }),
+    }),
+    // Consumes the one-time token and sets a new password.
+    resetPassword: build.mutation<{ message: string }, { token: string; newPassword: string }>({
+      query: ({ token, newPassword }) => ({
+        url: '/auth/reset-password',
+        method: 'POST',
+        body: { token, newPassword },
+      }),
+    }),
+
+    // ── FCM / Push notifications ──────────────────────────────────────────────
+    registerFcmToken: build.mutation<void, { token: string; device_label: string }>({
+      query: (body) => ({ url: '/notifications/token', method: 'POST', body }),
+    }),
+    unregisterFcmToken: build.mutation<void, { token: string; device_label: string }>({
+      query: (body) => ({ url: '/notifications/token', method: 'DELETE', body }),
     }),
 
     // ── Consent ──────────────────────────────────────────────────────────────
@@ -1297,6 +1408,14 @@ export const api = createApi({
       query: (body) => ({ url: '/prescriptions', method: 'POST', body }),
       invalidatesTags: [{ type: 'Prescription', id: 'LIST' }],
     }),
+    updatePrescription: build.mutation<Prescription, { id: string; body: Partial<PrescriptionCreateBody> }>({
+      query: ({ id, body }) => ({ url: `/prescriptions/${id}`, method: 'PUT', body }),
+      invalidatesTags: [{ type: 'Prescription', id: 'LIST' }],
+    }),
+    deletePrescription: build.mutation<void, string>({
+      query: (id) => ({ url: `/prescriptions/${id}`, method: 'DELETE' }),
+      invalidatesTags: [{ type: 'Prescription', id: 'LIST' }],
+    }),
 
     // ── Payments ──────────────────────────────────────────────────────────────
     listPayments: build.query<
@@ -1541,6 +1660,10 @@ export const api = createApi({
       query: (id) => ({ url: `/test-orders/${id}`, method: 'DELETE' }),
       invalidatesTags: [{ type: 'TestOrder', id: 'LIST' }],
     }),
+    cancelTestOrder: build.mutation<void, string>({
+      query: (id) => ({ url: `/test-orders/${id}/cancel`, method: 'POST' }),
+      invalidatesTags: [{ type: 'TestOrder', id: 'LIST' }],
+    }),
     listTestResults: build.query<TestResult[], { orderId?: string } | void>({
       query: (params) => ({ url: '/test-results', params: params ?? undefined }),
       providesTags: [{ type: 'TestResult', id: 'LIST' }],
@@ -1661,6 +1784,17 @@ export const api = createApi({
         { type: 'Appointment', id: 'LIST' },
       ],
     }),
+    updateVitals: build.mutation<Vitals, { id: string; body: Partial<VitalsCreateBody> }>({
+      query: ({ id, body }) => ({ url: `/vitals/${id}`, method: 'PUT', body }),
+      invalidatesTags: [{ type: 'Vitals', id: 'LIST' }],
+    }),
+    deleteVitals: build.mutation<void, string>({
+      query: (id) => ({ url: `/vitals/${id}`, method: 'DELETE' }),
+      invalidatesTags: [
+        { type: 'Vitals', id: 'LIST' },
+        { type: 'Appointment', id: 'LIST' },
+      ],
+    }),
   }),
 });
 
@@ -1695,6 +1829,9 @@ export const {
   useListHospitalsQuery,
   useGetHospitalDetailQuery,
   useGetMyHospitalSettingsQuery,
+  useLazyGetInvoiceQuery,
+  useUploadMyLetterheadMutation,
+  useRemoveMyLetterheadMutation,
   useUploadMyHospitalLogoMutation,
   useRemoveMyHospitalLogoMutation,
   useUpdateMyHospitalSettingsMutation,
@@ -1711,8 +1848,17 @@ export const {
   useReplaceHospitalSubscriptionMutation,
   useLoginMutation,
   useRegisterMutation,
+  useChangePasswordMutation,
+  useResetUserPasswordMutation,
   useLogoutMutation,
   useLogoutAllMutation,
+  useForgotPasswordMutation,
+  useResetPasswordMutation,
+  useUpdatePrescriptionMutation,
+  useDeletePrescriptionMutation,
+  useCancelTestOrderMutation,
+  useUpdateVitalsMutation,
+  useDeleteVitalsMutation,
   useListConsentPurposesQuery,
   useListConsentsQuery,
   useCreateConsentMutation,
@@ -1834,4 +1980,6 @@ export const {
   useListImmunizationsQuery,
   useCreateImmunizationMutation,
   useMarkImmunizationGivenMutation,
+  useRegisterFcmTokenMutation,
+  useUnregisterFcmTokenMutation,
 } = api;

@@ -74,7 +74,7 @@ def update_lab_test(
 def delete_lab_test(
     test_id: str,
     db: Session = Depends(get_db),
-    _: str = Depends(require_permission("lab_tests.manage")),
+    _: str = Depends(require_permission("lab_tests.delete")),
     tenant_id: str = Depends(get_tenant_id),
 ):
     test = (

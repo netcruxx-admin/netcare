@@ -5,13 +5,14 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useFormik, FormikProvider } from 'formik';
 import * as Yup from 'yup';
-import { Mail, Lock, AlertCircle, CheckCircle } from 'lucide-react';
+import { Mail, Lock, AlertCircle, CheckCircle, KeyRound } from 'lucide-react';
 import Image from 'next/image';
 import { authStorage } from '@/lib/auth';
 import { loginRoleTabs, resolveHomePath } from '@/lib/roles';
 import { FormField } from '@/components/form/FormField';
 import { useGetCurrentHospitalQuery, useLoginMutation } from '@/store/api';
 import { currentSubdomain } from '@/lib/tenant';
+import { Spinner } from '@/components/ui/spinner';
 
 type LoginType = (typeof loginRoleTabs)[number];
 
@@ -43,11 +44,11 @@ function LoginFallback() {
   );
 }
 
-
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const justRegistered = searchParams.get('registered') === '1';
+  const justReset = searchParams.get('reset') === '1';
   const isHospitalSubdomain = !!currentSubdomain();
   const { data: hospital } = useGetCurrentHospitalQuery(undefined, { skip: !isHospitalSubdomain });
   const [loginMutation, { isLoading }] = useLoginMutation();
@@ -93,8 +94,17 @@ function LoginForm() {
           permissions: result.permissions,
           token: result.token,
           refreshToken: result.refreshToken,
+          mustChangePassword: result.mustChangePassword,
           isAuthenticated: true,
         });
+
+        // A password somebody else chose gets the holder exactly one screen.
+        // The API refuses everything else anyway, so sending them to a
+        // dashboard would only produce a wall of 403s.
+        if (result.mustChangePassword) {
+          router.push('/change-password');
+          return;
+        }
 
         // The role itself declares where it lands, so a new role needs no code
         // change here (see lib/roles.ts).
@@ -177,26 +187,44 @@ function LoginForm() {
             </div>
           )}
 
-          {/* Error Message */}
-          {error && (
-            <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-start gap-3">
-              <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
-              <p className="text-red-700 text-sm">{error}</p>
+          {/* Password-reset success banner */}
+          {justReset && (
+            <div className="bg-green-50 border border-green-200 rounded-xl p-4 flex items-start gap-3">
+              <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
+              <p className="text-green-700 text-sm">Password updated! Sign in with your new password.</p>
             </div>
           )}
-
 
           <FormikProvider value={formik}>
             <form onSubmit={formik.handleSubmit} className="space-y-4" noValidate>
               <FormField name="email" label="Email" type="email" placeholder="your.email@example.com" icon={Mail} required />
               <FormField name="password" label="Password" type="password" placeholder="••••••••" icon={Lock} required />
 
+              {/* Forgot password link — only on hospital subdomains; superadmin
+                  has no self-service reset path from the platform root. */}
+              {isHospitalSubdomain && (
+                <div className="flex justify-end -mt-2">
+                  <Link href="/forgot-password" className="text-xs text-cyan-600 hover:text-teal-600 flex items-center gap-1">
+                    <KeyRound className="w-3 h-3" />
+                    Forgot password?
+                  </Link>
+                </div>
+              )}
+
+              {/* Error Message — sits right above the button so it's closest to the action */}
+              {error && (
+                <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3 flex items-center gap-2.5">
+                  <AlertCircle className="w-4 h-4 text-red-500 shrink-0" />
+                  <p className="text-red-700 text-sm">{error}</p>
+                </div>
+              )}
+
               <button
                 type="submit"
                 disabled={isLoading || formik.isSubmitting}
-                className="w-full bg-gradient-to-r from-cyan-500 to-brand-teal text-white py-2 rounded-lg font-semibold hover:shadow-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full inline-flex items-center justify-center gap-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white py-2 rounded-lg font-semibold hover:shadow-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {isLoading || formik.isSubmitting ? 'Signing in...' : 'Sign In'}
+                {isLoading || formik.isSubmitting ? <Spinner size="sm" label="Signing in…" /> : 'Sign In'}
               </button>
             </form>
           </FormikProvider>
@@ -216,7 +244,6 @@ function LoginForm() {
     </div>
   );
 }
-
 
 // `useSearchParams` opts the subtree into client-side rendering, and Next
 // refuses to prerender a page that reaches for it without a boundary — which

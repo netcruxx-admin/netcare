@@ -19,6 +19,7 @@ import {
   useListDoctorsPagedQuery,
   useListDepartmentsQuery,
 } from '@/store/api';
+import { Spinner } from '@/components/ui/spinner';
 
 const exportRow = (d: Doctor, deptName?: string) => [
   d.user?.name ?? '—',
@@ -39,6 +40,9 @@ export function AdminDoctors({ session }: RoleViewProps) {
   const [viewing, setViewing] = useState<Doctor | null>(null);
 
   const canManage = hasPermission(session, 'doctors.manage');
+  // Deletion is a platform capability: hospital staff create and edit, the
+  // platform owner is the one who can erase. See migration x9y0z1a2b3c4.
+  const canDelete = hasPermission(session, 'doctors.delete');
 
   const table = useServerTable({ filterKey: deptFilter });
 
@@ -46,7 +50,7 @@ export function AdminDoctors({ session }: RoleViewProps) {
     q: table.q.trim() || undefined,
     departmentId: deptFilter === 'all' ? undefined : deptFilter,
   };
-  const { data: doctorPage, refetch } = useListDoctorsPagedQuery({
+  const { data: doctorPage, isLoading, refetch } = useListDoctorsPagedQuery({
     ...listArgs,
     limit: table.limit,
     offset: table.offset,
@@ -108,7 +112,9 @@ export function AdminDoctors({ session }: RoleViewProps) {
           )}
         </div>
 
-        {filtered.length === 0 ? (
+        {isLoading ? (
+          <Spinner variant="block" />
+        ) : filtered.length === 0 ? (
           <div className="text-center py-16">
             <Stethoscope className="w-16 h-16 text-slate-300 mx-auto mb-4" />
             <p className="text-slate-600">No doctors found</p>
@@ -154,12 +160,8 @@ export function AdminDoctors({ session }: RoleViewProps) {
                     <td className="py-3 px-6 text-right">
                       <div className="flex items-center justify-end gap-1">
                         <ActionIcon icon={Eye} label="View" onClick={() => setViewing(doctor)} />
-                        {canManage && (
-                          <>
-                            <ActionIcon icon={Pencil} label="Edit" onClick={() => setEditing(doctor)} />
-                            <ActionIcon icon={Trash2} label="Delete" tone="danger" onClick={() => setDeleting(doctor)} />
-                          </>
-                        )}
+                        {canManage && <ActionIcon icon={Pencil} label="Edit" onClick={() => setEditing(doctor)} />}
+                        {canDelete && <ActionIcon icon={Trash2} label="Delete" tone="danger" onClick={() => setDeleting(doctor)} />}
                       </div>
                     </td>
                   </tr>

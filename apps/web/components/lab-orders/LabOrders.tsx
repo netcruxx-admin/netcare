@@ -17,6 +17,7 @@ import {
 } from '@/store/api';
 import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
+import { hasPermission } from '@/lib/auth';
 import { ExportButton } from '@/components/ExportButton';
 import { TablePagination } from '@/components/TablePagination';
 import { useDebounced } from '@/hooks/useDebounced';
@@ -32,6 +33,7 @@ import {
   FLAG_LABEL,
   type ResultFlag,
 } from '@/lib/lab';
+import { Spinner } from '@/components/ui/spinner';
 
 interface DraftRow extends TestResultParameter {
   low?: number;
@@ -57,10 +59,14 @@ function LabOrdersInner({ session }: RoleViewProps) {
   const [draft, setDraft] = useState<DraftTest[]>([]);
   const [deleting, setDeleting] = useState<TestOrder | null>(null);
 
+  // Deletion is a platform capability: lab staff process orders, the platform
+  // owner is the one who can erase one. See migration x9y0z1a2b3c4.
+  const canDelete = hasPermission(session, 'lab_orders.delete');
+
   // Filter, search and page on the server: with only one page in hand, doing it
   // here would search 20 rows and present that as the whole result.
   const debouncedQuery = useDebounced(query);
-  const { data: orderPage } = useListTestOrdersPagedQuery({
+  const { data: orderPage, isLoading } = useListTestOrdersPagedQuery({
     q: debouncedQuery.trim() || undefined,
     status: statusFilter === 'all' ? undefined : statusFilter,
     limit: PAGE_SIZE,
@@ -264,7 +270,10 @@ function LabOrdersInner({ session }: RoleViewProps) {
           <div className="px-6 py-4 border-b">
             <h3 className="font-semibold text-slate-900">Orders ({totalOrders})</h3>
           </div>
-          {rows.length === 0 ? (
+
+          {isLoading ? (
+            <Spinner variant="block" />
+          ) : rows.length === 0 ? (
             <div className="text-center py-16">
               <ClipboardList className="w-16 h-16 text-slate-300 mx-auto mb-4" />
               <p className="text-slate-600">No orders match your filters.</p>
@@ -334,14 +343,16 @@ function LabOrdersInner({ session }: RoleViewProps) {
                                 <FileText className="w-4 h-4" />
                               </Link>
                             )}
-                            <button
-                              onClick={() => setDeleting(r.order)}
-                              title="Delete Order"
-                              aria-label="Delete Order"
-                              className="p-2 rounded-lg text-slate-500 hover:text-red-600 hover:bg-red-50 transition"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
+                            {canDelete && (
+                              <button
+                                onClick={() => setDeleting(r.order)}
+                                title="Delete Order"
+                                aria-label="Delete Order"
+                                className="p-2 rounded-lg text-slate-500 hover:text-red-600 hover:bg-red-50 transition"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            )}
                           </div>
                         </td>
                       </tr>

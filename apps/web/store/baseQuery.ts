@@ -75,6 +75,11 @@ const rawBaseQuery = fetchBaseQuery({
       if (tenantHint && !headers.has('X-Hospital-Id')) {
         headers.set('X-Hospital-Id', tenantHint);
       }
+      // Tell the backend which URL the browser is on. The API runs on :8000
+      // so request.url.host is always the API host, not the browser's tab URL.
+      // The backend uses this to build password-reset links on the correct
+      // hospital subdomain (e.g. http://sunrise.localhost:3000).
+      headers.set('X-Frontend-Origin', window.location.origin);
     }
     return headers;
   },
@@ -83,6 +88,41 @@ const rawBaseQuery = fetchBaseQuery({
 /** The refresh in flight, if any. Every concurrent 401 awaits this one promise
  *  rather than starting its own — see the note above on rotation. */
 let refreshInFlight: Promise<boolean> | null = null;
+
+/** Seconds of headroom before `exp` at which a token counts as spent.
+ *  Covers clock skew between browser and server plus the request's own flight
+ *  time, so a token cannot expire in transit and 401 anyway. */
+const EXPIRY_SKEW_SECONDS = 30;
+
+/** When the access token expires, or null if it cannot be read.
+ *
+ *  Only the `exp` claim is read, and only to decide whether to renew early.
+ *  Nothing here is trusted for access control — the server re-verifies the
+ *  signature on every request, and a tampered payload would simply cause a
+ *  refresh we did not need.
+ */
+function accessTokenExpiry(token: string): number | null {
+  try {
+    const payload = token.split('.')[1];
+    if (!payload) return null;
+    const json = atob(payload.replace(/-/g, '+').replace(/_/g, '/'));
+    const exp = (JSON.parse(json) as { exp?: number }).exp;
+    return typeof exp === 'number' ? exp : null;
+  } catch {
+    // An unreadable token is not treated as expired: let the request go and
+    // let the 401 path handle it, which is the behaviour that existed before.
+    return null;
+  }
+}
+
+/** True when the stored access token is spent and should be renewed first. */
+function accessTokenIsStale(): boolean {
+  const token = readSession()?.token;
+  if (!token) return false;
+  const exp = accessTokenExpiry(token);
+  if (exp === null) return false;
+  return exp - EXPIRY_SKEW_SECONDS <= Date.now() / 1000;
+}
 
 async function refreshOnce(): Promise<boolean> {
   const session = readSession();
@@ -114,14 +154,39 @@ export const baseQueryWithReauth: BaseQueryFn<
   unknown,
   FetchBaseQueryError
 > = async (args, api, extraOptions) => {
+  const url = typeof args === 'string' ? args : args.url;
+  const isAuthCall = url.includes('/auth/refresh') || url.includes('/auth/login');
+
+  // Renew *before* spending a round trip on a request we know will 401.
+  //
+  // Reacting to the 401 alone costs every caller an extra full round trip each
+  // time the access token lapses, and the token is deliberately short-lived, so
+  // this happens throughout a normal session. Against a same-machine API that
+  // was invisible; against the deployed one it is roughly 600ms per affected
+  // request, and a dashboard opens five or six at once.
+  //
+  // Same mutex as the 401 path, for the same reason: refresh tokens rotate, and
+  // presenting a spent one is treated as theft and kills the session family. So
+  // concurrent callers all await the one refresh rather than racing.
+  if (!isAuthCall && accessTokenIsStale()) {
+    if (!refreshInFlight) {
+      refreshInFlight = refreshOnce().finally(() => {
+        refreshInFlight = null;
+      });
+    }
+    // A failed pre-emptive refresh is not fatal here: fall through and let the
+    // request run, so the 401 path below stays the single place that decides a
+    // session is over.
+    await refreshInFlight;
+  }
+
   let result = await rawBaseQuery(args, api, extraOptions);
 
   if (result.error?.status !== 401) return result;
 
   // /auth/refresh returning 401 means the session is genuinely over; retrying
   // it would loop.
-  const url = typeof args === 'string' ? args : args.url;
-  if (url.includes('/auth/refresh') || url.includes('/auth/login')) return result;
+  if (isAuthCall) return result;
 
   if (!refreshInFlight) {
     refreshInFlight = refreshOnce().finally(() => {

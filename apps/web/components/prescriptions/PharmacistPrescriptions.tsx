@@ -21,6 +21,7 @@ import { ExportButton } from '@/components/ExportButton';
 import { TablePagination } from '@/components/TablePagination';
 import { useServerTable } from '@/hooks/useServerTable';
 import { fmtDate } from '@/lib/date';
+import { Spinner } from '@/components/ui/spinner';
 
 const toRow = (rx: Prescription) => ({
   ...rx,
@@ -97,7 +98,7 @@ export function PharmacistPrescriptions({ session }: RoleViewProps) {
   };
 
   const listArgs = { q: table.q.trim() || undefined };
-  const { data: prescriptionPage } = useListPrescriptionsPagedQuery({
+  const { data: prescriptionPage, isLoading } = useListPrescriptionsPagedQuery({
     ...listArgs,
     limit: table.limit,
     offset: table.offset,
@@ -135,7 +136,9 @@ export function PharmacistPrescriptions({ session }: RoleViewProps) {
           <div className="px-6 py-4 border-b">
             <h3 className="font-semibold text-slate-900">Prescriptions ({totalPrescriptions})</h3>
           </div>
-          {rows.length === 0 ? (
+          {isLoading ? (
+            <Spinner variant="block" />
+          ) : rows.length === 0 ? (
             <div className="text-center py-16">
               <Pill className="w-16 h-16 text-slate-300 mx-auto mb-4" />
               <p className="text-slate-600">No prescriptions found.</p>
@@ -288,9 +291,9 @@ export function PharmacistPrescriptions({ session }: RoleViewProps) {
                 type="button"
                 onClick={confirmQueue}
                 disabled={isQueueing}
-                className="px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white text-sm font-semibold rounded-lg shadow hover:opacity-95 disabled:opacity-50 transition"
+                className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white text-sm font-semibold rounded-lg shadow hover:opacity-95 disabled:opacity-50 transition"
               >
-                {isQueueing ? 'Sending…' : 'Send to queue'}
+                {isQueueing ? <Spinner size="sm" label="Sending…" /> : 'Send to queue'}
               </button>
             </div>
           </div>

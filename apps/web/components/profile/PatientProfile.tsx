@@ -1,13 +1,14 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Formik, Form, useFormikContext } from 'formik';
 import * as Yup from 'yup';
-import { ChevronRight, Loader2 } from 'lucide-react';
+import { ChevronRight, Pencil, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiError } from '@/lib/apiError';
 import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
+import { ChangePasswordForm } from '@/components/auth/ChangePasswordForm';
 import {
   useGetPatientByUserQuery,
   useUpdatePatientMutation,
@@ -16,6 +17,7 @@ import {
 import { FormField } from '@/components/form/FormField';
 import { PhoneField, toPhoneDigits, withPrefix } from '@/components/form/PhoneField';
 import { ConsentSettings } from './ConsentSettings';
+import { Spinner } from '@/components/ui/spinner';
 
 interface FormValues {
   name: string;
@@ -223,9 +225,9 @@ function WizardContent({ isSaving }: { isSaving: boolean }) {
             key="submit"
             type="submit"
             disabled={isSubmitting || isSaving}
-            className="flex-1 px-6 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white font-semibold rounded-lg hover:shadow-lg transition disabled:opacity-50"
+            className="inline-flex items-center justify-center gap-2 flex-1 px-6 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white font-semibold rounded-lg hover:shadow-lg transition disabled:opacity-50"
           >
-            {isSubmitting || isSaving ? 'Saving…' : 'Save Profile'}
+            {isSubmitting || isSaving ? <Spinner size="sm" label="Saving…" /> : 'Save Profile'}
           </button>
         )}
       </div>
@@ -238,6 +240,19 @@ export function PatientProfile({ session }: RoleViewProps) {
   const [updatePatient, { isLoading: isSavingPatient }] = useUpdatePatientMutation();
   const [updateOwnAccount, { isLoading: isSavingAccount }] = useUpdateOwnAccountMutation();
   const isSaving = isSavingPatient || isSavingAccount;
+  const [isEditing, setIsEditing] = useState(false);
+
+  // Scroll to consent section if navigated here with #consent-section hash
+  // (e.g. from the consent gate on other pages).
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (window.location.hash === '#consent-section') {
+      const el = document.getElementById('consent-section');
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }
+  }, [isLoading]);
 
   const initialValues: FormValues = {
     name: session.user.name ?? '',
@@ -254,20 +269,6 @@ export function PatientProfile({ session }: RoleViewProps) {
     insuranceNumber: patient?.insuranceNumber ?? '',
   };
 
-  if (isLoading) {
-    return (
-      <DashboardShell
-        role={session.user.role}
-        userName={session.user.name}
-        title="Profile"
-        subtitle="Your health profile"
-      >
-        <div className="flex items-center justify-center py-16">
-          <Loader2 className="w-8 h-8 animate-spin text-cyan-500" />
-        </div>
-      </DashboardShell>
-    );
-  }
 
   return (
     <DashboardShell
@@ -275,59 +276,174 @@ export function PatientProfile({ session }: RoleViewProps) {
       userName={session.user.name}
       title="Profile"
       subtitle="Manage your health information"
+      loading={isLoading}
     >
       <div className="max-w-2xl mx-auto space-y-6">
-        <div className="w-full bg-white rounded-lg shadow-xl p-8 space-y-8">
-          <div className="text-center">
-            <h2 className="text-3xl font-bold text-slate-900">Your Profile</h2>
-            <p className="text-slate-600 mt-2">Keep your health information up to date</p>
+        <div className="w-full bg-white rounded-lg shadow p-6 space-y-6">
+          {/* Header with edit toggle */}
+          <div className="flex items-center justify-between">
+            <h2 className="font-semibold text-slate-900">{isEditing ? 'Edit Profile' : 'Profile Details'}</h2>
+            <div className="relative group">
+              <button
+                type="button"
+                onClick={() => setIsEditing((v) => !v)}
+                className="p-1.5 rounded-md text-slate-400 hover:text-cyan-600 hover:bg-cyan-50 transition"
+              >
+                {isEditing ? <X className="w-4 h-4" /> : <Pencil className="w-4 h-4" />}
+              </button>
+              <div className="absolute right-0 top-full mt-1.5 px-2 py-1 text-xs text-white bg-slate-700 rounded shadow-md whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-10">
+                {isEditing ? 'Cancel editing' : 'Edit profile'}
+              </div>
+            </div>
           </div>
 
-          <Formik
-            initialValues={initialValues}
-            enableReinitialize
-            validationSchema={schema}
-            onSubmit={async (values, { setSubmitting }) => {
-              if (!patient) return;
-              try {
-                await Promise.all([
-                  updatePatient({
-                    id: patient.id,
-                    body: {
-                      dateOfBirth: values.dateOfBirth || undefined,
-                      gender: values.gender || undefined,
-                      bloodGroup: values.bloodGroup || undefined,
-                      allergies: values.allergies || undefined,
-                      chronicDiseases: values.chronicDiseases || undefined,
-                      emergencyContact: values.emergencyContact || undefined,
-                      emergencyPhone: withPrefix(values.emergencyPhone) || undefined,
-                      insuranceProvider: values.insuranceProvider || undefined,
-                      insuranceNumber: values.insuranceNumber || undefined,
-                    },
-                  }).unwrap(),
-                  updateOwnAccount({
-                    name: values.name.trim() || undefined,
-                    email: values.email.trim() || undefined,
-                    phone: withPrefix(values.phone) || undefined,
-                  }).unwrap(),
-                ]);
-                toast.success('Profile updated');
-              } catch (err) {
-                toast.error(apiError(err, 'Could not save your profile. Please try again.'));
-              } finally {
-                setSubmitting(false);
-              }
-            }}
-          >
-            <Form className="space-y-6">
-              <WizardContent isSaving={isSaving} />
-            </Form>
-          </Formik>
+          {!isEditing ? (
+            /* ── Read-only view ── */
+            <div className="space-y-6">
+              <div>
+                <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-3">Personal Information</h3>
+                <dl className="grid sm:grid-cols-2 gap-x-8 gap-y-4 text-sm">
+                  <div>
+                    <dt className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-0.5">Full Name</dt>
+                    <dd className="text-slate-800 font-medium">{session.user.name || 'None'}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-0.5">Email</dt>
+                    <dd className="text-slate-800 font-medium">{session.user.email || 'None'}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-0.5">Date of Birth</dt>
+                    <dd className="text-slate-800 font-medium">{patient?.dateOfBirth || 'None'}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-0.5">Gender</dt>
+                    <dd className="text-slate-800 font-medium capitalize">{patient?.gender || 'None'}</dd>
+                  </div>
+                </dl>
+              </div>
+
+              <div className="border-t border-slate-100 pt-5">
+                <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-3">Contact Details</h3>
+                <dl className="grid sm:grid-cols-2 gap-x-8 gap-y-4 text-sm">
+                  <div>
+                    <dt className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-0.5">Phone Number</dt>
+                    <dd className="text-slate-800 font-medium">{patient?.phone || session.user.phone || 'None'}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-0.5">Emergency Contact</dt>
+                    <dd className="text-slate-800 font-medium">{patient?.emergencyContact || 'None'}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-0.5">Emergency Phone</dt>
+                    <dd className="text-slate-800 font-medium">{patient?.emergencyPhone || 'None'}</dd>
+                  </div>
+                </dl>
+              </div>
+
+              <div className="border-t border-slate-100 pt-5">
+                <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-3">Medical Information</h3>
+                <dl className="grid sm:grid-cols-2 gap-x-8 gap-y-4 text-sm">
+                  <div>
+                    <dt className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-0.5">Blood Group</dt>
+                    <dd className="text-slate-800 font-medium">{patient?.bloodGroup || 'None'}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-0.5">Allergies</dt>
+                    <dd className="text-slate-800 font-medium">{patient?.allergies || 'None'}</dd>
+                  </div>
+                  <div className="sm:col-span-2">
+                    <dt className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-0.5">Chronic Diseases</dt>
+                    <dd className="text-slate-800 font-medium">{patient?.chronicDiseases || 'None'}</dd>
+                  </div>
+                </dl>
+              </div>
+
+              <div className="border-t border-slate-100 pt-5">
+                <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-3">Insurance</h3>
+                <dl className="grid sm:grid-cols-2 gap-x-8 gap-y-4 text-sm">
+                  <div>
+                    <dt className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-0.5">Insurance Provider</dt>
+                    <dd className="text-slate-800 font-medium">{patient?.insuranceProvider || 'None'}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-0.5">Insurance Number</dt>
+                    <dd className="text-slate-800 font-medium">{patient?.insuranceNumber || 'None'}</dd>
+                  </div>
+                </dl>
+              </div>
+            </div>
+          ) : (
+            /* ── Edit form (wizard) ── */
+            <Formik
+              initialValues={initialValues}
+              enableReinitialize
+              validationSchema={schema}
+              onSubmit={async (values, { setSubmitting }) => {
+                if (!patient) return;
+                try {
+                  await Promise.all([
+                    updatePatient({
+                      id: patient.id,
+                      body: {
+                        dateOfBirth: values.dateOfBirth || undefined,
+                        gender: values.gender || undefined,
+                        bloodGroup: values.bloodGroup || undefined,
+                        allergies: values.allergies || undefined,
+                        chronicDiseases: values.chronicDiseases || undefined,
+                        emergencyContact: values.emergencyContact || undefined,
+                        emergencyPhone: withPrefix(values.emergencyPhone) || undefined,
+                        insuranceProvider: values.insuranceProvider || undefined,
+                        insuranceNumber: values.insuranceNumber || undefined,
+                      },
+                    }).unwrap(),
+                    updateOwnAccount({
+                      name: values.name.trim() || undefined,
+                      email: values.email.trim() || undefined,
+                      phone: withPrefix(values.phone) || undefined,
+                    }).unwrap(),
+                  ]);
+                  toast.success('Profile updated');
+                  setIsEditing(false);
+                } catch (err) {
+                  toast.error(apiError(err, 'Could not save your profile. Please try again.'));
+                } finally {
+                  setSubmitting(false);
+                }
+              }}
+            >
+              <Form className="space-y-6">
+                <WizardContent isSaving={isSaving} />
+              </Form>
+            </Formik>
+          )}
         </div>
 
         {/* Consent is a persistent setting, not a one-time setup step. */}
         <ConsentSettings dateOfBirth={patient?.dateOfBirth ?? ''} />
+
+        <PasswordCard />
       </div>
     </DashboardShell>
+  );
+}
+
+/** The voluntary change, for someone who simply wants a new password rather
+ *  than one that was handed to them. Its own card because it is a security
+ *  action, not a profile field: it ends every other session, and burying it
+ *  inside a form with one Save button would misstate when that happens. */
+function PasswordCard() {
+  return (
+    <div className="bg-white rounded-lg shadow-lg p-6 space-y-4">
+      <div>
+        <h2 className="font-bold text-lg text-slate-900">Password</h2>
+        <p className="text-sm text-slate-500">
+          Changing it signs you out on every other device, and keeps you signed
+          in here.
+        </p>
+      </div>
+      <div className="max-w-md">
+        <ChangePasswordForm />
+      </div>
+    </div>
   );
 }

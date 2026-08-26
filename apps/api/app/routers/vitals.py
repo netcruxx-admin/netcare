@@ -1,6 +1,6 @@
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Query, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.orm import Session
 
 from .. import models, schemas
@@ -77,3 +77,59 @@ def create_vitals(
     db.commit()
     db.refresh(vitals)
     return vitals
+
+
+def _get_vitals(db: Session, vitals_id: str, tenant_id: str) -> models.Vitals:
+    v = (
+        scoped(db, models.Vitals, tenant_id)
+        .filter(models.Vitals.id == vitals_id)
+        .first()
+    )
+    if v is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Vitals record not found")
+    return v
+
+
+@router.put("/{vitals_id}", response_model=schemas.VitalsOut)
+def update_vitals(
+    vitals_id: str,
+    body: schemas.VitalsUpdate,
+    db: Session = Depends(get_db),
+    user: models.User = Depends(get_current_user),
+    scope: str = Depends(require_permission("vitals.record")),
+    tenant_id: str = Depends(get_tenant_id),
+):
+    v = _get_vitals(db, vitals_id, tenant_id)
+
+    if scope == SCOPE_OWN:
+        doctor = db.query(models.Doctor).filter(models.Doctor.user_id == user.id).first()
+        if not doctor or v.doctor_id != doctor.id:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Vitals record not found")
+
+    for k, val in body.model_dump().items():
+        if val is not None:
+            setattr(v, k, val)
+
+    db.commit()
+    db.refresh(v)
+    return v
+
+
+@router.delete("/{vitals_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_vitals(
+    vitals_id: str,
+    db: Session = Depends(get_db),
+    user: models.User = Depends(get_current_user),
+    scope: str = Depends(require_permission("vitals.delete")),
+    tenant_id: str = Depends(get_tenant_id),
+):
+    v = _get_vitals(db, vitals_id, tenant_id)
+
+    if scope == SCOPE_OWN:
+        doctor = db.query(models.Doctor).filter(models.Doctor.user_id == user.id).first()
+        if not doctor or v.doctor_id != doctor.id:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Vitals record not found")
+
+    db.delete(v)
+    db.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

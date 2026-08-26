@@ -4,6 +4,181 @@ Notable changes to CarbonHealth. Format follows [Keep a Changelog](https://keepa
 
 ## [Unreleased]
 
+### Added — people can change their own password, and staff can reset one
+
+Before this, nobody could change their own password. Not a patient, not a
+clinician, not an admin for themselves — the only mechanism was one admin
+editing another user's row through `PUT /users/{id}`. Someone who forgot their
+password had no way back, and someone who suspected their account was
+compromised had no way to act on it.
+
+**`POST /auth/change-password`** — your own. The current password is required
+even though the caller is authenticated: an access token left on a shared
+machine would otherwise be enough to lock the real owner out. Every *other*
+session ends, since a password change is what someone does when they think
+they are compromised; the caller's own survives, so securing yourself does not
+sign you out of doing it.
+
+**`POST /users/{id}/reset-password`** — somebody else's, gated on
+`users.manage`. Returns a generated temporary password once; it is never stored
+in plaintext and cannot be retrieved again, so "I lost the note" is answered by
+another reset. Every session the account had is ended, because a reset is what
+gets done *because* an account is suspected compromised. Resetting your own is
+refused — it would skip the current-password check.
+
+This is deliberately not self-service. Recovery still needs a human who can
+vouch for the person asking, which is the right default for a system holding
+medical records and the wrong one for a consumer app. When an email or SMS
+provider exists, a token flow can sit alongside this rather than replace it.
+
+**`must_change_password`** marks a password somebody else chose — an admin
+reset, or the one a staff account was provisioned with, including the first
+admin created at onboarding. Until the holder replaces it, every
+permission-guarded endpoint refuses: an action taken under a password the front
+desk also knows cannot be honestly attributed to its owner in the audit trail.
+Enforced in `require_permission`, which every data endpoint passes through,
+while `/auth/me`, logout and the change call itself deliberately do not — that
+leaves exactly enough room to fix the situation and nothing else.
+
+Existing users are untouched. Backfilling the flag would lock every current user
+out of a running system to fix a risk they are already living with.
+
+Frontend: login diverts to `/change-password`, the dashboard guard diverts a
+stale tab, both profiles gained a password card, and the users table gained a
+reset action showing the temporary password once.
+
+Eighteen tests, including that the old password stops working, that other
+devices are evicted while the caller's own session survives, that a nurse cannot
+reset anyone, and that one hospital cannot reset another's staff.
+
+### Fixed — changing SUPERADMIN_EMAIL crashed the app on every boot
+
+`seed_database` checked whether the superadmin existed **by email** but inserted
+with a fixed primary key. Rotating `SUPERADMIN_EMAIL` on a running deployment
+meant the lookup found nothing, the insert reused `user-superadmin`, and startup
+died on a duplicate-key violation — every boot, until the variable was put back.
+
+Keyed on the primary key now. An address change is honoured, because an operator
+who edits that variable means it. The password deliberately is not re-applied:
+that would make the env var a standing backdoor and would silently undo a
+password the superadmin had since chosen.
+
+### Fixed — counter sales escaped the dashboard's date filter
+
+The fix for pharmacy revenue vanishing (`427439a`) counted a payment with no
+appointment whenever the view was not narrowed to a department — but with no
+date filter, because the window was only ever applied to appointment dates.
+A counter sale has no appointment whose date it could borrow, so every pharmacy
+sale ever taken counted toward "Last 7 days".
+
+On a realistic mix that turned a ₹300 undercount into a ₹9,000 overcount: the
+7-day figure read ₹9,800 against a true ₹800. An overcount is the worse failure
+of the two — a clinic reconciling the day's takings against a number that
+includes last year's is chasing a discrepancy that does not exist.
+
+Counter sales are now dated by their own `createdAt`. The all-time view also
+takes payment dates into account when sizing the chart axis, so a hospital whose
+pharmacy opened before its first booking, or one taking pharmacy money on a day
+with no clinic, still sees that revenue plotted.
+
+### Fixed — the bill lost its GSTIN, and pharmacy revenue vanished from the dashboard
+
+Both were live consequences of earlier changes, and both were only visible as
+type errors that `typescript.ignoreBuildErrors` was hiding from the build.
+
+**The invoice.** `PatientPayments` read the hospital's legal name and GSTIN off
+`GET /hospitals/current`, which stopped carrying them when it was narrowed —
+correctly, since that endpoint is unauthenticated. At runtime it degraded
+quietly: the bill fell back to the display name and printed **no GSTIN**, which
+is not a valid GST invoice.
+
+New `GET /payments/{id}/invoice` assembles the bill server-side — seller,
+buyer, lines and total — behind `payments.read`, with scope `own` so a patient
+gets their own and a stranger's is 404 rather than 403. A signed-in patient can
+be answered properly; a public endpoint cannot.
+
+One caveat, stated in the schema: the seller block is resolved when the invoice
+is *read*, not snapshotted when the payment was taken. Rename the hospital and
+an old bill reprints under the new name. Correct behaviour needs snapshot
+columns on `payments`.
+
+**The dashboard.** `Payment.appointmentId` became nullable for pharmacy
+billing, and the revenue chart matched payments to appointments by id — so
+counter sales were dropped from admin revenue entirely. They now count toward
+the total whenever the view is not narrowed to a single department, since there
+is no department to attribute them to.
+
+### Added — letterhead upload
+
+Mirrors the logo: `PUT`/`DELETE /hospitals/me/letterhead`, images only, old file
+deleted only after the new one commits. Logo, letterhead and signature now share
+one implementation differing only in which column they land on.
+
+The bill prints the letterhead when there is one and falls back to the
+hospital's name and address as text when there is not.
+
+### Changed — prescribing puts it in the dispense queue
+
+A doctor's prescription was something the pharmacist could read and not act on.
+Reaching the dispense queue meant a pharmacist retyping the drug by hand from
+the prescriptions screen, so in practice the queue stayed empty.
+
+Writing a prescription now raises the medication order. The order is a starting
+point rather than a finished instruction: a prescription records the dose and
+never the count, and its medicine is free text that may not name anything
+stocked — so quantity starts at 1 and the catalogue match is a guess from the
+name.
+
+**The pharmacist confirms both at the counter.** `PATCH .../dispense` takes an
+optional body with `quantity` and `medicineId`, applied before the stock check.
+Without it, auto-raising at quantity 1 would have reintroduced exactly the bug
+that made a ten-tablet course move stock by one. Omitting the body leaves the
+order alone, so a ward-round order raised directly needs no confirmation.
+
+The manual "Send to dispense queue" action stays for prescriptions written
+before this and for re-queueing after a cancellation; sending one that is
+already queued still refuses.
+
+### Changed — an appointment has to say why
+
+`reason` was optional. It is the only free text a clinician sees before the
+consultation, it drives triage, and a list of blank reasons is unreadable.
+
+Enforced in `schemas.py` across **all three** bodies that create an
+appointment — the direct one and both halves of the online payment flow.
+Enforcing it on one would have left the payment path as a way around it. The
+three booking forms mark the field required and validate before submitting.
+
+### Changed — completing an appointment returns to the list
+
+A finished consultation is done being looked at, and the next one is on the
+appointments page. `push` rather than `back()`: the detail route can be reached
+from a patient chart or a search, and completing should land somewhere
+predictable either way.
+
+### Fixed — one Razorpay payment could buy any number of appointments
+
+`/payments/verify` checked the HMAC signature and inserted, with nothing looking
+for a payment id it had already recorded. A Razorpay signature is a
+deterministic HMAC over `<order_id>|<payment_id>`, so it stays valid forever:
+re-POSTing one successful checkout response minted a fresh appointment and a
+fresh `completed` payment row every time. Reproduced before the fix — three
+replays of a single payment produced three appointments. The handler's
+docstring claimed replays were rejected; they were not.
+
+Verify is now idempotent. A payment id already on file returns the appointment
+it bought rather than an error, because Razorpay's callback fires twice on a
+flaky connection and users double-click — telling someone their completed
+payment failed is worse than telling them what it bought. A unique partial
+index on `payments.gateway_payment_id` (`t5u6v7w8x9y0`) sits under that check,
+since two concurrent verifies race past an application-level lookup and only
+the database can settle it. The migration collapses any duplicates already
+recorded, leaving the appointments they created alone — cancelling a real
+booking from a migration is not a migration's call.
+
+Six tests, including that the guard is tenant-scoped so two hospitals cannot
+collide on a payment id, and that a forged signature is still refused outright.
+
 ### Fixed — the public tenant endpoint published every hospital's PAN
 
 `GET /hospitals/current` resolves a tenant from the request host and answers

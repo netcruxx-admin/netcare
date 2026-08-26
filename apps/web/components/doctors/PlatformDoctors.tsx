@@ -19,6 +19,7 @@ import {
   useGetSuperadminDoctorsPagedQuery,
   useListHospitalsQuery,
 } from '@/store/api';
+import { Spinner } from '@/components/ui/spinner';
 
 export function PlatformDoctors({ session }: RoleViewProps) {
   const searchParams = useSearchParams();
@@ -42,6 +43,8 @@ export function PlatformDoctors({ session }: RoleViewProps) {
 
   const showHospital = !selectedHospitalId;
   const canManage = hasPermission(session, 'doctors.manage');
+  // Deletion is a platform capability: see migration x9y0z1a2b3c4.
+  const canDelete = hasPermission(session, 'doctors.delete');
 
   return (
     <DashboardShell
@@ -79,7 +82,7 @@ export function PlatformDoctors({ session }: RoleViewProps) {
           )}
         </div>
         {isLoading ? (
-          <div className="py-16 text-center text-slate-400 text-sm">Loading…</div>
+          <Spinner variant="block" />
         ) : doctors.length === 0 ? (
           <div className="py-16 text-center">
             <Stethoscope className="w-16 h-16 text-slate-200 mx-auto mb-4" />
@@ -113,12 +116,8 @@ export function PlatformDoctors({ session }: RoleViewProps) {
                     <td className="py-3 px-6 text-right">
                       <div className="flex items-center justify-end gap-1">
                         <ActionIcon icon={Eye} label="View" onClick={() => setViewing(d)} />
-                        {canManage && (
-                          <>
-                            <ActionIcon icon={Pencil} label="Edit" onClick={() => setEditing(d)} />
-                            <ActionIcon icon={Trash2} label="Delete" tone="danger" onClick={() => setDeleting(d)} />
-                          </>
-                        )}
+                        {canManage && <ActionIcon icon={Pencil} label="Edit" onClick={() => setEditing(d)} />}
+                        {canDelete && <ActionIcon icon={Trash2} label="Delete" tone="danger" onClick={() => setDeleting(d)} />}
                       </div>
                     </td>
                   </tr>

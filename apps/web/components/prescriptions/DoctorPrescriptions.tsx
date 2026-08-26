@@ -12,6 +12,7 @@ import { ExportButton } from '@/components/ExportButton';
 import { TablePagination } from '@/components/TablePagination';
 import { useServerTable } from '@/hooks/useServerTable';
 import { fmtDate } from '@/lib/date';
+import { Spinner } from '@/components/ui/spinner';
 
 const toRow = (rx: Prescription) => ({
   ...rx,
@@ -31,7 +32,7 @@ export function DoctorPrescriptions({ session }: RoleViewProps) {
   // Already narrowed to this doctor's own records by the API, and searched,
   // sorted and paged there too.
   const listArgs = { q: table.q.trim() || undefined };
-  const { data: prescriptionPage } = useListPrescriptionsPagedQuery({
+  const { data: prescriptionPage, isLoading } = useListPrescriptionsPagedQuery({
     ...listArgs,
     limit: table.limit,
     offset: table.offset,
@@ -69,7 +70,10 @@ export function DoctorPrescriptions({ session }: RoleViewProps) {
           <div className="px-6 py-4 border-b">
             <h3 className="font-semibold text-slate-900">Prescriptions ({totalPrescriptions})</h3>
           </div>
-          {rows.length === 0 ? (
+
+          {isLoading ? (
+            <Spinner variant="block" />
+          ) : rows.length === 0 ? (
             <div className="text-center py-16">
               <Pill className="w-16 h-16 text-slate-300 mx-auto mb-4" />
               <p className="text-slate-600">No prescriptions yet. Add one from an appointment.</p>

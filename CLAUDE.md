@@ -67,6 +67,20 @@ Every request answers these separately — do not collapse them:
   not the screen: the admin overview, the appointments board, the doctors list and both doctor
   modals read it, and the modals write `department_id`. Revoking read to hide one screen would have
   broken creating a doctor. When you move a capability, check what else reads it first.
+- **Deleting is a platform capability** (`x9y0z1a2b3c4`). `<resource>.delete` is its own
+  permission — `patients.delete`, `doctors.delete`, `users.delete`, `appointments.delete`,
+  `vitals.delete`, `prescriptions.delete`, `medicines.delete`, `lab_tests.delete`,
+  `lab_orders.delete` — granted to superadmin alone. It used to ride on `*.manage`, which made
+  "let an admin add a doctor" and "let an admin erase a doctor" the same decision. `*.manage`
+  still covers create and edit, and hospital admins keep it.
+  - Not included, on purpose: schedule blocks, video slots, FCM tokens and hospital
+    logo/letterhead. Those are people removing **their own** things — a doctor clearing their own
+    availability — not record deletion, and they stayed with their current holders.
+  - `departments` and `roles` needed no new row: `departments.manage` (`d7a2c5f81e64`) and
+    `roles.manage` were already superadmin's, so their deletes already were.
+  - The frontend gates the button on `*.delete` and the endpoint enforces it; `tests/
+    test_delete_is_platform_only.py` asserts both halves — the admin's 403 **and** that the
+    admin can still edit, so the split never quietly costs them the rest of the job.
 
 ### Rules that keep coming up
 - A record that does not exist *or* is not yours returns **404**, never 403 — a 403 confirms the id exists.

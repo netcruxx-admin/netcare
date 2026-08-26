@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Formik, Form } from 'formik';
 import * as Yup from 'yup';
-import { CheckCircle, AlertCircle, CreditCard, Loader2 } from 'lucide-react';
+import { CheckCircle, AlertCircle, CreditCard } from 'lucide-react';
 import type { Doctor, ScheduleBlock } from '@/lib/types';
 import { apiError } from '@/lib/apiError';
 import { fmtDate } from '@/lib/date';
@@ -23,6 +23,7 @@ import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
 import { FormField } from '@/components/form/FormField';
 import { Calendar } from '@/components/ui/calendar';
+import { Spinner } from '@/components/ui/spinner';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -145,7 +146,7 @@ const bookingSchema = Yup.object({
   department: Yup.string().required('Please select a department'),
   date: Yup.string().required('Date is required'),
   time: Yup.string().required('Please select a time slot'),
-  reason: Yup.string(),
+  reason: Yup.string().trim().required('Tell us why the appointment is needed'),
 });
 
 const initialValues = { department: '', date: '', time: '', reason: '' };
@@ -158,9 +159,9 @@ export function PatientBook({ session }: RoleViewProps) {
   const [paymentStatus, setPaymentStatus] = useState<'idle' | 'initiating' | 'checkout' | 'verifying'>('idle');
   const [selection, setSelection] = useState({ department: '', date: '' });
 
-  const { data: departments = [] } = useListDepartmentsQuery();
-  const { data: doctors = [] } = useListDoctorsQuery();
-  const { data: patient } = useGetPatientByUserQuery(session.user.id);
+  const { data: departments = [], isLoading: loadingDepartments } = useListDepartmentsQuery();
+  const { data: doctors = [], isLoading: loadingDoctors } = useListDoctorsQuery();
+  const { data: patient, isLoading: loadingPatient } = useGetPatientByUserQuery(session.user.id);
   const [initiatePayment] = useInitiatePaymentMutation();
   const [verifyPayment] = useVerifyPaymentMutation();
   const { slots: SLOTS, breakSlots } = useHospitalSlots();
@@ -197,6 +198,10 @@ export function PatientBook({ session }: RoleViewProps) {
     { skip: !deptDoctors[4] || !selection.date },
   );
   const allAv: AvailabilityData[] = [av0.data, av1.data, av2.data, av3.data, av4.data];
+  // Until availability lands, every slot would draw as free — which is not a
+  // slower answer but a wrong one, so the grid waits instead of guessing.
+  const loadingAvailability = [av0, av1, av2, av3, av4].some((a) => a.isFetching);
+
 
   return (
     <DashboardShell
@@ -204,6 +209,7 @@ export function PatientBook({ session }: RoleViewProps) {
       userName={session.user.name}
       title="Book Appointment"
       subtitle="Schedule a new consultation"
+      loading={loadingDepartments || loadingDoctors || loadingPatient}
     >
       <div className="max-w-3xl mx-auto">
         <div className="bg-white rounded-lg shadow-xl p-8 space-y-8">
@@ -373,9 +379,9 @@ export function PatientBook({ session }: RoleViewProps) {
 
               // Label for the pay button based on current payment flow stage.
               const payBtnContent = (() => {
-                if (paymentStatus === 'initiating') return <><Loader2 className="w-4 h-4 animate-spin" /> Preparing payment…</>;
-                if (paymentStatus === 'checkout') return <><Loader2 className="w-4 h-4 animate-spin" /> Opening checkout…</>;
-                if (paymentStatus === 'verifying') return <><Loader2 className="w-4 h-4 animate-spin" /> Confirming payment…</>;
+                if (paymentStatus === 'initiating') return <Spinner size="sm" label="Preparing payment…" />;
+                if (paymentStatus === 'checkout') return <Spinner size="sm" label="Opening checkout…" />;
+                if (paymentStatus === 'verifying') return <Spinner size="sm" label="Confirming payment…" />;
                 return <><CreditCard className="w-4 h-4" /> Pay {typeof consultationFee === 'number' ? `₹${consultationFee}` : ''} &amp; Book</>;
               })();
 
@@ -463,6 +469,8 @@ export function PatientBook({ session }: RoleViewProps) {
                             <div className="min-h-[220px] flex items-center justify-center text-slate-400 text-sm border border-dashed border-slate-300 rounded-lg">
                               Pick a date to see slots
                             </div>
+                          ) : loadingAvailability ? (
+                            <Spinner variant="block" className="py-0 min-h-[220px] border border-dashed border-slate-300 rounded-lg" label="Checking availability…" />
                           ) : deptDoctors.length === 0 ? (
                             <div className="min-h-[220px] flex items-center justify-center text-slate-400 text-sm border border-dashed border-slate-300 rounded-lg text-center px-4">
                               No doctors are currently assigned to this department.
@@ -547,7 +555,8 @@ export function PatientBook({ session }: RoleViewProps) {
                       <h2 className="text-2xl font-bold text-slate-900">Reason &amp; Payment</h2>
                       <FormField
                         name="reason"
-                        label="Reason for Visit (Optional)"
+                        label="Reason for Visit"
+                        required
                         as="textarea"
                         placeholder="Describe your symptoms or reason for visit"
                         rows={4}

@@ -1,11 +1,12 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { Users, Plus, Search, Pencil, Trash2, Eye } from 'lucide-react';
+import { Users, Plus, Search, Pencil, Trash2, Eye, KeyRound } from 'lucide-react';
 import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
 import { AddUserModal } from '@/components/superadmin/AddUserModal';
 import { DeleteUserModal } from '@/components/users/DeleteUserModal';
+import { ResetPasswordModal } from '@/components/users/ResetPasswordModal';
 import { ActionIcon } from '@/components/ActionIcon';
 import { RecordDialog } from '@/components/RecordDialog';
 import { fmtDate } from '@/lib/date';
@@ -20,6 +21,7 @@ import {
   useListUsersPagedQuery,
 } from '@/store/api';
 import type { RoleOption } from '@/store/api';
+import { Spinner } from '@/components/ui/spinner';
 
 // Badge colours for the roles that ship with the product.
 const roleStyle: Record<string, string> = {
@@ -37,10 +39,14 @@ export function AdminUsers({ session }: RoleViewProps) {
   const [editing, setEditing] = useState<User | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [deleting, setDeleting] = useState<User | null>(null);
+  const [resetting, setResetting] = useState<User | null>(null);
   const [viewing, setViewing] = useState<User | null>(null);
   const [roleFilter, setRoleFilter] = useState<string>('all');
 
   const canManage = hasPermission(session, 'users.manage');
+  // Deletion is a platform capability: hospital staff create and edit, the
+  // platform owner is the one who can erase. See migration x9y0z1a2b3c4.
+  const canDelete = hasPermission(session, 'users.delete');
 
   const table = useServerTable({ filterKey: roleFilter });
 
@@ -138,7 +144,9 @@ export function AdminUsers({ session }: RoleViewProps) {
             <tbody>
               {isLoading && (
                 <tr>
-                  <td colSpan={canManage ? 5 : 4} className="py-10 text-center text-slate-400 text-sm">Loading…</td>
+                  <td colSpan={canManage ? 5 : 4}>
+                    <Spinner variant="block" />
+                  </td>
                 </tr>
               )}
               {!isLoading && filtered.length === 0 && (
@@ -170,13 +178,25 @@ export function AdminUsers({ session }: RoleViewProps) {
                         {canManage && (
                           <>
                             <ActionIcon icon={Pencil} label="Edit" onClick={() => openEdit(user)} />
-                            {isSelf ? (
+                            {/* Not offered for yourself: the server refuses it,
+                                because resetting your own would skip the
+                                current-password check and lock you out of
+                                everything until you completed a change you
+                                could have done directly from your profile. */}
+                            {!isSelf && (
+                              <ActionIcon
+                                icon={KeyRound}
+                                label="Reset password"
+                                onClick={() => setResetting(user)}
+                              />
+                            )}
+                            {canDelete && (isSelf ? (
                               <span className="p-2 text-slate-300 cursor-not-allowed" title="Cannot delete yourself">
                                 <Trash2 className="w-4 h-4" />
                               </span>
                             ) : (
                               <ActionIcon icon={Trash2} label="Delete" tone="danger" onClick={() => setDeleting(user)} />
-                            )}
+                            ))}
                           </>
                         )}
                       </div>
@@ -206,6 +226,9 @@ export function AdminUsers({ session }: RoleViewProps) {
         onClose={() => setDeleting(null)}
         onSuccess={refetch}
       />
+      {resetting && (
+        <ResetPasswordModal user={resetting} onClose={() => setResetting(null)} />
+      )}
       <RecordDialog
         open={viewing !== null}
         onClose={() => setViewing(null)}

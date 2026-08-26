@@ -23,6 +23,7 @@ import { FormField } from '@/components/form/FormField';
 import { ExportButton } from '@/components/ExportButton';
 import { TablePagination } from '@/components/TablePagination';
 import { useServerTable } from '@/hooks/useServerTable';
+import { Spinner } from '@/components/ui/spinner';
 
 const CATEGORIES = ['Blood Test', 'Imaging', 'Urine Test', 'Cardiac', 'Prenatal Screening', 'Other'];
 const SAMPLE_TYPES = ['Blood', 'Urine', 'Swab', 'Imaging', 'None'];
@@ -50,6 +51,9 @@ export function AdminTests({ session }: RoleViewProps) {
   const [categoryFilter, setCategoryFilter] = useState('all');
 
   const canManage = hasPermission(session, 'lab_tests.manage');
+  // Deletion is a platform capability: hospital staff create and edit, the
+  // platform owner is the one who can erase. See migration x9y0z1a2b3c4.
+  const canDelete = hasPermission(session, 'lab_tests.delete');
 
   const table = useServerTable({ filterKey: categoryFilter });
 
@@ -130,7 +134,9 @@ export function AdminTests({ session }: RoleViewProps) {
           )}
         </div>
 
-        {!isLoading && filtered.length === 0 ? (
+        {isLoading ? (
+          <Spinner variant="block" />
+        ) : filtered.length === 0 ? (
           <div className="text-center py-16">
             <FlaskConical className="w-16 h-16 text-slate-300 mx-auto mb-4" />
             <p className="text-slate-600 mb-6">No tests yet</p>
@@ -168,12 +174,8 @@ export function AdminTests({ session }: RoleViewProps) {
                     <td className="py-3 px-6 text-right">
                       <div className="flex items-center justify-end gap-1">
                         <ActionIcon icon={Eye} label="View" onClick={() => setViewing(t)} />
-                        {canManage && (
-                          <>
-                            <ActionIcon icon={Pencil} label="Edit" onClick={() => openEdit(t)} />
-                            <ActionIcon icon={Trash2} label="Delete" tone="danger" onClick={() => setDeleting(t)} />
-                          </>
-                        )}
+                        {canManage && <ActionIcon icon={Pencil} label="Edit" onClick={() => openEdit(t)} />}
+                        {canDelete && <ActionIcon icon={Trash2} label="Delete" tone="danger" onClick={() => setDeleting(t)} />}
                       </div>
                     </td>
                   </tr>
@@ -255,9 +257,9 @@ export function AdminTests({ session }: RoleViewProps) {
                     <button
                       type="submit"
                       disabled={isSubmitting}
-                      className="flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded hover:shadow-lg font-semibold transition disabled:opacity-50"
+                      className="inline-flex items-center justify-center gap-2 flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded hover:shadow-lg font-semibold transition disabled:opacity-50"
                     >
-                      {isSubmitting ? 'Saving…' : editing ? 'Save Changes' : 'Add Test'}
+                      {isSubmitting ? <Spinner size="sm" label="Saving…" /> : editing ? 'Save Changes' : 'Add Test'}
                     </button>
                   </div>
                 </Form>
@@ -293,9 +295,9 @@ export function AdminTests({ session }: RoleViewProps) {
               <button
                 onClick={confirmDelete}
                 disabled={isDeleting}
-                className="flex-1 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 font-semibold transition disabled:opacity-50"
+                className="inline-flex items-center justify-center gap-2 flex-1 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 font-semibold transition disabled:opacity-50"
               >
-                {isDeleting ? 'Deleting…' : 'Delete'}
+                {isDeleting ? <Spinner size="sm" label="Deleting…" /> : 'Delete'}
               </button>
             </div>
           </div>

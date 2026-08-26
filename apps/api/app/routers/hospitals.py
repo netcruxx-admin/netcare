@@ -541,6 +541,95 @@ LOGO_CONTENT_TYPES = {
     "image/jpeg", "image/png", "image/webp",
 }
 
+#: The branding assets a hospital can upload, and the column each lands on.
+#: The logo is shown on every page; the letterhead and signature are printed
+#: onto bills and reports. Same upload rules, different destinations.
+BRANDING_ASSETS = {
+    "logo": "logo_url",
+    "letterhead": "letterhead_url",
+    "signature": "signature_url",
+}
+
+
+def _store_branding_asset(
+    db: Session, tenant_id: str, asset: str, file: UploadFile
+) -> models.HospitalProfile:
+    """Replace one branding asset, deleting whatever it replaced.
+
+    The old file goes only after the new URL is committed: the other order
+    risks losing the bytes while the row still points at them.
+    """
+    column = BRANDING_ASSETS[asset]
+    content_type = (file.content_type or "").split(";")[0].strip().lower()
+    if content_type not in LOGO_CONTENT_TYPES:
+        raise HTTPException(
+            status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            f"A {asset} must be a JPEG, PNG or WebP image",
+        )
+
+    profile = _profile_of(db, tenant_id)
+    if profile is None:
+        profile = models.HospitalProfile(id=new_id("hprof"), hospital_id=tenant_id)
+        db.add(profile)
+        db.flush()
+
+    previous = getattr(profile, column) or ""
+    url, _name, _size = storage.save_upload(
+        fileobj=file.file,
+        filename=file.filename or asset,
+        content_type=content_type,
+        folder=tenant_id,
+    )
+    setattr(profile, column, url)
+    profile.updated_at = now_iso()
+    db.commit()
+    db.refresh(profile)
+
+    if previous and previous != url:
+        storage.delete_file(previous)
+
+    audit.record_subject("hospital_profile", profile.id, detail=asset)
+    return profile
+
+
+def _clear_branding_asset(
+    db: Session, tenant_id: str, asset: str
+) -> models.HospitalProfile:
+    column = BRANDING_ASSETS[asset]
+    profile = _profile_of(db, tenant_id)
+    if profile is None or not getattr(profile, column):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, f"No {asset} to remove")
+
+    previous = getattr(profile, column)
+    setattr(profile, column, "")
+    profile.updated_at = now_iso()
+    db.commit()
+    db.refresh(profile)
+    storage.delete_file(previous)
+    audit.record_subject("hospital_profile", profile.id, detail=f"{asset} removed")
+    return profile
+
+
+@router.put("/me/letterhead", response_model=schemas.HospitalProfileOut)
+def upload_my_letterhead(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    _: str = Depends(require_permission("hospital.profile.manage")),
+    tenant_id: str = Depends(get_tenant_id),
+):
+    """The image printed across the top of bills and reports."""
+    return _profile_out(_store_branding_asset(db, tenant_id, "letterhead", file))
+
+
+@router.delete("/me/letterhead", response_model=schemas.HospitalProfileOut)
+def remove_my_letterhead(
+    db: Session = Depends(get_db),
+    _: str = Depends(require_permission("hospital.profile.manage")),
+    tenant_id: str = Depends(get_tenant_id),
+):
+    """Clear it. Bills fall back to the hospital's name and address as text."""
+    return _profile_out(_clear_branding_asset(db, tenant_id, "letterhead"))
+
 
 @router.put("/me/logo", response_model=schemas.HospitalProfileOut)
 def upload_my_logo(

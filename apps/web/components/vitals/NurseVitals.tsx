@@ -18,6 +18,7 @@ import { FormField } from '@/components/form/FormField';
 import { TablePagination } from '@/components/TablePagination';
 import { useServerTable } from '@/hooks/useServerTable';
 import { fmtDate } from '@/lib/date';
+import { Spinner } from '@/components/ui/spinner';
 
 const todayStr = new Date().toISOString().split('T')[0];
 
@@ -71,7 +72,7 @@ function NurseVitalsInner({ session }: RoleViewProps) {
 
   // A cancelled visit has no vitals to record, so the API is asked for the two
   // statuses that do rather than for everything.
-  const { data: appointmentPage } = useListAppointmentsPagedQuery({
+  const { data: appointmentPage, isLoading } = useListAppointmentsPagedQuery({
     q: table.q.trim() || undefined,
     status: 'scheduled,completed',
     date: date || undefined,
@@ -133,7 +134,10 @@ function NurseVitalsInner({ session }: RoleViewProps) {
           <div className="px-6 py-4 border-b">
             <h3 className="font-semibold text-slate-900">Visits ({totalVisits})</h3>
           </div>
-          {rows.length === 0 ? (
+
+          {isLoading ? (
+            <Spinner variant="block" />
+          ) : rows.length === 0 ? (
             <div className="text-center py-16">
               <HeartPulse className="w-16 h-16 text-slate-300 mx-auto mb-4" />
               <p className="text-slate-600">No visits match these filters.</p>

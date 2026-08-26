@@ -1,10 +1,11 @@
 'use client';
 
 import type { FormikProps } from 'formik';
-import { AlertCircle, Loader2, ShieldCheck } from 'lucide-react';
+import { AlertCircle, ShieldCheck } from 'lucide-react';
 import { useListConsentPurposesQuery } from '@/store/api';
 import { FormField } from '@/components/form/FormField';
 import { FormValues } from '../registrationSchemas';
+import { Spinner } from '@/components/ui/spinner';
 
 interface ConsentStepProps {
   formik: FormikProps<FormValues>;
@@ -81,7 +82,7 @@ export function ConsentStep({ formik, onBack, isMinor, inlineError }: ConsentSte
   if (isLoading) {
     return (
       <div className="flex items-center justify-center gap-2 py-10 text-slate-500">
-        <Loader2 className="h-4 w-4 animate-spin" /> Loading the privacy notice…
+        <Spinner label="Loading the privacy notice…" />
       </div>
     );
   }
@@ -162,7 +163,7 @@ export function ConsentStep({ formik, onBack, isMinor, inlineError }: ConsentSte
         disabled={formik.isSubmitting || !allRequiredTicked}
         className="w-full bg-gradient-to-r from-cyan-500 to-brand-teal text-white py-2 rounded-lg font-semibold hover:shadow-lg transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
       >
-        {formik.isSubmitting ? 'Creating account...' : 'Agree & Create Account'}
+        {formik.isSubmitting ? <Spinner size="sm" label="Creating account…" /> : 'Agree & Create Account'}
       </button>
 
       {!allRequiredTicked && (

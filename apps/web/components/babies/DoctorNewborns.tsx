@@ -20,6 +20,7 @@ import type { RoleViewProps } from '@/components/RoleView';
 import { TablePagination } from '@/components/TablePagination';
 import { useServerTable } from '@/hooks/useServerTable';
 import { ageDisplay, scheduleForDob, immStatus } from '@/lib/baby';
+import { Spinner } from '@/components/ui/spinner';
 
 const today = () => new Date().toISOString().split('T')[0];
 const inputCls = 'w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/30 focus:border-cyan-500';
@@ -33,7 +34,7 @@ export function DoctorNewborns({ session }: RoleViewProps) {
 
   // The mother's name arrives on the record, so this screen no longer holds
   // every patient in the hospital in memory to label a card.
-  const { data: babyPage } = useListBabiesPagedQuery({
+  const { data: babyPage, isLoading } = useListBabiesPagedQuery({
     q: table.q.trim() || undefined,
     limit: table.limit,
     offset: table.offset,
@@ -59,7 +60,9 @@ export function DoctorNewborns({ session }: RoleViewProps) {
           </button>
         </div>
 
-        {babies.length === 0 ? (
+        {isLoading ? (
+          <Spinner variant="block" />
+        ) : babies.length === 0 ? (
           <div className="text-center py-16 text-slate-500">
             <BabyIcon className="w-10 h-10 mx-auto mb-3 text-slate-300" />
             <p className="text-sm">No newborns registered yet.</p>

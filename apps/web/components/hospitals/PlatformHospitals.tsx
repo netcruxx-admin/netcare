@@ -15,6 +15,7 @@ import { hasPermission } from '@/lib/auth';
 import { fmtDate } from '@/lib/date';
 import { useListHospitalsQuery, useUpdateHospitalMutation } from '@/store/api';
 import type { HospitalInfo } from '@/store/api';
+import { Spinner } from '@/components/ui/spinner';
 
 export function PlatformHospitals({ session }: RoleViewProps) {
   const searchParams = useSearchParams();
@@ -72,7 +73,7 @@ export function PlatformHospitals({ session }: RoleViewProps) {
         </div>
 
         {isLoading ? (
-          <div className="py-16 text-center text-slate-400 text-sm">Loading…</div>
+          <Spinner variant="block" />
         ) : hospitals.length === 0 ? (
           <div className="py-16 text-center">
             <Building2 className="w-16 h-16 text-slate-200 mx-auto mb-4" />

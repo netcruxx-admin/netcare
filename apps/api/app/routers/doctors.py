@@ -202,7 +202,7 @@ def delete_doctor(
     doctor_id: str,
     db: Session = Depends(get_db),
     user: models.User = Depends(get_current_user),
-    _: dict = Depends(require_permission("doctors.manage")),
+    _: dict = Depends(require_permission("doctors.delete")),
     tenant_id: str = Depends(get_tenant_id),
 ):
     doctor = (

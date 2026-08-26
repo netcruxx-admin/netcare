@@ -5,6 +5,7 @@ import { X, Search } from 'lucide-react';
 import { apiError } from '@/lib/apiError';
 import { useCreateTestOrderMutation, useListLabTestsQuery } from '@/store/api';
 import { Modal } from './Modal';
+import { Spinner } from '@/components/ui/spinner';
 
 interface OrderTestModalProps {
   appointmentId: string;
@@ -15,7 +16,7 @@ interface OrderTestModalProps {
 }
 
 export function OrderTestModal({ appointmentId, patientId, doctorId, onClose, onSaved }: OrderTestModalProps) {
-  const { data: tests = [] } = useListLabTestsQuery();
+  const { data: tests = [], isLoading } = useListLabTestsQuery();
   const [createTestOrder] = useCreateTestOrderMutation();
   const [error, setError] = useState('');
   const [query, setQuery] = useState('');
@@ -78,7 +79,9 @@ export function OrderTestModal({ appointmentId, patientId, doctorId, onClose, on
 
       {/* Test list */}
       <div className="max-h-64 overflow-y-auto border border-slate-200 rounded-lg divide-y divide-slate-100">
-        {filtered.length === 0 ? (
+        {isLoading ? (
+          <Spinner variant="block" />
+        ) : filtered.length === 0 ? (
           <p className="text-sm text-slate-400 text-center py-6">No tests found.</p>
         ) : (
           filtered.map((t) => (

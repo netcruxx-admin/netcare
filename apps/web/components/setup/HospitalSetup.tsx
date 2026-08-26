@@ -19,6 +19,7 @@ import {
   type HospitalCategoryId,
 } from '@/lib/hospitalCategories';
 import type { HospitalModules } from '@/lib/types';
+import { Spinner } from '@/components/ui/spinner';
 
 // Human labels for the module flags, in display order.
 const MODULE_LABELS: { key: keyof HospitalModules; label: string }[] = [
@@ -41,7 +42,7 @@ export function HospitalSetup({ session }: RoleViewProps) {
   // picking a hospital up there is what makes the writes here land anywhere.
   const searchParams = useSearchParams();
   const hospitalId = searchParams.get('h') ?? '';
-  const { data: hospitals = [] } = useListHospitalsQuery();
+  const { data: hospitals = [], isLoading: loadingHospitals } = useListHospitalsQuery();
   const hospital = hospitals.find((h) => h.id === hospitalId);
 
   const canManageDepts = hasPermission(session, 'departments.manage');
@@ -101,13 +102,14 @@ export function HospitalSetup({ session }: RoleViewProps) {
     }
   };
 
-  if (!hospital) {
+  if (loadingHospitals || !hospital) {
     return (
       <DashboardShell
         role={session.user.role}
         userName={session.user.name}
         title="Hospital Setup"
         subtitle="Pick a hospital to configure"
+        loading={loadingHospitals}
       >
         <div className="rounded-xl border border-slate-200 bg-white p-8 text-center">
           <Building2 className="w-8 h-8 text-slate-300 mx-auto mb-3" />
@@ -290,7 +292,7 @@ export function HospitalSetup({ session }: RoleViewProps) {
                 disabled={!applyDepartments || busy}
                 className="inline-flex items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-cyan-500 to-brand-teal text-white text-sm font-semibold px-5 py-2.5 shadow hover:opacity-95 disabled:opacity-40 disabled:cursor-not-allowed"
               >
-                {busy ? 'Applying…' : 'Apply department template'}
+                {busy ? <Spinner size="sm" label="Applying…" /> : 'Apply department template'}
               </button>
             </div>
             <p className="text-xs text-amber-600 mt-2">

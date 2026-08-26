@@ -3,7 +3,7 @@
 import { RoleView } from '@/components/RoleView';
 import { PatientProfile } from '@/components/profile/PatientProfile';
 import { StaffProfile } from '@/components/profile/StaffProfile';
-import { doctorRole, labRole, nurseRole, patientRole } from '@/lib/roles';
+import { doctorRole, labRole, nurseRole, patientRole, pharmacistRole } from '@/lib/roles';
 
 export default function ProfilePage() {
   return (
@@ -13,6 +13,7 @@ export default function ProfilePage() {
         [doctorRole]: StaffProfile,
         [nurseRole]: StaffProfile,
         [labRole]: StaffProfile,
+        [pharmacistRole]: StaffProfile,
         [patientRole]: PatientProfile,
       }}
     />

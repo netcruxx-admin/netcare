@@ -966,6 +966,28 @@ class LoginRequest(CamelModel):
     password: str
 
 
+class ForgotPasswordRequest(CamelModel):
+    email: str
+
+
+# ---------- FCM tokens ----------
+class FcmTokenRegister(CamelModel):
+    token: str
+    device_label: str = ""
+
+
+class ResetPasswordRequest(CamelModel):
+    token: str
+    new_password: str
+
+    @field_validator("new_password")
+    @classmethod
+    def _min_length(cls, v: str) -> str:
+        if len(v) < 8:
+            raise ValueError("Password must be at least 8 characters")
+        return v
+
+
 class UserOut(OutModel):
     id: str
     hospital_id: Optional[str] = None
@@ -1096,13 +1118,34 @@ class DepartmentUpdate(CamelModel):
 
 
 # ---------- Appointment ----------
+def _require_reason(value: str) -> str:
+    """Why the patient is coming, and it is not optional.
+
+    It is the only free-text the clinician sees before the consultation, it
+    drives triage, and an appointment list of blank reasons is unreadable. The
+    check lives here rather than in one router because three request bodies
+    create appointments — the direct one and the two halves of the online
+    payment flow — and a rule enforced on only one of them is not a rule.
+    """
+    value = (value or "").strip()
+    if not value:
+        raise ValueError("Reason for the appointment is required")
+    return value
+
+
 class AppointmentCreate(CamelModel):
     patient_id: str
     doctor_id: str
     department_id: str
     date: str
     time: str
-    reason: str = ""
+    reason: str
+
+    @field_validator("reason")
+    @classmethod
+    def _reason_present(cls, value: str) -> str:
+        return _require_reason(value)
+
     notes: str = ""
     status: AppointmentStatus = "scheduled"
     mode: AppointmentMode = "in-person"
@@ -1204,6 +1247,59 @@ class PaymentOut(OutModel):
     created_at: str
 
 
+class InvoiceSeller(OutModel):
+    """Who issued the bill. Assembled server-side from the hospital record.
+
+    Not read from `GET /hospitals/current`: that endpoint is public and
+    deliberately carries no legal identity, while a bill needs the legal name
+    and — for a GST invoice — the GSTIN. The patient is signed in, so the
+    server can answer properly instead of the browser scraping a public page.
+    """
+
+    name: str = ""
+    legal_name: str = ""
+    gstin: str = ""
+    address: str = ""
+    phone: str = ""
+    email: str = ""
+    #: Printed across the top when set; otherwise the bill falls back to the
+    #: name and address as text.
+    letterhead_url: str = ""
+    logo_url: str = ""
+
+
+class InvoiceLine(OutModel):
+    description: str
+    quantity: int = 1
+    unit_price: float = 0.0
+    amount: float = 0.0
+
+
+class InvoiceOut(OutModel):
+    """Everything needed to render one bill, and nothing the caller must fetch
+    separately.
+
+    A caveat worth knowing: the seller block is resolved when the invoice is
+    read, not snapshotted when the payment was taken. Rename the hospital and
+    an old bill reprints under the new name. Correct behaviour needs snapshot
+    columns on `payments`; until then a reissued bill is not guaranteed
+    byte-identical to the one handed over at the counter.
+    """
+
+    payment_id: str
+    number: str
+    issued_at: str
+    payment_type: str = "consultation"
+    payment_method: str = ""
+    status: PaymentStatus = "pending"
+    currency: str = "INR"
+    seller: InvoiceSeller
+    patient_name: str = ""
+    patient_phone: str = ""
+    lines: List[InvoiceLine] = []
+    total: float = 0.0
+
+
 class PharmacyBillBody(CamelModel):
     """Pharmacist chooses how payment was collected when billing a dispensed order."""
     payment_method: str = "cash"  # cash | razorpay
@@ -1231,7 +1327,13 @@ class PaymentInitiateBody(CamelModel):
     department_id: str
     date: str
     time: str
-    reason: str = ""
+    reason: str
+
+    @field_validator("reason")
+    @classmethod
+    def _reason_present(cls, value: str) -> str:
+        return _require_reason(value)
+
     notes: str = ""
     mode: AppointmentMode = "in-person"
     follow_up_of: Optional[str] = None
@@ -1263,7 +1365,13 @@ class PaymentVerifyBody(CamelModel):
     department_id: str
     date: str
     time: str
-    reason: str = ""
+    reason: str
+
+    @field_validator("reason")
+    @classmethod
+    def _reason_present(cls, value: str) -> str:
+        return _require_reason(value)
+
     notes: str = ""
     mode: AppointmentMode = "in-person"
     follow_up_of: Optional[str] = None
@@ -1299,6 +1407,14 @@ class PrescriptionCreate(CamelModel):
     instructions: str = ""
 
 
+class PrescriptionUpdate(CamelModel):
+    medicine_name: Optional[str] = None
+    dosage: Optional[str] = None
+    frequency: Optional[str] = None
+    duration: Optional[str] = None
+    instructions: Optional[str] = None
+
+
 class PrescriptionOut(OutModel):
     id: str
     appointment_id: str
@@ -1315,6 +1431,16 @@ class PrescriptionOut(OutModel):
 
 
 # ---------- Vitals ----------
+class VitalsUpdate(CamelModel):
+    temperature: Optional[float] = None
+    blood_pressure: Optional[str] = None
+    heart_rate: Optional[int] = None
+    respiratory_rate: Optional[int] = None
+    weight: Optional[float] = None
+    height: Optional[float] = None
+    notes: Optional[str] = None
+
+
 class VitalsCreate(CamelModel):
     appointment_id: str
     patient_id: str
@@ -1451,6 +1577,29 @@ class MedicationOrderCreate(CamelModel):
     @classmethod
     def _at_least_one(cls, value: int) -> int:
         if value is None or value < 1:
+            raise ValueError("Quantity must be at least 1")
+        return value
+
+
+class MedicationDispenseBody(CamelModel):
+    """What the pharmacist confirms at the moment of dispensing.
+
+    An order raised from a prescription arrives as a starting point: quantity 1
+    and a catalogue match guessed from a free-text medicine name. Counting the
+    tablets is what settles both, so both can be corrected here — and stock
+    moves by what is confirmed, not by the guess.
+
+    Omitting a field leaves the order's own value alone, so a ward-round order
+    that was already exact needs no body at all.
+    """
+
+    quantity: Optional[int] = None
+    medicine_id: Optional[str] = None
+
+    @field_validator("quantity")
+    @classmethod
+    def _at_least_one(cls, value: Optional[int]) -> Optional[int]:
+        if value is not None and value < 1:
             raise ValueError("Quantity must be at least 1")
         return value
 
@@ -1851,6 +2000,11 @@ class AuthResponse(CamelModel):
     # Absent on /auth/me, which reports an existing session rather than opening
     # one and so has no new refresh token to hand out.
     refresh_token: Optional[str] = None
+    # True when this password was chosen by someone else (an admin reset, or the
+    # one a staff account was provisioned with). The client diverts to the change
+    # screen; the API refuses everything else until it is done, so a client that
+    # ignores this gets 403s rather than access.
+    must_change_password: bool = False
     # Seconds until `token` expires, so a client can refresh ahead of a 401
     # instead of discovering it mid-request.
     expires_in: int = 0
@@ -1859,6 +2013,77 @@ class AuthResponse(CamelModel):
 
 class RefreshRequest(CamelModel):
     refresh_token: str
+
+
+# ---------- Passwords ----------
+# Shared so the rules cannot drift between the three places a password is set:
+# self-service change, admin reset, and account creation.
+MIN_PASSWORD_LENGTH = 8
+
+
+def _validate_password(value: str) -> str:
+    """Length only, deliberately.
+
+    Composition rules ("one uppercase, one digit, one symbol") push people
+    towards `Passw0rd!` and are no longer recommended by anyone who measures
+    outcomes. Length is what actually costs an attacker. The real defences are
+    elsewhere and already built: bcrypt, per-address login throttling, and
+    sessions that can be revoked the moment something looks wrong.
+    """
+    if len(value or "") < MIN_PASSWORD_LENGTH:
+        raise ValueError(
+            f"Password must be at least {MIN_PASSWORD_LENGTH} characters"
+        )
+    return value
+
+
+class ChangePasswordRequest(CamelModel):
+    """Change your own password.
+
+    The current password is required even though the caller is already
+    authenticated: an access token can be left behind on a shared machine, and
+    without this, whoever finds one could lock the real owner out of their own
+    account.
+    """
+
+    current_password: str
+    new_password: str
+
+    @field_validator("new_password")
+    @classmethod
+    def _check(cls, value: str) -> str:
+        return _validate_password(value)
+
+
+class ResetPasswordRequest(CamelModel):
+    """Reset someone else's password, as staff.
+
+    `new_password` is optional: omit it and the server generates one. Generated
+    is the better path — it is high-entropy and nobody has to invent a password
+    on the spot, which is where "Welcome123" comes from.
+    """
+
+    new_password: Optional[str] = None
+
+    @field_validator("new_password")
+    @classmethod
+    def _check(cls, value: Optional[str]) -> Optional[str]:
+        return None if value is None else _validate_password(value)
+
+
+class ResetPasswordOut(CamelModel):
+    """What the person doing the reset reads out to the account's owner.
+
+    The only time the password is ever in a response body. It is not stored in
+    plaintext anywhere and cannot be retrieved again — a second reset issues a
+    new one, which is the correct answer to "I lost the note".
+    """
+
+    user_id: str
+    email: str
+    temporary_password: str
+    must_change_password: bool = True
+
 
 
 # ---------- Audit trail ----------

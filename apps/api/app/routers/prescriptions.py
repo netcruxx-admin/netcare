@@ -1,6 +1,7 @@
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Query, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from .. import models, schemas
@@ -85,6 +86,147 @@ def create_prescription(
         **body.model_dump(),
     )
     db.add(prescription)
+    db.flush()
+
+    # Prescribing puts it in front of the pharmacist. Until this existed the
+    # two tables were unconnected: a prescription was something pharmacy could
+    # read and not act on, and reaching the dispense queue meant someone
+    # retyping the drug by hand — so in practice the queue stayed empty.
+    #
+    # The order is a *starting point*, not a finished instruction. A
+    # prescription records the dose, never the count, and its medicine is free
+    # text that may or may not name something stocked. So quantity starts at 1
+    # and the catalogue match is a guess; the pharmacist confirms both when
+    # dispensing, which is the moment someone is actually counting tablets.
+    match = (
+        scoped(db, models.Medicine, tenant_id)
+        .filter(func.lower(models.Medicine.name) == (body.medicine_name or "").strip().lower())
+        .first()
+    )
+    db.add(
+        models.MedicationOrder(
+            id=new_id("mord"),
+            hospital_id=tenant_id,
+            appointment_id=prescription.appointment_id,
+            patient_id=prescription.patient_id,
+            doctor_id=prescription.doctor_id,
+            prescription_id=prescription.id,
+            medicine_id=match.id if match else None,
+            medicine_name=prescription.medicine_name,
+            quantity=1,
+            dosage=prescription.dosage,
+            route="Oral",
+            frequency=prescription.frequency,
+            duration=prescription.duration,
+            instructions=prescription.instructions,
+            status="pending",
+            ordered_at=now_iso(),
+        )
+    )
+
     db.commit()
     db.refresh(prescription)
     return prescription
+
+
+def _get_prescription(db: Session, prescription_id: str, tenant_id: str) -> models.Prescription:
+    rx = (
+        scoped(db, models.Prescription, tenant_id)
+        .filter(models.Prescription.id == prescription_id)
+        .first()
+    )
+    if rx is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Prescription not found")
+    return rx
+
+
+@router.put("/{prescription_id}", response_model=schemas.PrescriptionOut)
+def update_prescription(
+    prescription_id: str,
+    body: schemas.PrescriptionUpdate,
+    db: Session = Depends(get_db),
+    user: models.User = Depends(get_current_user),
+    scope: str = Depends(require_permission("prescriptions.manage")),
+    tenant_id: str = Depends(get_tenant_id),
+):
+    rx = _get_prescription(db, prescription_id, tenant_id)
+
+    # With scope "own" the caller must be the prescribing doctor — a 404 rather
+    # than 403 so the id itself is not confirmed to an unauthorised caller.
+    if scope == SCOPE_OWN:
+        doctor = db.query(models.Doctor).filter(models.Doctor.user_id == user.id).first()
+        if not doctor or rx.doctor_id != doctor.id:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Prescription not found")
+
+    fields = {k: v for k, v in body.model_dump().items() if v is not None}
+    for k, v in fields.items():
+        setattr(rx, k, v)
+
+    # Mirror editable fields onto the linked pending medication order so the
+    # pharmacist sees the corrected values rather than the accidental ones.
+    pending_order = (
+        db.query(models.MedicationOrder)
+        .filter(
+            models.MedicationOrder.prescription_id == rx.id,
+            models.MedicationOrder.status == "pending",
+        )
+        .first()
+    )
+    if pending_order:
+        order_field_map = {
+            "medicine_name": "medicine_name",
+            "dosage": "dosage",
+            "frequency": "frequency",
+            "duration": "duration",
+            "instructions": "instructions",
+        }
+        for src, dst in order_field_map.items():
+            if src in fields:
+                setattr(pending_order, dst, fields[src])
+
+    db.commit()
+    db.refresh(rx)
+    return rx
+
+
+@router.delete("/{prescription_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_prescription(
+    prescription_id: str,
+    db: Session = Depends(get_db),
+    user: models.User = Depends(get_current_user),
+    scope: str = Depends(require_permission("prescriptions.delete")),
+    tenant_id: str = Depends(get_tenant_id),
+):
+    rx = _get_prescription(db, prescription_id, tenant_id)
+
+    if scope == SCOPE_OWN:
+        doctor = db.query(models.Doctor).filter(models.Doctor.user_id == user.id).first()
+        if not doctor or rx.doctor_id != doctor.id:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Prescription not found")
+
+    # Block deletion when the pharmacy has already dispensed this order — the
+    # dispensing record is a fact about what happened and cannot be unwound by
+    # removing the prescription that triggered it.
+    dispensed_order = (
+        db.query(models.MedicationOrder)
+        .filter(
+            models.MedicationOrder.prescription_id == rx.id,
+            models.MedicationOrder.status != "pending",
+        )
+        .first()
+    )
+    if dispensed_order:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="This prescription has already been dispensed by the pharmacy and cannot be deleted.",
+        )
+
+    # Remove the pending pharmacy order that was created alongside the prescription.
+    db.query(models.MedicationOrder).filter(
+        models.MedicationOrder.prescription_id == rx.id,
+        models.MedicationOrder.status == "pending",
+    ).delete()
+
+    db.delete(rx)
+    db.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

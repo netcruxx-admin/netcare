@@ -24,7 +24,7 @@ def pharmacy(client, hospital_a):
     department = hospital_a.get("/departments").json()[0]
     appointment = hospital_a.post("/appointments", json={
         "patientId": patient["id"], "doctorId": doctor["id"],
-        "departmentId": department["id"], "date": "2030-04-04", "time": "10:00",
+        "departmentId": department["id"], "date": "2030-04-04", "time": "10:00", "reason": "Routine consultation",
     }).json()
     return {
         "client": client,
@@ -233,70 +233,136 @@ def test_a_doctor_id_from_another_tenant_is_refused(pharmacy, hospital_b):
 # ----- Prescription -> dispense queue --------------------------------------
 
 
-def _prescription(pharmacy) -> dict:
+def _prescription(pharmacy, medicine_name: str = "Amoxicillin") -> dict:
+    """A prescription for `medicine_name`.
+
+    Callers pass a name unique to their test: the fixture hospital is
+    session-scoped, so two tests stocking the same drug leave two catalogue
+    rows and the name match becomes ambiguous.
+    """
     response = pharmacy["client"].post("/prescriptions", json={
         "appointmentId": pharmacy["appointment"]["id"],
         "patientId": pharmacy["patient"]["id"],
         "doctorId": pharmacy["doctor"]["id"],
-        "medicineName": "Amoxicillin", "dosage": "500mg",
+        "medicineName": medicine_name, "dosage": "500mg",
         "frequency": "twice daily", "duration": "5 days",
     }, headers=pharmacy["doctor_headers"])
     assert response.status_code == 201, response.text
     return response.json()
 
 
-def test_a_prescription_can_be_sent_to_the_dispense_queue(pharmacy):
-    med = _medicine(pharmacy, stock=20, name="Amoxicillin")
+def test_prescribing_puts_it_in_the_dispense_queue(pharmacy):
+    """The doctor writes a prescription; the pharmacist sees it. No hand-off.
+
+    Until this was wired up the two tables were unconnected and the queue
+    stayed empty in practice, because reaching it meant someone retyping the
+    drug by hand.
+    """
+    _medicine(pharmacy, stock=20, name="Amoxicillin")
     rx = _prescription(pharmacy)
 
-    order = pharmacy["client"].post("/medication-orders", json={
-        "appointmentId": rx["appointmentId"], "patientId": rx["patientId"],
-        "doctorId": rx["doctorId"], "prescriptionId": rx["id"],
-        "medicineId": med["id"], "medicineName": rx["medicineName"],
-        "quantity": 10, "dosage": rx["dosage"], "route": "oral",
-        "frequency": rx["frequency"], "duration": rx["duration"],
-    }, headers=pharmacy["dispenser_headers"])
-    assert order.status_code == 201, order.text
-    assert order.json()["prescriptionId"] == rx["id"]
-
-    assert _dispense(pharmacy, order.json()["id"]).status_code == 200
-    assert _stock(pharmacy["tenant"], med["id"]) == 10
+    orders = pharmacy["client"].get(
+        "/medication-orders", headers=pharmacy["dispenser_headers"]
+    ).json()
+    queued = [o for o in orders if o["prescriptionId"] == rx["id"]]
+    assert len(queued) == 1, "prescribing should raise exactly one order"
+    assert queued[0]["status"] == "pending"
+    assert queued[0]["medicineName"] == rx["medicineName"]
 
 
-def test_the_same_prescription_cannot_be_queued_twice(pharmacy):
-    """Otherwise it dispenses twice and takes the stock twice."""
-    med = _medicine(pharmacy, stock=40, name="Amoxicillin")
-    rx = _prescription(pharmacy)
-    payload = {
-        "appointmentId": rx["appointmentId"], "patientId": rx["patientId"],
-        "doctorId": rx["doctorId"], "prescriptionId": rx["id"],
-        "medicineId": med["id"], "medicineName": rx["medicineName"],
-        "quantity": 10, "dosage": rx["dosage"], "route": "oral",
-    }
-    first = pharmacy["client"].post("/medication-orders", json=payload, headers=pharmacy["dispenser_headers"])
-    assert first.status_code == 201, first.text
+def test_the_auto_order_matches_the_catalogue_by_name_when_it_can(pharmacy):
+    """A guess, not a decision — the pharmacist confirms it at the counter."""
+    med = _medicine(pharmacy, stock=20, name="MatchByName")
+    rx = _prescription(pharmacy, "MatchByName")
 
-    second = pharmacy["client"].post("/medication-orders", json=payload, headers=pharmacy["dispenser_headers"])
-    assert second.status_code == 409, second.text
-    assert "already in the dispense queue" in second.json()["detail"]
+    order = next(
+        o for o in pharmacy["client"].get(
+            "/medication-orders", headers=pharmacy["dispenser_headers"]
+        ).json() if o["prescriptionId"] == rx["id"]
+    )
+    assert order["medicineId"] == med["id"]
+    # A prescription records the dose, never the count.
+    assert order["quantity"] == 1
 
 
-def test_a_cancelled_order_frees_the_prescription_to_be_queued_again(pharmacy):
-    med = _medicine(pharmacy, stock=40, name="Amoxicillin")
-    rx = _prescription(pharmacy)
-    payload = {
-        "appointmentId": rx["appointmentId"], "patientId": rx["patientId"],
-        "doctorId": rx["doctorId"], "prescriptionId": rx["id"],
-        "medicineId": med["id"], "medicineName": rx["medicineName"],
-        "quantity": 5, "dosage": rx["dosage"], "route": "oral",
-    }
-    first = pharmacy["client"].post("/medication-orders", json=payload, headers=pharmacy["dispenser_headers"]).json()
-    pharmacy["client"].patch(
-        f"/medication-orders/{first['id']}/cancel", headers=pharmacy["dispenser_headers"]
+def test_an_unstocked_medicine_still_queues_without_a_catalogue_match(pharmacy):
+    rx = pharmacy["client"].post("/prescriptions", json={
+        "appointmentId": pharmacy["appointment"]["id"],
+        "patientId": pharmacy["patient"]["id"],
+        "doctorId": pharmacy["doctor"]["id"],
+        "medicineName": "Something Not Stocked", "dosage": "5ml",
+    }, headers=pharmacy["doctor_headers"]).json()
+
+    order = next(
+        o for o in pharmacy["client"].get(
+            "/medication-orders", headers=pharmacy["dispenser_headers"]
+        ).json() if o["prescriptionId"] == rx["id"]
+    )
+    assert order["medicineId"] is None
+    assert order["status"] == "pending"
+
+
+def test_the_pharmacist_corrects_quantity_at_the_counter(pharmacy):
+    """The guessed quantity must not be what moves stock.
+
+    Auto-raising an order at quantity 1 would otherwise reintroduce exactly the
+    bug that made a ten-tablet course move stock by one.
+    """
+    med = _medicine(pharmacy, stock=30, name="CounterCorrection")
+    rx = _prescription(pharmacy, "CounterCorrection")
+    order = next(
+        o for o in pharmacy["client"].get(
+            "/medication-orders", headers=pharmacy["dispenser_headers"]
+        ).json() if o["prescriptionId"] == rx["id"]
     )
 
-    again = pharmacy["client"].post("/medication-orders", json=payload, headers=pharmacy["dispenser_headers"])
-    assert again.status_code == 201, again.text
+    response = pharmacy["client"].patch(
+        f"/medication-orders/{order['id']}/dispense",
+        json={"quantity": 10, "medicineId": med["id"]},
+        headers=pharmacy["dispenser_headers"],
+    )
+    assert response.status_code == 200, response.text
+    assert _stock(pharmacy["tenant"], med["id"]) == 20
+
+
+def test_a_correction_is_still_refused_when_the_shelf_is_short(pharmacy):
+    med = _medicine(pharmacy, stock=4, name="ShortShelf")
+    rx = _prescription(pharmacy, "ShortShelf")
+    order = next(
+        o for o in pharmacy["client"].get(
+            "/medication-orders", headers=pharmacy["dispenser_headers"]
+        ).json() if o["prescriptionId"] == rx["id"]
+    )
+
+    response = pharmacy["client"].patch(
+        f"/medication-orders/{order['id']}/dispense",
+        json={"quantity": 10, "medicineId": med["id"]},
+        headers=pharmacy["dispenser_headers"],
+    )
+    assert response.status_code == 409, response.text
+    assert _stock(pharmacy["tenant"], med["id"]) == 4
+
+
+def test_dispensing_without_a_body_uses_the_order_as_it_stands(pharmacy):
+    """A ward-round order raised directly is already exact."""
+    med = _medicine(pharmacy, stock=10, name="Direct")
+    order_id = _order(pharmacy, med, quantity=3).json()["id"]
+    assert _dispense(pharmacy, order_id).status_code == 200
+    assert _stock(pharmacy["tenant"], med["id"]) == 7
+
+
+def test_one_prescription_never_yields_two_orders(pharmacy):
+    """Prescribing raises the order, so sending it again is a duplicate."""
+    med = _medicine(pharmacy, stock=40, name="Amoxicillin")
+    rx = _prescription(pharmacy)
+
+    again = pharmacy["client"].post("/medication-orders", json={
+        "appointmentId": rx["appointmentId"], "patientId": rx["patientId"],
+        "doctorId": rx["doctorId"], "prescriptionId": rx["id"],
+        "medicineId": med["id"], "medicineName": rx["medicineName"],
+        "quantity": 10, "dosage": rx["dosage"], "route": "oral",
+    }, headers=pharmacy["dispenser_headers"])
+    assert again.status_code == 409, again.text
 
 
 # ----- Expiry ---------------------------------------------------------------

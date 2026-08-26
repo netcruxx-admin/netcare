@@ -280,7 +280,7 @@ def delete_patient(
     patient_id: str,
     db: Session = Depends(get_db),
     user: models.User = Depends(get_current_user),
-    _: dict = Depends(require_permission("patients.manage")),
+    _: dict = Depends(require_permission("patients.delete")),
     tenant_id: str = Depends(get_tenant_id),
 ):
     patient = _get_or_404(db, patient_id, tenant_id)

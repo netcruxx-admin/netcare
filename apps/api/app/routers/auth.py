@@ -1,9 +1,14 @@
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy.orm import Session
 
+import hashlib
+import logging
+import secrets
+
+log = logging.getLogger(__name__)
 from datetime import datetime, timedelta, timezone
 
-from .. import audit, consent as consent_lib, models, schemas, sessions
+from .. import audit, consent as consent_lib, email as mailer, models, schemas, sessions
 from ..auth import (
     create_token,
     get_current_session,
@@ -56,6 +61,7 @@ def _build_response(
         token=create_token(user.id, user.hospital_id, user.role, session.id),
         refresh_token=refresh_token,
         expires_in=settings.access_token_minutes * 60,
+        must_change_password=bool(user.must_change_password),
         is_authenticated=True,
     )
 
@@ -234,18 +240,28 @@ def login(
             .first()
         )
 
-    if user is None or not verify_password(body.password, user.password):
+    if user is None:
+        audit.record_action("login_failed")
+        audit.record_subject("user", "", detail=body.email)
+        if tenant_id:
+            audit.record_tenant(tenant_id)
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="No account found with this email address.",
+        )
+
+    if not verify_password(body.password, user.password):
         # Failed sign-ins are the trail's early-warning signal — a burst of them
         # against one account is what a breach looks like before it succeeds.
         # The email is recorded because that is what was tried; the password
         # never is, here or anywhere else in the trail.
         audit.record_action("login_failed")
-        audit.record_subject("user", user.id if user else "", detail=body.email)
+        audit.record_subject("user", user.id, detail=body.email)
         if tenant_id:
             audit.record_tenant(tenant_id)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid email or password",
+            detail="Incorrect password. Please try again.",
         )
 
     # Block login for users whose hospital has been suspended.
@@ -356,6 +372,61 @@ def logout_all(
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
+@router.post("/change-password", response_model=schemas.AuthResponse)
+def change_password(
+    body: schemas.ChangePasswordRequest,
+    request: Request,
+    user: models.User = Depends(get_current_user),
+    session: models.Session = Depends(get_current_session),
+    db: Session = Depends(get_db),
+):
+    """Change your own password.
+
+    Guarded by `get_current_user` alone, deliberately: it must stay reachable by
+    someone who is mid-forced-change and therefore refused by every
+    permission-guarded endpoint. That is the whole point of the exception.
+
+    The current password is required even though the caller is authenticated —
+    a token left behind on a shared machine would otherwise be enough to lock
+    the real owner out of their own account.
+
+    Every *other* session is ended. A password change is what someone does when
+    they think their account is compromised, so leaving the attacker's session
+    running would defeat it. The caller's own session survives so they are not
+    signed out by the act of securing themselves.
+    """
+    if not verify_password(body.current_password, user.password):
+        audit.record_action("password_change_failed")
+        audit.record_subject("user", user.id)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Your current password is not correct.",
+        )
+
+    if verify_password(body.new_password, user.password):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="The new password must be different from the current one.",
+        )
+
+    user.password = hash_password(body.new_password)
+    # Cleared here rather than by the reset: this is the moment the password
+    # stops being one somebody else knows.
+    user.must_change_password = False
+    revoked = sessions.revoke_all_for_user(
+        db,
+        user.id,
+        reason=sessions.REVOKED_PASSWORD_CHANGE,
+        except_session_id=session.id,
+    )
+    db.commit()
+    db.refresh(user)
+
+    audit.record_action("password_changed")
+    audit.record_subject("user", user.id, detail=f"{revoked} other session(s) ended")
+    return _build_response(db, user, session=session, refresh_token=None)
+
+
 @router.get("/me", response_model=schemas.AuthResponse)
 def me(
     user: models.User = Depends(get_current_user),
@@ -369,3 +440,192 @@ def me(
     back: this reports a sign-in, it does not start one.
     """
     return _build_response(db, user, session=session, refresh_token=None)
+
+
+# ---------------------------------------------------------------------------
+# Forgot / reset password
+# ---------------------------------------------------------------------------
+
+_RESET_TOKEN_TTL_MINUTES = 60
+
+
+def _hash_token(raw: str) -> str:
+    return hashlib.sha256(raw.encode()).hexdigest()
+
+
+def _frontend_base_url(request: Request) -> str:
+    """Return the base URL the browser was actually on when it made this request.
+
+    Priority:
+    1. X-Frontend-Origin — set by the Next.js client to window.location.origin,
+       so it always reflects the browser's tab URL (e.g. http://sunrise.localhost:3000).
+    2. X-Forwarded-Proto + X-Forwarded-Host — set by nginx / Cloudflare in prod.
+    3. Fallback to APP_BASE_URL from settings.
+
+    The API itself runs on :8000, so request.url.host is always localhost:8000
+    and must NOT be used.
+    """
+    origin = request.headers.get("x-frontend-origin", "").strip()
+    if origin:
+        return origin.rstrip("/")
+
+    proto = request.headers.get("x-forwarded-proto", "").strip()
+    host  = request.headers.get("x-forwarded-host", "").strip()
+    if proto and host:
+        return f"{proto}://{host}"
+
+    # Last resort: non-browser callers (e.g. curl / tests) won't send this
+    # header, so fall back to localhost dev default.
+    return "http://localhost:3000"
+
+
+@router.post("/forgot-password", status_code=status.HTTP_200_OK)
+def forgot_password(
+    body: schemas.ForgotPasswordRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+    tenant_id: str = Depends(resolve_public_tenant),
+):
+    """Request a password-reset link.
+
+    Returns 404 when the email is not registered so the user gets immediate
+    feedback instead of wondering whether they mistyped.  This is an internal
+    HMS used by known staff and patients — the privacy trade-off of confirming
+    an address exists is acceptable here.
+
+    The reset link is built from the *request's own host* so an email sent from
+    sunrise.netcare.co.in always links back to that hospital's subdomain, not
+    the platform root.
+    """
+    ip = _client_ip(request)
+    _throttle_login(db, body.email, ip)  # re-uses login throttle keyed on IP
+
+    # Look up user scoped to this tenant.  Superadmin (no hospital) is excluded
+    # here — the forgot-password page is hidden on the platform root anyway.
+    user = (
+        db.query(models.User)
+        .filter(models.User.hospital_id == tenant_id, models.User.email == body.email)
+        .first()
+    )
+
+    audit.record_action("forgot_password_requested")
+    if tenant_id:
+        audit.record_tenant(tenant_id)
+
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No account found with this email address.",
+        )
+
+    audit.record_subject("user", user.id, detail=body.email)
+
+    # Invalidate any still-live tokens for this user so only the newest link
+    # works.  A user who clicks "resend" gets a clean slate.
+    now = datetime.now(timezone.utc)
+    (
+        db.query(models.PasswordResetToken)
+        .filter(
+            models.PasswordResetToken.user_id == user.id,
+            models.PasswordResetToken.used_at.is_(None),
+        )
+        .update({"used_at": now.isoformat()})
+    )
+
+    raw_token = secrets.token_urlsafe(32)
+    expires_at = (now + timedelta(minutes=_RESET_TOKEN_TTL_MINUTES)).isoformat()
+
+    db.add(
+        models.PasswordResetToken(
+            id=new_id("prt"),
+            hospital_id=user.hospital_id,
+            user_id=user.id,
+            token_hash=_hash_token(raw_token),
+            expires_at=expires_at,
+            used_at=None,
+            created_at=now.isoformat(),
+        )
+    )
+    db.commit()
+
+    # Build the link from the browser's actual origin — so the reset page opens
+    # on the same hospital subdomain the request came from, not the API host.
+    base_url = _frontend_base_url(request)
+    reset_url = f"{base_url}/reset-password?token={raw_token}"
+
+    hospital_name = "NetCare"
+    if user.hospital_id:
+        hospital = db.get(models.Hospital, user.hospital_id)
+        if hospital:
+            hospital_name = hospital.name
+
+    try:
+        mailer.send_password_reset(user.email, reset_url, hospital_name)
+    except Exception as exc:
+        # Email failure must not bubble a 500 or expose the token in the
+        # response, but it MUST appear in the server logs so it can be fixed.
+        log.exception("Password reset email failed for %s: %s", user.email, exc)
+
+    return {"message": "If that email is registered, you will receive a reset link shortly."}
+
+
+@router.post("/reset-password", status_code=status.HTTP_200_OK)
+def reset_password(
+    body: schemas.ResetPasswordRequest,
+    db: Session = Depends(get_db),
+):
+    """Consume a password-reset token and set a new password.
+
+    Every failure returns the same generic 400 — distinguishing expired from
+    used from never-existed would tell someone holding a stolen token exactly
+    what they have.
+    """
+    _invalid = HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail="This reset link is invalid or has expired. Please request a new one.",
+    )
+
+    token_hash = _hash_token(body.token)
+    record = (
+        db.query(models.PasswordResetToken)
+        .filter(models.PasswordResetToken.token_hash == token_hash)
+        .first()
+    )
+
+    if record is None:
+        raise _invalid
+
+    now = datetime.now(timezone.utc)
+
+    if record.used_at is not None:
+        raise _invalid
+
+    expires = datetime.fromisoformat(record.expires_at)
+    # Make expires timezone-aware if stored without offset (defensive).
+    if expires.tzinfo is None:
+        expires = expires.replace(tzinfo=timezone.utc)
+    if now > expires:
+        raise _invalid
+
+    user = db.get(models.User, record.user_id)
+    if user is None:
+        raise _invalid
+
+    # Write the new password and mark the token consumed in one commit so
+    # there is no window where the token is live but the password is already
+    # changed (or vice-versa).
+    user.password = hash_password(body.new_password)
+    record.used_at = now.isoformat()
+
+    # Revoke every live session: whoever held the old password is now locked
+    # out, which is exactly what a password reset is for.
+    sessions.revoke_all_for_user(db, user.id, reason=sessions.REVOKED_LOGOUT_ALL)
+
+    db.commit()
+
+    audit.record_action("password_reset_completed")
+    audit.record_subject("user", user.id)
+    if user.hospital_id:
+        audit.record_tenant(user.hospital_id)
+
+    return {"message": "Password updated successfully. Please sign in with your new password."}

@@ -24,6 +24,7 @@ import {
   useUpdateRazorpaySettingsMutation,
   type HospitalSelfUpdateBody,
 } from '@/store/api';
+import { Spinner } from '@/components/ui/spinner';
 
 const schema = Yup.object({
   name: Yup.string().trim().required('Hospital name is required'),
@@ -127,7 +128,7 @@ function RazorpaySettingsSection({ canEdit }: { canEdit: boolean }) {
       blurb="Connect your hospital's own Razorpay account. Payments from patients will go directly to your account."
     >
       {isLoading ? (
-        <p className="text-sm text-slate-400">Loading…</p>
+        <Spinner variant="block" />
       ) : (
         <div className="space-y-4">
           {/* Current status */}
@@ -200,9 +201,9 @@ function RazorpaySettingsSection({ canEdit }: { canEdit: boolean }) {
                 type="button"
                 onClick={handleSave}
                 disabled={isSaving || !keyId || !keySecret}
-                className="px-5 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white text-sm font-semibold rounded-lg shadow hover:opacity-95 disabled:opacity-50 transition"
+                className="inline-flex items-center justify-center gap-2 px-5 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white text-sm font-semibold rounded-lg shadow hover:opacity-95 disabled:opacity-50 transition"
               >
-                {isSaving ? 'Saving…' : current?.keyId ? 'Update keys' : 'Connect Razorpay'}
+                {isSaving ? <Spinner size="sm" label="Saving…" /> : current?.keyId ? 'Update keys' : 'Connect Razorpay'}
               </button>
             </div>
           )}
@@ -320,7 +321,7 @@ export function HospitalSettings({ session }: RoleViewProps) {
       subtitle={hospital?.name ?? 'Your hospital'}
     >
       {isLoading || !data ? (
-        <p className="text-sm text-slate-400">Loading…</p>
+        <Spinner variant="block" />
       ) : (
         <div className="max-w-4xl space-y-6">
           {/* ---- Registered identity: read-only, and said so plainly ---- */}
@@ -382,7 +383,7 @@ export function HospitalSettings({ session }: RoleViewProps) {
                     className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-slate-300 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 transition"
                   >
                     <Upload className="w-4 h-4" />
-                    {isUploading ? 'Uploading…' : profile?.logoUrl ? 'Replace' : 'Upload logo'}
+                    {isUploading ? <Spinner size="sm" label="Uploading…" /> : profile?.logoUrl ? 'Replace' : 'Upload logo'}
                   </button>
                   {profile?.logoUrl && canEdit && (
                     <button
@@ -507,9 +508,9 @@ export function HospitalSettings({ session }: RoleViewProps) {
                     <button
                       type="submit"
                       disabled={isSaving}
-                      className="px-5 py-2.5 bg-gradient-to-r from-cyan-500 to-brand-teal text-white text-sm font-semibold rounded-lg shadow hover:opacity-95 disabled:opacity-50 transition"
+                      className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-gradient-to-r from-cyan-500 to-brand-teal text-white text-sm font-semibold rounded-lg shadow hover:opacity-95 disabled:opacity-50 transition"
                     >
-                      {isSaving ? 'Saving…' : 'Save changes'}
+                      {isSaving ? <Spinner size="sm" label="Saving…" /> : 'Save changes'}
                     </button>
                   </div>
                 ) : (

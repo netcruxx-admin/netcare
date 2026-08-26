@@ -22,7 +22,6 @@ import {
   ArrowRight,
   Check,
   CheckCircle,
-  Loader2,
   Pencil,
   X,
 } from 'lucide-react';
@@ -58,6 +57,7 @@ import {
 } from './onboarding/StepPanels';
 import { ColourField, FieldGrid, ReviewRow, SectionTitle } from './onboarding/fields';
 import { FormField } from '@/components/form/FormField';
+import { Spinner } from '@/components/ui/spinner';
 import { toPhoneDigits, withPrefix } from '@/components/form/PhoneField';
 
 // ---------------------------------------------------------------------------
@@ -655,9 +655,8 @@ export function EditHospitalWizard({ open, hospital, onClose, onUpdated }: Props
   if (loadingDetail || !detail) {
     return (
       <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-        <div className="bg-white rounded-xl shadow-2xl p-10 flex flex-col items-center gap-3">
-          <Loader2 className="w-8 h-8 text-cyan-500 animate-spin" />
-          <p className="text-sm text-slate-500">Loading hospital details…</p>
+        <div className="bg-white rounded-xl shadow-2xl p-10">
+          <Spinner variant="block" label="Loading hospital details…" />
         </div>
       </div>
     );
@@ -781,7 +780,7 @@ export function EditHospitalWizard({ open, hospital, onClose, onUpdated }: Props
                           className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg font-semibold text-sm hover:shadow-lg transition disabled:opacity-50"
                         >
                           {isSubmitting ? (
-                            <><Loader2 className="w-4 h-4 animate-spin" /> Saving…</>
+                            <Spinner size="sm" label="Saving…" />
                           ) : (
                             <><Check className="w-4 h-4" /> Save Changes</>
                           )}

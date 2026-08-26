@@ -1,3 +1,4 @@
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -75,6 +76,26 @@ class Settings(BaseSettings):
     razorpay_key_id: str = ""
     razorpay_key_secret: str = ""
 
+    # --- Email (password-reset and future notifications) ---
+    # Uses Python stdlib smtplib — no paid service required.
+    # Works with Gmail "App Passwords" (needs 2FA enabled, then create an App
+    # Password at myaccount.google.com/apppasswords).
+    # Leave smtp_host empty in development: the reset link is printed to the
+    # server console instead of being emailed, so the flow is testable without
+    # any mail server.
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_user: str = ""
+    smtp_password: str = ""
+    smtp_from: str = ""        # e.g. "NetCare <no-reply@yourdomain.com>"
+    smtp_use_tls: bool = True  # STARTTLS on port 587; set False for port 465 SSL
+    smtp_use_ssl: bool = False  # True for port-465 implicit SSL
+
+    # Path to the Firebase service account JSON, relative to the api/ directory.
+    # The file must never be committed to git (.gitignore already covers it).
+    # Leave empty to disable push notifications (e.g. in CI or unit tests).
+    firebase_service_account: str = "firebase-service-account.json"
+
     # Bootstrap credentials for the platform superadmin, created on first boot.
     # The default password is a demo convenience and is refused in production —
     # set SUPERADMIN_PASSWORD (and ideally SUPERADMIN_EMAIL) before deploying.
@@ -89,6 +110,17 @@ class Settings(BaseSettings):
     r2_public_url: str = ""  # Optional public bucket URL for serving files
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    # .env values may have trailing whitespace (e.g. SMTP_PORT=587   ).
+    # Strip every string field so int/bool coercion doesn't silently fail.
+    @field_validator(
+        "smtp_host", "smtp_user", "smtp_password", "smtp_from",
+        "cors_origins", "root_domain", "environment",
+        mode="before",
+    )
+    @classmethod
+    def _strip(cls, v: object) -> object:
+        return v.strip() if isinstance(v, str) else v
 
     @property
     def is_production(self) -> bool:

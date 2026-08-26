@@ -18,6 +18,7 @@ import {
   useAdjustInventoryMutation,
 } from '@/store/api';
 import { fmtDate } from '@/lib/date';
+import { Spinner } from '@/components/ui/spinner';
 
 type ActiveTab = 'stock' | 'movements';
 
@@ -62,9 +63,9 @@ export function InventoryManagement({ session }: RoleViewProps) {
   });
   const [formError, setFormError] = useState('');
 
-  const { data: medicinePage } = useListMedicinesPagedQuery({ limit: 200, offset: 0 });
+  const { data: medicinePage, isLoading: loadingMedicines } = useListMedicinesPagedQuery({ limit: 200, offset: 0 });
   const medicines = medicinePage?.items ?? [];
-  const { data: movements = [] } = useListInventoryMovementsQuery();
+  const { data: movements = [], isLoading: loadingMovements } = useListInventoryMovementsQuery();
   const { data: lowStock = [] } = useListLowStockQuery();
 
   const [restockMedicine, { isLoading: isRestocking }] = useRestockMedicineMutation();
@@ -175,7 +176,9 @@ export function InventoryManagement({ session }: RoleViewProps) {
             <div className="px-6 py-4 border-b">
               <h3 className="font-semibold text-slate-900">Stock Levels ({medicines.length})</h3>
             </div>
-            {medicines.length === 0 ? (
+            {loadingMedicines ? (
+              <Spinner variant="block" />
+            ) : medicines.length === 0 ? (
               <div className="text-center py-16">
                 <Package className="w-16 h-16 text-slate-300 mx-auto mb-4" />
                 <p className="text-slate-600">No medicines in catalog yet.</p>
@@ -247,7 +250,9 @@ export function InventoryManagement({ session }: RoleViewProps) {
             <div className="px-6 py-4 border-b">
               <h3 className="font-semibold text-slate-900">Movement History ({movements.length})</h3>
             </div>
-            {movements.length === 0 ? (
+            {loadingMovements ? (
+              <Spinner variant="block" />
+            ) : movements.length === 0 ? (
               <div className="text-center py-16">
                 <Package className="w-16 h-16 text-slate-300 mx-auto mb-4" />
                 <p className="text-slate-600">No movements recorded yet.</p>
@@ -363,9 +368,9 @@ export function InventoryManagement({ session }: RoleViewProps) {
                 <button
                   onClick={handleRestock}
                   disabled={isRestocking}
-                  className="flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded hover:shadow-lg font-semibold transition disabled:opacity-50"
+                  className="inline-flex items-center justify-center gap-2 flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded hover:shadow-lg font-semibold transition disabled:opacity-50"
                 >
-                  {isRestocking ? 'Saving…' : 'Restock'}
+                  {isRestocking ? <Spinner size="sm" label="Saving…" /> : 'Restock'}
                 </button>
               </div>
             </div>
@@ -429,9 +434,9 @@ export function InventoryManagement({ session }: RoleViewProps) {
                 <button
                   onClick={handleAdjust}
                   disabled={isAdjusting}
-                  className="flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded hover:shadow-lg font-semibold transition disabled:opacity-50"
+                  className="inline-flex items-center justify-center gap-2 flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded hover:shadow-lg font-semibold transition disabled:opacity-50"
                 >
-                  {isAdjusting ? 'Saving…' : 'Apply Adjustment'}
+                  {isAdjusting ? <Spinner size="sm" label="Saving…" /> : 'Apply Adjustment'}
                 </button>
               </div>
             </div>

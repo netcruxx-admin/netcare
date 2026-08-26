@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { Clock, CalendarPlus, Eye, Plus, Loader2 } from 'lucide-react';
+import { Clock, CalendarPlus, Eye, Plus } from 'lucide-react';
 import { fmtDate } from '@/lib/date';
 import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
@@ -10,6 +10,7 @@ import { useGetPatientAppointmentsQuery } from '@/store/api';
 import type { Appointment } from '@/lib/types';
 import { hasPermission } from '@/lib/auth';
 import { ActionIcon } from '../ActionIcon';
+import { Spinner } from '@/components/ui/spinner';
 
 const todayStr = new Date().toISOString().split('T')[0];
 
@@ -72,9 +73,7 @@ export function PatientAppointments({ session }: RoleViewProps) {
           <h3 className="font-semibold text-slate-900">All Appointments ({sorted.length})</h3>
         </div>
         {isLoading ? (
-          <div className="flex items-center justify-center py-16">
-            <Loader2 className="w-8 h-8 animate-spin text-cyan-500" />
-          </div>
+          <Spinner variant="block" />
         ) : sorted.length === 0 ? (
           <div className="text-center py-16">
             <Clock className="w-16 h-16 text-slate-300 mx-auto mb-4" />

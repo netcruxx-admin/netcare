@@ -11,7 +11,7 @@ import { useDeleteRoleMutation, useListRolesQuery } from '@/store/api';
 import type { RoleInfo } from '@/store/api';
 import { builtInRoleCodes } from '@/lib/roles';
 import { hasPermission } from '@/lib/auth';
-
+import { Spinner } from '@/components/ui/spinner';
 
 export function PlatformRoles({ session }: RoleViewProps) {
   const router = useRouter();
@@ -66,7 +66,7 @@ export function PlatformRoles({ session }: RoleViewProps) {
         )}
 
         {isLoading ? (
-          <div className="py-16 text-center text-slate-400 text-sm">Loading…</div>
+          <Spinner variant="block" />
         ) : roles.length === 0 ? (
           <div className="py-16 text-center">
             <ShieldCheck className="w-16 h-16 text-slate-200 mx-auto mb-4" />

@@ -522,6 +522,10 @@ export interface AuthSession {
    *  Optional so a session stored before this existed still parses — it will
    *  simply fail to renew once, and sign the user in again. */
   refreshToken?: string;
+  /** True when this password was chosen by somebody else. The API refuses every
+   *  permission-guarded endpoint until it is replaced, so the app diverts to the
+   *  change screen instead of pretending the sign-in finished. */
+  mustChangePassword?: boolean;
   isAuthenticated: boolean;
 }
 

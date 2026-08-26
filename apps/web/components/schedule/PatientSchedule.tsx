@@ -38,8 +38,8 @@ export function PatientSchedule({ session }: RoleViewProps) {
   const [selected, setSelected] = useState<Date>(new Date());
 
   // "own" scope means these are already just this patient's appointments.
-  const { data: appts = [] } = useListAppointmentsQuery();
-  const { data: doctors = [] } = useListDoctorsQuery();
+  const { data: appts = [], isLoading: loadingAppts } = useListAppointmentsQuery();
+  const { data: doctors = [], isLoading: loadingDoctors } = useListDoctorsQuery();
 
   const doctorName = useMemo(() => {
     const doctorById = new Map(doctors.map((d) => [d.id, d]));
@@ -67,8 +67,9 @@ export function PatientSchedule({ session }: RoleViewProps) {
     .sort((a, b) => (a.date === b.date ? slotToMinutes(a.time) - slotToMinutes(b.time) : a.date < b.date ? -1 : 1))
     .slice(0, 6);
 
+
   return (
-    <DashboardShell role={session.user.role} userName={session.user.name} title="Schedule" subtitle="Your appointment calendar">
+    <DashboardShell role={session.user.role} userName={session.user.name} title="Schedule" subtitle="Your appointment calendar" loading={loadingAppts || loadingDoctors}>
       <div className="grid lg:grid-cols-2 gap-6">
         {/* Calendar */}
         <div className="bg-white rounded-lg shadow p-6">

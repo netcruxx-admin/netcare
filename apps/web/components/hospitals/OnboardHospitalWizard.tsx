@@ -27,7 +27,6 @@ import {
   Building2,
   Check,
   CheckCircle,
-  Loader2,
   X,
 } from 'lucide-react';
 import { apiError } from '@/lib/apiError';
@@ -57,6 +56,7 @@ import {
   OperationsStep,
   RegistrationStep,
 } from './onboarding/StepPanels';
+import { Spinner } from '@/components/ui/spinner';
 
 interface Props {
   open: boolean;
@@ -297,7 +297,7 @@ export function OnboardHospitalWizard({ open, onClose, onCreated }: Props) {
                           className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg font-semibold text-sm hover:shadow-lg transition disabled:opacity-50"
                         >
                           {isSubmitting ? (
-                            <><Loader2 className="w-4 h-4 animate-spin" /> Creating…</>
+                            <Spinner size="sm" label="Creating…" />
                           ) : (
                             <><Check className="w-4 h-4" /> Create Hospital</>
                           )}

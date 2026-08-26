@@ -18,6 +18,7 @@ import { ExportButton } from '@/components/ExportButton';
 import { TablePagination } from '@/components/TablePagination';
 import { useServerTable } from '@/hooks/useServerTable';
 import { ORDER_STATUS_LABEL, ORDER_STATUS_STYLE } from '@/lib/lab';
+import { Spinner } from '@/components/ui/spinner';
 
 /**
  * `patientName`, `hasResults` and `abnormal` all arrive on the order. This
@@ -46,7 +47,7 @@ export function DoctorLabOrders({ session }: RoleViewProps) {
     q: table.q.trim() || undefined,
     status: statusFilter === 'all' ? undefined : statusFilter,
   };
-  const { data: orderPage } = useListTestOrdersPagedQuery({
+  const { data: orderPage, isLoading } = useListTestOrdersPagedQuery({
     ...listArgs,
     limit: table.limit,
     offset: table.offset,
@@ -106,7 +107,9 @@ export function DoctorLabOrders({ session }: RoleViewProps) {
           <div className="px-6 py-4 border-b">
             <h3 className="font-semibold text-slate-900">Orders ({totalOrders})</h3>
           </div>
-          {rows.length === 0 ? (
+          {isLoading ? (
+            <Spinner variant="block" />
+          ) : rows.length === 0 ? (
             <div className="text-center py-16">
               <ClipboardList className="w-16 h-16 text-slate-300 mx-auto mb-4" />
               <p className="text-slate-600">You haven't ordered any tests yet.</p>
@@ -153,9 +156,9 @@ export function DoctorLabOrders({ session }: RoleViewProps) {
                             <button
                               onClick={() => markReviewed(r.order.id)}
                               disabled={isReviewing}
-                              className="text-purple-600 hover:text-purple-700 font-semibold text-sm disabled:opacity-50"
+                              className="inline-flex items-center justify-center gap-2 text-purple-600 hover:text-purple-700 font-semibold text-sm disabled:opacity-50"
                             >
-                              {isReviewing ? 'Saving…' : 'Mark Reviewed'}
+                              {isReviewing ? <Spinner size="sm" label="Saving…" /> : 'Mark Reviewed'}
                             </button>
                           )}
                         </div>

@@ -12,7 +12,7 @@ from .. import models, schemas
 from ..auth import get_current_user
 from ..authz import SCOPE_OWN, require_permission
 from ..database import get_db
-from ..tenancy import assert_body_in_tenant, get_tenant_id, scoped
+from ..tenancy import assert_body_in_tenant, assert_in_tenant, get_tenant_id, scoped
 from ..utils import ListQuery, list_params, new_id, now_iso, paginate, text_search
 
 router = APIRouter(prefix="/medication-orders", tags=["medication_orders"])
@@ -133,6 +133,7 @@ def create_medication_order(
 @router.patch("/{order_id}/dispense", response_model=schemas.MedicationOrderOut)
 def dispense_order(
     order_id: str,
+    body: Optional[schemas.MedicationDispenseBody] = None,
     db: Session = Depends(get_db),
     user: models.User = Depends(get_current_user),
     _: str = Depends(require_permission("medication_orders.dispense")),
@@ -143,6 +144,16 @@ def dispense_order(
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Order not found")
     if order.status != "pending":
         raise HTTPException(status.HTTP_409_CONFLICT, f"Order is already {order.status}")
+
+    # The pharmacist's correction, applied before anything is counted. An order
+    # raised from a prescription carries a guessed quantity and catalogue match;
+    # this is where someone who can see the shelf replaces the guess.
+    if body is not None:
+        if body.medicine_id is not None:
+            assert_in_tenant(db, models.Medicine, body.medicine_id, tenant_id)
+            order.medicine_id = body.medicine_id
+        if body.quantity is not None:
+            order.quantity = body.quantity
     # An order for a catalogued medicine moves stock by the quantity ordered.
     # This used to deduct exactly 1 whatever the order said, so a ten-tablet
     # course moved stock by one and inventory drifted from the first dispense.

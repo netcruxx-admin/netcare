@@ -8,6 +8,7 @@ import { apiError } from '@/lib/apiError';
 import { useCreateMedicalRecordMutation } from '@/store/api';
 import { FormField } from '@/components/form/FormField';
 import { Modal } from './Modal';
+import { Spinner } from '@/components/ui/spinner';
 
 interface Props {
   appointmentId: string;
@@ -87,9 +88,9 @@ export function AddClinicalNotesModal({ appointmentId, patientId, doctorId, onCl
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg hover:shadow-lg font-semibold transition disabled:opacity-50"
+                className="inline-flex items-center justify-center gap-2 flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg hover:shadow-lg font-semibold transition disabled:opacity-50"
               >
-                {isSubmitting ? 'Saving…' : 'Save Notes'}
+                {isSubmitting ? <Spinner size="sm" label="Saving…" /> : 'Save Notes'}
               </button>
             </div>
           </Form>

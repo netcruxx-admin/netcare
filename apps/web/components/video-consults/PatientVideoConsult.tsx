@@ -9,13 +9,13 @@ import {
   useBookVideoSlotMutation,
   useGetPatientByUserQuery,
   useInitiatePaymentMutation,
-  useListDepartmentsQuery,
   useListDoctorsQuery,
   useListVideoSlotsQuery,
   useVerifyPaymentMutation,
 } from '@/store/api';
 import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
+import { Spinner } from '@/components/ui/spinner';
 
 declare global {
   interface Window {
@@ -46,17 +46,17 @@ export function PatientVideoConsult({ session }: RoleViewProps) {
   const patientId = patient?.id ?? '';
 
   const { data: allDoctors = [] } = useListDoctorsQuery();
-  const { data: departments = [] } = useListDepartmentsQuery();
   const doctors = allDoctors
     .filter((d) => d.verificationStatus !== 'rejected')
     .map((d) => ({
       id: d.id,
       name: d.user?.name ?? 'Doctor',
       specialization: d.specialization,
+      departmentId: d.departmentId ?? '',
       fee: d.consultationFee,
     }));
 
-  const { data: openSlots = [] } = useListVideoSlotsQuery(
+  const { data: openSlots = [], isLoading: loadingSlots } = useListVideoSlotsQuery(
     { doctorId: selectedDoctor, status: 'open' },
     { skip: !selectedDoctor },
   );
@@ -88,10 +88,6 @@ export function PatientVideoConsult({ session }: RoleViewProps) {
 
   const doctorById = useMemo(() => new Map(doctors.map((d) => [d.id, d])), [doctors]);
 
-  const deptForDoctor = (spec: string) =>
-    departments.find((d) => d.name === spec || spec.includes(d.name.split(' ')[0]))?.id ??
-    departments[0]?.id;
-
   const book = async (slot: VideoSlot) => {
     setError('');
     const doc = doctorById.get(slot.doctorId);
@@ -104,7 +100,17 @@ export function PatientVideoConsult({ session }: RoleViewProps) {
       return;
     }
 
-    const departmentId = deptForDoctor(doc.specialization);
+    // The department is the doctor's own FK, exactly as every other booking
+    // path reads it. It used to be guessed by string-matching the free-text
+    // specialization against department names, falling back to whichever
+    // department happened to be first — which quietly filed video consults
+    // under the wrong department. A doctor with no department is a data
+    // problem to report, not one to paper over with a wrong answer.
+    const departmentId = doc.departmentId;
+    if (!departmentId) {
+      setError('This doctor is not assigned to a department yet. Please contact the hospital.');
+      return;
+    }
 
     setBooking(true);
     try {
@@ -254,6 +260,8 @@ export function PatientVideoConsult({ session }: RoleViewProps) {
               <Video className="w-10 h-10 mx-auto mb-3 text-slate-300" />
               <p className="text-sm">Select a doctor to see their available video-consult times.</p>
             </div>
+          ) : loadingSlots ? (
+            <Spinner variant="block" />
           ) : slots.length === 0 ? (
             <div className="rounded-xl border border-dashed border-slate-300 p-10 text-center text-slate-500">
               <CalendarX className="w-10 h-10 mx-auto mb-3 text-slate-300" />
@@ -313,9 +321,9 @@ export function PatientVideoConsult({ session }: RoleViewProps) {
             <button
               onClick={() => book(confirm)}
               disabled={booking}
-              className="mt-5 w-full py-2.5 rounded-lg bg-gradient-to-r from-cyan-500 to-brand-teal text-white font-semibold text-sm disabled:opacity-50"
+              className="inline-flex items-center justify-center gap-2 mt-5 w-full py-2.5 rounded-lg bg-gradient-to-r from-cyan-500 to-brand-teal text-white font-semibold text-sm disabled:opacity-50"
             >
-              {booking ? 'Processing…' : `Pay ₹${doctorById.get(confirm.doctorId)?.fee ?? 0} & Book`}
+              {booking ? <Spinner size="sm" label="Processing…" /> : `Pay ₹${doctorById.get(confirm.doctorId)?.fee ?? 0} & Book`}
             </button>
             <p className="text-xs text-slate-400 text-center mt-2">Secured by Razorpay. Slot is confirmed only after payment.</p>
           </div>

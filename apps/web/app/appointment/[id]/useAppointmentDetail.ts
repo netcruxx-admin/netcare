@@ -10,7 +10,7 @@
 import { useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { toast } from 'sonner';
-import { authStorage } from '@/lib/auth';
+import { authStorage, hasPermission } from '@/lib/auth';
 import { apiError } from '@/lib/apiError';
 import {
   useDeleteAppointmentMutation,
@@ -84,6 +84,13 @@ export function useAppointmentDetail() {
       if (confirmAction === 'complete') {
         await updateAppointment({ id: appointmentId, body: { status: 'completed' } }).unwrap();
         toast.success('Appointment marked complete');
+        // Back to the list: a finished consultation is done being looked at,
+        // and the next one is on that page. `push` rather than `back()` — the
+        // route here may have been reached from a patient chart or a search,
+        // and "complete" should land somewhere predictable either way.
+        setConfirmAction(null);
+        router.push('/dashboard/appointments');
+        return;
       } else if (confirmAction === 'cancel') {
         await updateAppointment({ id: appointmentId, body: { status: 'cancelled' } }).unwrap();
         toast.success('Appointment cancelled');
@@ -110,6 +117,13 @@ export function useAppointmentDetail() {
   // it, so "can manage" is about the UI's affordances rather than authorization.
   const isOwningDoctor = role === 'doctor';
   const canManage = isAdmin || isOwningDoctor;
+
+  // Deletion split off from canManage: clinical staff amend their records, the
+  // platform owner is the one who can erase them. Each row is its own
+  // capability because each hits a different endpoint. See x9y0z1a2b3c4.
+  const canDeletePrescription = hasPermission(session, 'prescriptions.delete');
+  const canDeleteVitals = hasPermission(session, 'vitals.delete');
+  const canDeleteTestOrder = hasPermission(session, 'lab_orders.delete');
 
   const isPast = !!appointment && appointment.date < today;
   const notCancelled = appointment?.status !== 'cancelled';
@@ -144,6 +158,9 @@ export function useAppointmentDetail() {
     isPatient,
     isAdmin,
     canManage,
+    canDeletePrescription,
+    canDeleteVitals,
+    canDeleteTestOrder,
     canReschedule,
     canComplete,
     canCancel,

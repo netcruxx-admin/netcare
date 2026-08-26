@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import { apiError } from '@/lib/apiError';
 import { useDeleteUserMutation } from '@/store/api';
 import type { User } from '@/lib/types';
+import { Spinner } from '@/components/ui/spinner';
 
 interface Props {
   /** User to delete. Pass null to close the modal. */
@@ -59,9 +60,9 @@ export function DeleteUserModal({ user, onClose, onSuccess, hospitalId }: Props)
           <button
             onClick={handleDelete}
             disabled={isLoading}
-            className="flex-1 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 font-semibold transition disabled:opacity-50"
+            className="inline-flex items-center justify-center gap-2 flex-1 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 font-semibold transition disabled:opacity-50"
           >
-            {isLoading ? 'Deleting…' : 'Delete'}
+            {isLoading ? <Spinner size="sm" label="Deleting…" /> : 'Delete'}
           </button>
         </div>
       </div>

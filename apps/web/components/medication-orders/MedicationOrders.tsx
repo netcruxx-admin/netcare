@@ -20,6 +20,7 @@ import {
 } from '@/store/api';
 import { doctorRole, nurseRole, pharmacistRole } from '@/lib/roles';
 import { fmtDate } from '@/lib/date';
+import { Spinner } from '@/components/ui/spinner';
 
 type StatusTab = 'all' | MedicationOrderStatus;
 
@@ -274,7 +275,7 @@ export function MedicationOrders({ session }: RoleViewProps) {
           </div>
 
           {isLoading ? (
-            <div className="text-center py-16 text-slate-400">Loading…</div>
+            <Spinner variant="block" />
           ) : orders.length === 0 ? (
             <div className="text-center py-16">
               <ClipboardList className="w-16 h-16 text-slate-300 mx-auto mb-4" />
@@ -516,9 +517,9 @@ export function MedicationOrders({ session }: RoleViewProps) {
                 <button
                   onClick={handleCreate}
                   disabled={isCreating}
-                  className="flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded hover:shadow-lg font-semibold transition disabled:opacity-50"
+                  className="inline-flex items-center justify-center gap-2 flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded hover:shadow-lg font-semibold transition disabled:opacity-50"
                 >
-                  {isCreating ? 'Creating…' : 'Create Order'}
+                  {isCreating ? <Spinner size="sm" label="Creating…" /> : 'Create Order'}
                 </button>
               </div>
             </div>

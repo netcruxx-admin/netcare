@@ -14,6 +14,7 @@ import {
 import { ORDER_STATUS_LABEL, FLAG_STYLE, FLAG_LABEL, isAbnormal } from '@/lib/lab';
 import { useActiveHospital } from '@/hooks/useActiveHospital';
 import { fmtDate } from '@/lib/date';
+import { Spinner } from '@/components/ui/spinner';
 
 export default function LabReportPage() {
   const router = useRouter();
@@ -39,7 +40,13 @@ export default function LabReportPage() {
     [results],
   );
 
-  if (!session || isLoading) return null;
+  if (!session) return null;
+
+  if (isLoading) {
+    return (
+      <Spinner variant="page" label="Loading report…" />
+    );
+  }
 
   if (!order || isError) {
     return (

@@ -28,6 +28,7 @@ from .routers import (
     medical_records,
     medication_orders,
     medicines,
+    notifications,
     patients,
     payments,
     permissions,
@@ -155,6 +156,7 @@ for module in (
     video_slots,
     maternity,
     babies,
+    notifications,
 ):
     app.include_router(module.router)
 

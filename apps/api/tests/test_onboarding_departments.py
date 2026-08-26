@@ -14,7 +14,7 @@ import uuid
 
 import pytest
 
-from conftest import _superadmin_token
+from conftest import PROVISIONED_PASSWORD, _login, _superadmin_token
 
 
 def _onboard(client, payload_extra: dict, category: str = "multi-specialty"):
@@ -27,7 +27,7 @@ def _onboard(client, payload_extra: dict, category: str = "multi-specialty"):
         "category": category,
         "adminName": "Dept Admin",
         "adminEmail": f"admin@{slug}.test",
-        "adminPassword": "Passw0rd!test",
+        "adminPassword": PROVISIONED_PASSWORD,
         **payload_extra,
     }
     return client.post(
@@ -36,18 +36,12 @@ def _onboard(client, payload_extra: dict, category: str = "multi-specialty"):
 
 
 def _department_names(client, hospital_id: str, slug: str) -> set[str]:
-    login = client.post(
-        "/auth/login",
-        headers={"X-Hospital-Id": hospital_id},
-        json={"email": f"admin@{slug}.test", "password": "Passw0rd!test"},
-    )
-    assert login.status_code == 200, login.text
+    # Through _login, which settles the forced password change a provisioned
+    # admin lands with — otherwise every read here is refused before it starts.
+    token = _login(client, hospital_id, f"admin@{slug}.test")
     rows = client.get(
         "/departments",
-        headers={
-            "Authorization": f"Bearer {login.json()['token']}",
-            "X-Hospital-Id": hospital_id,
-        },
+        headers={"Authorization": f"Bearer {token}", "X-Hospital-Id": hospital_id},
     ).json()
     return {row["name"] for row in rows}
 

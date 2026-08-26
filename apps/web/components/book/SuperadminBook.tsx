@@ -15,6 +15,7 @@ import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
 import { FormField } from '@/components/form/FormField';
 import { Calendar } from '@/components/ui/calendar';
+import { Spinner } from '@/components/ui/spinner';
 
 function toDateStr(d: Date) {
   const y = d.getFullYear();
@@ -58,14 +59,14 @@ const bookingSchema = Yup.object({
   doctorId: Yup.string().required('Select a doctor'),
   date: Yup.string().required('Pick a date'),
   time: Yup.string().required('Select a time slot'),
-  reason: Yup.string(),
+  reason: Yup.string().trim().required('Tell us why the appointment is needed'),
 });
 
 function SuperadminBookForm({ session }: RoleViewProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  const { data: allHospitals = [] } = useListHospitalsQuery();
+  const { data: allHospitals = [], isLoading: loadingHospitals } = useListHospitalsQuery();
   const [hospitalId, setHospitalId] = useState(searchParams.get('h') ?? '');
 
   const [patients, setPatients] = useState<Patient[]>([]);
@@ -95,7 +96,9 @@ function SuperadminBookForm({ session }: RoleViewProps) {
 
   const [selection, setSelection] = useState({ doctorId: '', date: '' });
 
-  const { data: availability } = useGetDoctorAvailabilityQuery(
+  // Until availability lands, every slot would draw as free — which is not a
+  // slower answer but a wrong one, so the grid waits instead of guessing.
+  const { data: availability, isFetching: loadingAvailability } = useGetDoctorAvailabilityQuery(
     { doctorId: selection.doctorId, date: selection.date },
     { skip: !selection.doctorId || !selection.date || !hospitalId },
   );
@@ -190,8 +193,8 @@ function SuperadminBookForm({ session }: RoleViewProps) {
           >
             {({ values, errors, touched, setFieldValue }) => (
               <Form className="space-y-6">
-                {loadingOptions && (
-                  <p className="text-xs text-slate-400 text-center">Loading options…</p>
+                {(loadingOptions || loadingHospitals) && (
+                  <Spinner variant="block" label="Loading options…" />
                 )}
 
                 <fieldset disabled={!hospitalId} className="space-y-6">
@@ -253,6 +256,8 @@ function SuperadminBookForm({ session }: RoleViewProps) {
                         <div className="min-h-[220px] flex items-center justify-center text-slate-400 text-sm border border-dashed border-slate-300 rounded-lg text-center px-4">
                           {values.doctorId ? 'Pick a date to see slots' : 'Select a doctor and date to see slots'}
                         </div>
+                      ) : loadingAvailability ? (
+                        <Spinner variant="block" className="py-0 min-h-[220px] border border-dashed border-slate-300 rounded-lg" label="Checking availability…" />
                       ) : (
                         <>
                           <div className="flex flex-wrap gap-4 mb-3 text-xs text-slate-600">
@@ -297,7 +302,8 @@ function SuperadminBookForm({ session }: RoleViewProps) {
 
                   <FormField
                     name="reason"
-                    label="Reason for Visit (Optional)"
+                    label="Reason for Visit"
+                    required
                     as="textarea"
                     placeholder="Describe the reason for the appointment"
                     rows={3}

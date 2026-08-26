@@ -131,6 +131,33 @@ def own_record_filter(db: Session, user: models.User, model):
     return or_(*conditions)
 
 
+# Detail text for the must-change-password refusal. A constant because the
+# frontend matches on it to divert to the change screen — a typo here would
+# silently strand a user on a 403 they cannot act on.
+MUST_CHANGE_PASSWORD_DETAIL = (
+    "You must change your password before continuing."
+)
+
+
+def _refuse_until_password_changed(user: models.User) -> None:
+    """Block a caller whose password was chosen by somebody else.
+
+    Enforced here rather than in get_current_user because this is the seam every
+    data endpoint passes through, while the handful that only need identity —
+    /auth/me, logout, and the change-password call itself — deliberately do not.
+    That gives the caller exactly enough room to fix the situation and nothing
+    else, without an allowlist of paths to keep in step.
+
+    The client is told at sign-in via `mustChangePassword` and should never
+    reach this; it is the backstop for one that ignores it.
+    """
+    if getattr(user, "must_change_password", False):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=MUST_CHANGE_PASSWORD_DETAIL,
+        )
+
+
 def require_any_permission(*codes: str):
     """Guard for endpoints reachable by more than one capability.
 
@@ -145,6 +172,7 @@ def require_any_permission(*codes: str):
         user: models.User = Depends(get_current_user),
         db: Session = Depends(get_db),
     ) -> dict[str, Optional[str]]:
+        _refuse_until_password_changed(user)
         permissions = effective_permissions(db, user)
         held = {code: permissions[code] for code in codes if code in permissions}
         for code, scope in held.items():
@@ -177,6 +205,7 @@ def require_permission(code: str):
         user: models.User = Depends(get_current_user),
         db: Session = Depends(get_db),
     ) -> Optional[str]:
+        _refuse_until_password_changed(user)
         permissions = effective_permissions(db, user)
         # Recorded before the check, so a refusal is audited with the capability
         # it was reaching for — a denied access attempt is the most interesting

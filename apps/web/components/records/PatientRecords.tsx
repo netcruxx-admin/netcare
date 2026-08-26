@@ -8,8 +8,9 @@ import { useGetPatientPrescriptionsQuery, useGetPatientVitalsQuery } from '@/sto
 
 export function PatientRecords({ session }: RoleViewProps) {
   const patientId = session?.patient?.id ?? '';
-  const { data: prescriptions = [] } = useGetPatientPrescriptionsQuery(patientId, { skip: !patientId });
-  const { data: vitals = [] } = useGetPatientVitalsQuery(patientId, { skip: !patientId });
+  const { data: prescriptions = [], isLoading: loadingPrescriptions } = useGetPatientPrescriptionsQuery(patientId, { skip: !patientId });
+  const { data: vitals = [], isLoading: loadingVitals } = useGetPatientVitalsQuery(patientId, { skip: !patientId });
+
 
   return (
     <DashboardShell
@@ -17,6 +18,7 @@ export function PatientRecords({ session }: RoleViewProps) {
       userName={session.user.name}
       title="Medical Records"
       subtitle="Your prescriptions and recorded vitals"
+      loading={loadingPrescriptions || loadingVitals}
     >
       <div className="space-y-8">
         {/* Prescriptions */}
