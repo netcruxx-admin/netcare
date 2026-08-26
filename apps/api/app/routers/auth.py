@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response, status
 from sqlalchemy.orm import Session
 
 import hashlib
@@ -483,6 +483,7 @@ def _frontend_base_url(request: Request) -> str:
 def forgot_password(
     body: schemas.ForgotPasswordRequest,
     request: Request,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     tenant_id: str = Depends(resolve_public_tenant),
 ):
@@ -559,12 +560,15 @@ def forgot_password(
         if hospital:
             hospital_name = hospital.name
 
-    try:
-        mailer.send_password_reset(user.email, reset_url, hospital_name)
-    except Exception as exc:
-        # Email failure must not bubble a 500 or expose the token in the
-        # response, but it MUST appear in the server logs so it can be fixed.
-        log.exception("Password reset email failed for %s: %s", user.email, exc)
+    def _send_email():
+        try:
+            mailer.send_password_reset(user.email, reset_url, hospital_name)
+        except Exception:
+            log.exception("Password reset email failed for %s", user.email)
+
+    # Send in the background so the API responds immediately — SMTP can be slow
+    # or temporarily unreachable without making the user wait.
+    background_tasks.add_task(_send_email)
 
     return {"message": "If that email is registered, you will receive a reset link shortly."}
 

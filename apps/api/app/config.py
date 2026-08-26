@@ -80,9 +80,12 @@ class Settings(BaseSettings):
     # Uses Python stdlib smtplib — no paid service required.
     # Works with Gmail "App Passwords" (needs 2FA enabled, then create an App
     # Password at myaccount.google.com/apppasswords).
-    # Leave smtp_host empty in development: the reset link is printed to the
-    # server console instead of being emailed, so the flow is testable without
-    # any mail server.
+    # Resend API key (https://resend.com). Takes priority over SMTP when set.
+    # Leave empty in development — the reset link is printed to the console.
+    resend_api_key: str = ""
+    resend_from: str = ""  # e.g. "NetCare <no-reply@yourdomain.com>"
+
+    # Legacy SMTP settings — only used when resend_api_key is empty.
     smtp_host: str = ""
     smtp_port: int = 587
     smtp_user: str = ""
