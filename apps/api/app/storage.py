@@ -47,18 +47,6 @@ def _use_r2() -> bool:
     )
 
 
-def _r2_client():
-    import boto3
-
-    return boto3.client(
-        "s3",
-        endpoint_url=f"https://{settings.r2_account_id}.r2.cloudflarestorage.com",
-        aws_access_key_id=settings.r2_access_key_id,
-        aws_secret_access_key=settings.r2_secret_access_key,
-        region_name="auto",
-    )
-
-
 def _root() -> Path:
     root = Path(settings.upload_dir)
     if not root.is_absolute():
@@ -217,7 +205,7 @@ def save_upload(
 
     if _use_r2():
         import io
-        client = _r2_client()
+        client = _client()
         client.upload_fileobj(
             io.BytesIO(data),
             settings.r2_bucket,
@@ -254,7 +242,7 @@ def delete_file(url: str) -> None:
                 object_key = url[len(base) + 1:]
             else:
                 return
-            _r2_client().delete_object(Bucket=settings.r2_bucket, Key=object_key)
+            _client().delete_object(Bucket=settings.r2_bucket, Key=object_key)
         except Exception:
             pass
         return

@@ -77,22 +77,10 @@ class Settings(BaseSettings):
     razorpay_key_secret: str = ""
 
     # --- Email (password-reset and future notifications) ---
-    # Uses Python stdlib smtplib — no paid service required.
-    # Works with Gmail "App Passwords" (needs 2FA enabled, then create an App
-    # Password at myaccount.google.com/apppasswords).
-    # Resend API key (https://resend.com). Takes priority over SMTP when set.
+    # Uses Resend (https://resend.com) — free tier 3,000 emails/month.
     # Leave empty in development — the reset link is printed to the console.
     resend_api_key: str = ""
     resend_from: str = ""  # e.g. "NetCare <no-reply@yourdomain.com>"
-
-    # Legacy SMTP settings — only used when resend_api_key is empty.
-    smtp_host: str = ""
-    smtp_port: int = 587
-    smtp_user: str = ""
-    smtp_password: str = ""
-    smtp_from: str = ""        # e.g. "NetCare <no-reply@yourdomain.com>"
-    smtp_use_tls: bool = True  # STARTTLS on port 587; set False for port 465 SSL
-    smtp_use_ssl: bool = False  # True for port-465 implicit SSL
 
     # Path to the Firebase service account JSON, relative to the api/ directory.
     # The file must never be committed to git (.gitignore already covers it).
@@ -117,7 +105,7 @@ class Settings(BaseSettings):
     # .env values may have trailing whitespace (e.g. SMTP_PORT=587   ).
     # Strip every string field so int/bool coercion doesn't silently fail.
     @field_validator(
-        "smtp_host", "smtp_user", "smtp_password", "smtp_from",
+        "resend_api_key", "resend_from",
         "cors_origins", "root_domain", "environment",
         mode="before",
     )

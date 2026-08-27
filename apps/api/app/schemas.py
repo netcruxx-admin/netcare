@@ -2055,7 +2055,7 @@ class ChangePasswordRequest(CamelModel):
         return _validate_password(value)
 
 
-class ResetPasswordRequest(CamelModel):
+class StaffResetPasswordRequest(CamelModel):
     """Reset someone else's password, as staff.
 
     `new_password` is optional: omit it and the server generates one. Generated

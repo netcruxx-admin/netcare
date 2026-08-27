@@ -1,28 +1,21 @@
-"""Outbound email — Resend (primary) with smtplib fallback.
+"""Outbound email via Resend (https://resend.com).
 
-Priority:
-  1. RESEND_API_KEY set  → uses Resend HTTPS API (works from any cloud server)
-  2. SMTP_HOST set       → falls back to smtplib (useful for self-hosted / local)
-  3. Neither set         → prints the link to the console (dev mode)
+When RESEND_API_KEY is empty (local dev), the reset link is printed to the
+console so the full forgot-password flow is testable without a mail account.
 """
 
 import logging
-import smtplib
-import ssl
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
 
-import certifi
+import resend
 
 from .config import settings
 
 log = logging.getLogger(__name__)
 
 
-def _send_via_resend(to_address: str, subject: str, html: str, plain: str) -> None:
-    import resend  # installed via requirements.txt
+def _send(to_address: str, subject: str, html: str, plain: str) -> None:
     resend.api_key = settings.resend_api_key
-    sender = settings.resend_from or settings.smtp_from or "NetCare <onboarding@resend.dev>"
+    sender = settings.resend_from or "NetCare <onboarding@resend.dev>"
     resend.Emails.send({
         "from": sender,
         "to": [to_address],
@@ -30,36 +23,6 @@ def _send_via_resend(to_address: str, subject: str, html: str, plain: str) -> No
         "html": html,
         "text": plain,
     })
-
-
-def _send_via_smtp(to_address: str, subject: str, html: str, plain: str) -> None:
-    msg = MIMEMultipart("alternative")
-    msg["Subject"] = subject
-    msg["From"] = settings.smtp_from or settings.smtp_user
-    msg["To"] = to_address
-    msg.attach(MIMEText(plain, "plain"))
-    msg.attach(MIMEText(html, "html"))
-
-    context = ssl.create_default_context(cafile=certifi.where())
-
-    # 15-second timeout so a blocked host fails fast instead of hanging for minutes.
-    if settings.smtp_use_ssl:
-        with smtplib.SMTP_SSL(settings.smtp_host, settings.smtp_port, context=context, timeout=15) as server:
-            server.login(settings.smtp_user, settings.smtp_password)
-            server.sendmail(msg["From"], to_address, msg.as_string())
-    else:
-        with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=15) as server:
-            if settings.smtp_use_tls:
-                server.starttls(context=context)
-            server.login(settings.smtp_user, settings.smtp_password)
-            server.sendmail(msg["From"], to_address, msg.as_string())
-
-
-def _send(to_address: str, subject: str, html: str, plain: str) -> None:
-    if settings.resend_api_key:
-        _send_via_resend(to_address, subject, html, plain)
-    else:
-        _send_via_smtp(to_address, subject, html, plain)
 
 
 def send_password_reset(to_address: str, reset_url: str, hospital_name: str = "NetCare") -> None:
@@ -150,11 +113,10 @@ Your password will not change unless you follow the link above.
 </html>
 """
 
-    if not settings.smtp_host:
-        # Dev fallback: print link so the flow is fully testable without a
-        # mail server. Never reached in production (SMTP_HOST will be set).
+    if not settings.resend_api_key:
+        # Dev fallback: print link so the flow is testable without Resend.
         log.warning(
-            "[DEV] SMTP not configured — password reset link for %s:\n%s",
+            "[DEV] RESEND_API_KEY not set — password reset link for %s:\n%s",
             to_address,
             reset_url,
         )

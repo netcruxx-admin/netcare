@@ -27,8 +27,6 @@ httpx2>=2.0
 # Firebase Admin SDK — push notifications (requires firebase-service-account.json)
 firebase-admin>=6.0
 
-# CA bundle for SMTP over TLS. app/email.py imports this at module scope, so a
-# missing certifi takes the whole API down, not just mail — on macOS Python's
-# bundled SSL has no usable root store, which is why it is not optional.
-certifi>=2024.2.2
+# Resend — transactional email (password reset). HTTPS-based, works from any
+# cloud server without SMTP port restrictions.
 resend>=2.0
