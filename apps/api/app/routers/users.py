@@ -282,7 +282,7 @@ def delete_user(
 )
 def reset_user_password(
     user_id: str,
-    body: schemas.ResetPasswordRequest,
+    body: schemas.StaffResetPasswordRequest,
     db: Session = Depends(get_db),
     actor: models.User = Depends(get_current_user),
     _: str = Depends(require_permission("users.manage")),

@@ -566,8 +566,7 @@ def forgot_password(
         except Exception:
             log.exception("Password reset email failed for %s", user.email)
 
-    # Send in the background so the API responds immediately — SMTP can be slow
-    # or temporarily unreachable without making the user wait.
+    # Send in the background so the API responds immediately.
     background_tasks.add_task(_send_email)
 
     return {"message": "If that email is registered, you will receive a reset link shortly."}
