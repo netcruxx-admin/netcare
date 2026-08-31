@@ -1559,8 +1559,22 @@ export const api = createApi({
       query: (body) => ({ url: '/medication-orders', method: 'POST', body }),
       invalidatesTags: [{ type: 'MedicationOrder', id: 'LIST' }],
     }),
-    dispenseMedicationOrder: build.mutation<MedicationOrder, string>({
-      query: (id) => ({ url: `/medication-orders/${id}/dispense`, method: 'PATCH' }),
+    /** Quantity and medicine are the pharmacist's correction at the counter.
+     *  An order raised from a prescription arrives with quantity 1 and a
+     *  catalogue match guessed from a free-text name; omitting them dispenses
+     *  the order as it stands. */
+    dispenseMedicationOrder: build.mutation<
+      MedicationOrder,
+      string | { id: string; quantity?: number; medicineId?: string }
+    >({
+      query: (arg) => {
+        const { id, ...body } = typeof arg === 'string' ? { id: arg } : arg;
+        return {
+          url: `/medication-orders/${id}/dispense`,
+          method: 'PATCH',
+          body: Object.keys(body).length ? body : undefined,
+        };
+      },
       invalidatesTags: [{ type: 'MedicationOrder', id: 'LIST' }, { type: 'Medicine', id: 'LIST' }],
     }),
     administerMedicationOrder: build.mutation<MedicationOrder, { id: string; notes?: string; site?: string }>({

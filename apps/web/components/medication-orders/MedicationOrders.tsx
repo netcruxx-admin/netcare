@@ -1,8 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
-import { ClipboardList, Plus, X, AlertTriangle, Search, Receipt } from 'lucide-react';
+import { ClipboardList, Plus, X, AlertTriangle, Search, Receipt, ChevronRight } from 'lucide-react';
 import { apiError } from '@/lib/apiError';
 import type { MedicationOrder, MedicationOrderStatus } from '@/lib/types';
 import { DashboardShell } from '@/components/DashboardShell';
@@ -15,11 +15,13 @@ import {
   useAdministerMedicationOrderMutation,
   useCancelMedicationOrderMutation,
   useBillMedicationOrderMutation,
+  useLazyGetInvoiceQuery,
   useListMedicinesQuery,
   useListPatientsQuery,
 } from '@/store/api';
 import { doctorRole, nurseRole, pharmacistRole } from '@/lib/roles';
 import { fmtDate } from '@/lib/date';
+import { printInvoice } from '@/components/payments/printInvoice';
 import { Spinner } from '@/components/ui/spinner';
 
 type StatusTab = 'all' | MedicationOrderStatus;
@@ -78,6 +80,19 @@ export function MedicationOrders({ session }: RoleViewProps) {
   const [billOrder, setBillOrder] = useState<MedicationOrder | null>(null);
   const [billMethod, setBillMethod] = useState<'cash' | 'card' | 'upi'>('cash');
   const [isBilling, setIsBilling] = useState(false);
+  // What the pharmacist confirms while counting. An order raised from a
+  // prescription arrives at quantity 1 with a catalogue match guessed from a
+  // free-text name — dispensing that unchanged is how a ten-tablet course used
+  // to move stock by one.
+  const [billQuantity, setBillQuantity] = useState('1');
+  const [billMedicineId, setBillMedicineId] = useState('');
+  //: The payment just created, offered as a printable bill. Held separately
+  //: from billOrder so the offer survives the modal closing.
+  const [printable, setPrintable] = useState<string | null>(null);
+  //: Which patients are opened. Collapsed by default: the queue is worked one
+  //: patient at a time — everything they were prescribed is handed over
+  //: together — so the useful unit is the person, not the line item.
+  const [openPatients, setOpenPatients] = useState<Set<string>>(new Set());
 
   const [form, setForm] = useState<NewOrderForm>({
     appointmentId: '',
@@ -107,10 +122,45 @@ export function MedicationOrders({ session }: RoleViewProps) {
   const [administerOrderMut] = useAdministerMedicationOrderMutation();
   const [cancelOrder] = useCancelMedicationOrderMutation();
   const [billMedicationOrder] = useBillMedicationOrderMutation();
+  const [fetchInvoice] = useLazyGetInvoiceQuery();
+
+  /** One entry per patient, in the order their oldest item was raised, so the
+   *  person who has been waiting longest is at the top. */
+  const grouped = useMemo(() => {
+    const byPatient = new Map<string, {
+      patientId: string; patientName: string; patientPhone: string;
+      orders: MedicationOrder[];
+    }>();
+    for (const order of orders) {
+      const key = order.patientId;
+      const entry = byPatient.get(key) ?? {
+        patientId: key,
+        patientName: order.patientName ?? key,
+        patientPhone: order.patientPhone ?? '',
+        orders: [],
+      };
+      entry.orders.push(order);
+      byPatient.set(key, entry);
+    }
+    return [...byPatient.values()].sort((a, b) => {
+      const oldest = (g: { orders: MedicationOrder[] }) =>
+        g.orders.reduce((min, o) => (o.orderedAt < min ? o.orderedAt : min), g.orders[0].orderedAt);
+      return oldest(a) < oldest(b) ? -1 : 1;
+    });
+  }, [orders]);
+
+  const togglePatient = (patientId: string) =>
+    setOpenPatients((current) => {
+      const next = new Set(current);
+      if (next.has(patientId)) next.delete(patientId);
+      else next.add(patientId);
+      return next;
+    });
 
   const canCreate = hasPermission(session, 'medication_orders.manage');
   const canDispense = hasPermission(session, 'medication_orders.dispense');
   const canAdminister = hasPermission(session, 'medication_orders.administer');
+
 
   const handleMedicineSelect = (id: string) => {
     const med = medicines.find((m) => m.id === id);
@@ -165,18 +215,39 @@ export function MedicationOrders({ session }: RoleViewProps) {
   const openDispenseModal = (order: MedicationOrder) => {
     setBillOrder(order);
     setBillMethod('cash');
+    setBillQuantity(String(order.quantity ?? 1));
+    setBillMedicineId(order.medicineId ?? '');
   };
+
+  /** The medicine actually being handed over — the pharmacist's choice if they
+   *  changed it, otherwise whatever the order arrived with. */
+  const billedMedicine = medicines.find((m) => m.id === billMedicineId);
+  const billedQuantity = Math.max(1, Number(billQuantity) || 0);
+  const billedUnitPrice = billedMedicine?.price ?? billOrder?.unitPrice ?? 0;
+  const billedTotal = billedUnitPrice * billedQuantity;
 
   const handleDispenseAndBill = async () => {
     if (!billOrder) return;
+    if (!Number.isInteger(Number(billQuantity)) || Number(billQuantity) < 1) {
+      toast.error('Quantity must be a whole number of at least 1');
+      return;
+    }
     setIsBilling(true);
     try {
-      // 1. Dispense (moves stock, marks order dispensed)
-      await dispenseOrder(billOrder.id).unwrap();
+      // 1. Dispense — with the counted quantity and the confirmed catalogue
+      //    item, so stock moves by what was actually handed over.
+      await dispenseOrder({
+        id: billOrder.id,
+        quantity: Number(billQuantity),
+        ...(billMedicineId ? { medicineId: billMedicineId } : {}),
+      }).unwrap();
       // 2. Bill (creates Payment record)
-      await billMedicationOrder({ id: billOrder.id, paymentMethod: billMethod }).unwrap();
+      const bill = await billMedicationOrder({
+        id: billOrder.id, paymentMethod: billMethod,
+      }).unwrap();
       toast.success('Order dispensed and billed');
       setBillOrder(null);
+      setPrintable(bill.payment.id);
     } catch (err) {
       toast.error(apiError(err, 'Failed to dispense/bill order'));
     } finally {
@@ -217,6 +288,9 @@ export function MedicationOrders({ session }: RoleViewProps) {
       (canAdminister && o.status === 'dispensed') ||
       (canCreate && role === doctorRole && o.status === 'pending'),
   );
+  // Medicine, Qty, Dosage, Route, Doctor, Ordered, Status — plus Total and
+  // Actions when those columns are rendered.
+  const COLUMN_COUNT = 7 + (canDispense ? 1 : 0) + (showActions ? 1 : 0);
 
   return (
     <DashboardShell
@@ -286,7 +360,6 @@ export function MedicationOrders({ session }: RoleViewProps) {
               <table className="w-full">
                 <thead>
                   <tr className="border-b bg-slate-50">
-                    <th className="text-left py-3 px-4 font-semibold text-slate-900">Patient</th>
                     <th className="text-left py-3 px-4 font-semibold text-slate-900">Medicine</th>
                     <th className="text-right py-3 px-4 font-semibold text-slate-900">Qty</th>
                     {canDispense && <th className="text-right py-3 px-4 font-semibold text-slate-900">Total</th>}
@@ -298,16 +371,40 @@ export function MedicationOrders({ session }: RoleViewProps) {
                     {showActions && <th className="text-right py-3 px-4 font-semibold text-slate-900">Actions</th>}
                   </tr>
                 </thead>
-                <tbody>
-                  {orders.map((order) => (
+                {grouped.map((group) => {
+                  const open = openPatients.has(group.patientId);
+                  const pending = group.orders.filter((o) => o.status === 'pending').length;
+                  return (
+                <tbody key={group.patientId}>
+                  <tr
+                    onClick={() => togglePatient(group.patientId)}
+                    className="border-b bg-slate-50/60 hover:bg-slate-100 cursor-pointer"
+                  >
+                    <td colSpan={COLUMN_COUNT} className="py-3 px-4">
+                      <div className="flex items-center gap-3">
+                        <ChevronRight
+                          className={`w-4 h-4 text-slate-400 transition-transform ${open ? 'rotate-90' : ''}`}
+                        />
+                        <div className="min-w-0">
+                          <p className="font-medium text-slate-900">{group.patientName}</p>
+                          {group.patientPhone && (
+                            <p className="text-xs text-slate-500">{group.patientPhone}</p>
+                          )}
+                        </div>
+                        <span className="ml-auto text-xs text-slate-500">
+                          {group.orders.length} item{group.orders.length === 1 ? '' : 's'}
+                          {pending > 0 && (
+                            <span className="ml-2 px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 font-semibold">
+                              {pending} to dispense
+                            </span>
+                          )}
+                        </span>
+                      </div>
+                    </td>
+                  </tr>
+                  {open && group.orders.map((order) => (
                     <tr key={order.id} className="border-b hover:bg-slate-50">
-                      <td className="py-3 px-4">
-                        <p className="font-medium text-slate-900">{order.patientName ?? order.patientId}</p>
-                        {order.patientPhone && (
-                          <p className="text-xs text-slate-500 mt-0.5">{order.patientPhone}</p>
-                        )}
-                      </td>
-                      <td className="py-3 px-4 text-slate-700">{order.medicineName}</td>
+                      <td className="py-3 px-4 text-slate-700 pl-11">{order.medicineName}</td>
                       <td className="py-3 px-4 text-right font-medium text-slate-900 tabular-nums">
                         {order.quantity}
                       </td>
@@ -374,6 +471,8 @@ export function MedicationOrders({ session }: RoleViewProps) {
                     </tr>
                   ))}
                 </tbody>
+                  );
+                })}
               </table>
             </div>
           )}
@@ -527,6 +626,46 @@ export function MedicationOrders({ session }: RoleViewProps) {
         </div>
       )}
 
+      {/* The bill itself, offered once the payment exists. Kept as its own
+          step rather than printing automatically: a print dialog firing on its
+          own during a dispense is startling, and not every counter prints. */}
+      {printable && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg shadow-2xl max-w-sm w-full p-6 text-center space-y-4">
+            <div className="w-12 h-12 rounded-full bg-green-50 text-green-600 flex items-center justify-center mx-auto">
+              <Receipt className="w-6 h-6" />
+            </div>
+            <div>
+              <h3 className="text-lg font-bold text-slate-900">Dispensed and billed</h3>
+              <p className="text-sm text-slate-500 mt-1">
+                Print the bill for the patient, or close and print it later from Payments.
+              </p>
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setPrintable(null)}
+                className="flex-1 px-4 py-2 bg-slate-200 text-slate-700 rounded hover:bg-slate-300 transition"
+              >
+                Close
+              </button>
+              <button
+                onClick={async () => {
+                  try {
+                    printInvoice(await fetchInvoice(printable).unwrap());
+                    setPrintable(null);
+                  } catch (err) {
+                    toast.error(apiError(err, 'Could not prepare the bill'));
+                  }
+                }}
+                className="flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded font-semibold hover:shadow-lg transition"
+              >
+                Print bill
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Dispense & Bill Modal */}
       {billOrder && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
@@ -545,31 +684,94 @@ export function MedicationOrders({ session }: RoleViewProps) {
                 <span className="font-medium text-slate-900">{billOrder.patientName ?? billOrder.patientId}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-slate-500">Medicine</span>
+                <span className="text-slate-500">Prescribed</span>
                 <span className="font-medium text-slate-900">{billOrder.medicineName}</span>
               </div>
-              <div className="flex justify-between">
-                <span className="text-slate-500">Quantity</span>
-                <span className="font-medium text-slate-900">{billOrder.quantity}</span>
-              </div>
-              {billOrder.unitPrice > 0 && (
-                <>
-                  <div className="flex justify-between">
-                    <span className="text-slate-500">Unit Price</span>
-                    <span className="text-slate-900">₹{billOrder.unitPrice.toFixed(2)}</span>
-                  </div>
-                  <div className="flex justify-between border-t pt-2 mt-2">
-                    <span className="font-semibold text-slate-900">Total</span>
-                    <span className="font-bold text-lg text-cyan-700">₹{(billOrder.unitPrice * billOrder.quantity).toFixed(2)}</span>
-                  </div>
-                </>
-              )}
-              {billOrder.unitPrice === 0 && (
-                <p className="text-xs text-amber-600 mt-1">
-                  No catalogue price — bill records ₹0. Update the medicine price to auto-calculate.
-                </p>
+              {(billOrder.dosage || billOrder.frequency || billOrder.duration) && (
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Directions</span>
+                  <span className="text-slate-700 text-right">
+                    {[billOrder.dosage, billOrder.frequency, billOrder.duration].filter(Boolean).join(' · ')}
+                  </span>
+                </div>
               )}
             </div>
+
+            {/* What is actually handed over. Editable while the order is still
+                pending: a prescription records the dose, never the count, and
+                its medicine is free text that may not name anything stocked. */}
+            {billOrder.status === 'pending' ? (
+              <div className="space-y-3 mb-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                    Dispensing from stock
+                  </label>
+                  <select
+                    value={billMedicineId}
+                    onChange={(e) => setBillMedicineId(e.target.value)}
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                  >
+                    <option value="">Not stocked — bill without moving inventory</option>
+                    {medicines.map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {[m.name, m.strength, m.form].filter(Boolean).join(' · ')} ({m.stock} left)
+                      </option>
+                    ))}
+                  </select>
+                  {!billMedicineId && (
+                    <p className="text-xs text-amber-600 mt-1">
+                      Nothing will be deducted from stock.
+                    </p>
+                  )}
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                    Quantity handed over
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    step="1"
+                    value={billQuantity}
+                    onChange={(e) => setBillQuantity(e.target.value)}
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                  />
+                  {billedMedicine && billedQuantity > (billedMedicine.stock ?? 0) && (
+                    <p className="text-xs text-red-600 mt-1">
+                      Only {billedMedicine.stock} in stock — dispensing will be refused.
+                    </p>
+                  )}
+                </div>
+                <div className="bg-slate-50 rounded-lg p-3 text-sm space-y-1">
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">Unit price</span>
+                    <span className="text-slate-900">₹{billedUnitPrice.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between border-t pt-2">
+                    <span className="font-semibold text-slate-900">Total</span>
+                    <span className="font-bold text-lg text-cyan-700">₹{billedTotal.toFixed(2)}</span>
+                  </div>
+                  {billedUnitPrice === 0 && (
+                    <p className="text-xs text-amber-600">
+                      No catalogue price — the bill records ₹0.
+                    </p>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div className="bg-slate-50 rounded-lg p-4 mb-4 space-y-1 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Quantity</span>
+                  <span className="font-medium text-slate-900">{billOrder.quantity}</span>
+                </div>
+                <div className="flex justify-between border-t pt-2 mt-2">
+                  <span className="font-semibold text-slate-900">Total</span>
+                  <span className="font-bold text-lg text-cyan-700">
+                    ₹{((billOrder.unitPrice ?? 0) * (billOrder.quantity ?? 1)).toFixed(2)}
+                  </span>
+                </div>
+              </div>
+            )}
 
             {/* Payment method */}
             <div className="mb-5">

@@ -20,6 +20,8 @@ import {
   useUpdateMyHospitalSettingsMutation,
   useUploadMyHospitalLogoMutation,
   useRemoveMyHospitalLogoMutation,
+  useUploadMyLetterheadMutation,
+  useRemoveMyLetterheadMutation,
   useGetRazorpaySettingsQuery,
   useUpdateRazorpaySettingsMutation,
   type HospitalSelfUpdateBody,
@@ -224,7 +226,10 @@ export function HospitalSettings({ session }: RoleViewProps) {
   const [save, { isLoading: isSaving }] = useUpdateMyHospitalSettingsMutation();
   const [uploadLogo, { isLoading: isUploading }] = useUploadMyHospitalLogoMutation();
   const [removeLogo] = useRemoveMyHospitalLogoMutation();
+  const [uploadLetterhead, { isLoading: isUploadingLetterhead }] = useUploadMyLetterheadMutation();
+  const [removeLetterhead] = useRemoveMyLetterheadMutation();
   const logoInput = useRef<HTMLInputElement>(null);
+  const letterheadInput = useRef<HTMLInputElement>(null);
   const [error, setError] = useState('');
   const canEdit = hasPermission(session, 'hospital.profile.manage');
 
@@ -269,7 +274,6 @@ export function HospitalSettings({ session }: RoleViewProps) {
     appointmentSlotMinutes: profile?.appointmentSlotMinutes ?? 15,
     lunchBreakStart: profile?.lunchBreakStart ?? '12:00',
     lunchBreakEnd: profile?.lunchBreakEnd ?? '14:00',
-    letterheadUrl: profile?.letterheadUrl ?? '',
     signatureUrl: profile?.signatureUrl ?? '',
     notes: profile?.notes ?? '',
   };
@@ -294,6 +298,27 @@ export function HospitalSettings({ session }: RoleViewProps) {
       toast.success('Logo removed');
     } catch (err) {
       toast.error(apiError(err, 'Could not remove the logo'));
+    }
+  };
+
+  const pickLetterhead = async (files: FileList | null) => {
+    const file = Array.from(files ?? [])[0];
+    if (letterheadInput.current) letterheadInput.current.value = '';
+    if (!file) return;
+    try {
+      await uploadLetterhead(file).unwrap();
+      toast.success('Letterhead updated');
+    } catch (err) {
+      toast.error(apiError(err, 'Could not upload the letterhead'));
+    }
+  };
+
+  const dropLetterhead = async () => {
+    try {
+      await removeLetterhead().unwrap();
+      toast.success('Letterhead removed');
+    } catch (err) {
+      toast.error(apiError(err, 'Could not remove the letterhead'));
     }
   };
 
@@ -403,6 +428,57 @@ export function HospitalSettings({ session }: RoleViewProps) {
             </div>
           </Section>
 
+          <Section
+            icon={FileText}
+            title="Letterhead"
+            blurb="Printed across the top of bills. Without one, bills show your name and address as text."
+          >
+            <div className="flex flex-wrap items-center gap-5">
+              <div className="w-40 h-24 rounded-xl border border-slate-200 bg-slate-50 flex items-center justify-center overflow-hidden shrink-0">
+                {profile?.letterheadUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={profile.letterheadUrl} alt="Letterhead" className="w-full h-full object-contain" />
+                ) : (
+                  <FileText className="w-8 h-8 text-slate-300" />
+                )}
+              </div>
+              <div className="space-y-2">
+                <div className="flex flex-wrap gap-2">
+                  <input
+                    ref={letterheadInput}
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp"
+                    className="hidden"
+                    onChange={(e) => pickLetterhead(e.target.files)}
+                  />
+                  <button
+                    type="button"
+                    disabled={!canEdit || isUploadingLetterhead}
+                    onClick={() => letterheadInput.current?.click()}
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-slate-300 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 transition"
+                  >
+                    <Upload className="w-4 h-4" />
+                    {isUploadingLetterhead
+                      ? 'Uploading…'
+                      : profile?.letterheadUrl ? 'Replace' : 'Upload letterhead'}
+                  </button>
+                  {profile?.letterheadUrl && canEdit && (
+                    <button
+                      type="button"
+                      onClick={dropLetterhead}
+                      className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-slate-200 text-sm font-medium text-slate-500 hover:text-red-600 hover:border-red-200 transition"
+                    >
+                      <Trash2 className="w-4 h-4" /> Remove
+                    </button>
+                  )}
+                </div>
+                <p className="text-xs text-slate-400">
+                  PNG, JPEG or WebP. A wide banner works best — roughly 1600&times;400.
+                </p>
+              </div>
+            </div>
+          </Section>
+
           <Formik initialValues={initialValues} validationSchema={schema} onSubmit={submit} enableReinitialize>
             {({ values, setFieldValue }) => (
               <Form className="space-y-6">
@@ -490,7 +566,6 @@ export function HospitalSettings({ session }: RoleViewProps) {
 
                   <Section icon={ImageIcon} title="Branding assets" blurb="Used on reports and letterheads.">
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <FormField name="letterheadUrl" label="Letterhead URL" />
                       <FormField name="signatureUrl" label="Signature URL" />
                       <FormField name="notes" label="Internal notes" />
                     </div>

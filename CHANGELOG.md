@@ -4,6 +4,42 @@ Notable changes to CarbonHealth. Format follows [Keep a Changelog](https://keepa
 
 ## [Unreleased]
 
+### Changed — the dispense queue is a list of patients, not of line items
+
+The queue is worked one patient at a time: everything they were prescribed is
+handed over together. It now groups by patient — name, item count and how many
+are still to dispense — and opens to show that patient's medicines. Groups are
+ordered by the oldest item in each, so whoever has waited longest is at the top,
+and collapsed by default.
+
+The patient column is gone from the rows, since the group heading is the
+patient. `colSpan` is derived from the same flags that decide which columns
+render, so adding one cannot leave the heading short.
+
+### Added — the pharmacist confirms what is actually handed over
+
+An order raised from a prescription arrives at quantity 1 with a catalogue match
+guessed from a free-text name. Dispensing that unchanged is how a ten-tablet
+course used to move stock by one — so the dispense modal now makes both
+editable while the order is pending, showing the stock on hand for the chosen
+medicine, warning before a refusal, and recalculating the total live. Choosing
+no catalogue medicine says plainly that nothing will be deducted.
+
+### Added — a printable bill
+
+After dispensing and billing, the pharmacist is offered the bill. It is a
+separate step rather than an automatic print: a dialog firing on its own mid-
+dispense is startling, and not every counter has a printer.
+
+`components/payments/printInvoice.ts` renders it from the server's invoice
+response, so the letterhead, legal name and GSTIN come from the one place that
+has them. The letterhead replaces the text header entirely when uploaded;
+without one the same facts print as text, so a bill is never anonymous. Shared
+with the patient's own invoice download rather than duplicated.
+
+Settings gains the letterhead uploader beside the logo — both upload on choice,
+so neither belongs behind the form's Save button.
+
 ### Added — people can change their own password, and staff can reset one
 
 Before this, nobody could change their own password. Not a patient, not a
