@@ -20,6 +20,7 @@ import type {
   PaymentInitiateOut,
   PaymentVerifyOut,
   PharmacyBillOut,
+  PharmacyBillingSummary,
   PregnancyRecord,
   Prescription,
   ScheduleBlock,
@@ -1425,6 +1426,13 @@ export const api = createApi({
       query: (params) => ({ url: '/payments', params: params ?? undefined }),
       providesTags: [{ type: 'Payment', id: 'LIST' }],
     }),
+    getPharmacyBillingSummary: build.query<PharmacyBillingSummary, { date?: string } | void>({
+      query: (params) => ({
+        url: '/payments/pharmacy-billing',
+        params: params ? { date: params.date } : undefined,
+      }),
+      providesTags: [{ type: 'Payment', id: 'LIST' }],
+    }),
     createPayment: build.mutation<Payment, PaymentCreateBody>({
       query: (body) => ({ url: '/payments', method: 'POST', body }),
       invalidatesTags: [{ type: 'Payment', id: 'LIST' }],
@@ -1905,6 +1913,7 @@ export const {
   useListPaymentsQuery,
   useListPaymentsPagedQuery,
   useLazyListPaymentsPagedQuery,
+  useGetPharmacyBillingSummaryQuery,
   useCreatePaymentMutation,
   useInitiatePaymentMutation,
   useVerifyPaymentMutation,

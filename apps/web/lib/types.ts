@@ -148,6 +148,30 @@ export interface PharmacyBillOut {
   unitPrice: number;
 }
 
+export interface PharmacyBillingRow {
+  paymentId: string;
+  invoiceNumber: string;
+  createdAt: string;
+  patientName: string;
+  patientPhone: string;
+  medicineName: string;
+  dosage: string;
+  quantity: number;
+  unitPrice: number;
+  amount: number;
+  paymentMethod: string;
+}
+
+export interface PharmacyBillingSummary {
+  date: string;
+  rows: PharmacyBillingRow[];
+  total: number;
+  cashTotal: number;
+  upiTotal: number;
+  cardTotal: number;
+  billCount: number;
+}
+
 /** Returned by POST /payments/initiate — everything needed to open Razorpay checkout. */
 export interface PaymentInitiateOut {
   orderId: string;
