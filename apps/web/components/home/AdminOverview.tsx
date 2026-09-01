@@ -48,6 +48,7 @@ interface Kpi {
   value: string;
   icon: LucideIcon;
   tint: string;
+  href?: string;
 }
 
 const STATUS_COLORS = { scheduled: '#2563eb', completed: '#16a34a', cancelled: '#dc2626' };
@@ -157,14 +158,14 @@ export function AdminOverview({ session }: RoleViewProps) {
     const pending = scopedPay.filter((p) => p.status === 'pending').reduce((x, p) => x + p.amount, 0);
 
     const kpis: Kpi[] = [
-      { label: 'Total Appointments', value: String(scoped.length), icon: CalendarDays, tint: 'bg-cyan-100 text-cyan-600' },
-      { label: "Today's Appointments", value: String(scoped.filter((a) => a.date === today).length), icon: CalendarClock, tint: 'bg-teal-100 text-teal-600' },
-      { label: 'Scheduled', value: String(byStatus('scheduled')), icon: Clock, tint: 'bg-blue-100 text-blue-600' },
-      { label: 'Completed', value: String(byStatus('completed')), icon: CheckCircle, tint: 'bg-green-100 text-green-600' },
-      { label: 'Cancelled', value: String(byStatus('cancelled')), icon: XCircle, tint: 'bg-red-100 text-red-600' },
-      { label: 'Patients', value: String(patients.length), icon: Users, tint: 'bg-cyan-100 text-cyan-600' },
-      { label: 'Doctors', value: String(doctors.length), icon: Stethoscope, tint: 'bg-teal-100 text-teal-600' },
-      { label: 'Departments', value: String(departments.length), icon: Building2, tint: 'bg-indigo-100 text-indigo-600' },
+      { label: 'Total Appointments', value: String(scoped.length), icon: CalendarDays, tint: 'bg-cyan-100 text-cyan-600', href: '/dashboard/appointments' },
+      { label: "Today's Appointments", value: String(scoped.filter((a) => a.date === today).length), icon: CalendarClock, tint: 'bg-teal-100 text-teal-600', href: '/dashboard/appointments' },
+      { label: 'Scheduled', value: String(byStatus('scheduled')), icon: Clock, tint: 'bg-blue-100 text-blue-600', href: '/dashboard/appointments?status=scheduled' },
+      { label: 'Completed', value: String(byStatus('completed')), icon: CheckCircle, tint: 'bg-green-100 text-green-600', href: '/dashboard/appointments?status=completed' },
+      { label: 'Cancelled', value: String(byStatus('cancelled')), icon: XCircle, tint: 'bg-red-100 text-red-600', href: '/dashboard/appointments?status=cancelled' },
+      { label: 'Patients', value: String(patients.length), icon: Users, tint: 'bg-cyan-100 text-cyan-600', href: '/dashboard/patients' },
+      { label: 'Doctors', value: String(doctors.length), icon: Stethoscope, tint: 'bg-teal-100 text-teal-600', href: '/dashboard/doctors' },
+      { label: 'Departments', value: String(departments.length), icon: Building2, tint: 'bg-indigo-100 text-indigo-600', href: '/dashboard/departments' },
       { label: 'Revenue Collected', value: inr(revenue), icon: IndianRupee, tint: 'bg-emerald-100 text-emerald-600' },
       { label: 'Pending Payments', value: inr(pending), icon: Wallet, tint: 'bg-amber-100 text-amber-600' },
     ];
@@ -284,14 +285,19 @@ export function AdminOverview({ session }: RoleViewProps) {
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
           {data.kpis.map((kpi) => {
             const Icon = kpi.icon;
-            return (
-              <div key={kpi.label} className="bg-white rounded-lg shadow p-5">
+            const card = (
+              <div className={`bg-white rounded-lg shadow p-5 ${kpi.href ? 'hover:shadow-md hover:ring-1 hover:ring-cyan-200 transition cursor-pointer' : ''}`}>
                 <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${kpi.tint}`}>
                   <Icon className="w-5 h-5" />
                 </div>
                 <p className="text-2xl font-bold text-slate-900 mt-4">{kpi.value}</p>
                 <p className="text-sm text-slate-500">{kpi.label}</p>
               </div>
+            );
+            return kpi.href ? (
+              <Link key={kpi.label} href={kpi.href}>{card}</Link>
+            ) : (
+              <div key={kpi.label}>{card}</div>
             );
           })}
         </div>

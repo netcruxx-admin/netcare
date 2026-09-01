@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { Formik, Form } from 'formik';
 import * as Yup from 'yup';
 import { toast } from 'sonner';
@@ -179,7 +180,11 @@ export function AdminAppointments({ session }: RoleViewProps) {
   // platform owner is the one who can erase. See migration x9y0z1a2b3c4.
   const canDelete = hasPermission(session, 'appointments.delete');
 
-  const [status, setStatus] = useState<'all' | Appointment['status']>('all');
+  const searchParams = useSearchParams();
+  const initialStatus = (['scheduled', 'completed', 'cancelled'] as const).find(
+    (s) => s === searchParams.get('status'),
+  ) ?? 'all';
+  const [status, setStatus] = useState<'all' | Appointment['status']>(initialStatus);
   const [deptId, setDeptId] = useState('all');
   const [query, setQuery] = useState('');
   const [date, setDate] = useState('');

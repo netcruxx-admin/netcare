@@ -19,7 +19,7 @@ export function PlatformOverview({ session }: RoleViewProps) {
 
   const [modalOpen, setModalOpen] = useState(false);
 
-  const { data: overview } = useGetSuperadminOverviewQuery();
+  const { data: overview } = useGetSuperadminOverviewQuery(selectedHospitalId || undefined);
   const { data: allHospitals = [], isLoading } = useListHospitalsQuery();
 
   const hospitals = selectedHospitalId
@@ -27,12 +27,12 @@ export function PlatformOverview({ session }: RoleViewProps) {
     : allHospitals;
 
   const stats = [
-    { label: 'Hospitals', value: selectedHospitalId ? hospitals.length : (overview?.hospitals ?? '—'), icon: Building2, color: 'bg-slate-100 text-slate-700' },
-    { label: 'Users', value: selectedHospitalId ? '—' : (overview?.users ?? '—'), icon: Users, color: 'bg-blue-50 text-blue-700' },
-    { label: 'Patients', value: selectedHospitalId ? '—' : (overview?.patients ?? '—'), icon: UserRound, color: 'bg-emerald-50 text-emerald-700' },
-    { label: 'Doctors', value: selectedHospitalId ? '—' : (overview?.doctors ?? '—'), icon: Stethoscope, color: 'bg-violet-50 text-violet-700' },
-    { label: 'Appointments', value: selectedHospitalId ? '—' : (overview?.appointments ?? '—'), icon: CalendarDays, color: 'bg-amber-50 text-amber-700' },
-    { label: 'Departments', value: selectedHospitalId ? '—' : (overview?.departments ?? '—'), icon: LayoutDashboard, color: 'bg-rose-50 text-rose-700' },
+    { label: 'Hospitals', value: overview?.hospitals ?? '—', icon: Building2, color: 'bg-slate-100 text-slate-700' },
+    { label: 'Users', value: overview?.users ?? '—', icon: Users, color: 'bg-blue-50 text-blue-700' },
+    { label: 'Patients', value: overview?.patients ?? '—', icon: UserRound, color: 'bg-emerald-50 text-emerald-700' },
+    { label: 'Doctors', value: overview?.doctors ?? '—', icon: Stethoscope, color: 'bg-violet-50 text-violet-700' },
+    { label: 'Appointments', value: overview?.appointments ?? '—', icon: CalendarDays, color: 'bg-amber-50 text-amber-700' },
+    { label: 'Departments', value: overview?.departments ?? '—', icon: LayoutDashboard, color: 'bg-rose-50 text-rose-700' },
   ];
 
   return (

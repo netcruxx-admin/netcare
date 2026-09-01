@@ -781,8 +781,8 @@ export const api = createApi({
     getSuperadminOverview: build.query<{
       hospitals: number; users: number; patients: number;
       doctors: number; appointments: number; departments: number;
-    }, void>({
-      query: () => '/superadmin/overview',
+    }, string | void>({
+      query: (hospitalId) => hospitalId ? `/superadmin/overview?hospitalId=${hospitalId}` : '/superadmin/overview',
     }),
     getSuperadminPatients: build.query<Patient[], void>({ query: () => '/superadmin/patients' }),
     getSuperadminDoctors: build.query<Doctor[], void>({ query: () => '/superadmin/doctors' }),
