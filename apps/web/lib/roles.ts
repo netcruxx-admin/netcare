@@ -35,6 +35,7 @@ import {
   LayoutDashboard,
   Package,
   Pill,
+  Receipt,
   Settings,
   ShieldCheck,
   Stethoscope,
@@ -168,7 +169,7 @@ export interface DashboardRoute {
 export const staffRoles = [adminRole, doctorRole, nurseRole];
 /** Staff who deliver care directly and share the same profile form. */
 export const clinicalRoles = [doctorRole, nurseRole];
-const allRoles = [superadminRole, adminRole, doctorRole, nurseRole, labRole, patientRole];
+const allRoles = [superadminRole, adminRole, doctorRole, nurseRole, labRole, patientRole, pharmacistRole];
 
 /**
  * Every dashboard route, once.
@@ -306,6 +307,15 @@ export const dashboardRoutes: DashboardRoute[] = [
     viewRoles: [pharmacistRole, adminRole],
     permission: 'inventory.read',
     module: 'pharmacy',
+  },
+  {
+    path: '/dashboard/billing',
+    label: 'Billing',
+    icon: Receipt,
+    viewRoles: [pharmacistRole, adminRole],
+    permission: 'payments.read',
+    module: 'payments',
+    labelByRole: { [pharmacistRole]: 'Daily Billing' },
   },
   // A doctor's own finished visits. Every role holding appointments.read would
   // otherwise be offered it, and there is no version of the screen for them.

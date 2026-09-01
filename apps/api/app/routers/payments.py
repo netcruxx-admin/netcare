@@ -104,6 +104,92 @@ def list_payments(
     return paginate(query, response, params.limit, params.offset).all()
 
 
+@router.get("/pharmacy-billing", response_model=schemas.PharmacyBillingSummary)
+def get_pharmacy_billing_summary(
+    date: Optional[str] = Query(default=None, description="YYYY-MM-DD, defaults to today"),
+    db: Session = Depends(get_db),
+    user: models.User = Depends(get_current_user),
+    _scope: str = Depends(require_permission("payments.read")),
+    tenant_id: str = Depends(get_tenant_id),
+):
+    """Day-level billing summary for the pharmacy counter.
+
+    Returns every pharmacy payment for the given date together with the patient
+    name, medicine details and method breakdown — everything the pharmacist needs
+    for end-of-shift reconciliation. Defaults to today when no date is supplied.
+    """
+    import datetime as dt
+
+    report_date = date or dt.date.today().isoformat()
+
+    payments = (
+        scoped(db, models.Payment, tenant_id)
+        .filter(models.Payment.payment_type == "pharmacy")
+        .filter(models.Payment.created_at.like(f"{report_date}%"))
+        .order_by(models.Payment.created_at.asc())
+        .all()
+    )
+
+    # Resolve patient names in one query.
+    patient_ids = list({p.patient_id for p in payments})
+    patient_map = patient_display(db, patient_ids, tenant_id)
+
+    # Resolve medication orders in one query.
+    order_ids = [p.medication_order_id for p in payments if p.medication_order_id]
+    order_map: dict = {}
+    if order_ids:
+        orders = (
+            scoped(db, models.MedicationOrder, tenant_id)
+            .filter(models.MedicationOrder.id.in_(order_ids))
+            .all()
+        )
+        order_map = {o.id: o for o in orders}
+
+    rows: list[schemas.PharmacyBillingRow] = []
+    total = cash_total = upi_total = card_total = 0.0
+
+    for payment in payments:
+        patient_name, patient_phone = patient_map.get(payment.patient_id, ("", ""))
+        order = order_map.get(payment.medication_order_id or "")
+        medicine_name = (order.medicine_name if order else "") or ""
+        dosage = (order.dosage if order else "") or ""
+        quantity = (order.quantity if order else 1) or 1
+        unit_price = round(payment.amount / quantity, 2) if quantity else payment.amount
+
+        rows.append(schemas.PharmacyBillingRow(
+            payment_id=payment.id,
+            invoice_number=payment.id.replace("pay-", "INV-").upper(),
+            created_at=payment.created_at,
+            patient_name=patient_name,
+            patient_phone=patient_phone,
+            medicine_name=medicine_name,
+            dosage=dosage,
+            quantity=quantity,
+            unit_price=unit_price,
+            amount=payment.amount,
+            payment_method=payment.payment_method or "",
+        ))
+
+        total += payment.amount
+        method = (payment.payment_method or "").lower()
+        if method == "cash":
+            cash_total += payment.amount
+        elif method in ("upi", "qr"):
+            upi_total += payment.amount
+        elif method == "card":
+            card_total += payment.amount
+
+    return schemas.PharmacyBillingSummary(
+        date=report_date,
+        rows=rows,
+        total=round(total, 2),
+        cash_total=round(cash_total, 2),
+        upi_total=round(upi_total, 2),
+        card_total=round(card_total, 2),
+        bill_count=len(rows),
+    )
+
+
 @router.get("/{payment_id}/invoice", response_model=schemas.InvoiceOut)
 def get_invoice(
     payment_id: str,

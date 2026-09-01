@@ -180,6 +180,11 @@ class HospitalOut(OutModel):
     currency: str = "INR"
     modules: dict = {}
     theme: dict = {}
+    #: The tenant's own logo, resolved to something a browser can fetch. Lives
+    #: on hospital_profiles with the other branding assets, but is surfaced
+    #: here because it is read on every page — including the login screen,
+    #: before there is a session to read a profile with.
+    logo_url: str = ""
     status: HospitalStatus = "active"
 
     # Legal identity
@@ -1293,6 +1298,32 @@ class InvoiceOut(OutModel):
     patient_phone: str = ""
     lines: List[InvoiceLine] = []
     total: float = 0.0
+
+
+class PharmacyBillingRow(OutModel):
+    """One line in the pharmacy billing day-report."""
+    payment_id: str
+    invoice_number: str
+    created_at: str
+    patient_name: str = ""
+    patient_phone: str = ""
+    medicine_name: str = ""
+    dosage: str = ""
+    quantity: int = 1
+    unit_price: float = 0.0
+    amount: float = 0.0
+    payment_method: str = ""
+
+
+class PharmacyBillingSummary(OutModel):
+    """Aggregated billing report for one day, used by the pharmacy billing page."""
+    date: str
+    rows: List[PharmacyBillingRow] = []
+    total: float = 0.0
+    cash_total: float = 0.0
+    upi_total: float = 0.0
+    card_total: float = 0.0
+    bill_count: int = 0
 
 
 class PharmacyBillBody(CamelModel):

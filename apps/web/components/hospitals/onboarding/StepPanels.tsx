@@ -7,6 +7,7 @@ import { useEffect } from 'react';
 import { useFormikContext } from 'formik';
 import { Plus, Trash2, Upload, FileText, X, AlertTriangle } from 'lucide-react';
 import { FormField } from '@/components/form/FormField';
+import { AddressAutocomplete } from '@/components/form/AddressAutocomplete';
 import { PhoneField } from '@/components/form/PhoneField';
 import { HOSPITAL_CATEGORIES } from '@/lib/hospitalCategories';
 import type { CatalogOption, HospitalDocument, OnboardingMeta } from '@/store/api';
@@ -194,7 +195,7 @@ export function ContactStep({ meta }: StepProps) {
       <div className="space-y-4">
         <SectionTitle>Address</SectionTitle>
         <FieldGrid>
-          <FormField name="addressLine1" label="Address Line 1" placeholder="Building, street" />
+          <AddressAutocomplete label="Address Line 1" placeholder="Building, street or search…" />
           <FormField name="addressLine2" label="Address Line 2" placeholder="Area, landmark" />
         </FieldGrid>
         <FieldGrid cols={4}>

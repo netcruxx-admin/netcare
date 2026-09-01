@@ -25,16 +25,29 @@ router = APIRouter(prefix="/superadmin", tags=["superadmin"])
 
 @router.get("/overview")
 def overview(
+    hospital_id: Optional[str] = Query(default=None, alias="hospitalId"),
     db: Session = Depends(get_db),
     _: str = Depends(require_permission("platform.read")),
 ):
+    def count(model, extra_filter=None):
+        q = db.query(model)
+        if hospital_id:
+            q = q.filter(model.hospital_id == hospital_id)
+        if extra_filter is not None:
+            q = q.filter(extra_filter)
+        return q.count()
+
+    hospitals_q = db.query(models.Hospital)
+    if hospital_id:
+        hospitals_q = hospitals_q.filter(models.Hospital.id == hospital_id)
+
     return {
-        "hospitals": db.query(models.Hospital).count(),
-        "users": db.query(models.User).filter(models.User.hospital_id.isnot(None)).count(),
-        "patients": db.query(models.Patient).count(),
-        "doctors": db.query(models.Doctor).count(),
-        "appointments": db.query(models.Appointment).count(),
-        "departments": db.query(models.Department).count(),
+        "hospitals": hospitals_q.count(),
+        "users": count(models.User, models.User.hospital_id.isnot(None)),
+        "patients": count(models.Patient),
+        "doctors": count(models.Doctor),
+        "appointments": count(models.Appointment),
+        "departments": count(models.Department),
     }
 
 

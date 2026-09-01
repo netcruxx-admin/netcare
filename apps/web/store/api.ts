@@ -20,6 +20,7 @@ import type {
   PaymentInitiateOut,
   PaymentVerifyOut,
   PharmacyBillOut,
+  PharmacyBillingSummary,
   PregnancyRecord,
   Prescription,
   ScheduleBlock,
@@ -81,6 +82,9 @@ export interface HospitalInfo {
   currency: string;
   modules: Record<string, boolean>;
   theme: Record<string, string>;
+  /** The tenant's own logo, already resolved to a fetchable URL. Empty when
+   *  they have not uploaded one — screens fall back to the platform mark. */
+  logoUrl: string;
   status: string;
 
   // Legal identity — printed on invoices and reports.
@@ -777,8 +781,8 @@ export const api = createApi({
     getSuperadminOverview: build.query<{
       hospitals: number; users: number; patients: number;
       doctors: number; appointments: number; departments: number;
-    }, void>({
-      query: () => '/superadmin/overview',
+    }, string | void>({
+      query: (hospitalId) => hospitalId ? `/superadmin/overview?hospitalId=${hospitalId}` : '/superadmin/overview',
     }),
     getSuperadminPatients: build.query<Patient[], void>({ query: () => '/superadmin/patients' }),
     getSuperadminDoctors: build.query<Doctor[], void>({ query: () => '/superadmin/doctors' }),
@@ -1422,6 +1426,13 @@ export const api = createApi({
       query: (params) => ({ url: '/payments', params: params ?? undefined }),
       providesTags: [{ type: 'Payment', id: 'LIST' }],
     }),
+    getPharmacyBillingSummary: build.query<PharmacyBillingSummary, { date?: string } | void>({
+      query: (params) => ({
+        url: '/payments/pharmacy-billing',
+        params: params ? { date: params.date } : undefined,
+      }),
+      providesTags: [{ type: 'Payment', id: 'LIST' }],
+    }),
     createPayment: build.mutation<Payment, PaymentCreateBody>({
       query: (body) => ({ url: '/payments', method: 'POST', body }),
       invalidatesTags: [{ type: 'Payment', id: 'LIST' }],
@@ -1916,6 +1927,7 @@ export const {
   useListPaymentsQuery,
   useListPaymentsPagedQuery,
   useLazyListPaymentsPagedQuery,
+  useGetPharmacyBillingSummaryQuery,
   useCreatePaymentMutation,
   useInitiatePaymentMutation,
   useVerifyPaymentMutation,

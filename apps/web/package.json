@@ -67,6 +67,7 @@
   "devDependencies": {
     "@netlify/plugin-nextjs": "^5.15.13",
     "@tailwindcss/postcss": "^4.2.0",
+    "@types/google.maps": "^3.66.0",
     "@types/node": "^22",
     "@types/react": "^19",
     "@types/react-dom": "^19",

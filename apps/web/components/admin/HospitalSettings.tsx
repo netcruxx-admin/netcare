@@ -11,6 +11,7 @@ import {
 import { toast } from 'sonner';
 import { DashboardShell } from '@/components/DashboardShell';
 import { FormField } from '@/components/form/FormField';
+import { AddressAutocomplete } from '@/components/form/AddressAutocomplete';
 import { FormattedDate } from '@/components/ui/FormattedDate';
 import { apiError } from '@/lib/apiError';
 import { hasPermission } from '@/lib/auth';
@@ -492,7 +493,7 @@ export function HospitalSettings({ session }: RoleViewProps) {
 
                   <Section icon={MapPin} title="Address">
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <FormField name="addressLine1" label="Address line 1" />
+                      <AddressAutocomplete label="Address line 1" placeholder="Building, street or search…" />
                       <FormField name="addressLine2" label="Address line 2" />
                       <FormField name="city" label="City" />
                       <FormField name="district" label="District" />
