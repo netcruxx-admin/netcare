@@ -1559,7 +1559,7 @@ export const api = createApi({
     }),
     getConsultationBillingSummary: build.query<
       ConsultationBillingSummary,
-      { date?: string; dateFrom?: string; dateTo?: string } | void
+      { date?: string; dateFrom?: string; dateTo?: string; includeOthers?: boolean } | void
     >({
       query: (params) => ({
         url: '/payments/consultation-billing',

@@ -642,6 +642,12 @@ class Appointment(Base):
     # Raised by the server when a booked date/time is moved — a fact about what
     # happened, so it is never taken from the request body.
     rescheduled = Column(Boolean, default=False, nullable=False)
+    # Who placed the booking — a patient booking themselves, a doctor's own
+    # follow-up, or staff booking for someone else — and their role at the
+    # time, snapshotted rather than joined so it survives a later role change.
+    # Both null for anything booked before this existed.
+    booked_by_user_id = Column(String, index=True, nullable=True)
+    booked_by_role = Column(String, nullable=True)
     created_at = Column(String, nullable=False)
 
 

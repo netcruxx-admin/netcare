@@ -3,7 +3,7 @@ import hmac
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from .. import consent as consent_lib, models, pricing, printing, schemas
@@ -16,6 +16,16 @@ from ..utils import ListQuery, list_params, new_id, now_iso, paginate, text_sear
 from ..utils import assert_no_duplicate_department_booking, doctor_display, patient_display
 
 router = APIRouter(prefix="/payments", tags=["payments"])
+
+# Scope value for `payments.read`, granted only to receptionist
+# (migration d3e4f5a6b7c8) and understood only by the consultation-billing
+# report below. Deliberately not in authz.py: SCOPE_OWN there means patient/
+# doctor identity, which is not what this permission needs to mean for a
+# receptionist's day-report, and every other endpoint gated on
+# `payments.read` only special-cases SCOPE_OWN — an unrecognized scope value
+# falls through to their existing unfiltered behavior, so this cannot widen
+# or narrow anything but the one report that checks for it.
+SCOPE_BOOKED_BY_ME = "booked"
 
 
 # ---------------------------------------------------------------------------
@@ -131,9 +141,10 @@ def get_consultation_billing_summary(
     date: Optional[str] = Query(default=None, description="YYYY-MM-DD, defaults to today"),
     date_from: Optional[str] = Query(default=None, alias="dateFrom"),
     date_to: Optional[str] = Query(default=None, alias="dateTo"),
+    include_others: bool = Query(default=False, alias="includeOthers"),
     db: Session = Depends(get_db),
     user: models.User = Depends(get_current_user),
-    _scope: str = Depends(require_permission("payments.read")),
+    scope: str = Depends(require_permission("payments.read")),
     tenant_id: str = Depends(get_tenant_id),
 ):
     """Day- or range-level consultation billing for the front desk.
@@ -143,6 +154,14 @@ def get_consultation_billing_summary(
     as, and the method breakdown. `pending_total` is billed-but-uncollected — the
     number the desk chases before close of day, and the reason status travels on
     each row rather than being filtered out.
+
+    Scope `SCOPE_BOOKED_BY_ME` (granted only to receptionist, see migration
+    `d3e4f5a6b7c8`) narrows this one report to bookings the caller made
+    themselves, plus anything booked before that scope existed (`NULL`,
+    treated as unattributed rather than hidden) — widened with `include_others`
+    to every receptionist's bookings, but never a patient's own. Every other
+    consumer of `payments.read` only special-cases `SCOPE_OWN`, so this scope
+    value changes nothing about reprinting a bill or the other billing tabs.
     """
     import datetime as dt
 
@@ -153,6 +172,20 @@ def get_consultation_billing_summary(
         .filter(models.Payment.payment_type == "consultation")
     )
     query = _billing_date_filter(query, date, date_from, date_to)
+
+    if scope == SCOPE_BOOKED_BY_ME:
+        booked_condition = or_(
+            models.Appointment.booked_by_user_id == user.id,
+            models.Appointment.booked_by_user_id.is_(None),
+        )
+        if include_others:
+            booked_condition = or_(
+                booked_condition, models.Appointment.booked_by_role == "receptionist"
+            )
+        query = query.join(
+            models.Appointment, models.Appointment.id == models.Payment.appointment_id
+        ).filter(booked_condition)
+
     payments = query.order_by(models.Payment.created_at.asc()).all()
 
     # Resolve display names in one query each, rather than per row.
@@ -175,6 +208,16 @@ def get_consultation_billing_summary(
         d.id: d.name for d in scoped(db, models.Department, tenant_id).all()
     }
     visit_labels = pricing.label_map(db, tenant_id)
+
+    booker_ids = {
+        a.booked_by_user_id for a in appointment_map.values() if a.booked_by_user_id
+    }
+    booker_map: dict = {}
+    if booker_ids:
+        booker_map = {
+            u.id: u.name
+            for u in db.query(models.User).filter(models.User.id.in_(booker_ids)).all()
+        }
 
     rows: list[schemas.ConsultationBillingRow] = []
     total = cash_total = upi_total = card_total = pending_total = 0.0
@@ -199,6 +242,8 @@ def get_consultation_billing_summary(
             amount=payment.amount,
             status=payment.status or "",
             payment_method=payment.payment_method or "",
+            booked_by_name=booker_map.get(appointment.booked_by_user_id, "") if appointment else "",
+            booked_by_role=(appointment.booked_by_role or "") if appointment else "",
         ))
 
         # Only money actually collected counts toward the day's takings; the
@@ -799,6 +844,8 @@ def verify_payment(
         id=new_id("apt"),
         hospital_id=tenant_id,
         created_at=now_iso(),
+        booked_by_user_id=user.id,
+        booked_by_role=user.role,
         patient_id=body.patient_id,
         doctor_id=body.doctor_id,
         department_id=body.department_id,

@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
 import { hasPermission } from '@/lib/auth';
-import { pharmacistRole } from '@/lib/roles';
+import { permissionScope, pharmacistRole } from '@/lib/roles';
 import { ConsultationBillingContent } from './ConsultationBillingContent';
 import { ConsultationFeesContent } from './ConsultationFeesContent';
 import { PharmacyBillingContent } from './PharmacyBillingPage';
@@ -28,6 +28,10 @@ export function BillingPage({ session }: RoleViewProps) {
   // Settling a bill is `payments.manage` — the same permission the endpoint
   // checks, so the button is absent rather than present-and-403ing.
   const canCollect = hasPermission(session, 'payments.manage');
+  // Only a receptionist holds `payments.read` at this scope (migration
+  // d3e4f5a6b7c8) — the consultation report defaults them to their own
+  // bookings, and this is what unlocks the toggle to widen that.
+  const showBookedByFilter = permissionScope(session.permissions, 'payments.read') === 'booked';
   const [tab, setTab] = useState<Tab>(
     session.user.role === pharmacistRole ? 'pharmacy' : 'consultation',
   );
@@ -66,7 +70,9 @@ export function BillingPage({ session }: RoleViewProps) {
           </nav>
         </div>
 
-        {tab === 'consultation' && <ConsultationBillingContent canCollect={canCollect} />}
+        {tab === 'consultation' && (
+          <ConsultationBillingContent canCollect={canCollect} showBookedByFilter={showBookedByFilter} />
+        )}
         {tab === 'pharmacy' && <PharmacyBillingContent />}
         {tab === 'injectableLab' && <InjectableLabBillingContent canCollect={canCollect} />}
         {tab === 'fees' && canManageFees && <ConsultationFeesContent />}

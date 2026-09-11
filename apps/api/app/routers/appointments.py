@@ -237,6 +237,8 @@ def create_appointment(
         id=new_id("apt"),
         hospital_id=tenant_id,
         created_at=now_iso(),
+        booked_by_user_id=user.id,
+        booked_by_role=user.role,
         **fields,
     )
     db.add(appointment)

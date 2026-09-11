@@ -1387,6 +1387,10 @@ class AppointmentOut(OutModel):
     visit_type: str = "new"
     follow_up_of: Optional[str] = None
     rescheduled: bool = False
+    #: Who placed the booking, and their role at the time. Null for anything
+    #: booked before this was tracked.
+    booked_by_user_id: Optional[str] = None
+    booked_by_role: Optional[str] = None
     created_at: str
     # Display fields resolved server-side. Without them a table of appointments
     # has to fetch every patient in the hospital just to turn an id into a name,
@@ -1647,6 +1651,10 @@ class ConsultationBillingRow(OutModel):
     amount: float = 0.0
     status: str = ""
     payment_method: str = ""
+    #: Who placed the booking. Empty for anything booked before this was
+    #: tracked — not the same as a patient booking, and shown as such.
+    booked_by_name: str = ""
+    booked_by_role: str = ""
 
 
 class ConsultationBillingSummary(OutModel):

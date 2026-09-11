@@ -101,6 +101,10 @@ function Row({
         {row.patientPhone && <p className="text-xs text-slate-400">{row.patientPhone}</p>}
       </TableCell>
       <TableCell className="py-3 px-4 whitespace-normal">
+        <p className="text-sm text-slate-800">{row.bookedByName || 'Unattributed'}</p>
+        {row.bookedByRole && <p className="text-xs text-slate-400 capitalize">{row.bookedByRole}</p>}
+      </TableCell>
+      <TableCell className="py-3 px-4 whitespace-normal">
         <p className="text-sm text-slate-800">{row.doctorName || '—'}</p>
         {row.departmentName && <p className="text-xs text-slate-400">{row.departmentName}</p>}
       </TableCell>
@@ -181,12 +185,28 @@ function Row({
  *
  *  `canCollect` gates settling a bill from here — the same `payments.manage`
  *  the endpoint enforces. A viewer without it still sees what is outstanding;
- *  they just cannot say it has been paid. */
-export function ConsultationBillingContent({ canCollect = false }: { canCollect?: boolean } = {}) {
+ *  they just cannot say it has been paid.
+ *
+ *  `showBookedByFilter` is true only for a receptionist, whose `payments.read`
+ *  defaults this report to bookings they made themselves (plus anything
+ *  booked before that was tracked) — the toggle widens that to every
+ *  receptionist's bookings, but a patient's own booking never appears here
+ *  regardless; that stays on the Appointments tab. Admin holds `payments.read`
+ *  at scope "all" and always sees everything, so the toggle never renders for
+ *  them. */
+export function ConsultationBillingContent({
+  canCollect = false,
+  showBookedByFilter = false,
+}: { canCollect?: boolean; showBookedByFilter?: boolean } = {}) {
   const [dateRange, setDateRange] = useState<DateRange>({ from: todayIso(), to: todayIso() });
+  const [includeOthers, setIncludeOthers] = useState(false);
 
   const { data: summary, isLoading, isFetching } = useGetConsultationBillingSummaryQuery(
-    { dateFrom: dateRange.from || undefined, dateTo: dateRange.to || undefined },
+    {
+      dateFrom: dateRange.from || undefined,
+      dateTo: dateRange.to || undefined,
+      includeOthers: showBookedByFilter ? includeOthers : undefined,
+    },
     { refetchOnMountOrArgChange: true },
   );
 
@@ -210,6 +230,17 @@ export function ConsultationBillingContent({ canCollect = false }: { canCollect?
             <span className="text-xs font-medium bg-cyan-100 text-cyan-700 px-2 py-0.5 rounded-full">
               Today
             </span>
+          )}
+          {showBookedByFilter && (
+            <label className="flex items-center gap-2 text-sm text-slate-600 ml-2">
+              <input
+                type="checkbox"
+                checked={includeOthers}
+                onChange={(e) => setIncludeOthers(e.target.checked)}
+                className="rounded border-slate-300 text-cyan-600 focus:ring-cyan-500"
+              />
+              Include other receptionists' bookings
+            </label>
           )}
         </div>
         {isFetching && <Loader2 className="w-4 h-4 animate-spin text-slate-400" />}
@@ -277,6 +308,7 @@ export function ConsultationBillingContent({ canCollect = false }: { canCollect?
                   <TableHead className="py-3 px-4">Invoice</TableHead>
                   <TableHead className="py-3 px-4">Time</TableHead>
                   <TableHead className="py-3 px-4">Patient</TableHead>
+                  <TableHead className="py-3 px-4">Booked By</TableHead>
                   <TableHead className="py-3 px-4">Doctor</TableHead>
                   <TableHead className="py-3 px-4">Visit Type</TableHead>
                   <TableHead className="py-3 px-4 text-right">Amount</TableHead>
@@ -291,7 +323,7 @@ export function ConsultationBillingContent({ canCollect = false }: { canCollect?
               </TableBody>
               <TableFooter>
                 <TableRow className="border-t bg-slate-50">
-                  <TableCell colSpan={5} className="py-3 px-4 text-sm font-semibold text-slate-700 text-right">
+                  <TableCell colSpan={6} className="py-3 px-4 text-sm font-semibold text-slate-700 text-right">
                     Collected
                   </TableCell>
                   <TableCell className="py-3 px-4 text-right text-sm font-bold text-slate-900 tabular-nums">
