@@ -4,6 +4,7 @@ import type { FormikProps } from 'formik';
 import { PatientProfileFields } from '@/components/patients/patientProfile';
 import { FormValues } from '../registrationSchemas';
 import { Spinner } from '@/components/ui/spinner';
+import { Button } from '@/components/ui/button';
 
 interface DetailsStepProps {
   formik: FormikProps<FormValues>;
@@ -27,13 +28,14 @@ export function DetailsStep({ formik, onBack }: DetailsStepProps) {
       <PatientProfileFields requireDateOfBirth />
 
       <div className="space-y-4">
-        <button
+        <Button
           type="submit"
-          disabled={formik.isSubmitting}
-          className="w-full bg-gradient-to-r from-cyan-500 to-brand-teal text-white py-2 rounded-lg font-semibold hover:shadow-lg transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+          disabled={formik.isSubmitting || !formik.dirty}
+          variant="brand"
+          className="w-full"
         >
           {formik.isSubmitting ? <Spinner size="sm" label="Creating account…" /> : 'Create Account'}
-        </button>
+        </Button>
 
         <button
           type="button"

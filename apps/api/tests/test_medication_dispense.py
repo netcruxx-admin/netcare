@@ -8,7 +8,7 @@ went to `dispensed` — a discrepancy with no inventory row to explain it.
 
 import pytest
 
-from tests.conftest import _superadmin_token
+from tests.conftest import _superadmin_token, unique_date
 
 
 def _stock(tenant, medicine_id: str) -> int:
@@ -24,7 +24,7 @@ def pharmacy(client, hospital_a):
     department = hospital_a.get("/departments").json()[0]
     appointment = hospital_a.post("/appointments", json={
         "patientId": patient["id"], "doctorId": doctor["id"],
-        "departmentId": department["id"], "date": "2030-04-04", "time": "10:00", "reason": "Routine consultation",
+        "departmentId": department["id"], "date": unique_date(), "time": "10:00", "reason": "Routine consultation",
     }).json()
     return {
         "client": client,

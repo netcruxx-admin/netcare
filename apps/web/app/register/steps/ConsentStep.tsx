@@ -6,6 +6,7 @@ import { useListConsentPurposesQuery } from '@/store/api';
 import { FormField } from '@/components/form/FormField';
 import { FormValues } from '../registrationSchemas';
 import { Spinner } from '@/components/ui/spinner';
+import { Button } from '@/components/ui/button';
 
 interface ConsentStepProps {
   formik: FormikProps<FormValues>;
@@ -158,13 +159,14 @@ export function ConsentStep({ formik, onBack, isMinor, inlineError }: ConsentSte
         </div>
       )}
 
-      <button
+      <Button
         type="submit"
-        disabled={formik.isSubmitting || !allRequiredTicked}
-        className="w-full bg-gradient-to-r from-cyan-500 to-brand-teal text-white py-2 rounded-lg font-semibold hover:shadow-lg transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+        disabled={formik.isSubmitting || !formik.dirty || !allRequiredTicked}
+        variant="brand"
+        className="w-full"
       >
         {formik.isSubmitting ? <Spinner size="sm" label="Creating account…" /> : 'Agree & Create Account'}
-      </button>
+      </Button>
 
       {!allRequiredTicked && (
         <p className="text-xs text-center text-slate-500">

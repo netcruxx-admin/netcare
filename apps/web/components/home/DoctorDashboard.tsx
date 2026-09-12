@@ -21,6 +21,7 @@ import {
 import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
 import { fmtDate } from '@/lib/date';
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
 
 function toDateStr(d: Date) {
   const y = d.getFullYear();
@@ -213,33 +214,33 @@ export function DoctorDashboard({ session }: RoleViewProps) {
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b bg-slate-50">
-                    <th className="text-left py-3 px-6 font-semibold text-slate-900">Patient</th>
-                    <th className="text-left py-3 px-6 font-semibold text-slate-900">Date &amp; Time</th>
-                    <th className="text-left py-3 px-6 font-semibold text-slate-900">Reason</th>
-                    <th className="text-right py-3 px-6 font-semibold text-slate-900">Action</th>
-                  </tr>
-                </thead>
-                <tbody>
+              <Table>
+                <TableHeader>
+                  <TableRow className="border-b bg-slate-50">
+                    <TableHead className="text-left py-3 px-6 font-semibold text-slate-900">Patient</TableHead>
+                    <TableHead className="text-left py-3 px-6 font-semibold text-slate-900">Date &amp; Time</TableHead>
+                    <TableHead className="text-left py-3 px-6 font-semibold text-slate-900">Reason</TableHead>
+                    <TableHead className="text-right py-3 px-6 font-semibold text-slate-900">Action</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
                   {model.upcoming.slice(0, 6).map((a) => (
-                    <tr key={a.id} className="border-b hover:bg-slate-50">
-                      <td className="py-3 px-6">
+                    <TableRow key={a.id} className="border-b hover:bg-slate-50">
+                      <TableCell className="py-3 px-6 whitespace-normal">
                         <p className="font-medium text-slate-900">{a.name}</p>
                         <p className="text-xs text-slate-500">{a.phone || '—'}</p>
-                      </td>
-                      <td className="py-3 px-6 text-slate-600 whitespace-nowrap">{fmtDate(a.date)} at {a.time}</td>
-                      <td className="py-3 px-6 text-slate-600">{a.reason || 'Consultation'}</td>
-                      <td className="py-3 px-6 text-right">
+                      </TableCell>
+                      <TableCell className="py-3 px-6 text-slate-600">{fmtDate(a.date)} at {a.time}</TableCell>
+                      <TableCell className="py-3 px-6 text-slate-600 whitespace-normal">{a.reason || 'Consultation'}</TableCell>
+                      <TableCell className="py-3 px-6 text-right whitespace-normal">
                         <Link href={`/appointment/${a.id}`} className="text-cyan-600 hover:text-cyan-700 font-semibold text-sm">
                           View
                         </Link>
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   ))}
-                </tbody>
-              </table>
+                </TableBody>
+              </Table>
             </div>
           )}
         </div>

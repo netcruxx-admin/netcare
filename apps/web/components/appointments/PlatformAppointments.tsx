@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Formik, Form } from 'formik';
+import { Formik, Form, useFormik } from 'formik';
 import * as Yup from 'yup';
 import {
   CalendarDays, Plus, Trash2, AlertTriangle, Search,
@@ -21,6 +21,7 @@ import {
   vitalsToPayload,
 } from '@/components/vitals/vitalsForm';
 import { FollowUpModal } from '@/components/FollowUpModal';
+import { DateRangeFilter, type DateRange } from '@/components/DateRangeFilter';
 import { SortableTh, useAppointmentSort } from './appointmentSort';
 import { Calendar } from '@/components/ui/calendar';
 import { TablePagination } from '@/components/TablePagination';
@@ -40,6 +41,8 @@ import {
   useCreateVitalsMutation,
 } from '@/store/api';
 import { Spinner } from '@/components/ui/spinner';
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
+import { Button } from '@/components/ui/button';
 
 const STATUS_STYLES: Record<string, string> = {
   scheduled: 'bg-blue-100 text-blue-700',
@@ -111,28 +114,26 @@ export function PlatformAppointments({ session }: RoleViewProps) {
   const selectedHospitalId = searchParams.get('h') ?? '';
   const [editing, setEditing] = useState<Appointment | null>(null);
   const [rescheduling, setRescheduling] = useState<Appointment | null>(null);
-  const [reDate, setReDate] = useState('');
-  const [reTime, setReTime] = useState('');
   const [followUp, setFollowUp] = useState<Appointment | null>(null);
   const [addingVitals, setAddingVitals] = useState<Appointment | null>(null);
   const [deleting, setDeleting] = useState<Appointment | null>(null);
   const [error, setError] = useState('');
   const [vitalsError, setVitalsError] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
-  // Today by default, same as every hospital's own appointment board — Clear
-  // opens this cross-hospital view back up to every date.
-  const [date, setDate] = useState(todayStr);
+  // Today by default, same as every hospital's own appointment board.
+  const [dateRange, setDateRange] = useState<DateRange>({ from: todayStr, to: todayStr });
 
   // Hospital, status, search and paging are all applied by the API. Patient and
   // doctor names arrive resolved on each row, so this screen no longer pulls
   // every patient and doctor on the platform to turn two ids into two names.
   const { sort, toggle, token: sortToken } = useAppointmentSort();
-  const table = useServerTable({ filterKey: `${selectedHospitalId}|${statusFilter}|${date}|${sortToken}` });
+  const table = useServerTable({ filterKey: `${selectedHospitalId}|${statusFilter}|${dateRange.from}|${dateRange.to}|${sortToken}` });
   const { data: appointmentPage, isLoading, refetch } = useGetSuperadminAppointmentsPagedQuery({
     q: table.q.trim() || undefined,
     hospitalId: selectedHospitalId || undefined,
     status: statusFilter === 'all' ? undefined : statusFilter,
-    date: date || undefined,
+    dateFrom: dateRange.from || undefined,
+    dateTo: dateRange.to || undefined,
     sort: sortToken,
     limit: table.limit,
     offset: table.offset,
@@ -171,6 +172,26 @@ export function PlatformAppointments({ session }: RoleViewProps) {
   // Which slots the doctor already has taken on that date. Asked of the API
   // rather than derived from a page of appointments, which would miss conflicts
   // that happen to be on another page.
+  const rescheduleFormik = useFormik({
+    initialValues: { date: '', time: '' },
+    onSubmit: async (values, { setSubmitting }) => {
+      if (!rescheduling || !values.date || !values.time) { setSubmitting(false); return; }
+      setError('');
+      try {
+        await updateAppointment({ id: rescheduling.id, hospitalId: rescheduling.hospitalId, body: { date: values.date, time: values.time } }).unwrap();
+        setRescheduling(null);
+        refetch();
+        toast.success('Appointment rescheduled');
+      } catch (err) {
+        setError(apiError(err, 'Could not reschedule the appointment'));
+      } finally {
+        setSubmitting(false);
+      }
+    },
+  });
+  const reDate = rescheduleFormik.values.date;
+  const reTime = rescheduleFormik.values.time;
+
   const { data: availability } = useGetDoctorAvailabilityQuery(
     { doctorId: rescheduling?.doctorId ?? '', date: reDate, hospitalId: rescheduling?.hospitalId },
     { skip: !rescheduling || !reDate },
@@ -187,22 +208,8 @@ export function PlatformAppointments({ session }: RoleViewProps) {
   );
 
   const openReschedule = (a: Appointment) => {
-    setReDate(a.date);
-    setReTime(a.time);
+    rescheduleFormik.setValues({ date: a.date, time: a.time });
     setRescheduling(a);
-  };
-
-  const saveReschedule = async () => {
-    if (!rescheduling || !reDate || !reTime) return;
-    setError('');
-    try {
-      await updateAppointment({ id: rescheduling.id, hospitalId: rescheduling.hospitalId, body: { date: reDate, time: reTime } }).unwrap();
-      setRescheduling(null);
-      refetch();
-      toast.success('Appointment rescheduled');
-    } catch (err) {
-      setError(apiError(err, 'Could not reschedule the appointment'));
-    }
   };
 
   const confirmDelete = async () => {
@@ -251,34 +258,23 @@ export function PlatformAppointments({ session }: RoleViewProps) {
           <option value="completed">Completed</option>
           <option value="cancelled">Cancelled</option>
         </select>
-        <div className="flex items-center gap-2">
-          <input
-            type="date"
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
-            className="bg-white rounded-lg shadow px-3 py-2 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-cyan-500"
-          />
-          {date && (
-            <button onClick={() => setDate('')} className="text-sm text-cyan-600 hover:text-cyan-700 font-medium">
-              Clear
-            </button>
-          )}
-        </div>
+        <DateRangeFilter value={dateRange} onChange={setDateRange} defaultDate={todayStr} />
       </div>
 
       <div className="bg-white rounded-xl border border-slate-100 shadow-sm">
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
           <p className="text-sm text-slate-500">
             {totalAppointments} appointment{totalAppointments !== 1 ? 's' : ''}
-            {(selectedHospitalId || table.search || statusFilter !== 'all' || date) && <span className="text-slate-400"> (filtered)</span>}
+            {(selectedHospitalId || table.search || statusFilter !== 'all' || dateRange.from || dateRange.to) && <span className="text-slate-400"> (filtered)</span>}
           </p>
           {hasPermission(session, 'appointments.create') && (
-            <button
+            <Button
               onClick={() => router.push(selectedHospitalId ? `/dashboard/book?h=${selectedHospitalId}` : '/dashboard/book')}
-              className="flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg text-sm font-medium hover:shadow-lg transition"
+              variant="brand"
+              size="sm"
             >
               <Plus className="w-4 h-4" /> Add Appointment
-            </button>
+            </Button>
           )}
         </div>
         {isLoading ? (
@@ -290,10 +286,10 @@ export function PlatformAppointments({ session }: RoleViewProps) {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="bg-slate-50 border-b border-slate-100">
-                  {showHospital && <th className="text-left py-3 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wide">Hospital</th>}
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-slate-50 border-b border-slate-100">
+                  {showHospital && <TableHead className="text-left py-3 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wide">Hospital</TableHead>}
                   {['Date', 'Time', 'Patient', 'Doctor', 'Status', 'Mode'].map((h) =>
                     h === 'Date' || h === 'Status' ? (
                       <SortableTh
@@ -305,36 +301,36 @@ export function PlatformAppointments({ session }: RoleViewProps) {
                         className="text-left py-3 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wide"
                       />
                     ) : (
-                      <th key={h} className="text-left py-3 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wide">{h}</th>
+                      <TableHead key={h} className="text-left py-3 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wide">{h}</TableHead>
                     ),
                   )}
-                  <th className="text-right py-3 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wide">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
+                  <TableHead className="text-right py-3 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wide">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {appointments.map((a) => (
-                  <tr key={a.id} className="border-b border-slate-50 hover:bg-slate-50 transition">
+                  <TableRow key={a.id} className="border-b border-slate-50 hover:bg-slate-50 transition">
                     {showHospital && (
-                      <td className="py-3 px-6">
+                      <TableCell className="py-3 px-6 whitespace-normal">
                         <HospitalBadge hospitalId={a.hospitalId} hospitals={hospitals} />
-                      </td>
+                      </TableCell>
                     )}
-                    <td className="py-3 px-6 text-slate-900 text-sm whitespace-nowrap">
+                    <TableCell className="py-3 px-6 text-slate-900 text-sm">
                       <div className="flex items-center gap-2">
                         <DateBadge date={a.date} />
                         <span>{fmtDate(a.date)}</span>
                       </div>
-                    </td>
-                    <td className="py-3 px-6 text-slate-600 text-sm">{a.time}</td>
-                    <td className="py-3 px-6 text-slate-600 text-sm">{patientName(a)}</td>
-                    <td className="py-3 px-6 text-slate-600 text-sm">{doctorName(a)}</td>
-                    <td className="py-3 px-6">
+                    </TableCell>
+                    <TableCell className="py-3 px-6 text-slate-600 text-sm whitespace-normal">{a.time}</TableCell>
+                    <TableCell className="py-3 px-6 text-slate-600 text-sm whitespace-normal">{patientName(a)}</TableCell>
+                    <TableCell className="py-3 px-6 text-slate-600 text-sm whitespace-normal">{doctorName(a)}</TableCell>
+                    <TableCell className="py-3 px-6 whitespace-normal">
                       <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${STATUS_STYLES[a.status] ?? 'bg-slate-100 text-slate-600'}`}>
                         {a.status}
                       </span>
-                    </td>
-                    <td className="py-3 px-6 text-slate-600 capitalize text-sm">{a.mode ?? 'in-person'}</td>
-                    <td className="py-3 px-6 text-right">
+                    </TableCell>
+                    <TableCell className="py-3 px-6 text-slate-600 capitalize text-sm whitespace-normal">{a.mode ?? 'in-person'}</TableCell>
+                    <TableCell className="py-3 px-6 text-right whitespace-normal">
                       <div className="flex items-center justify-end gap-1">
                         <ActionIcon icon={Eye} label="View" href={`/appointment/${a.id}${a.hospitalId ? `?h=${a.hospitalId}` : ''}`} />
                         {hasPermission(session, 'appointments.manage') && <ActionIcon icon={Pencil} label="Edit" onClick={() => setEditing(a)} />}
@@ -343,11 +339,11 @@ export function PlatformAppointments({ session }: RoleViewProps) {
                         {hasPermission(session, 'appointments.manage') && <ActionIcon icon={Activity} label="Add Vitals" onClick={() => { setVitalsError(''); setAddingVitals(a); }} />}
                         {hasPermission(session, 'appointments.delete') && <ActionIcon icon={Trash2} label="Delete" tone="danger" onClick={() => setDeleting(a)} />}
                       </div>
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 ))}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
             <TablePagination
               page={table.page}
               pageSize={table.pageSize}
@@ -369,7 +365,7 @@ export function PlatformAppointments({ session }: RoleViewProps) {
             <Formik
               initialValues={{ doctorId: editing.doctorId, status: editing.status, reason: editing.reason ?? '' }}
               validationSchema={editSchema}
-              onSubmit={async (values) => {
+              onSubmit={async (values, { setSubmitting }) => {
                 setError('');
                 try {
                   await updateAppointment({
@@ -387,18 +383,24 @@ export function PlatformAppointments({ session }: RoleViewProps) {
                   toast.success('Appointment updated');
                 } catch (err) {
                   setError(apiError(err, 'Could not update the appointment'));
+                } finally {
+                  setSubmitting(false);
                 }
               }}
             >
-              <Form className="space-y-4">
-                <FormField name="doctorId" label="Doctor" as="select" placeholder="Select a doctor" options={doctorOptions} required />
-                <FormField name="status" label="Status" as="select" placeholder="Select status" options={statusOptions} required />
-                <FormField name="reason" label="Reason" as="textarea" placeholder="Reason for visit" />
-                <div className="flex gap-3 pt-2">
-                  <button type="button" onClick={() => setEditing(null)} className="flex-1 px-4 py-2 bg-slate-200 text-slate-700 rounded hover:bg-slate-300 transition">Cancel</button>
-                  <button type="submit" className="flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded hover:shadow-lg font-semibold transition">Save Changes</button>
-                </div>
-              </Form>
+              {({ isSubmitting, dirty }) => (
+                <Form className="space-y-4">
+                  <FormField name="doctorId" label="Doctor" as="select" placeholder="Select a doctor" options={doctorOptions} required />
+                  <FormField name="status" label="Status" as="select" placeholder="Select status" options={statusOptions} required />
+                  <FormField name="reason" label="Reason" as="textarea" placeholder="Reason for visit" />
+                  <div className="flex gap-3 pt-2">
+                    <button type="button" onClick={() => setEditing(null)} className="flex-1 px-4 py-2 bg-slate-200 text-slate-700 rounded hover:bg-slate-300 transition">Cancel</button>
+                    <Button type="submit" disabled={isSubmitting || !dirty} variant="brand" className="flex-1">
+                      {isSubmitting ? <Spinner size="sm" label="Saving…" /> : 'Save Changes'}
+                    </Button>
+                  </div>
+                </Form>
+              )}
             </Formik>
           </div>
         </div>
@@ -418,7 +420,7 @@ export function PlatformAppointments({ session }: RoleViewProps) {
                 <Calendar
                   mode="single"
                   selected={reDate ? new Date(`${reDate}T00:00:00`) : undefined}
-                  onSelect={(d) => { setReDate(d ? toDateStr(d) : ''); setReTime(''); }}
+                  onSelect={(d) => rescheduleFormik.setValues({ date: d ? toDateStr(d) : '', time: '' })}
                   disabled={{ before: new Date(new Date().setHours(0, 0, 0, 0)) }}
                   className="[--cell-size:2rem] rounded-lg border border-slate-200 w-full max-w-full overflow-hidden"
                 />
@@ -440,7 +442,7 @@ export function PlatformAppointments({ session }: RoleViewProps) {
                         ? 'bg-red-50 text-red-400 border-red-200 line-through cursor-not-allowed'
                         : 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed';
                       return (
-                        <button key={slot} type="button" disabled={st !== 'available'} onClick={() => setReTime(slot)} className={`px-2 py-2 rounded-lg border text-sm font-medium transition ${cls}`}>
+                        <button key={slot} type="button" disabled={st !== 'available'} onClick={() => rescheduleFormik.setFieldValue('time', slot)} className={`px-2 py-2 rounded-lg border text-sm font-medium transition ${cls}`}>
                           {slot}
                         </button>
                       );
@@ -450,8 +452,10 @@ export function PlatformAppointments({ session }: RoleViewProps) {
               </div>
             </div>
             <div className="flex gap-3 mt-6">
-              <button onClick={() => setRescheduling(null)} className="flex-1 px-4 py-2 bg-slate-200 text-slate-700 rounded hover:bg-slate-300 transition">Cancel</button>
-              <button onClick={saveReschedule} disabled={!reDate || !reTime} className="flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded hover:shadow-lg font-semibold transition disabled:opacity-50">Reschedule</button>
+              <button onClick={() => setRescheduling(null)} disabled={rescheduleFormik.isSubmitting} className="flex-1 px-4 py-2 bg-slate-200 text-slate-700 rounded hover:bg-slate-300 transition disabled:opacity-50">Cancel</button>
+              <Button onClick={() => rescheduleFormik.submitForm()} disabled={!reDate || !reTime || !rescheduleFormik.dirty || rescheduleFormik.isSubmitting} variant="brand" className="flex-1">
+                {rescheduleFormik.isSubmitting ? <Spinner size="sm" label="Saving…" /> : 'Reschedule'}
+              </Button>
             </div>
           </div>
         </div>
@@ -468,7 +472,7 @@ export function PlatformAppointments({ session }: RoleViewProps) {
             <Formik
               initialValues={emptyVitals}
               validationSchema={vitalsSchema}
-              onSubmit={async (values) => {
+              onSubmit={async (values, { setSubmitting }) => {
                 setVitalsError('');
                 try {
                   await createVitals({
@@ -482,19 +486,25 @@ export function PlatformAppointments({ session }: RoleViewProps) {
                   toast.success('Vitals recorded');
                 } catch (err) {
                   setVitalsError(apiError(err, 'Could not record the vitals'));
+                } finally {
+                  setSubmitting(false);
                 }
               }}
             >
-              <Form className="grid grid-cols-2 gap-4">
-                <VitalsFormFields />
-                {vitalsError && (
-                  <p className="col-span-2 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{vitalsError}</p>
-                )}
-                <div className="col-span-2 flex gap-3 pt-2">
-                  <button type="button" onClick={() => setAddingVitals(null)} className="flex-1 px-4 py-2 bg-slate-200 text-slate-700 rounded hover:bg-slate-300 transition">Cancel</button>
-                  <button type="submit" className="flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded hover:shadow-lg font-semibold transition">Save Vitals</button>
-                </div>
-              </Form>
+              {({ isSubmitting, dirty }) => (
+                <Form className="grid grid-cols-2 gap-4">
+                  <VitalsFormFields />
+                  {vitalsError && (
+                    <p className="col-span-2 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{vitalsError}</p>
+                  )}
+                  <div className="col-span-2 flex gap-3 pt-2">
+                    <button type="button" onClick={() => setAddingVitals(null)} className="flex-1 px-4 py-2 bg-slate-200 text-slate-700 rounded hover:bg-slate-300 transition">Cancel</button>
+                    <Button type="submit" disabled={isSubmitting || !dirty} variant="brand" className="flex-1">
+                      {isSubmitting ? <Spinner size="sm" label="Saving…" /> : 'Save Vitals'}
+                    </Button>
+                  </div>
+                </Form>
+              )}
             </Formik>
           </div>
         </div>

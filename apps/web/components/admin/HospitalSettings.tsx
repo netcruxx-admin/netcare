@@ -31,6 +31,7 @@ import {
   type LetterheadMargins,
 } from '@/store/api';
 import { Spinner } from '@/components/ui/spinner';
+import { Button } from '@/components/ui/button';
 
 const schema = Yup.object({
   name: Yup.string().trim().required('Hospital name is required'),
@@ -203,14 +204,14 @@ function RazorpaySettingsSection({ canEdit }: { canEdit: boolean }) {
 
           {canEdit && (
             <div className="flex justify-end">
-              <button
+              <Button
                 type="button"
                 onClick={handleSave}
                 disabled={isSaving || !keyId || !keySecret}
-                className="inline-flex items-center justify-center gap-2 px-5 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white text-sm font-semibold rounded-lg shadow hover:opacity-95 disabled:opacity-50 transition"
+                variant="brand"
               >
                 {isSaving ? <Spinner size="sm" label="Saving…" /> : current?.keyId ? 'Update keys' : 'Connect Razorpay'}
-              </button>
+              </Button>
             </div>
           )}
 
@@ -626,7 +627,7 @@ export function HospitalSettings({ session }: RoleViewProps) {
           )}
 
           <Formik initialValues={initialValues} validationSchema={schema} onSubmit={submit} enableReinitialize>
-            {({ values, setFieldValue }) => (
+            {({ values, setFieldValue, dirty }) => (
               <Form className="space-y-6">
                 <fieldset disabled={!canEdit} className="space-y-6 disabled:opacity-70">
                   <Section icon={Building2} title="Name & branding" blurb="How your hospital appears to patients and staff.">
@@ -777,13 +778,13 @@ export function HospitalSettings({ session }: RoleViewProps) {
 
                 {canEdit ? (
                   <div className="sticky bottom-0 bg-slate-50 py-4 flex justify-end border-t border-slate-200">
-                    <button
+                    <Button
                       type="submit"
-                      disabled={isSaving}
-                      className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-gradient-to-r from-cyan-500 to-brand-teal text-white text-sm font-semibold rounded-lg shadow hover:opacity-95 disabled:opacity-50 transition"
+                      disabled={isSaving || !dirty}
+                      variant="brand"
                     >
                       {isSaving ? <Spinner size="sm" label="Saving…" /> : 'Save changes'}
-                    </button>
+                    </Button>
                   </div>
                 ) : (
                   <p className="flex items-center gap-2 text-xs text-slate-400">

@@ -24,6 +24,7 @@ import type {
   PaymentVerifyOut,
   PharmacyBillOut,
   PharmacyBillingSummary,
+  InjectableLabBillingSummary,
   ConsultationBillingSummary,
   ConsultationFee,
   PregnancyRecord,
@@ -691,6 +692,7 @@ export interface VitalsCreateBody {
   lmp?: string;
   edd?: string;
   pog?: string;
+  pregnancyStatus?: string;
   notes?: string;
 }
 export interface RazorpaySettingsUpdate {
@@ -1184,7 +1186,7 @@ export const api = createApi({
     // ── Appointments ─────────────────────────────────────────────────────────
     listAppointments: build.query<
       Appointment[],
-      { patientId?: string; doctorId?: string } | void
+      { patientId?: string; doctorId?: string; departmentId?: string; date?: string } | void
     >({
       query: (params) => ({
         url: '/appointments',
@@ -1248,7 +1250,14 @@ export const api = createApi({
     }),
     listAppointmentsPaged: build.query<
       Paged<Appointment>,
-      PageArgs & { status?: string; departmentId?: string; date?: string; sort?: string }
+      PageArgs & {
+        status?: string;
+        departmentId?: string;
+        date?: string;
+        dateFrom?: string;
+        dateTo?: string;
+        sort?: string;
+      }
     >({
       query: (params) => ({ url: '/appointments', params: cleanParams(params) }),
       transformResponse: pageOf<Appointment>,
@@ -1346,7 +1355,14 @@ export const api = createApi({
     }),
     getSuperadminAppointmentsPaged: build.query<
       Paged<Appointment>,
-      PageArgs & { hospitalId?: string; status?: string; date?: string; sort?: string }
+      PageArgs & {
+        hospitalId?: string;
+        status?: string;
+        date?: string;
+        dateFrom?: string;
+        dateTo?: string;
+        sort?: string;
+      }
     >({
       query: (params) => ({ url: '/superadmin/appointments', params: cleanParams(params) }),
       transformResponse: pageOf<Appointment>,
@@ -1541,10 +1557,13 @@ export const api = createApi({
       query: (params) => ({ url: '/payments', params: params ?? undefined }),
       providesTags: [{ type: 'Payment', id: 'LIST' }],
     }),
-    getConsultationBillingSummary: build.query<ConsultationBillingSummary, { date?: string } | void>({
+    getConsultationBillingSummary: build.query<
+      ConsultationBillingSummary,
+      { date?: string; dateFrom?: string; dateTo?: string } | void
+    >({
       query: (params) => ({
         url: '/payments/consultation-billing',
-        params: params ? { date: params.date } : undefined,
+        params: params ? cleanParams(params) : undefined,
       }),
       providesTags: [{ type: 'Payment', id: 'LIST' }],
     }),
@@ -1599,10 +1618,23 @@ export const api = createApi({
       invalidatesTags: [{ type: 'ConsultationFee', id: 'LIST' }],
     }),
 
-    getPharmacyBillingSummary: build.query<PharmacyBillingSummary, { date?: string } | void>({
+    getPharmacyBillingSummary: build.query<
+      PharmacyBillingSummary,
+      { date?: string; dateFrom?: string; dateTo?: string } | void
+    >({
       query: (params) => ({
         url: '/payments/pharmacy-billing',
-        params: params ? { date: params.date } : undefined,
+        params: params ? cleanParams(params) : undefined,
+      }),
+      providesTags: [{ type: 'Payment', id: 'LIST' }],
+    }),
+    getInjectableLabBillingSummary: build.query<
+      InjectableLabBillingSummary,
+      { date?: string; dateFrom?: string; dateTo?: string } | void
+    >({
+      query: (params) => ({
+        url: '/payments/injectable-lab-billing',
+        params: params ? cleanParams(params) : undefined,
       }),
       providesTags: [{ type: 'Payment', id: 'LIST' }],
     }),
@@ -2217,6 +2249,7 @@ export const {
   useListPaymentsPagedQuery,
   useLazyListPaymentsPagedQuery,
   useGetPharmacyBillingSummaryQuery,
+  useGetInjectableLabBillingSummaryQuery,
   useGetConsultationBillingSummaryQuery,
   useUpdatePaymentMutation,
   useListConsultationFeesQuery,

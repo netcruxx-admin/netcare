@@ -14,6 +14,8 @@ the amount is the hospital's rather than the caller's, and naming no mode
 raises nothing (the online flow writes its own row at /payments/verify).
 """
 
+from tests.conftest import unique_date
+
 FEES = "/consultation-fees"
 
 
@@ -29,7 +31,7 @@ def _booking(tenant, **overrides) -> dict:
         "patientId": tenant.ids["patient"],
         "doctorId": tenant.ids["doctor"],
         "departmentId": tenant.ids["department"],
-        "date": "2026-11-02",
+        "date": unique_date(),
         "time": "11:00 AM",
         "reason": "counter payment test",
     }

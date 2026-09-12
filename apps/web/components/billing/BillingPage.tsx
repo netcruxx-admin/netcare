@@ -8,8 +8,9 @@ import { pharmacistRole } from '@/lib/roles';
 import { ConsultationBillingContent } from './ConsultationBillingContent';
 import { ConsultationFeesContent } from './ConsultationFeesContent';
 import { PharmacyBillingContent } from './PharmacyBillingPage';
+import { InjectableLabBillingContent } from './InjectableLabBillingContent';
 
-type Tab = 'consultation' | 'pharmacy' | 'fees';
+type Tab = 'consultation' | 'pharmacy' | 'injectableLab' | 'fees';
 
 /**
  * One Billing screen for the whole hospital.
@@ -34,6 +35,7 @@ export function BillingPage({ session }: RoleViewProps) {
   const tabs: { id: Tab; label: string }[] = [
     { id: 'consultation', label: 'Consultations' },
     { id: 'pharmacy', label: 'Pharmacy' },
+    { id: 'injectableLab', label: 'Injectables & Lab' },
     ...(canManageFees ? [{ id: 'fees' as Tab, label: 'Fee Schedule' }] : []),
   ];
 
@@ -66,6 +68,7 @@ export function BillingPage({ session }: RoleViewProps) {
 
         {tab === 'consultation' && <ConsultationBillingContent canCollect={canCollect} />}
         {tab === 'pharmacy' && <PharmacyBillingContent />}
+        {tab === 'injectableLab' && <InjectableLabBillingContent canCollect={canCollect} />}
         {tab === 'fees' && canManageFees && <ConsultationFeesContent />}
       </div>
     </DashboardShell>

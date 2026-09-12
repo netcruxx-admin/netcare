@@ -8,6 +8,7 @@ import type { RoleViewProps } from '@/components/RoleView';
 import { useListAppointmentsQuery, useListDepartmentsQuery } from '@/store/api';
 import { hasPermission } from '@/lib/auth';
 import { Spinner } from '@/components/ui/spinner';
+import { Button } from '@/components/ui/button';
 
 export function PatientDashboard({ session }: RoleViewProps) {
   const router = useRouter();
@@ -78,12 +79,9 @@ export function PatientDashboard({ session }: RoleViewProps) {
                 <Calendar className="w-16 h-16 text-slate-300 mx-auto mb-4" />
                 <p className="text-slate-600 mb-6">No upcoming appointments</p>
                 {canBook && (
-                  <Link
-                    href="/dashboard/book"
-                    className="inline-block px-6 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg hover:shadow-lg transition"
-                  >
-                    Book an Appointment
-                  </Link>
+                  <Button asChild variant="brand">
+                    <Link href="/dashboard/book">Book an Appointment</Link>
+                  </Button>
                 )}
               </div>
             ) : (

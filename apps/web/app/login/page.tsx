@@ -14,6 +14,7 @@ import { FormField } from '@/components/form/FormField';
 import { useGetCurrentHospitalQuery, useLoginMutation } from '@/store/api';
 import { currentSubdomain } from '@/lib/tenant';
 import { Spinner } from '@/components/ui/spinner';
+import { Button } from '@/components/ui/button';
 
 const loginSchema = Yup.object({
   identifier: Yup.string()
@@ -199,13 +200,14 @@ function LoginForm() {
                 </div>
               )}
 
-              <button
+              <Button
                 type="submit"
-                disabled={isLoading || formik.isSubmitting}
-                className="w-full inline-flex items-center justify-center gap-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white py-2 rounded-lg font-semibold hover:shadow-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={isLoading || formik.isSubmitting || !formik.dirty}
+                variant="brand"
+                className="w-full"
               >
                 {isLoading || formik.isSubmitting ? <Spinner size="sm" label="Signing in…" /> : 'Sign In'}
-              </button>
+              </Button>
             </form>
           </FormikProvider>
 

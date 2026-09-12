@@ -16,6 +16,7 @@ import {
 } from '@/store/api';
 import { adminRole, doctorRole } from '@/lib/roles';
 import { Spinner } from '@/components/ui/spinner';
+import { Button } from '@/components/ui/button';
 
 interface ChatMsg { from: 'me' | 'them'; text: string; }
 type Phase = 'lobby' | 'call' | 'ended';
@@ -198,9 +199,9 @@ export default function ConsultRoomPage() {
           </div>
 
           <div className="flex justify-center mt-6">
-            <button onClick={() => setPhase('call')} className="px-8 py-3 rounded-full bg-gradient-to-r from-cyan-500 to-brand-teal font-semibold hover:opacity-95 flex items-center gap-2">
+            <Button onClick={() => setPhase('call')} variant="brand" size="lg" className="rounded-full">
               <VideoIcon className="w-5 h-5" /> Join now
-            </button>
+            </Button>
           </div>
           <button onClick={() => router.push(`/appointment/${appointmentId}`)} className="mx-auto mt-4 flex items-center gap-1 text-sm text-slate-400 hover:text-slate-200">
             <ArrowLeft className="w-4 h-4" /> Back to appointment
@@ -314,7 +315,7 @@ export default function ConsultRoomPage() {
               </div>
               <div className="p-3 border-t border-slate-700 flex gap-2">
                 <input value={draft} onChange={(e) => setDraft(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && sendMessage()} placeholder="Type a message…" className="flex-1 bg-slate-700 rounded-lg px-3 py-2 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-cyan-500/40" />
-                <button onClick={sendMessage} className="p-2 rounded-lg bg-gradient-to-r from-cyan-500 to-brand-teal hover:shadow-lg"><Send className="w-4 h-4" /></button>
+                <Button onClick={sendMessage} variant="brand" size="icon"><Send className="w-4 h-4" /></Button>
               </div>
             </>
           ) : (

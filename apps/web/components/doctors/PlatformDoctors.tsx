@@ -20,6 +20,8 @@ import {
   useListHospitalsQuery,
 } from '@/store/api';
 import { Spinner } from '@/components/ui/spinner';
+import { Button } from '@/components/ui/button';
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
 
 export function PlatformDoctors({ session }: RoleViewProps) {
   const searchParams = useSearchParams();
@@ -73,12 +75,13 @@ export function PlatformDoctors({ session }: RoleViewProps) {
             {(selectedHospitalId || table.search) && <span className="text-slate-400"> (filtered)</span>}
           </p>
           {canManage && (
-            <button
+            <Button
               onClick={() => setAddModalOpen(true)}
-              className="flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg text-sm font-medium hover:shadow-lg transition"
+              variant="brand"
+              size="sm"
             >
               <Plus className="w-4 h-4" /> Add Doctor
-            </button>
+            </Button>
           )}
         </div>
         {isLoading ? (
@@ -90,40 +93,40 @@ export function PlatformDoctors({ session }: RoleViewProps) {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="bg-slate-50 border-b border-slate-100">
-                  {showHospital && <th className="text-left py-3 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wide">Hospital</th>}
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-slate-50 border-b border-slate-100">
+                  {showHospital && <TableHead className="text-left py-3 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wide">Hospital</TableHead>}
                   {['Name', 'Email', 'Specialization', 'Qualification', 'Experience'].map((h) => (
-                    <th key={h} className="text-left py-3 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wide">{h}</th>
+                    <TableHead key={h} className="text-left py-3 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wide">{h}</TableHead>
                   ))}
-                  <th className="text-right py-3 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wide">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
+                  <TableHead className="text-right py-3 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wide">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {doctors.map((d) => (
-                  <tr key={d.id} className="border-b border-slate-50 hover:bg-slate-50 transition">
+                  <TableRow key={d.id} className="border-b border-slate-50 hover:bg-slate-50 transition">
                     {showHospital && (
-                      <td className="py-3 px-6">
+                      <TableCell className="py-3 px-6 whitespace-normal">
                         <HospitalBadge hospitalId={d.hospitalId} hospitals={hospitals} />
-                      </td>
+                      </TableCell>
                     )}
-                    <td className="py-3 px-6 font-medium text-slate-900">{d.user?.name ?? '—'}</td>
-                    <td className="py-3 px-6 text-slate-600 text-sm">{d.user?.email ?? '—'}</td>
-                    <td className="py-3 px-6 text-slate-600">{d.specialization || '—'}</td>
-                    <td className="py-3 px-6 text-slate-600">{d.qualification || '—'}</td>
-                    <td className="py-3 px-6 text-slate-600">{d.experienceYears != null ? `${d.experienceYears} yrs` : '—'}</td>
-                    <td className="py-3 px-6 text-right">
+                    <TableCell className="py-3 px-6 font-medium text-slate-900 whitespace-normal">{d.user?.name ?? '—'}</TableCell>
+                    <TableCell className="py-3 px-6 text-slate-600 text-sm whitespace-normal">{d.user?.email ?? '—'}</TableCell>
+                    <TableCell className="py-3 px-6 text-slate-600 whitespace-normal">{d.specialization || '—'}</TableCell>
+                    <TableCell className="py-3 px-6 text-slate-600 whitespace-normal">{d.qualification || '—'}</TableCell>
+                    <TableCell className="py-3 px-6 text-slate-600 whitespace-normal">{d.experienceYears != null ? `${d.experienceYears} yrs` : '—'}</TableCell>
+                    <TableCell className="py-3 px-6 text-right whitespace-normal">
                       <div className="flex items-center justify-end gap-1">
                         <ActionIcon icon={Eye} label="View" onClick={() => setViewing(d)} />
                         {canManage && <ActionIcon icon={Pencil} label="Edit" onClick={() => setEditing(d)} />}
                         {canDelete && <ActionIcon icon={Trash2} label="Delete" tone="danger" onClick={() => setDeleting(d)} />}
                       </div>
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 ))}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
             <TablePagination
               page={table.page}
               pageSize={table.pageSize}

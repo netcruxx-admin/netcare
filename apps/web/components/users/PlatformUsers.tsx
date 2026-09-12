@@ -22,6 +22,8 @@ import {
 } from '@/store/api';
 import type { RoleOption } from '@/store/api';
 import { Spinner } from '@/components/ui/spinner';
+import { Button } from '@/components/ui/button';
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
 
 const ROLE_STYLES: Record<string, string> = {
   admin: 'bg-violet-100 text-violet-700',
@@ -103,12 +105,13 @@ export function PlatformUsers({ session }: RoleViewProps) {
             {(selectedHospitalId || table.search || roleFilter !== 'all') && <span className="text-slate-400"> (filtered)</span>}
           </p>
           {canManage && (
-            <button
+            <Button
               onClick={() => { setEditing(null); setModalOpen(true); }}
-              className="flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg text-sm font-medium hover:shadow-lg transition"
+              variant="brand"
+              size="sm"
             >
               <Plus className="w-4 h-4" /> Add User
-            </button>
+            </Button>
           )}
         </div>
         {isLoading ? (
@@ -120,39 +123,39 @@ export function PlatformUsers({ session }: RoleViewProps) {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="bg-slate-50 border-b border-slate-100">
-                  {showHospital && <th className="text-left py-3 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wide">Hospital</th>}
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-slate-50 border-b border-slate-100">
+                  {showHospital && <TableHead className="text-left py-3 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wide">Hospital</TableHead>}
                   {['Name', 'Email', 'Role', 'Phone', 'Joined'].map((h) => (
-                    <th key={h} className="text-left py-3 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wide">{h}</th>
+                    <TableHead key={h} className="text-left py-3 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wide">{h}</TableHead>
                   ))}
-                  <th className="text-right py-3 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wide">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
+                  <TableHead className="text-right py-3 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wide">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {users.map((u) => {
                   const isSelf = u.id === session.user.id;
                   return (
-                    <tr key={u.id} className="border-b border-slate-50 hover:bg-slate-50 transition">
+                    <TableRow key={u.id} className="border-b border-slate-50 hover:bg-slate-50 transition">
                       {showHospital && (
-                        <td className="py-3 px-6">
+                        <TableCell className="py-3 px-6 whitespace-normal">
                           <HospitalBadge hospitalId={u.hospitalId} hospitals={hospitals} />
-                        </td>
+                        </TableCell>
                       )}
-                      <td className="py-3 px-6 font-medium text-slate-900">
+                      <TableCell className="py-3 px-6 font-medium text-slate-900 whitespace-normal">
                         {u.name}
                         {isSelf && <span className="ml-2 text-xs text-slate-400">(you)</span>}
-                      </td>
-                      <td className="py-3 px-6 text-slate-600 text-sm">{u.email}</td>
-                      <td className="py-3 px-6">
+                      </TableCell>
+                      <TableCell className="py-3 px-6 text-slate-600 text-sm whitespace-normal">{u.email}</TableCell>
+                      <TableCell className="py-3 px-6 whitespace-normal">
                         <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium capitalize ${ROLE_STYLES[u.role] ?? 'bg-slate-100 text-slate-600'}`}>
                           {u.role}
                         </span>
-                      </td>
-                      <td className="py-3 px-6 text-slate-600 text-sm">{u.phone ?? '—'}</td>
-                      <td className="py-3 px-6 text-slate-500 text-sm">{fmtDate(u.createdAt)}</td>
-                      <td className="py-3 px-6 text-right">
+                      </TableCell>
+                      <TableCell className="py-3 px-6 text-slate-600 text-sm whitespace-normal">{u.phone ?? '—'}</TableCell>
+                      <TableCell className="py-3 px-6 text-slate-500 text-sm whitespace-normal">{fmtDate(u.createdAt)}</TableCell>
+                      <TableCell className="py-3 px-6 text-right whitespace-normal">
                         <div className="flex items-center justify-end gap-1">
                           <ActionIcon icon={Eye} label="View" onClick={() => setViewing(u)} />
                           {canManage && <ActionIcon icon={Pencil} label="Edit" onClick={() => { setEditing(u); setModalOpen(true); }} />}
@@ -164,12 +167,12 @@ export function PlatformUsers({ session }: RoleViewProps) {
                             <ActionIcon icon={Trash2} label="Delete" tone="danger" onClick={() => setDeleting(u)} />
                           ))}
                         </div>
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   );
                 })}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
             <TablePagination
               page={table.page}
               pageSize={table.pageSize}

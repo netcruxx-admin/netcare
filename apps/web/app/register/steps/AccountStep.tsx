@@ -6,6 +6,7 @@ import { FormField } from '@/components/form/FormField';
 import { PhoneField } from '@/components/form/PhoneField';
 import type { FormValues } from '../registrationSchemas';
 import { Spinner } from '@/components/ui/spinner';
+import { Button } from '@/components/ui/button';
 
 interface AccountStepProps {
   formik: FormikProps<FormValues>;
@@ -27,13 +28,14 @@ export function AccountStep({ formik, needsDetails, hasVerify, onBack }: Account
       <FormField name="password" label="Password" type="password" placeholder="••••••••" icon={Lock} autoComplete="new-password" required />
       <FormField name="confirmPassword" label="Confirm Password" type="password" placeholder="••••••••" icon={Lock} autoComplete="new-password" required />
 
-      <button
+      <Button
         type="submit"
-        disabled={formik.isSubmitting}
-        className="inline-flex items-center justify-center gap-2 w-full bg-gradient-to-r from-cyan-500 to-brand-teal text-white py-2 rounded-lg font-semibold hover:shadow-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
+        disabled={formik.isSubmitting || !formik.dirty}
+        variant="brand"
+        className="w-full"
       >
         {formik.isSubmitting ? <Spinner size="sm" label="Please wait…" /> : needsDetails ? 'Continue' : 'Create Account'}
-      </button>
+      </Button>
 
       <button
         type="button"

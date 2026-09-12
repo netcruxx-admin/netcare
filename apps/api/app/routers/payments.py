@@ -3,6 +3,7 @@ import hmac
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from .. import consent as consent_lib, models, pricing, printing, schemas
@@ -12,7 +13,7 @@ from ..config import settings
 from ..database import get_db
 from ..tenancy import assert_body_in_tenant, assert_in_tenant, get_tenant_id, scoped
 from ..utils import ListQuery, list_params, new_id, now_iso, paginate, text_search
-from ..utils import doctor_display, patient_display
+from ..utils import assert_no_duplicate_department_booking, doctor_display, patient_display
 
 router = APIRouter(prefix="/payments", tags=["payments"])
 
@@ -43,6 +44,27 @@ def _resolve_razorpay_keys(db: Session, tenant_id: str) -> tuple[str, str]:
         status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
         detail="Online payments are not configured for this hospital. Use cash payment instead.",
     )
+
+
+def _billing_date_filter(query, date: Optional[str], date_from: Optional[str], date_to: Optional[str]):
+    """Narrow a Payment query to a day (`date`) or a range (`date_from`/`date_to`).
+
+    `created_at` is an ISO datetime string, so comparing its first 10 characters
+    against plain YYYY-MM-DD bounds sorts correctly without needing to guess a
+    time-of-day boundary. A range takes priority when both are given; with
+    neither, the caller's own "defaults to today" behavior is unaffected.
+    """
+    if date_from or date_to:
+        day = func.substr(models.Payment.created_at, 1, 10)
+        if date_from:
+            query = query.filter(day >= date_from)
+        if date_to:
+            query = query.filter(day <= date_to)
+        return query
+    import datetime as dt
+
+    report_date = date or dt.date.today().isoformat()
+    return query.filter(models.Payment.created_at.like(f"{report_date}%"))
 
 
 def _razorpay_client(db: Session, tenant_id: str):
@@ -107,30 +129,31 @@ def list_payments(
 @router.get("/consultation-billing", response_model=schemas.ConsultationBillingSummary)
 def get_consultation_billing_summary(
     date: Optional[str] = Query(default=None, description="YYYY-MM-DD, defaults to today"),
+    date_from: Optional[str] = Query(default=None, alias="dateFrom"),
+    date_to: Optional[str] = Query(default=None, alias="dateTo"),
     db: Session = Depends(get_db),
     user: models.User = Depends(get_current_user),
     _scope: str = Depends(require_permission("payments.read")),
     tenant_id: str = Depends(get_tenant_id),
 ):
-    """Day-level consultation billing for the front desk.
+    """Day- or range-level consultation billing for the front desk.
 
     The counterpart to the pharmacy report: every consultation payment for the
-    date with the patient, the doctor, what kind of visit it was billed as, and
-    the method breakdown. `pending_total` is billed-but-uncollected — the number
-    the desk chases before close of day, and the reason status travels on each
-    row rather than being filtered out.
+    day or range with the patient, the doctor, what kind of visit it was billed
+    as, and the method breakdown. `pending_total` is billed-but-uncollected — the
+    number the desk chases before close of day, and the reason status travels on
+    each row rather than being filtered out.
     """
     import datetime as dt
 
-    report_date = date or dt.date.today().isoformat()
+    report_date = date or date_from or dt.date.today().isoformat()
 
-    payments = (
+    query = (
         scoped(db, models.Payment, tenant_id)
         .filter(models.Payment.payment_type == "consultation")
-        .filter(models.Payment.created_at.like(f"{report_date}%"))
-        .order_by(models.Payment.created_at.asc())
-        .all()
     )
+    query = _billing_date_filter(query, date, date_from, date_to)
+    payments = query.order_by(models.Payment.created_at.asc()).all()
 
     # Resolve display names in one query each, rather than per row.
     patient_map = patient_display(db, list({p.patient_id for p in payments}), tenant_id)
@@ -208,28 +231,30 @@ def get_consultation_billing_summary(
 @router.get("/pharmacy-billing", response_model=schemas.PharmacyBillingSummary)
 def get_pharmacy_billing_summary(
     date: Optional[str] = Query(default=None, description="YYYY-MM-DD, defaults to today"),
+    date_from: Optional[str] = Query(default=None, alias="dateFrom"),
+    date_to: Optional[str] = Query(default=None, alias="dateTo"),
     db: Session = Depends(get_db),
     user: models.User = Depends(get_current_user),
     _scope: str = Depends(require_permission("payments.read")),
     tenant_id: str = Depends(get_tenant_id),
 ):
-    """Day-level billing summary for the pharmacy counter.
+    """Day- or range-level billing summary for the pharmacy counter.
 
-    Returns every pharmacy payment for the given date together with the patient
-    name, medicine details and method breakdown — everything the pharmacist needs
-    for end-of-shift reconciliation. Defaults to today when no date is supplied.
+    Returns every pharmacy payment for the given day or range together with the
+    patient name, medicine details and method breakdown — everything the
+    pharmacist needs for end-of-shift reconciliation. Defaults to today when
+    nothing is supplied.
     """
     import datetime as dt
 
-    report_date = date or dt.date.today().isoformat()
+    report_date = date or date_from or dt.date.today().isoformat()
 
-    payments = (
+    query = (
         scoped(db, models.Payment, tenant_id)
         .filter(models.Payment.payment_type == "pharmacy")
-        .filter(models.Payment.created_at.like(f"{report_date}%"))
-        .order_by(models.Payment.created_at.asc())
-        .all()
     )
+    query = _billing_date_filter(query, date, date_from, date_to)
+    payments = query.order_by(models.Payment.created_at.asc()).all()
 
     # Resolve patient names in one query.
     patient_ids = list({p.patient_id for p in payments})
@@ -287,6 +312,117 @@ def get_pharmacy_billing_summary(
         cash_total=round(cash_total, 2),
         upi_total=round(upi_total, 2),
         card_total=round(card_total, 2),
+        bill_count=len(rows),
+    )
+
+
+@router.get("/injectable-lab-billing", response_model=schemas.InjectableLabBillingSummary)
+def get_injectable_lab_billing_summary(
+    date: Optional[str] = Query(default=None, description="YYYY-MM-DD, defaults to today"),
+    date_from: Optional[str] = Query(default=None, alias="dateFrom"),
+    date_to: Optional[str] = Query(default=None, alias="dateTo"),
+    db: Session = Depends(get_db),
+    user: models.User = Depends(get_current_user),
+    _scope: str = Depends(require_permission("payments.read")),
+    tenant_id: str = Depends(get_tenant_id),
+):
+    """Day- or range-level billing summary combining injectables and lab tests.
+
+    Both bill automatically, the way a consultation does: administering a shot
+    or completing a test order raises a `pending` Payment with no method yet,
+    and the front desk collects and records it from here — nurses and lab
+    staff never handle money. `pending_total` is what the desk still has to
+    chase before close of day, the same number the consultation report keeps.
+    """
+    import datetime as dt
+
+    report_date = date or date_from or dt.date.today().isoformat()
+
+    query = (
+        scoped(db, models.Payment, tenant_id)
+        .filter(models.Payment.payment_type.in_(("injectable", "lab")))
+    )
+    query = _billing_date_filter(query, date, date_from, date_to)
+    payments = query.order_by(models.Payment.created_at.asc()).all()
+
+    patient_ids = list({p.patient_id for p in payments})
+    patient_map = patient_display(db, patient_ids, tenant_id)
+
+    injection_ids = [p.injection_order_id for p in payments if p.injection_order_id]
+    injection_map: dict = {}
+    if injection_ids:
+        injection_orders = (
+            scoped(db, models.InjectionOrder, tenant_id)
+            .filter(models.InjectionOrder.id.in_(injection_ids))
+            .all()
+        )
+        injection_map = {o.id: o for o in injection_orders}
+
+    test_ids = [p.test_order_id for p in payments if p.test_order_id]
+    test_map: dict = {}
+    if test_ids:
+        test_orders = (
+            scoped(db, models.TestOrder, tenant_id)
+            .filter(models.TestOrder.id.in_(test_ids))
+            .all()
+        )
+        test_map = {o.id: o for o in test_orders}
+
+    rows: list[schemas.InjectableLabBillingRow] = []
+    total = cash_total = upi_total = card_total = pending_total = 0.0
+
+    for payment in payments:
+        patient_name, patient_phone = patient_map.get(payment.patient_id, ("", ""))
+
+        if payment.payment_type == "injectable":
+            order = injection_map.get(payment.injection_order_id or "")
+            description = (order.injectable_name if order else "") or "Injectable"
+            if order and order.dose:
+                description = f"{description} ({order.dose})"
+            quantity = (order.quantity if order else 1) or 1
+        else:
+            order = test_map.get(payment.test_order_id or "")
+            items = (order.items if order else []) or []
+            description = ", ".join(i.get("name", "") for i in items) or "Lab tests"
+            quantity = len(items) or 1
+
+        rows.append(schemas.InjectableLabBillingRow(
+            payment_id=payment.id,
+            invoice_number=payment.id.replace("pay-", "INV-").upper(),
+            created_at=payment.created_at,
+            patient_name=patient_name,
+            patient_phone=patient_phone,
+            category=payment.payment_type,
+            description=description,
+            quantity=quantity,
+            amount=payment.amount,
+            status=payment.status or "",
+            payment_method=payment.payment_method or "",
+        ))
+
+        # Only money actually collected counts toward the day's takings; the
+        # rest is what the desk still has to collect.
+        if (payment.status or "") != "completed":
+            pending_total += payment.amount
+            continue
+
+        total += payment.amount
+        method = (payment.payment_method or "").lower()
+        if method == "cash":
+            cash_total += payment.amount
+        elif method in ("upi", "qr"):
+            upi_total += payment.amount
+        elif method == "card":
+            card_total += payment.amount
+
+    return schemas.InjectableLabBillingSummary(
+        date=report_date,
+        rows=rows,
+        total=round(total, 2),
+        cash_total=round(cash_total, 2),
+        upi_total=round(upi_total, 2),
+        card_total=round(card_total, 2),
+        pending_total=round(pending_total, 2),
         bill_count=len(rows),
     )
 
@@ -352,6 +488,44 @@ def get_invoice(
             unit_price=round(payment.amount / quantity, 2) if quantity else payment.amount,
             amount=payment.amount,
         ))
+    elif payment.payment_type == "injectable" and payment.injection_order_id:
+        order = (
+            scoped(db, models.InjectionOrder, tenant_id)
+            .filter(models.InjectionOrder.id == payment.injection_order_id)
+            .first()
+        )
+        quantity = (order.quantity or 1) if order else 1
+        description = (order.injectable_name if order else "") or "Injectable"
+        if order and order.dose:
+            description = f"{description} ({order.dose})"
+        lines.append(schemas.InvoiceLine(
+            description=description,
+            quantity=quantity,
+            unit_price=round(payment.amount / quantity, 2) if quantity else payment.amount,
+            amount=payment.amount,
+        ))
+    elif payment.payment_type == "lab" and payment.test_order_id:
+        order = (
+            scoped(db, models.TestOrder, tenant_id)
+            .filter(models.TestOrder.id == payment.test_order_id)
+            .first()
+        )
+        items = (order.items if order else []) or []
+        # One line per test, using each item's own price as captured on the
+        # order — the multi-line case the shape above was always meant for.
+        for item in items:
+            price = float(item.get("price") or 0)
+            lines.append(schemas.InvoiceLine(
+                description=item.get("name", "") or "Lab test",
+                quantity=1,
+                unit_price=price,
+                amount=price,
+            ))
+        if not lines:
+            lines.append(schemas.InvoiceLine(
+                description="Lab tests", quantity=1,
+                unit_price=payment.amount, amount=payment.amount,
+            ))
     else:
         description = "Consultation"
         if payment.appointment_id:
@@ -480,6 +654,14 @@ def initiate_payment(
     assert_in_tenant(db, models.Doctor, body.doctor_id, tenant_id)
     assert_in_tenant(db, models.Department, body.department_id, tenant_id)
 
+    # Checked here, before any money moves, rather than only in /verify: a
+    # patient charged for a booking that then gets refused would be the worst
+    # of the outcomes this rule could cause. See /verify for why it is not
+    # re-enforced as a hard refusal there.
+    assert_no_duplicate_department_booking(
+        db, tenant_id, body.patient_id, body.department_id, body.date
+    )
+
     # The fee comes from the hospital's price list, not the client — naming a
     # visit type cannot forge a cheaper amount, and pricing.fee_for refuses an
     # unpriced or retired one rather than booking at zero.
@@ -593,6 +775,12 @@ def verify_payment(
     assert_in_tenant(db, models.Patient, body.patient_id, tenant_id)
     assert_in_tenant(db, models.Doctor, body.doctor_id, tenant_id)
     assert_in_tenant(db, models.Department, body.department_id, tenant_id)
+
+    # Deliberately not re-checked here: /initiate already refused a duplicate
+    # booking before any money moved. A second booking racing in between
+    # (two tabs, both past /initiate) is rare enough that refusing here — after
+    # Razorpay has captured the payment — would trade it for the strictly worse
+    # outcome the pricing comment below describes: charged with no appointment.
 
     # Re-price from the schedule so the amount stored in the payment row is
     # always ours, never a number the client sent.

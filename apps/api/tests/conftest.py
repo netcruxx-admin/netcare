@@ -18,8 +18,10 @@ Runs against its own database (TEST_DATABASE_URL, default
 so a test run can never touch development data.
 """
 
+import itertools
 import os
 import uuid
+from datetime import date, timedelta
 
 import pytest
 from sqlalchemy import create_engine, text
@@ -170,6 +172,22 @@ def _login(client: TestClient, hospital_id: str, email: str) -> str:
     assert changed.status_code == 200, changed.text
     assert changed.json()["mustChangePassword"] is False
     return changed.json()["token"]
+
+
+_unique_date_counter = itertools.count()
+
+
+def unique_date() -> str:
+    """A fresh ISO date on every call.
+
+    `hospital_a`/`hospital_b` are session-scoped — every test in a file shares
+    the same patient — so a fixture that books its own throwaway appointment on
+    a hardcoded literal date collides with one-booking-per-department-per-day
+    the moment a second test (or a second iteration in the same test) runs.
+    None of these fixtures care what the date actually is, so each gets its
+    own rather than fighting over one.
+    """
+    return (date(2033, 1, 1) + timedelta(days=next(_unique_date_counter))).isoformat()
 
 
 def _superadmin_token(client: TestClient) -> str:

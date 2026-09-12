@@ -13,6 +13,9 @@ import { SortableTh, compareAppointments, useAppointmentSort } from './appointme
 import { hasPermission } from '@/lib/auth';
 import { ActionIcon } from '../ActionIcon';
 import { Spinner } from '@/components/ui/spinner';
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
+import { Button } from '@/components/ui/button';
+import { DateRangeFilter, type DateRange } from '@/components/DateRangeFilter';
 
 const todayStr = new Date().toISOString().split('T')[0];
 
@@ -29,9 +32,8 @@ function DateBadge({ date }: { date: string }) {
 export function PatientAppointments({ session }: RoleViewProps) {
   const canBook = hasPermission(session, 'appointments.create');
   const [statusFilter, setStatusFilter] = useState<'all' | Appointment['status']>('all');
-  // Today by default, same as every staff appointment board — Clear (next to
-  // the date picker below) opens this back up to the full history.
-  const [date, setDate] = useState(todayStr);
+  // Today by default, same as every staff appointment board.
+  const [dateRange, setDateRange] = useState<DateRange>({ from: todayStr, to: todayStr });
   const { sort, toggle } = useAppointmentSort();
 
   const patientId = session?.patient?.id ?? '';
@@ -44,7 +46,7 @@ export function PatientAppointments({ session }: RoleViewProps) {
 
   const sorted = [...appointments]
     .filter((a) => statusFilter === 'all' || a.status === statusFilter)
-    .filter((a) => !date || a.date === date)
+    .filter((a) => (!dateRange.from || a.date >= dateRange.from) && (!dateRange.to || a.date <= dateRange.to))
     .sort(compareAppointments(sort));
 
   return (
@@ -65,26 +67,13 @@ export function PatientAppointments({ session }: RoleViewProps) {
           <option value="completed">Completed</option>
           <option value="cancelled">Cancelled</option>
         </select>
-        <div className="flex items-center gap-2">
-          <input
-            type="date"
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
-            className="bg-white rounded-lg shadow px-3 py-2 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-cyan-500"
-          />
-          {date && (
-            <button onClick={() => setDate('')} className="text-sm text-cyan-600 hover:text-cyan-700 font-medium">
-              Clear
-            </button>
-          )}
-        </div>
+        <DateRangeFilter value={dateRange} onChange={setDateRange} defaultDate={todayStr} />
         {canBook && (
-          <Link
-            href="/dashboard/book"
-            className="ml-auto flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg text-sm font-semibold hover:shadow-lg transition"
-          >
-            <Plus className="w-4 h-4" /> Book Appointment
-          </Link>
+          <Button asChild variant="brand" className="ml-auto">
+            <Link href="/dashboard/book">
+              <Plus className="w-4 h-4" /> Book Appointment
+            </Link>
+          </Button>
         )}
       </div>
 
@@ -92,7 +81,7 @@ export function PatientAppointments({ session }: RoleViewProps) {
         <div className="px-6 py-4 border-b">
           <h3 className="font-semibold text-slate-900">
             Appointments ({sorted.length})
-            {(date || statusFilter !== 'all') && <span className="text-slate-400 font-normal"> (filtered)</span>}
+            {(dateRange.from || dateRange.to || statusFilter !== 'all') && <span className="text-slate-400 font-normal"> (filtered)</span>}
           </h3>
         </div>
         {isLoading ? (
@@ -101,30 +90,27 @@ export function PatientAppointments({ session }: RoleViewProps) {
           <div className="text-center py-16">
             <Clock className="w-16 h-16 text-slate-300 mx-auto mb-4" />
             <p className="text-slate-600 mb-2">
-              {date || statusFilter !== 'all' ? 'No appointments match this filter.' : 'No appointments yet'}
+              {dateRange.from || dateRange.to || statusFilter !== 'all' ? 'No appointments match this filter.' : 'No appointments yet'}
             </p>
-            {(date || statusFilter !== 'all') && appointments.length > 0 && (
+            {(dateRange.from || dateRange.to || statusFilter !== 'all') && appointments.length > 0 && (
               <button
-                onClick={() => { setDate(''); setStatusFilter('all'); }}
+                onClick={() => { setDateRange({ from: '', to: '' }); setStatusFilter('all'); }}
                 className="text-sm text-cyan-600 hover:text-cyan-700 font-medium mb-4"
               >
                 Clear filters to see your full history
               </button>
             )}
             {canBook && (
-              <Link
-                href="/dashboard/book"
-                className="inline-block px-6 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg hover:shadow-lg transition"
-              >
-                Book an Appointment
-              </Link>
+              <Button asChild variant="brand">
+                <Link href="/dashboard/book">Book an Appointment</Link>
+              </Button>
             )}
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b bg-slate-50">
+            <Table>
+              <TableHeader>
+                <TableRow className="border-b bg-slate-50">
                   {(
                     [
                       ['Date & Time', 'date'],
@@ -143,44 +129,44 @@ export function PatientAppointments({ session }: RoleViewProps) {
                       className="text-left py-3 px-6 font-semibold text-slate-900"
                     />
                   ))}
-                  <th className="text-right py-3 px-6 font-semibold text-slate-900">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
+                  <TableHead className="text-right py-3 px-6 font-semibold text-slate-900">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {sorted.map((apt) => (
-                  <tr key={apt.id} className="border-b hover:bg-slate-50">
-                    <td className="py-3 px-6 font-medium whitespace-nowrap">
+                  <TableRow key={apt.id} className="border-b hover:bg-slate-50">
+                    <TableCell className="py-3 px-6 font-medium">
                       <div className="flex items-center gap-2">
                         <DateBadge date={apt.date} />
                         <span>{fmtDate(apt.date)} at {apt.time}</span>
                       </div>
-                    </td>
-                    <td className="py-3 px-6 text-slate-600">{apt.doctorName ? `Dr. ${apt.doctorName}` : 'Doctor'}</td>
-                    <td className="py-3 px-6 text-slate-600">
+                    </TableCell>
+                    <TableCell className="py-3 px-6 text-slate-600 whitespace-normal">{apt.doctorName ? `Dr. ${apt.doctorName}` : 'Doctor'}</TableCell>
+                    <TableCell className="py-3 px-6 text-slate-600 whitespace-normal">
                       {apt.reason || '—'}
                       {apt.followUpOf && (
                         <span className="ml-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-cyan-100 text-cyan-700">
                           <CalendarPlus className="w-3 h-3" /> Follow-up
                         </span>
                       )}
-                    </td>
-                    <td className="py-3 px-6">
+                    </TableCell>
+                    <TableCell className="py-3 px-6 whitespace-normal">
                       <span className={`inline-block px-3 py-1 rounded-full text-sm font-semibold capitalize ${statusStyle(apt.status)}`}>
                         {apt.status}
                       </span>
-                    </td>
-                    <td className="py-3 px-6">
+                    </TableCell>
+                    <TableCell className="py-3 px-6 whitespace-normal">
                       <PaymentBadge appointment={apt} />
-                    </td>
-                    <td className="py-3 px-6 text-right">
+                    </TableCell>
+                    <TableCell className="py-3 px-6 text-right whitespace-normal">
                       <div className="flex items-center justify-end gap-1">
                         <ActionIcon icon={Eye} label="View" href={`/appointment/${apt.id}`} />
                       </div>
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 ))}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </div>
         )}
       </div>

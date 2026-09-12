@@ -8,7 +8,7 @@ stock, expired stock, recoverable refusal) live on `administer` here.
 
 import pytest
 
-from tests.conftest import _superadmin_token
+from tests.conftest import _superadmin_token, unique_date
 
 
 @pytest.fixture
@@ -19,7 +19,7 @@ def ward(client, hospital_a):
     department = hospital_a.get("/departments").json()[0]
     appointment = hospital_a.post("/appointments", json={
         "patientId": patient["id"], "doctorId": doctor["id"],
-        "departmentId": department["id"], "date": "2030-05-05", "time": "11:00",
+        "departmentId": department["id"], "date": unique_date(), "time": "11:00",
         "reason": "Routine consultation",
     }).json()
     return {

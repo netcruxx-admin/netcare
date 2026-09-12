@@ -18,6 +18,7 @@ import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
 import { GRID_SLOTS } from '@/lib/schedule';
 import { fmtDate } from '@/lib/date';
+import { Button } from '@/components/ui/button';
 
 const todayStr = () => new Date().toISOString().split('T')[0];
 
@@ -151,13 +152,14 @@ export function DoctorVideoConsults({ session }: RoleViewProps) {
               );
             })}
           </div>
-          <button
+          <Button
             onClick={publish}
             disabled={picked.size === 0}
-            className="mt-4 inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-cyan-500 to-brand-teal text-white text-sm font-semibold px-4 py-2 shadow hover:opacity-95 disabled:opacity-40"
+            variant="brand"
+            className="mt-4"
           >
             <Plus className="w-4 h-4" /> Publish {picked.size > 0 ? `${picked.size} slot${picked.size === 1 ? '' : 's'}` : 'slots'}
-          </button>
+          </Button>
         </section>
 
         {/* Upcoming video appointments */}
@@ -179,12 +181,13 @@ export function DoctorVideoConsults({ session }: RoleViewProps) {
                       <Clock className="w-3.5 h-3.5" /> {fmtDate(a.date)} · {a.time}
                     </p>
                   </div>
-                  <button
+                  <Button
                     onClick={() => router.push(`/dashboard/consult/${a.id}`)}
-                    className="inline-flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-cyan-500 to-brand-teal text-white text-sm font-semibold px-3 py-1.5"
+                    variant="brand"
+                    size="sm"
                   >
                     <Video className="w-4 h-4" /> Join
-                  </button>
+                  </Button>
                 </div>
               ))}
             </div>

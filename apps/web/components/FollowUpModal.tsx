@@ -1,9 +1,12 @@
 'use client';
 
 import { useState } from 'react';
+import { Formik, Form } from 'formik';
+import * as Yup from 'yup';
 import { X, CalendarPlus, AlertCircle } from 'lucide-react';
 import { Calendar } from '@/components/ui/calendar';
 import { Spinner } from '@/components/ui/spinner';
+import { Button } from '@/components/ui/button';
 import type { Appointment } from '@/lib/types';
 import { apiError } from '@/lib/apiError';
 import {
@@ -15,6 +18,7 @@ import {
 import { PaymentModeField, type CounterPaymentMode } from '@/components/payments/PaymentModeField';
 import { blockedSlotSet } from '@/lib/schedule';
 import { useBreakSlots } from '@/hooks/useBreakSlots';
+import { useDepartmentBookingConflict } from '@/hooks/useDepartmentBookingConflict';
 
 function toDateStr(d: Date) {
   const y = d.getFullYear();
@@ -65,6 +69,12 @@ function defaultFollowUpDate() {
   return toDateStr(new Date(Date.now() + 14 * 24 * 60 * 60 * 1000));
 }
 
+interface FollowUpFormValues {
+  date: string;
+  time: string;
+  reason: string;
+}
+
 export function FollowUpModal({
   appointment,
   onClose,
@@ -76,13 +86,13 @@ export function FollowUpModal({
   onCreated: (message: string) => void;
   hospitalId?: string;
 }) {
-  const [date, setDate] = useState(defaultFollowUpDate());
-  const [time, setTime] = useState('');
-  const [reason, setReason] = useState(`Follow-up: ${appointment.reason || 'Consultation'}`);
   // Counter modes only: this is booked mid-consultation, with nobody at a
   // checkout screen. The bill is raised pending and settled at the desk.
   const [paymentMode, setPaymentMode] = useState<CounterPaymentMode>('cash');
   const [error, setError] = useState('');
+  // Mirrors the form's date so the conflict check — a hook, and so cannot live
+  // inside Formik's render prop — can react to it.
+  const [selectedDate, setSelectedDate] = useState(defaultFollowUpDate());
 
   const [createAppointment] = useCreateAppointmentMutation();
   const { data: appointments = [], isLoading: loadingAppointments } = useListAppointmentsQuery({ doctorId: appointment.doctorId });
@@ -91,37 +101,27 @@ export function FollowUpModal({
   // used to be billed at, since it sent no visit type at all.
   const { data: fees = [] } = useListConsultationFeesQuery(hospitalId ? { hospitalId } : undefined);
   const followUpFee = fees.find((f) => f.visitType === FOLLOW_UP_VISIT_TYPE);
-
-  const booked = bookedSlotsFrom(appointments, appointment.doctorId, date);
-  const blocked = blockedSlotSet(blocks, appointment.doctorId, date, SLOTS);
   const breakSlots = useBreakSlots(SLOTS);
 
-  const save = async () => {
-    setError('');
-    if (!date) return setError('Pick a date');
-    if (!time) return setError('Select a time slot');
-    if (slotStatus(time, date, booked, blocked, breakSlots) !== 'available') return setError('That slot is not available for this doctor');
+  // Same one-booking-per-department-per-day rule the server enforces on
+  // create — checked here too so picking a date that already collides is
+  // caught before the rest of the form is filled in.
+  const deptConflict = useDepartmentBookingConflict(
+    appointment.patientId,
+    appointment.departmentId,
+    selectedDate,
+  );
 
-    try {
-      await createAppointment({
-        hospitalId,
-        patientId: appointment.patientId,
-        doctorId: appointment.doctorId,
-        departmentId: appointment.departmentId,
-        date,
-        time,
-        status: 'scheduled',
-        visitType: FOLLOW_UP_VISIT_TYPE,
-        reason: reason.trim() || 'Follow-up',
-        notes: '',
-        followUpOf: appointment.id,
-        paymentMode,
-      }).unwrap();
-      onCreated('Follow-up scheduled');
-    } catch (err) {
-      setError(apiError(err, 'Could not schedule the follow-up'));
-    }
+  const initialValues: FollowUpFormValues = {
+    date: defaultFollowUpDate(),
+    time: '',
+    reason: `Follow-up: ${appointment.reason || 'Consultation'}`,
   };
+
+  const schema = Yup.object({
+    date: Yup.string().required('Pick a date'),
+    time: Yup.string().required('Select a time slot'),
+  });
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
@@ -136,85 +136,147 @@ export function FollowUpModal({
           </button>
         </div>
 
-        <div className="p-6 space-y-5">
-          {error && (
-            <div className="bg-red-50 border border-red-200 rounded-lg p-3 flex items-start gap-2">
-              <AlertCircle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
-              <p className="text-red-700 text-sm">{error}</p>
-            </div>
-          )}
-
-          <div className="grid sm:grid-cols-2 gap-6">
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-2">Date <span className="text-red-500">*</span></label>
-              <Calendar
-                mode="single"
-                selected={date ? new Date(`${date}T00:00:00`) : undefined}
-                onSelect={(d) => { setDate(d ? toDateStr(d) : ''); setTime(''); }}
-                disabled={{ before: new Date(new Date().setHours(0, 0, 0, 0)) }}
-                className="[--cell-size:2rem] rounded-lg border border-slate-200 w-full max-w-full overflow-hidden"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-2">Time slot <span className="text-red-500">*</span></label>
-              {!date ? (
-                <div className="min-h-[180px] flex items-center justify-center text-slate-400 text-sm border border-dashed border-slate-300 rounded-lg">Pick a date</div>
-              ) : loadingAppointments || loadingBlocks ? (
-                <Spinner variant="block" className="py-0 min-h-[180px] border border-dashed border-slate-300 rounded-lg" label="Checking availability…" />
-              ) : (
-                <div className="grid grid-cols-2 gap-2">
-                  {SLOTS.map((slot) => {
-                    const st = slotStatus(slot, date, booked, blocked, breakSlots);
-                    const selected = time === slot && st === 'available';
-                    const cls = selected
-                      ? 'bg-cyan-600 text-white border-cyan-600'
-                      : st === 'available'
-                      ? 'bg-white text-slate-700 border-cyan-200 hover:border-cyan-500 hover:bg-cyan-50'
-                      : st === 'booked'
-                      ? 'bg-red-50 text-red-400 border-red-200 line-through cursor-not-allowed'
-                      : 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed';
-                    return (
-                      <button key={slot} type="button" disabled={st !== 'available'} onClick={() => setTime(slot)} className={`px-2 py-2 rounded-lg border text-sm font-medium transition ${cls}`}>
-                        {slot}
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Reason</label>
-            <textarea
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-              rows={2}
-              className="w-full px-3 py-2 border border-slate-300 rounded focus:outline-none focus:border-cyan-500 resize-none"
-              placeholder="Reason for the follow-up visit"
-            />
-          </div>
-
-          <PaymentModeField
-            value={paymentMode}
-            onChange={setPaymentMode}
-            allowOnline={false}
-            note={
-              followUpFee && followUpFee.amount > 0
-                ? `₹${followUpFee.amount} (${followUpFee.label}) will be raised as a pending bill for the desk to collect.`
-                : 'No follow-up fee is configured for this hospital, so no bill will be raised.'
+        <Formik
+          initialValues={initialValues}
+          validationSchema={schema}
+          onSubmit={async (values, { setSubmitting }) => {
+            setError('');
+            const booked = bookedSlotsFrom(appointments, appointment.doctorId, values.date);
+            const blocked = blockedSlotSet(blocks, appointment.doctorId, values.date, SLOTS);
+            if (slotStatus(values.time, values.date, booked, blocked, breakSlots) !== 'available') {
+              setError('That slot is not available for this doctor');
+              setSubmitting(false);
+              return;
             }
-          />
-        </div>
+            if (deptConflict) {
+              setError('This patient already has an appointment in this department on this date.');
+              setSubmitting(false);
+              return;
+            }
+            try {
+              await createAppointment({
+                hospitalId,
+                patientId: appointment.patientId,
+                doctorId: appointment.doctorId,
+                departmentId: appointment.departmentId,
+                date: values.date,
+                time: values.time,
+                status: 'scheduled',
+                visitType: FOLLOW_UP_VISIT_TYPE,
+                reason: values.reason.trim() || 'Follow-up',
+                notes: '',
+                followUpOf: appointment.id,
+                paymentMode,
+              }).unwrap();
+              onCreated('Follow-up scheduled');
+            } catch (err) {
+              setError(apiError(err, 'Could not schedule the follow-up'));
+            } finally {
+              setSubmitting(false);
+            }
+          }}
+        >
+          {({ values, setValues, setFieldValue, handleChange, isSubmitting, dirty }) => {
+            const booked = bookedSlotsFrom(appointments, appointment.doctorId, values.date);
+            const blocked = blockedSlotSet(blocks, appointment.doctorId, values.date, SLOTS);
+            return (
+              <Form>
+                <div className="p-6 space-y-5">
+                  {error && (
+                    <div className="bg-red-50 border border-red-200 rounded-lg p-3 flex items-start gap-2">
+                      <AlertCircle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
+                      <p className="text-red-700 text-sm">{error}</p>
+                    </div>
+                  )}
+                  {!error && deptConflict && (
+                    <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 flex items-start gap-2">
+                      <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                      <p className="text-amber-800 text-sm">
+                        This patient already has an appointment in this department on this date. Pick a different date.
+                      </p>
+                    </div>
+                  )}
 
-        <div className="flex gap-3 px-6 py-4 border-t">
-          <button onClick={onClose} className="flex-1 px-4 py-2 bg-slate-200 text-slate-700 rounded hover:bg-slate-300 transition">
-            Cancel
-          </button>
-          <button onClick={save} className="flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded hover:shadow-lg font-semibold transition">
-            Schedule Follow-Up
-          </button>
-        </div>
+                  <div className="grid sm:grid-cols-2 gap-6">
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-2">Date <span className="text-red-500">*</span></label>
+                      <Calendar
+                        mode="single"
+                        selected={values.date ? new Date(`${values.date}T00:00:00`) : undefined}
+                        onSelect={(d) => {
+                          const ds = d ? toDateStr(d) : '';
+                          setValues({ ...values, date: ds, time: '' });
+                          setSelectedDate(ds);
+                        }}
+                        disabled={{ before: new Date(new Date().setHours(0, 0, 0, 0)) }}
+                        className="[--cell-size:2rem] rounded-lg border border-slate-200 w-full max-w-full overflow-hidden"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-2">Time slot <span className="text-red-500">*</span></label>
+                      {!values.date ? (
+                        <div className="min-h-[180px] flex items-center justify-center text-slate-400 text-sm border border-dashed border-slate-300 rounded-lg">Pick a date</div>
+                      ) : loadingAppointments || loadingBlocks ? (
+                        <Spinner variant="block" className="py-0 min-h-[180px] border border-dashed border-slate-300 rounded-lg" label="Checking availability…" />
+                      ) : (
+                        <div className="grid grid-cols-2 gap-2">
+                          {SLOTS.map((slot) => {
+                            const st = slotStatus(slot, values.date, booked, blocked, breakSlots);
+                            const selected = values.time === slot && st === 'available';
+                            const cls = selected
+                              ? 'bg-cyan-600 text-white border-cyan-600'
+                              : st === 'available'
+                              ? 'bg-white text-slate-700 border-cyan-200 hover:border-cyan-500 hover:bg-cyan-50'
+                              : st === 'booked'
+                              ? 'bg-red-50 text-red-400 border-red-200 line-through cursor-not-allowed'
+                              : 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed';
+                            return (
+                              <button key={slot} type="button" disabled={st !== 'available'} onClick={() => setFieldValue('time', slot)} className={`px-2 py-2 rounded-lg border text-sm font-medium transition ${cls}`}>
+                                {slot}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Reason</label>
+                    <textarea
+                      name="reason"
+                      value={values.reason}
+                      onChange={handleChange}
+                      rows={2}
+                      className="w-full px-3 py-2 border border-slate-300 rounded focus:outline-none focus:border-cyan-500 resize-none"
+                      placeholder="Reason for the follow-up visit"
+                    />
+                  </div>
+
+                  <PaymentModeField
+                    value={paymentMode}
+                    onChange={setPaymentMode}
+                    allowOnline={false}
+                    note={
+                      followUpFee && followUpFee.amount > 0
+                        ? `₹${followUpFee.amount} (${followUpFee.label}) will be raised as a pending bill for the desk to collect.`
+                        : 'No follow-up fee is configured for this hospital, so no bill will be raised.'
+                    }
+                  />
+                </div>
+
+                <div className="flex gap-3 px-6 py-4 border-t">
+                  <button type="button" onClick={onClose} className="flex-1 px-4 py-2 bg-slate-200 text-slate-700 rounded hover:bg-slate-300 transition">
+                    Cancel
+                  </button>
+                  <Button type="submit" disabled={isSubmitting || !dirty || deptConflict} variant="brand" className="flex-1">
+                    {isSubmitting ? <Spinner size="sm" label="Saving…" /> : 'Schedule Follow-Up'}
+                  </Button>
+                </div>
+              </Form>
+            );
+          }}
+        </Formik>
       </div>
     </div>
   );

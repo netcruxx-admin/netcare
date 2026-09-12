@@ -7,6 +7,7 @@ import { useListPregnanciesPagedQuery } from '@/store/api';
 import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
 import { Spinner } from '@/components/ui/spinner';
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
 import { formatGA, gestationalAge, trimester } from '@/lib/anc';
 
 /**
@@ -83,29 +84,29 @@ export function AdminPregnancies({ session }: RoleViewProps) {
               </div>
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="text-left text-xs text-slate-500 border-b border-slate-100 bg-slate-50">
-                      <th className="px-6 py-2.5 font-medium">Patient</th>
-                      <th className="px-4 py-2.5 font-medium">Gestational age</th>
-                      <th className="px-4 py-2.5 font-medium">EDD</th>
-                      <th className="px-4 py-2.5 font-medium">G/P</th>
-                      <th className="px-4 py-2.5 font-medium">Flags</th>
-                      <th className="px-6 py-2.5 font-medium text-right">Antenatal visits</th>
-                    </tr>
-                  </thead>
-                  <tbody>
+                <Table>
+                  <TableHeader>
+                    <TableRow className="text-left text-xs text-slate-500 border-b border-slate-100 bg-slate-50">
+                      <TableHead className="px-6 py-2.5 font-medium">Patient</TableHead>
+                      <TableHead className="px-4 py-2.5 font-medium">Gestational age</TableHead>
+                      <TableHead className="px-4 py-2.5 font-medium">EDD</TableHead>
+                      <TableHead className="px-4 py-2.5 font-medium">G/P</TableHead>
+                      <TableHead className="px-4 py-2.5 font-medium">Flags</TableHead>
+                      <TableHead className="px-6 py-2.5 font-medium text-right">Antenatal visits</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
                     {[...records]
                       .sort((a, b) => a.edd.localeCompare(b.edd))
                       .map((r) => {
                         const ga = gestationalAge(r.lmp);
                         return (
-                          <tr key={r.id} className="border-b border-slate-50 last:border-0 hover:bg-slate-50">
-                            <td className="px-6 py-3 font-medium text-slate-900">{r.patientName || r.patientId}</td>
-                            <td className="px-4 py-3 text-slate-600">{formatGA(ga)} · Tri {trimester(ga.weeks)}</td>
-                            <td className="px-4 py-3 text-slate-600">{new Date(r.edd + 'T00:00:00').toLocaleDateString('en-IN')}</td>
-                            <td className="px-4 py-3 text-slate-600">G{r.gravida}P{r.para}</td>
-                            <td className="px-4 py-3">
+                          <TableRow key={r.id} className="border-b border-slate-50 last:border-0 hover:bg-slate-50">
+                            <TableCell className="px-6 py-3 font-medium text-slate-900 whitespace-normal">{r.patientName || r.patientId}</TableCell>
+                            <TableCell className="px-4 py-3 text-slate-600 whitespace-normal">{formatGA(ga)} · Tri {trimester(ga.weeks)}</TableCell>
+                            <TableCell className="px-4 py-3 text-slate-600">{new Date(r.edd + 'T00:00:00').toLocaleDateString('en-IN')}</TableCell>
+                            <TableCell className="px-4 py-3 text-slate-600 whitespace-normal">G{r.gravida}P{r.para}</TableCell>
+                            <TableCell className="px-4 py-3 whitespace-normal">
                               {r.riskFactors.length > 0 ? (
                                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-800">
                                   <AlertTriangle className="w-3 h-3" /> {r.riskFactors.length}
@@ -113,13 +114,13 @@ export function AdminPregnancies({ session }: RoleViewProps) {
                               ) : (
                                 <span className="text-slate-300">—</span>
                               )}
-                            </td>
-                            <td className="px-6 py-3 text-right text-slate-600">{r.visitCount ?? 0}</td>
-                          </tr>
+                            </TableCell>
+                            <TableCell className="px-6 py-3 text-right text-slate-600 whitespace-normal">{r.visitCount ?? 0}</TableCell>
+                          </TableRow>
                         );
                       })}
-                  </tbody>
-                </table>
+                  </TableBody>
+                </Table>
               </div>
             )}
           </div>

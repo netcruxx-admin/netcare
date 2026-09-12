@@ -21,11 +21,13 @@ import {
 } from '@/store/api';
 import { blockedSlotSet } from '@/lib/schedule';
 import { useHospitalSlots } from '@/hooks/useBreakSlots';
+import { useDepartmentBookingConflict } from '@/hooks/useDepartmentBookingConflict';
 import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
 import { FormField } from '@/components/form/FormField';
 import { Calendar } from '@/components/ui/calendar';
 import { Spinner } from '@/components/ui/spinner';
+import { Button } from '@/components/ui/button';
 import { PaymentModeField, isCounterMode, type PaymentMode } from '@/components/payments/PaymentModeField';
 
 // ---------------------------------------------------------------------------
@@ -211,6 +213,15 @@ export function PatientBook({ session }: RoleViewProps) {
   // slower answer but a wrong one, so the grid waits instead of guessing.
   const loadingAvailability = [av0, av1, av2, av3, av4].some((a) => a.isFetching);
 
+  // Same one-booking-per-department-per-day rule the server enforces on
+  // create — checked here too so picking a date that already collides is
+  // caught before the patient fills in the rest of the form.
+  const deptConflict = useDepartmentBookingConflict(
+    patient?.id ?? '',
+    selection.department,
+    selection.date,
+  );
+
 
   return (
     <DashboardShell
@@ -266,6 +277,14 @@ export function PatientBook({ session }: RoleViewProps) {
               try {
                 if (!patient) {
                   setSubmitError('Patient information not found');
+                  return;
+                }
+
+                // Guard against a conflicting booking landing between page load
+                // and submit — the server would refuse this anyway, but not
+                // silently after a filled-in form.
+                if (deptConflict) {
+                  setSubmitError('You already have an appointment in this department on this date.');
                   return;
                 }
 
@@ -387,7 +406,7 @@ export function PatientBook({ session }: RoleViewProps) {
               }
             }}
           >
-            {({ values, errors, touched, setFieldValue, setFieldTouched, validateForm, isSubmitting }) => {
+            {({ values, errors, touched, setFieldValue, setFieldTouched, validateForm, isSubmitting, dirty }) => {
               // Resolve the doctor's name for the selected slot so the patient
               // can see who they'll see — but only after they've picked a time.
               const assignedDoc = (() => {
@@ -463,6 +482,15 @@ export function PatientBook({ session }: RoleViewProps) {
                           </span>
                         )}
                       </div>
+
+                      {deptConflict && (
+                        <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 flex items-start gap-2">
+                          <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                          <p className="text-amber-800 text-sm">
+                            You already have an appointment in this department on this date. Pick a different date, or cancel the existing one first.
+                          </p>
+                        </div>
+                      )}
 
                       <div className="grid md:grid-cols-2 gap-6">
                         {/* Calendar */}
@@ -560,19 +588,20 @@ export function PatientBook({ session }: RoleViewProps) {
                         >
                           Back
                         </button>
-                        <button
+                        <Button
                           type="button"
-                          disabled={deptDoctors.length === 0}
+                          disabled={deptDoctors.length === 0 || deptConflict}
                           onClick={async () => {
                             await setFieldTouched('date', true);
                             await setFieldTouched('time', true);
                             const errs = await validateForm();
                             if (!errs.date && !errs.time) setStep(3);
                           }}
-                          className="flex-1 px-6 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg hover:shadow-lg transition disabled:opacity-40 disabled:cursor-not-allowed"
+                          variant="brand"
+                          className="flex-1"
                         >
                           Next
-                        </button>
+                        </Button>
                       </div>
                     </div>
                   )}
@@ -644,7 +673,7 @@ export function PatientBook({ session }: RoleViewProps) {
                         </button>
                         <button
                           type="submit"
-                          disabled={isSubmitting || paymentStatus !== 'idle' || success}
+                          disabled={isSubmitting || !dirty || paymentStatus !== 'idle' || success || deptConflict}
                           className="flex-1 px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition font-semibold disabled:opacity-50 flex items-center justify-center gap-2"
                         >
                           {payBtnContent}

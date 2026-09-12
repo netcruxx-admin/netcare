@@ -5,6 +5,8 @@ import { Formik, Form, useFormik } from 'formik';
 import { Pencil, Pill, Plus, Trash2 } from 'lucide-react';
 import { apiError } from '@/lib/apiError';
 import { Spinner } from '@/components/ui/spinner';
+import { Button } from '@/components/ui/button';
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
 import { FormField } from '@/components/form/FormField';
 import {
   useCreatePrescriptionMutation,
@@ -85,22 +87,22 @@ export function PrescriptionsSection({
 
       {(prescriptions.length > 0 || canManage) && (
         <div className="overflow-x-auto rounded-lg border border-slate-100">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-slate-50 border-b border-slate-100">
+          <Table>
+            <TableHeader>
+              <TableRow className="bg-slate-50 border-b border-slate-100">
                 {[...head, ...(canManage ? ['Actions'] : [])].map((h) => (
-                  <th key={h} className="py-2.5 px-4 text-left text-xs font-semibold text-slate-500 whitespace-nowrap">
+                  <TableHead key={h} className="py-2.5 px-4 text-left text-xs font-semibold text-slate-500">
                     {h}
-                  </th>
+                  </TableHead>
                 ))}
-              </tr>
-            </thead>
-            <tbody className="bg-white">
+              </TableRow>
+            </TableHeader>
+            <TableBody className="bg-white">
               {prescriptions.map((rx) => {
                 if (editingId === rx.id) {
                   return (
-                    <tr key={rx.id} className="border-b border-slate-50 bg-cyan-50/30">
-                      <td colSpan={colSpan} className="p-4">
+                    <TableRow key={rx.id} className="border-b border-slate-50 bg-cyan-50/30">
+                      <TableCell colSpan={colSpan} className="p-4">
                         <EditRxForm
                           prescription={rx}
                           medicineOptions={medicineOptions}
@@ -110,14 +112,14 @@ export function PrescriptionsSection({
                             setEditingId(null);
                           }}
                         />
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   );
                 }
                 if (deleteId === rx.id) {
                   return (
-                    <tr key={rx.id} className="border-b border-slate-50">
-                      <td colSpan={colSpan} className="p-4">
+                    <TableRow key={rx.id} className="border-b border-slate-50">
+                      <TableCell colSpan={colSpan} className="p-4">
                         <InlineConfirmBar
                           message="Delete this prescription? This will also remove the pending pharmacy order. This cannot be undone."
                           confirmLabel="Delete Prescription"
@@ -125,19 +127,19 @@ export function PrescriptionsSection({
                           onConfirm={confirmDelete}
                           onCancel={() => setDeleteId(null)}
                         />
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   );
                 }
                 return (
-                  <tr key={rx.id} className="border-b border-slate-50 hover:bg-slate-50">
-                    <td className="py-3 px-4 font-medium text-slate-900">{rx.medicineName}</td>
-                    <td className="py-3 px-4 text-slate-600">{rx.dosage || '—'}</td>
-                    <td className="py-3 px-4 text-slate-600">{rx.frequency || '—'}</td>
-                    <td className="py-3 px-4 text-slate-600">{rx.duration || '—'}</td>
-                    <td className="py-3 px-4 text-slate-500">{rx.instructions || '—'}</td>
+                  <TableRow key={rx.id} className="border-b border-slate-50 hover:bg-slate-50">
+                    <TableCell className="py-3 px-4 font-medium text-slate-900 whitespace-normal">{rx.medicineName}</TableCell>
+                    <TableCell className="py-3 px-4 text-slate-600 whitespace-normal">{rx.dosage || '—'}</TableCell>
+                    <TableCell className="py-3 px-4 text-slate-600 whitespace-normal">{rx.frequency || '—'}</TableCell>
+                    <TableCell className="py-3 px-4 text-slate-600 whitespace-normal">{rx.duration || '—'}</TableCell>
+                    <TableCell className="py-3 px-4 text-slate-500 whitespace-normal">{rx.instructions || '—'}</TableCell>
                     {canManage && (
-                      <td className="py-2 px-3 whitespace-nowrap">
+                      <TableCell className="py-2 px-3">
                         <div className="flex items-center gap-1">
                           <button onClick={() => setEditingId(rx.id)} title="Edit" className="p-1.5 text-slate-400 hover:text-cyan-600 hover:bg-cyan-50 rounded transition">
                             <Pencil className="w-3.5 h-3.5" />
@@ -148,9 +150,9 @@ export function PrescriptionsSection({
                             </button>
                           )}
                         </div>
-                      </td>
+                      </TableCell>
                     )}
-                  </tr>
+                  </TableRow>
                 );
               })}
               {canManage && (
@@ -168,8 +170,8 @@ export function PrescriptionsSection({
                   }}
                 />
               )}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         </div>
       )}
       {addError && (
@@ -217,45 +219,45 @@ function NewRxRow({
 
   return (
     <>
-      <tr className="bg-cyan-50/20">
-        <td className="p-1.5">
+      <TableRow className="bg-cyan-50/20">
+        <TableCell className="p-1.5">
           <select name="medicineName" value={formik.values.medicineName} onChange={formik.handleChange} className={cell}>
             <option value="">Select medicine…</option>
             {medicineOptions.map((o) => (
               <option key={o.value} value={o.value}>{o.label}</option>
             ))}
           </select>
-        </td>
-        <td className="p-1.5">
+        </TableCell>
+        <TableCell className="p-1.5">
           <input name="dosage" value={formik.values.dosage} onChange={formik.handleChange} placeholder="500 mg" className={cell} />
-        </td>
-        <td className="p-1.5">
+        </TableCell>
+        <TableCell className="p-1.5">
           <input name="frequency" value={formik.values.frequency} onChange={formik.handleChange} placeholder="Twice a day" className={cell} />
-        </td>
-        <td className="p-1.5">
+        </TableCell>
+        <TableCell className="p-1.5">
           <input name="duration" value={formik.values.duration} onChange={formik.handleChange} placeholder="5 days" className={cell} />
-        </td>
-        <td className="p-1.5">
+        </TableCell>
+        <TableCell className="p-1.5">
           <input name="instructions" value={formik.values.instructions} onChange={formik.handleChange} placeholder="After meals" className={cell} />
-        </td>
-        <td className="p-1.5 whitespace-nowrap">
+        </TableCell>
+        <TableCell className="p-1.5">
           <button
             type="button"
             onClick={() => formik.submitForm()}
-            disabled={formik.isSubmitting}
+            disabled={formik.isSubmitting || !formik.dirty}
             title="Add prescription"
             className="p-1.5 text-cyan-600 hover:text-cyan-700 hover:bg-cyan-50 rounded transition disabled:opacity-50"
           >
             {formik.isSubmitting ? <Spinner size="sm" /> : <Plus className="w-4 h-4" />}
           </button>
-        </td>
-      </tr>
+        </TableCell>
+      </TableRow>
       {err && (
-        <tr>
-          <td colSpan={colSpan} className="px-2 pb-2">
+        <TableRow>
+          <TableCell colSpan={colSpan} className="px-2 pb-2">
             <p className="text-xs text-red-600">{err}</p>
-          </td>
-        </tr>
+          </TableCell>
+        </TableRow>
       )}
     </>
   );
@@ -300,7 +302,7 @@ function EditRxForm({
         }
       }}
     >
-      {({ isSubmitting }) => (
+      {({ isSubmitting, dirty }) => (
         <Form className="grid sm:grid-cols-2 gap-4">
           <div className="sm:col-span-2">
             <FormField name="medicineName" label="Medicine" as="select" placeholder="Select a medicine" options={medicineOptions} required />
@@ -313,13 +315,13 @@ function EditRxForm({
             <button type="button" onClick={onCancel} className="px-4 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-white transition text-sm">
               Cancel
             </button>
-            <button
+            <Button
               type="submit"
-              disabled={isSubmitting}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg hover:shadow-lg font-semibold transition text-sm disabled:opacity-50"
+              disabled={isSubmitting || !dirty}
+              variant="brand"
             >
               {isSubmitting ? <Spinner size="sm" label="Saving…" /> : 'Save Changes'}
-            </button>
+            </Button>
           </div>
         </Form>
       )}

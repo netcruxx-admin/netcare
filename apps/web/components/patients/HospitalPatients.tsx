@@ -22,6 +22,8 @@ import {
   useLazyListPatientsPagedQuery,
 } from '@/store/api';
 import { Spinner } from '@/components/ui/spinner';
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
+import { Button } from '@/components/ui/button';
 
 /**
  * The patient directory for hospital staff — one component for admin, doctor and
@@ -291,13 +293,14 @@ export function HospitalPatients({ session }: RoleViewProps) {
           <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
             <h3 className="font-semibold text-slate-900">Patients ({totalPatients})</h3>
             {canManage && (
-              <button
+              <Button
                 onClick={() => setShowAddModal(true)}
-                className="flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg text-sm font-medium hover:shadow-lg transition"
+                variant="brand"
+                size="sm"
               >
                 <UserPlus className="w-4 h-4" />
                 Add Patient
-              </button>
+              </Button>
             )}
           </div>
 
@@ -310,38 +313,38 @@ export function HospitalPatients({ session }: RoleViewProps) {
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b bg-slate-50">
+              <Table>
+                <TableHeader>
+                  <TableRow className="border-b bg-slate-50">
                     {columns.map((column) => (
-                      <th
+                      <TableHead
                         key={column.header}
                         className={`py-3 px-6 font-semibold text-slate-900 ${
                           column.align === 'right' ? 'text-right' : 'text-left'
                         }`}
                       >
                         {column.header}
-                      </th>
+                      </TableHead>
                     ))}
-                  </tr>
-                </thead>
-                <tbody>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
                   {rows.map((row) => (
-                    <tr key={row.patientId} className="border-b hover:bg-slate-50">
+                    <TableRow key={row.patientId} className="border-b hover:bg-slate-50">
                       {columns.map((column) => (
-                        <td
+                        <TableCell
                           key={column.header}
-                          className={`py-3 px-6 text-slate-600 ${
+                          className={`py-3 px-6 text-slate-600 whitespace-normal ${
                             column.align === 'right' ? 'text-right' : ''
                           }`}
                         >
                           {column.render(row)}
-                        </td>
+                        </TableCell>
                       ))}
-                    </tr>
+                    </TableRow>
                   ))}
-                </tbody>
-              </table>
+                </TableBody>
+              </Table>
               <TablePagination
                 page={table.page}
                 pageSize={table.pageSize}

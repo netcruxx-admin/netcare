@@ -14,6 +14,7 @@
 import { useCallback, useState } from 'react';
 import { ChevronDown, ChevronsUpDown, ChevronUp } from 'lucide-react';
 import type { Appointment } from '@/lib/types';
+import { TableHead } from '@/components/ui/table';
 
 export type SortDir = 'asc' | 'desc';
 export interface SortState {
@@ -66,7 +67,7 @@ export function SortableTh({
   const active = sort.key === sortKey;
   const Icon = !active ? ChevronsUpDown : sort.dir === 'asc' ? ChevronUp : ChevronDown;
   return (
-    <th
+    <TableHead
       className={className}
       aria-sort={active ? (sort.dir === 'asc' ? 'ascending' : 'descending') : 'none'}
     >
@@ -84,7 +85,7 @@ export function SortableTh({
           }`}
         />
       </button>
-    </th>
+    </TableHead>
   );
 }
 

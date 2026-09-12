@@ -58,6 +58,7 @@ import {
 import { ColourField, FieldGrid, ReviewRow, SectionTitle } from './onboarding/fields';
 import { FormField } from '@/components/form/FormField';
 import { Spinner } from '@/components/ui/spinner';
+import { Button } from '@/components/ui/button';
 import { toPhoneDigits, withPrefix } from '@/components/form/PhoneField';
 
 // ---------------------------------------------------------------------------
@@ -702,7 +703,7 @@ export function EditHospitalWizard({ open, hospital, onClose, onUpdated }: Props
             enableReinitialize={false}
             onSubmit={submit}
           >
-            {({ isSubmitting, validateForm, setTouched, values }) => {
+            {({ isSubmitting, validateForm, setTouched, values, dirty }) => {
               const goNext = async () => {
                 const errors = await validateForm();
                 if (Object.keys(errors).length > 0) {
@@ -774,25 +775,25 @@ export function EditHospitalWizard({ open, hospital, onClose, onUpdated }: Props
                         </button>
                       )}
                       {isLast ? (
-                        <button
+                        <Button
                           type="submit"
-                          disabled={isSubmitting}
-                          className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg font-semibold text-sm hover:shadow-lg transition disabled:opacity-50"
+                          disabled={isSubmitting || !dirty}
+                          variant="brand"
                         >
                           {isSubmitting ? (
                             <Spinner size="sm" label="Saving…" />
                           ) : (
                             <><Check className="w-4 h-4" /> Save Changes</>
                           )}
-                        </button>
+                        </Button>
                       ) : (
-                        <button
+                        <Button
                           type="button"
                           onClick={goNext}
-                          className="flex items-center gap-1.5 px-5 py-2.5 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg font-semibold text-sm hover:shadow-lg transition"
+                          variant="brand"
                         >
                           Next <ArrowRight className="w-4 h-4" />
-                        </button>
+                        </Button>
                       )}
                     </div>
                   </div>
@@ -1011,12 +1012,13 @@ function SuccessPanel({ result, onDone }: { result: SaveResult; onDone: () => vo
         </div>
       )}
 
-      <button
+      <Button
         onClick={onDone}
-        className="mt-7 px-6 py-2.5 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg text-sm font-medium hover:shadow-lg transition"
+        variant="brand"
+        className="mt-7"
       >
         Done
-      </button>
+      </Button>
     </div>
   );
 }

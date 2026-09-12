@@ -6,6 +6,7 @@ import * as Yup from 'yup';
 import { FileText } from 'lucide-react';
 import { apiError } from '@/lib/apiError';
 import { Spinner } from '@/components/ui/spinner';
+import { Button } from '@/components/ui/button';
 import { FormField } from '@/components/form/FormField';
 import { useCreateMedicalRecordMutation, useUpdateMedicalRecordMutation } from '@/store/api';
 import type { MedicalRecord } from '@/lib/types';
@@ -109,7 +110,7 @@ export function ClinicalNotesSection({ appointmentId, patientId, doctorId, recor
             }
           }}
         >
-          {({ isSubmitting }) => (
+          {({ isSubmitting, dirty }) => (
             <Form className="space-y-4">
               {isNewVisit && (
                 <div className="grid sm:grid-cols-2 gap-4 pb-4 border-b border-slate-100">
@@ -147,13 +148,13 @@ export function ClinicalNotesSection({ appointmentId, patientId, doctorId, recor
               {error && (
                 <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</p>
               )}
-              <button
+              <Button
                 type="submit"
-                disabled={isSubmitting}
-                className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg hover:shadow-lg font-semibold transition text-sm disabled:opacity-50"
+                disabled={isSubmitting || !dirty}
+                variant="brand"
               >
                 {isSubmitting ? <Spinner size="sm" label="Saving…" /> : record ? 'Update Notes' : 'Save Notes'}
-              </button>
+              </Button>
             </Form>
           )}
         </Formik>

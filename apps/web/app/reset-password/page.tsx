@@ -11,6 +11,7 @@ import { FormField } from '@/components/form/FormField';
 import { useResetPasswordMutation, useGetCurrentHospitalQuery } from '@/store/api';
 import { currentSubdomain } from '@/lib/tenant';
 import { Spinner } from '@/components/ui/spinner';
+import { Button } from '@/components/ui/button';
 
 const schema = Yup.object({
   newPassword: Yup.string()
@@ -133,13 +134,14 @@ function ResetPasswordForm() {
                   </div>
                 )}
 
-                <button
+                <Button
                   type="submit"
-                  disabled={formik.isSubmitting || !token}
-                  className="inline-flex items-center justify-center gap-2 w-full bg-gradient-to-r from-cyan-500 to-brand-teal text-white py-2 rounded-lg font-semibold hover:shadow-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
+                  disabled={formik.isSubmitting || !formik.dirty || !token}
+                  variant="brand"
+                  className="w-full"
                 >
                   {formik.isSubmitting ? <Spinner size="sm" label="Saving…" /> : 'Set new password'}
-                </button>
+                </Button>
 
                 <div className="text-center">
                   <Link href="/forgot-password" className="text-slate-500 hover:text-cyan-600 text-sm">

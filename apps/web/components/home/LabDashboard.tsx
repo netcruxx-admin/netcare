@@ -8,6 +8,7 @@ import { useListPatientsQuery, useListTestOrdersQuery } from '@/store/api';
 import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
 import { ORDER_STATUS_LABEL, ORDER_STATUS_STYLE } from '@/lib/lab';
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
 
 export function LabDashboard({ session }: RoleViewProps) {
   const { data: orders = [], isLoading } = useListTestOrdersQuery();
@@ -86,28 +87,28 @@ export function LabDashboard({ session }: RoleViewProps) {
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b bg-slate-50">
-                    <th className="text-left py-3 px-6 font-semibold text-slate-900">Order</th>
-                    <th className="text-left py-3 px-6 font-semibold text-slate-900">Patient</th>
-                    <th className="text-left py-3 px-6 font-semibold text-slate-900">Tests</th>
-                    <th className="text-left py-3 px-6 font-semibold text-slate-900">Priority</th>
-                    <th className="text-left py-3 px-6 font-semibold text-slate-900">Status</th>
-                    <th className="text-right py-3 px-6 font-semibold text-slate-900">Action</th>
-                  </tr>
-                </thead>
-                <tbody>
+              <Table>
+                <TableHeader>
+                  <TableRow className="border-b bg-slate-50">
+                    <TableHead className="text-left py-3 px-6 font-semibold text-slate-900">Order</TableHead>
+                    <TableHead className="text-left py-3 px-6 font-semibold text-slate-900">Patient</TableHead>
+                    <TableHead className="text-left py-3 px-6 font-semibold text-slate-900">Tests</TableHead>
+                    <TableHead className="text-left py-3 px-6 font-semibold text-slate-900">Priority</TableHead>
+                    <TableHead className="text-left py-3 px-6 font-semibold text-slate-900">Status</TableHead>
+                    <TableHead className="text-right py-3 px-6 font-semibold text-slate-900">Action</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
                   {model.queue.slice(0, 8).map((o) => (
-                    <tr key={o.id} className="border-b hover:bg-slate-50">
-                      <td className="py-3 px-6">
+                    <TableRow key={o.id} className="border-b hover:bg-slate-50">
+                      <TableCell className="py-3 px-6 whitespace-normal">
                         <Link href={`/dashboard/lab-orders?open=${o.id}`} className="font-mono text-xs text-cyan-600 hover:text-cyan-700 hover:underline">
                           {o.id}
                         </Link>
-                      </td>
-                      <td className="py-3 px-6 font-medium text-slate-900">{o.patient}</td>
-                      <td className="py-3 px-6 text-slate-600">{o.tests}</td>
-                      <td className="py-3 px-6">
+                      </TableCell>
+                      <TableCell className="py-3 px-6 font-medium text-slate-900 whitespace-normal">{o.patient}</TableCell>
+                      <TableCell className="py-3 px-6 text-slate-600 whitespace-normal">{o.tests}</TableCell>
+                      <TableCell className="py-3 px-6 whitespace-normal">
                         {o.priority === 'urgent' ? (
                           <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-700">
                             <AlertTriangle className="w-3 h-3" /> Urgent
@@ -115,21 +116,21 @@ export function LabDashboard({ session }: RoleViewProps) {
                         ) : (
                           <span className="text-slate-500 text-sm">Routine</span>
                         )}
-                      </td>
-                      <td className="py-3 px-6">
+                      </TableCell>
+                      <TableCell className="py-3 px-6 whitespace-normal">
                         <span className={`inline-block px-2.5 py-1 rounded-full text-xs font-semibold ${ORDER_STATUS_STYLE[o.status]}`}>
                           {ORDER_STATUS_LABEL[o.status]}
                         </span>
-                      </td>
-                      <td className="py-3 px-6 text-right">
+                      </TableCell>
+                      <TableCell className="py-3 px-6 text-right whitespace-normal">
                         <Link href={`/dashboard/lab-orders?open=${o.id}`} className="text-cyan-600 hover:text-cyan-700 font-semibold text-sm">
                           Process
                         </Link>
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   ))}
-                </tbody>
-              </table>
+                </TableBody>
+              </Table>
             </div>
           )}
         </div>

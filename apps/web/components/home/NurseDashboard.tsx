@@ -12,6 +12,7 @@ import {
   useListVitalsQuery,
 } from '@/store/api';
 import { DashboardShell } from '@/components/DashboardShell';
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
 import type { RoleViewProps } from '@/components/RoleView';
 
 const todayStr = new Date().toISOString().split('T')[0];
@@ -114,38 +115,38 @@ export function NurseDashboard({ session }: RoleViewProps) {
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b bg-slate-50">
-                    <th className="text-left py-3 px-6 font-semibold text-slate-900">Time</th>
-                    <th className="text-left py-3 px-6 font-semibold text-slate-900">Patient</th>
-                    <th className="text-left py-3 px-6 font-semibold text-slate-900">Doctor</th>
-                    <th className="text-left py-3 px-6 font-semibold text-slate-900">Vitals</th>
-                    <th className="text-right py-3 px-6 font-semibold text-slate-900">Action</th>
-                  </tr>
-                </thead>
-                <tbody>
+              <Table>
+                <TableHeader>
+                  <TableRow className="border-b bg-slate-50">
+                    <TableHead className="text-left py-3 px-6 font-semibold text-slate-900">Time</TableHead>
+                    <TableHead className="text-left py-3 px-6 font-semibold text-slate-900">Patient</TableHead>
+                    <TableHead className="text-left py-3 px-6 font-semibold text-slate-900">Doctor</TableHead>
+                    <TableHead className="text-left py-3 px-6 font-semibold text-slate-900">Vitals</TableHead>
+                    <TableHead className="text-right py-3 px-6 font-semibold text-slate-900">Action</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
                   {model.todaysAppts.slice(0, 8).map((a) => (
-                    <tr key={a.id} className="border-b hover:bg-slate-50">
-                      <td className="py-3 px-6 font-medium text-slate-900">{a.time}</td>
-                      <td className="py-3 px-6 text-slate-700">{a.patient}</td>
-                      <td className="py-3 px-6 text-slate-600">{a.doctor}</td>
-                      <td className="py-3 px-6">
+                    <TableRow key={a.id} className="border-b hover:bg-slate-50">
+                      <TableCell className="py-3 px-6 font-medium text-slate-900 whitespace-normal">{a.time}</TableCell>
+                      <TableCell className="py-3 px-6 text-slate-700 whitespace-normal">{a.patient}</TableCell>
+                      <TableCell className="py-3 px-6 text-slate-600 whitespace-normal">{a.doctor}</TableCell>
+                      <TableCell className="py-3 px-6 whitespace-normal">
                         {a.hasVitals ? (
                           <span className="inline-block px-2.5 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-700">Recorded</span>
                         ) : (
                           <span className="inline-block px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-700">Pending</span>
                         )}
-                      </td>
-                      <td className="py-3 px-6 text-right">
+                      </TableCell>
+                      <TableCell className="py-3 px-6 text-right whitespace-normal">
                         <Link href={`/dashboard/vitals?appt=${a.id}`} className="text-cyan-600 hover:text-cyan-700 font-semibold text-sm">
                           {a.hasVitals ? 'Update' : 'Record'}
                         </Link>
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   ))}
-                </tbody>
-              </table>
+                </TableBody>
+              </Table>
             </div>
           )}
         </div>

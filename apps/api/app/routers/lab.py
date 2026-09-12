@@ -180,6 +180,36 @@ def update_test_order(
     db.refresh(order)
 
     if order.status == "completed" and not was_completed:
+        # Billing is automatic, not a separate step lab staff take: the report
+        # is ready, so a pending lab Payment appears on the Billing screen for
+        # the front desk to collect. Guarded against a bounce back through
+        # `completed` a second time — the generic status setter above has no
+        # one-way turnstile the way `administer` does.
+        already_billed = (
+            db.query(models.Payment)
+            .filter(
+                models.Payment.hospital_id == tenant_id,
+                models.Payment.test_order_id == order.id,
+            )
+            .first()
+            is not None
+        )
+        if not already_billed:
+            items = order.items or []
+            db.add(models.Payment(
+                id=new_id("pay"),
+                hospital_id=tenant_id,
+                appointment_id=None,
+                test_order_id=order.id,
+                patient_id=order.patient_id,
+                amount=round(sum(float(i.get("price") or 0) for i in items), 2),
+                payment_type="lab",
+                status="pending",
+                payment_method="",
+                created_at=now_iso(),
+            ))
+            db.commit()
+
         notify.notify_patient(
             db, tenant_id, order.patient_id,
             title="Lab report ready",

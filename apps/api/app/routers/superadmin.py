@@ -116,6 +116,8 @@ def all_appointments(
     hospital_id: Optional[str] = Query(default=None, alias="hospitalId"),
     status_filter: Optional[str] = Query(default=None, alias="status"),
     date: Optional[str] = Query(default=None),
+    date_from: Optional[str] = Query(default=None, alias="dateFrom"),
+    date_to: Optional[str] = Query(default=None, alias="dateTo"),
     sort: str = Query(default=DEFAULT_APPOINTMENT_SORT),
     params: ListQuery = Depends(list_params),
     db: Session = Depends(get_db),
@@ -128,6 +130,10 @@ def all_appointments(
         query = query.filter(models.Appointment.status == status_filter)
     if date:
         query = query.filter(models.Appointment.date == date)
+    if date_from:
+        query = query.filter(models.Appointment.date >= date_from)
+    if date_to:
+        query = query.filter(models.Appointment.date <= date_to)
     # Same search as the tenant list: patient name/phone or doctor name, which
     # is what the platform table shows and therefore what a superadmin types.
     query = appointment_name_search(query, params.q)

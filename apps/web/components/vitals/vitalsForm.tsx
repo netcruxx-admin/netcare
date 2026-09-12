@@ -3,14 +3,22 @@
 // Shared shape + fields for the counter's vitals form, used by RecordVitalsModal,
 // EditVitalsModal and NurseVitals so the three stay identical.
 //
-// Nine fields: BP, Height, Pulse, Weight, Temperature, BMI, LMP, EDD, POG.
-// Respiratory rate and clinical notes are still stored on the record (old data,
-// API contract) but are no longer entered here — the payload builder simply
-// omits them, which POST defaults and PUT leaves untouched.
+// Ten fields: BP, Height, Pulse, Weight, Temperature, BMI, Pregnancy Status,
+// LMP, EDD, POG. Respiratory rate and clinical notes are still stored on the
+// record (old data, API contract) but are no longer entered here — the
+// payload builder simply omits them, which POST defaults and PUT leaves
+// untouched.
 //
-// BMI, EDD and POG are auto-filled from their sources (height+weight, and LMP)
-// but remain editable: each recomputes only when its own source changes, so a
-// value the recorder then adjusts by hand survives until the next source edit.
+// BMI is auto-filled from height+weight but remains editable: it recomputes
+// only when height/weight change, so a value the recorder then adjusts by
+// hand survives until the next source edit.
+//
+// EDD and POG are auto-filled from LMP, but ONLY when pregnancyStatus is
+// "pregnant" — LMP alone does not mean the patient is pregnant (a routine
+// gynae visit records LMP too), so computing a due date from it regardless
+// used to be wrong. A blank LMP does not mean menopause either; that is now
+// its own explicit status rather than something inferred from an empty
+// field. Picking "Menopause" clears LMP/EDD/POG, since none apply.
 
 import { useEffect, useRef } from 'react';
 import { useFormikContext } from 'formik';
@@ -25,6 +33,7 @@ export interface VitalsFormValues {
   weight: string;
   temperature: string;
   bmi: string;
+  pregnancyStatus: string;
   lmp: string;
   edd: string;
   pog: string;
@@ -35,8 +44,11 @@ export const emptyVitals: VitalsFormValues = {
   height: '',
   heartRate: '',
   weight: '',
-  temperature: '',
+  // Normal body temperature by default — most visits don't have a fever, so
+  // the recorder overrides this rather than typing it out every time.
+  temperature: '98.4',
   bmi: '',
+  pregnancyStatus: '',
   lmp: '',
   edd: '',
   pog: '',
@@ -51,6 +63,7 @@ export const vitalsToForm = (v: Vitals): VitalsFormValues => ({
   weight: asStr(v.weight),
   temperature: asStr(v.temperature),
   bmi: asStr(v.bmi),
+  pregnancyStatus: v.pregnancyStatus ?? '',
   lmp: v.lmp ?? '',
   edd: v.edd ?? '',
   pog: v.pog ?? '',
@@ -67,10 +80,17 @@ export const vitalsToPayload = (v: VitalsFormValues) => ({
   weight: asNum(v.weight),
   temperature: asNum(v.temperature),
   bmi: asNum(v.bmi),
+  pregnancyStatus: v.pregnancyStatus,
   lmp: v.lmp,
   edd: v.edd,
   pog: v.pog,
 });
+
+export const pregnancyStatusOptions = [
+  { value: 'pregnant', label: 'Pregnant' },
+  { value: 'not_pregnant', label: 'Not Pregnant' },
+  { value: 'menopause', label: 'Menopause' },
+];
 
 const numOpt = Yup.number()
   .transform((v, orig) => (orig === '' ? undefined : v))
@@ -85,6 +105,7 @@ export const vitalsSchema = Yup.object({
   weight: numOpt,
   temperature: numOpt,
   bmi: numOpt,
+  pregnancyStatus: Yup.string().oneOf(['', 'pregnant', 'not_pregnant', 'menopause']),
   lmp: Yup.string(),
   edd: Yup.string(),
   pog: Yup.string().max(20, 'Too long'),
@@ -125,6 +146,7 @@ export function Autofill() {
   const seen = useRef({
     hw: `${values.height}|${values.weight}`,
     lmp: values.lmp,
+    pregnancyStatus: values.pregnancyStatus,
   });
 
   useEffect(() => {
@@ -135,16 +157,36 @@ export function Autofill() {
   }, [values.height, values.weight, setFieldValue]);
 
   useEffect(() => {
-    if (values.lmp === seen.current.lmp) return;
+    const lmpChanged = values.lmp !== seen.current.lmp;
+    const statusChanged = values.pregnancyStatus !== seen.current.pregnancyStatus;
+    if (!lmpChanged && !statusChanged) return;
     seen.current.lmp = values.lmp;
-    setFieldValue('edd', values.lmp ? addDays(values.lmp, 280) : '');
-    setFieldValue('pog', values.lmp ? gestationFromLmp(values.lmp) : '');
-  }, [values.lmp, setFieldValue]);
+    seen.current.pregnancyStatus = values.pregnancyStatus;
+
+    // Menopause rules out LMP/EDD/POG entirely — clear all three rather than
+    // leave a contradictory "menopause + dated LMP" on the record.
+    if (statusChanged && values.pregnancyStatus === 'menopause') {
+      setFieldValue('lmp', '');
+      setFieldValue('edd', '');
+      setFieldValue('pog', '');
+      return;
+    }
+
+    // EDD/POG are only meaningful for an actual pregnancy — LMP being filled
+    // in (routine menstrual history) is not enough on its own.
+    if (values.pregnancyStatus === 'pregnant' && values.lmp) {
+      setFieldValue('edd', addDays(values.lmp, 280));
+      setFieldValue('pog', gestationFromLmp(values.lmp));
+    } else {
+      setFieldValue('edd', '');
+      setFieldValue('pog', '');
+    }
+  }, [values.lmp, values.pregnancyStatus, setFieldValue]);
 
   return null;
 }
 
-/** The nine fields, in the agreed order. Drop straight into a two-column grid
+/** The ten fields, in the agreed order. Drop straight into a two-column grid
  *  `<Form>`. */
 export function VitalsFormFields() {
   return (
@@ -154,8 +196,9 @@ export function VitalsFormFields() {
       <FormField name="height" label="Height (cm)" type="number" placeholder="165" />
       <FormField name="heartRate" label="Pulse (bpm)" type="number" placeholder="78" />
       <FormField name="weight" label="Weight (kg)" type="number" placeholder="68" />
-      <FormField name="temperature" label="Temperature (°F)" type="number" placeholder="98.6" />
+      <FormField name="temperature" label="Temperature (°F)" type="number" placeholder="98.4" />
       <FormField name="bmi" label="BMI (kg/m²)" type="number" placeholder="from height & weight" />
+      <FormField name="pregnancyStatus" label="Pregnancy Status" as="select" placeholder="Not recorded" options={pregnancyStatusOptions} />
       <FormField name="lmp" label="LMP" type="date" />
       <FormField name="edd" label="EDD" type="date" />
       <FormField name="pog" label="POG" placeholder="e.g. 28w 3d" />

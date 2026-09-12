@@ -8,6 +8,8 @@ import { FormField } from '@/components/form/FormField';
 import { useGetOnboardingMetaQuery, useUpdateHospitalMutation } from '@/store/api';
 import type { HospitalInfo } from '@/store/api';
 import { Spinner } from '@/components/ui/spinner';
+import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 
 const CATEGORY_THEMES: Record<string, { primary: string; primaryDark: string }> = {
   maternity: { primary: '#0891b2', primaryDark: '#0d9488' },
@@ -71,8 +73,6 @@ export function EditHospitalModal({ open, hospital, onClose, onSuccess }: Props)
   const [updateHospital] = useUpdateHospitalMutation();
   const { data: meta, isLoading: loadingMeta } = useGetOnboardingMetaQuery(hospital.category, { skip: !open });
 
-  if (!open) return null;
-
   const theme = hospital.theme as Record<string, string>;
 
   const entityTypeOptions = meta?.entityTypes?.map((e) => ({ value: e.code, label: e.label })) ?? [];
@@ -91,16 +91,16 @@ export function EditHospitalModal({ open, hospital, onClose, onSuccess }: Props)
   ];
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-start justify-center p-4 z-50 overflow-y-auto">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl my-8">
-        <div className="flex justify-between items-center px-6 py-4 border-b border-slate-100">
-          <h3 className="text-lg font-bold text-slate-900">Edit Hospital</h3>
+    <Dialog open={open} onOpenChange={(next) => !next && onClose()}>
+      <DialogContent showCloseButton={false} className="max-w-2xl max-h-[90vh] flex flex-col p-0 gap-0">
+        <div className="flex justify-between items-center px-6 py-4 border-b border-slate-100 shrink-0">
+          <DialogTitle className="text-lg font-bold text-slate-900">Edit Hospital</DialogTitle>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-900 p-1">
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        <div className="px-6 py-5">
+        <div className="px-6 py-5 overflow-y-auto flex-1">
           {loadingMeta && <Spinner variant="block" />}
           <Formik
             initialValues={{
@@ -166,7 +166,7 @@ export function EditHospitalModal({ open, hospital, onClose, onSuccess }: Props)
               }
             }}
           >
-            {({ isSubmitting, values, setFieldValue }) => (
+            {({ isSubmitting, values, setFieldValue, dirty }) => (
               <Form className="space-y-5">
 
                 {/* ── Basic Info ─────────────────────────────────────────── */}
@@ -361,19 +361,20 @@ export function EditHospitalModal({ open, hospital, onClose, onSuccess }: Props)
                   >
                     Cancel
                   </button>
-                  <button
+                  <Button
                     type="submit"
-                    disabled={isSubmitting}
-                    className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg font-semibold text-sm hover:shadow-lg transition disabled:opacity-50"
+                    disabled={isSubmitting || !dirty}
+                    variant="brand"
+                    className="flex-1"
                   >
                     {isSubmitting ? <Spinner size="sm" label="Saving…" /> : 'Save Changes'}
-                  </button>
+                  </Button>
                 </div>
               </Form>
             )}
           </Formik>
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

@@ -17,6 +17,7 @@ import {
 import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
 import { Spinner } from '@/components/ui/spinner';
+import { Button } from '@/components/ui/button';
 
 declare global {
   interface Window {
@@ -213,12 +214,12 @@ export function PatientVideoConsult({ session }: RoleViewProps) {
             Payment confirmed. You&apos;ll find it in your appointments. Join the video room from there at your scheduled time.
           </p>
           <div className="flex gap-2 justify-center mt-6">
-            <button
+            <Button
               onClick={() => router.push(`/dashboard/consult/${bookedApptId}`)}
-              className="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-cyan-500 to-brand-teal text-white text-sm font-semibold px-4 py-2"
+              variant="brand"
             >
               <Video className="w-4 h-4" /> Join now
-            </button>
+            </Button>
             <button
               onClick={() => router.push('/dashboard/appointments')}
               className="rounded-lg border border-slate-300 text-slate-700 text-sm font-medium px-4 py-2 hover:bg-slate-50"
@@ -327,13 +328,14 @@ export function PatientVideoConsult({ session }: RoleViewProps) {
               <Row label="Fee" value={`₹${videoFee}`} />
             </div>
             {error && <p className="mt-4 text-sm text-red-600">{error}</p>}
-            <button
+            <Button
               onClick={() => book(confirm)}
               disabled={booking}
-              className="inline-flex items-center justify-center gap-2 mt-5 w-full py-2.5 rounded-lg bg-gradient-to-r from-cyan-500 to-brand-teal text-white font-semibold text-sm disabled:opacity-50"
+              variant="brand"
+              className="mt-5 w-full"
             >
               {booking ? <Spinner size="sm" label="Processing…" /> : `Pay ₹${videoFee} & Book`}
-            </button>
+            </Button>
             <p className="text-xs text-slate-400 text-center mt-2">Secured by Razorpay. Slot is confirmed only after payment.</p>
           </div>
         </div>

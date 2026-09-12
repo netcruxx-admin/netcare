@@ -12,6 +12,8 @@ import type { RoleInfo } from '@/store/api';
 import { builtInRoleCodes } from '@/lib/roles';
 import { hasPermission } from '@/lib/auth';
 import { Spinner } from '@/components/ui/spinner';
+import { Button } from '@/components/ui/button';
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
 
 export function PlatformRoles({ session }: RoleViewProps) {
   const router = useRouter();
@@ -52,12 +54,13 @@ export function PlatformRoles({ session }: RoleViewProps) {
             {roles.length} role{roles.length !== 1 ? 's' : ''}
           </p>
           {hasPermission(session, 'roles.manage') && (
-            <button
+            <Button
               onClick={openCreate}
-              className="flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg text-sm font-medium hover:shadow-lg transition"
+              variant="brand"
+              size="sm"
             >
               <Plus className="w-4 h-4" /> Add Role
-            </button>
+            </Button>
           )}
         </div>
 
@@ -74,28 +77,28 @@ export function PlatformRoles({ session }: RoleViewProps) {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="bg-slate-50 border-b border-slate-100">
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-slate-50 border-b border-slate-100">
                   {['Code', 'Display Name', 'Permissions', 'Scope', 'Users', ''].map((h) => (
-                    <th key={h} className="text-left py-3 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wide">{h}</th>
+                    <TableHead key={h} className="text-left py-3 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wide">{h}</TableHead>
                   ))}
-                </tr>
-              </thead>
-              <tbody>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {roles.map((r) => {
                   const builtin = builtInRoleCodes.includes(r.code);
                   const locked = builtin || r.userCount > 0;
                   return (
-                    <tr key={r.code} className="border-b border-slate-50 hover:bg-slate-50 transition">
-                      <td className="py-3 px-6">
+                    <TableRow key={r.code} className="border-b border-slate-50 hover:bg-slate-50 transition">
+                      <TableCell className="py-3 px-6 whitespace-normal">
                         <code className="text-xs bg-slate-100 text-slate-700 rounded px-2 py-1">{r.code}</code>
-                      </td>
-                      <td className="py-3 px-6">
+                      </TableCell>
+                      <TableCell className="py-3 px-6 whitespace-normal">
                         <span className="font-medium text-slate-900">{r.label}</span>
                         {r.description && <span className="block text-xs text-slate-500">{r.description}</span>}
-                      </td>
-                      <td className="py-3 px-6 text-sm">
+                      </TableCell>
+                      <TableCell className="py-3 px-6 text-sm whitespace-normal">
                         {r.permissions.length > 0 ? (
                           <span
                             className="text-slate-700"
@@ -106,14 +109,14 @@ export function PlatformRoles({ session }: RoleViewProps) {
                         ) : (
                           <span className="text-amber-600" title="This role can sign in but see nothing">none</span>
                         )}
-                      </td>
-                      <td className="py-3 px-6 text-sm">
+                      </TableCell>
+                      <TableCell className="py-3 px-6 text-sm whitespace-normal">
                         <span className={`px-2 py-1 rounded-full text-xs font-medium ${r.isPlatform ? 'bg-violet-50 text-violet-700' : 'bg-slate-100 text-slate-600'}`}>
                           {r.isPlatform ? 'Platform' : 'Hospital'}
                         </span>
-                      </td>
-                      <td className="py-3 px-6 text-slate-600 text-sm">{r.userCount}</td>
-                      <td className="py-3 px-6">
+                      </TableCell>
+                      <TableCell className="py-3 px-6 text-slate-600 text-sm whitespace-normal">{r.userCount}</TableCell>
+                      <TableCell className="py-3 px-6 whitespace-normal">
                         <div className="flex items-center justify-end gap-1">
                           {hasPermission(session, 'roles.manage') && (
                             <button
@@ -141,12 +144,12 @@ export function PlatformRoles({ session }: RoleViewProps) {
                             </button>
                           )}
                         </div>
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   );
                 })}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </div>
         )}
       </div>

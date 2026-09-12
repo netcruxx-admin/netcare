@@ -10,6 +10,8 @@ paid, billed and not paid, and never billed at all. Collapsing the last two
 sends the front desk chasing money nobody ever asked for.
 """
 
+from tests.conftest import unique_date
+
 APPOINTMENTS = "/appointments"
 FEES = "/consultation-fees"
 
@@ -37,7 +39,7 @@ def _book(tenant, **overrides) -> dict:
         "patientId": tenant.ids["patient"],
         "doctorId": tenant.ids["doctor"],
         "departmentId": tenant.ids["department"],
-        "date": "2031-03-03",
+        "date": unique_date(),
         "time": "10:00",
         "reason": "Billing status check",
     }

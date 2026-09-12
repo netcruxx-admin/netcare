@@ -223,6 +223,39 @@ def attach_patient_names(
         setattr(item, name_attr, names.get(getattr(item, id_attr, None), ("", ""))[0])
 
 
+def assert_no_duplicate_department_booking(
+    db: Session,
+    tenant_id: str,
+    patient_id: str,
+    department_id: str,
+    date: str,
+    exclude_appointment_id: Optional[str] = None,
+) -> None:
+    """Refuse a second live appointment for one patient in one department on
+    one day — one booking per department per day is the rule regardless of
+    which doctor it lands on or who is doing the booking.
+
+    A cancelled appointment does not count against the patient: cancelling and
+    rebooking the same day is the point of cancelling, not a way around this.
+    `exclude_appointment_id` lets a reschedule check against every *other* row
+    without tripping over the row it is itself moving.
+    """
+    query = db.query(models.Appointment).filter(
+        models.Appointment.hospital_id == tenant_id,
+        models.Appointment.patient_id == patient_id,
+        models.Appointment.department_id == department_id,
+        models.Appointment.date == date,
+        models.Appointment.status != "cancelled",
+    )
+    if exclude_appointment_id:
+        query = query.filter(models.Appointment.id != exclude_appointment_id)
+    if query.first() is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="This patient already has an appointment in this department on this date",
+        )
+
+
 def appointment_name_search(query, q: Optional[str]):
     """Narrow an appointment query by patient name/phone or doctor name.
 

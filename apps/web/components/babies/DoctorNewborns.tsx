@@ -2,6 +2,8 @@
 
 import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { Formik, Form } from 'formik';
+import * as Yup from 'yup';
 import { Baby as BabyIcon, Plus, X, Search, Syringe, LineChart as LineChartIcon, CheckCircle2, AlertTriangle } from 'lucide-react';
 import type { Baby, Immunization } from '@/lib/types';
 import { apiError } from '@/lib/apiError';
@@ -22,6 +24,7 @@ import { TablePagination } from '@/components/TablePagination';
 import { useServerTable } from '@/hooks/useServerTable';
 import { ageDisplay, scheduleForDob, immStatus } from '@/lib/baby';
 import { Spinner } from '@/components/ui/spinner';
+import { Button } from '@/components/ui/button';
 
 const today = () => new Date().toISOString().split('T')[0];
 const inputCls = 'w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/30 focus:border-cyan-500';
@@ -60,9 +63,9 @@ export function DoctorNewborns({ session }: RoleViewProps) {
             />
           </div>
           {canManage && (
-            <button onClick={() => setShowRegister(true)} className="ml-auto inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-cyan-500 to-brand-teal text-white text-sm font-semibold px-4 py-2 shadow hover:opacity-95">
+            <Button onClick={() => setShowRegister(true)} variant="brand" className="ml-auto">
               <Plus className="w-4 h-4" /> Register newborn
-            </button>
+            </Button>
           )}
         </div>
 
@@ -148,6 +151,23 @@ function BabyCard({
   );
 }
 
+interface RegisterBabyValues {
+  motherPatientId: string;
+  name: string;
+  dob: string;
+  sex: 'male' | 'female';
+  birthWeight: string;
+  birthLength: string;
+  headCircumference: string;
+  deliveryType: 'normal' | 'c-section' | 'assisted';
+  gestationalWeeks: string;
+}
+
+const registerBabySchema = Yup.object({
+  motherPatientId: Yup.string().required('Select the mother'),
+  dob: Yup.string().required('Date of birth is required'),
+});
+
 function RegisterBabyModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
   const { data: patientRecords = [] } = useListPatientsQuery();
   const [createBaby] = useCreateBabyMutation();
@@ -157,145 +177,175 @@ function RegisterBabyModal({ onClose, onSaved }: { onClose: () => void; onSaved:
     return patientRecords.map((p) => ({ id: p.id, name: p.user?.name ?? p.id }));
   }, []);
 
-  const [motherPatientId, setMother] = useState('');
-  const [name, setName] = useState('');
-  const [dob, setDob] = useState(today());
-  const [sex, setSex] = useState<'male' | 'female'>('female');
-  const [birthWeight, setBirthWeight] = useState(0);
-  const [birthLength, setBirthLength] = useState(0);
-  const [headCircumference, setHead] = useState(0);
-  const [deliveryType, setDelivery] = useState<'normal' | 'c-section' | 'assisted'>('normal');
-  const [gestationalWeeks, setGA] = useState(39);
   const [error, setError] = useState('');
 
-  const save = async () => {
-    if (!motherPatientId) return setError('Select the mother');
-    if (!dob) return setError('Date of birth is required');
-    setError('');
-    try {
-      const baby = await createBaby({
-        motherPatientId, name: name || 'Baby', dateOfBirth: dob, sex,
-        birthWeight, birthLength, headCircumference, deliveryType, gestationalWeeks,
-      }).unwrap();
-
-      // Seed the immunisation schedule from the DOB.
-      for (const s of scheduleForDob(dob)) {
-        await createImmunization({
-          babyId: baby.id,
-          body: { vaccine: s.vaccine, ageLabel: s.ageLabel, dueDate: s.dueDate, status: 'pending' },
-        }).unwrap();
-      }
-      // Record the birth measurement as the first growth point.
-      if (birthWeight) {
-        await addGrowth({
-          babyId: baby.id,
-          body: { date: dob, weight: birthWeight, height: birthLength, headCircumference },
-        }).unwrap();
-      }
-      onSaved();
-    } catch (err) {
-      setError(apiError(err, 'Could not register the newborn'));
-    }
+  const initialValues: RegisterBabyValues = {
+    motherPatientId: '', name: '', dob: today(), sex: 'female',
+    birthWeight: '', birthLength: '', headCircumference: '',
+    deliveryType: 'normal', gestationalWeeks: '39',
   };
 
   return (
     <Modal title="Register newborn" onClose={onClose}>
-      <div className="space-y-3">
-        <Field label="Mother">
-          <select value={motherPatientId} onChange={(e) => setMother(e.target.value)} className={inputCls}>
-            <option value="">Select mother…</option>
-            {mothers.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
-          </select>
-        </Field>
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Baby's name"><input value={name} onChange={(e) => setName(e.target.value)} placeholder="Baby / given name" className={inputCls} /></Field>
-          <Field label="Date of birth"><input type="date" value={dob} max={today()} onChange={(e) => setDob(e.target.value)} className={inputCls} /></Field>
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Sex">
-            <select value={sex} onChange={(e) => setSex(e.target.value as 'male' | 'female')} className={inputCls}>
-              <option value="female">Girl</option>
-              <option value="male">Boy</option>
-            </select>
-          </Field>
-          <Field label="Gestational age (weeks)"><input type="number" value={gestationalWeeks} onChange={(e) => setGA(+e.target.value)} className={inputCls} /></Field>
-        </div>
-        <div className="grid grid-cols-3 gap-3">
-          <Field label="Birth weight (kg)"><input type="number" step="0.01" value={birthWeight || ''} onChange={(e) => setBirthWeight(+e.target.value)} className={inputCls} /></Field>
-          <Field label="Length (cm)"><input type="number" step="0.1" value={birthLength || ''} onChange={(e) => setBirthLength(+e.target.value)} className={inputCls} /></Field>
-          <Field label="Head circ. (cm)"><input type="number" step="0.1" value={headCircumference || ''} onChange={(e) => setHead(+e.target.value)} className={inputCls} /></Field>
-        </div>
-        <Field label="Delivery type">
-          <select value={deliveryType} onChange={(e) => setDelivery(e.target.value as 'normal' | 'c-section' | 'assisted')} className={inputCls}>
-            <option value="normal">Normal (vaginal)</option>
-            <option value="c-section">C-section</option>
-            <option value="assisted">Assisted</option>
-          </select>
-        </Field>
-        {error && <p className="text-sm text-red-600">{error}</p>}
-        <div className="flex justify-end gap-2 pt-1">
-          <button onClick={onClose} className="px-4 py-2 text-sm text-slate-600 hover:text-slate-900">Cancel</button>
-          <button onClick={save} className="px-4 py-2 text-sm font-semibold text-white bg-gradient-to-r from-cyan-500 to-brand-teal rounded-lg">Register</button>
-        </div>
-      </div>
+      <Formik<RegisterBabyValues>
+        initialValues={initialValues}
+        validationSchema={registerBabySchema}
+        onSubmit={async (values, { setSubmitting }) => {
+          setError('');
+          const birthWeight = Number(values.birthWeight) || 0;
+          const birthLength = Number(values.birthLength) || 0;
+          const headCircumference = Number(values.headCircumference) || 0;
+          try {
+            const baby = await createBaby({
+              motherPatientId: values.motherPatientId,
+              name: values.name || 'Baby',
+              dateOfBirth: values.dob,
+              sex: values.sex,
+              birthWeight, birthLength, headCircumference,
+              deliveryType: values.deliveryType,
+              gestationalWeeks: Number(values.gestationalWeeks) || 0,
+            }).unwrap();
+
+            // Seed the immunisation schedule from the DOB.
+            for (const s of scheduleForDob(values.dob)) {
+              await createImmunization({
+                babyId: baby.id,
+                body: { vaccine: s.vaccine, ageLabel: s.ageLabel, dueDate: s.dueDate, status: 'pending' },
+              }).unwrap();
+            }
+            // Record the birth measurement as the first growth point.
+            if (birthWeight) {
+              await addGrowth({
+                babyId: baby.id,
+                body: { date: values.dob, weight: birthWeight, height: birthLength, headCircumference },
+              }).unwrap();
+            }
+            onSaved();
+          } catch (err) {
+            setError(apiError(err, 'Could not register the newborn'));
+          } finally {
+            setSubmitting(false);
+          }
+        }}
+      >
+        {({ values, handleChange, isSubmitting, dirty }) => (
+          <Form className="space-y-3">
+            <Field label="Mother">
+              <select name="motherPatientId" value={values.motherPatientId} onChange={handleChange} className={inputCls}>
+                <option value="">Select mother…</option>
+                {mothers.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+              </select>
+            </Field>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Baby's name"><input name="name" value={values.name} onChange={handleChange} placeholder="Baby / given name" className={inputCls} /></Field>
+              <Field label="Date of birth"><input type="date" name="dob" value={values.dob} max={today()} onChange={handleChange} className={inputCls} /></Field>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Sex">
+                <select name="sex" value={values.sex} onChange={handleChange} className={inputCls}>
+                  <option value="female">Girl</option>
+                  <option value="male">Boy</option>
+                </select>
+              </Field>
+              <Field label="Gestational age (weeks)"><input type="number" name="gestationalWeeks" value={values.gestationalWeeks} onChange={handleChange} className={inputCls} /></Field>
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              <Field label="Birth weight (kg)"><input type="number" step="0.01" name="birthWeight" value={values.birthWeight} onChange={handleChange} className={inputCls} /></Field>
+              <Field label="Length (cm)"><input type="number" step="0.1" name="birthLength" value={values.birthLength} onChange={handleChange} className={inputCls} /></Field>
+              <Field label="Head circ. (cm)"><input type="number" step="0.1" name="headCircumference" value={values.headCircumference} onChange={handleChange} className={inputCls} /></Field>
+            </div>
+            <Field label="Delivery type">
+              <select name="deliveryType" value={values.deliveryType} onChange={handleChange} className={inputCls}>
+                <option value="normal">Normal (vaginal)</option>
+                <option value="c-section">C-section</option>
+                <option value="assisted">Assisted</option>
+              </select>
+            </Field>
+            {error && <p className="text-sm text-red-600">{error}</p>}
+            <div className="flex justify-end gap-2 pt-1">
+              <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-slate-600 hover:text-slate-900">Cancel</button>
+              <Button type="submit" disabled={isSubmitting || !dirty} variant="brand">
+                {isSubmitting ? 'Registering…' : 'Register'}
+              </Button>
+            </div>
+          </Form>
+        )}
+      </Formik>
     </Modal>
   );
 }
 
-function GrowthModal({ baby, canManage, onClose }: { baby: Baby; canManage: boolean; onClose: () => void }) {
-  const [date, setDate] = useState(today());
-  const [weight, setWeight] = useState(0);
-  const [height, setHeight] = useState(0);
-  const [head, setHead] = useState(0);
+interface GrowthValues {
+  date: string;
+  weight: string;
+  height: string;
+  head: string;
+}
 
+function GrowthModal({ baby, canManage, onClose }: { baby: Baby; canManage: boolean; onClose: () => void }) {
   const { data: measurements = [] } = useListGrowthQuery(baby.id);
   const [addGrowth] = useAddGrowthMutation();
   const [error, setError] = useState('');
 
-  const add = async () => {
-    if (!weight) return;
-    setError('');
-    try {
-      await addGrowth({
-        babyId: baby.id,
-        body: { date, weight, height, headCircumference: head },
-      }).unwrap();
-      setWeight(0); setHeight(0); setHead(0);
-    } catch (err) {
-      setError(apiError(err, 'Could not add the measurement'));
-    }
-  };
+  const initialValues: GrowthValues = { date: today(), weight: '', height: '', head: '' };
 
   return (
     <Modal title={`Growth — ${baby.name}`} onClose={onClose}>
       <div className="space-y-3">
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Date"><input type="date" value={date} max={today()} onChange={(e) => setDate(e.target.value)} className={inputCls} /></Field>
-          <Field label="Weight (kg)"><input type="number" step="0.01" value={weight || ''} onChange={(e) => setWeight(+e.target.value)} className={inputCls} /></Field>
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Length (cm)"><input type="number" step="0.1" value={height || ''} onChange={(e) => setHeight(+e.target.value)} className={inputCls} /></Field>
-          <Field label="Head circ. (cm)"><input type="number" step="0.1" value={head || ''} onChange={(e) => setHead(+e.target.value)} className={inputCls} /></Field>
-        </div>
-        {canManage && (
-          <button onClick={add} className="w-full py-2 rounded-lg bg-gradient-to-r from-cyan-500 to-brand-teal text-white text-sm font-semibold">Add measurement</button>
-        )}
-
-        <div className="pt-2">
-          <p className="text-xs font-medium text-slate-500 mb-1">Recorded measurements</p>
-          {measurements.length === 0 ? (
-            <p className="text-sm text-slate-400">None yet.</p>
-          ) : (
-            <div className="max-h-40 overflow-y-auto text-sm divide-y divide-slate-100">
-              {[...measurements].reverse().map((m) => (
-                <div key={m.id} className="flex justify-between py-1.5 text-slate-700">
-                  <span>{m.date}</span>
-                  <span>{m.weight} kg{m.height ? ` · ${m.height} cm` : ''}</span>
-                </div>
-              ))}
+      <Formik<GrowthValues>
+        initialValues={initialValues}
+        onSubmit={async (values, { setSubmitting, resetForm }) => {
+          const weight = Number(values.weight) || 0;
+          if (!weight) { setSubmitting(false); return; }
+          setError('');
+          try {
+            await addGrowth({
+              babyId: baby.id,
+              body: { date: values.date, weight, height: Number(values.height) || 0, headCircumference: Number(values.head) || 0 },
+            }).unwrap();
+            resetForm({ values: { ...values, weight: '', height: '', head: '' } });
+          } catch (err) {
+            setError(apiError(err, 'Could not add the measurement'));
+          } finally {
+            setSubmitting(false);
+          }
+        }}
+      >
+        {({ values, handleChange, isSubmitting, dirty }) => (
+          <Form className="space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Date"><input type="date" name="date" value={values.date} max={today()} onChange={handleChange} className={inputCls} /></Field>
+              <Field label="Weight (kg)"><input type="number" step="0.01" name="weight" value={values.weight} onChange={handleChange} className={inputCls} /></Field>
             </div>
-          )}
-        </div>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Length (cm)"><input type="number" step="0.1" name="height" value={values.height} onChange={handleChange} className={inputCls} /></Field>
+              <Field label="Head circ. (cm)"><input type="number" step="0.1" name="head" value={values.head} onChange={handleChange} className={inputCls} /></Field>
+            </div>
+            {error && <p className="text-sm text-red-600">{error}</p>}
+            {canManage && (
+              <Button type="submit" disabled={isSubmitting || !dirty} variant="brand" className="w-full">
+                {isSubmitting ? 'Adding…' : 'Add measurement'}
+              </Button>
+            )}
+          </Form>
+        )}
+      </Formik>
+
+      <div className="pt-2">
+        <p className="text-xs font-medium text-slate-500 mb-1">Recorded measurements</p>
+        {measurements.length === 0 ? (
+          <p className="text-sm text-slate-400">None yet.</p>
+        ) : (
+          <div className="max-h-40 overflow-y-auto text-sm divide-y divide-slate-100">
+            {[...measurements].reverse().map((m) => (
+              <div key={m.id} className="flex justify-between py-1.5 text-slate-700">
+                <span>{m.date}</span>
+                <span>{m.weight} kg{m.height ? ` · ${m.height} cm` : ''}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
       </div>
     </Modal>
   );

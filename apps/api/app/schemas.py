@@ -1705,6 +1705,41 @@ class PharmacyBillOut(OutModel):
     unit_price: float
 
 
+class InjectableLabBillingRow(OutModel):
+    """One line in the combined injectables + lab billing report.
+
+    Both bill automatically — an administered shot or a completed test order
+    creates a `pending` Payment with no method yet, exactly like a
+    consultation. `status` and `payment_method` travel with the row for the
+    same reason `ConsultationBillingRow` carries them: the desk needs to see
+    what is still owed, not just what has been collected.
+    """
+    payment_id: str
+    invoice_number: str
+    created_at: str
+    patient_name: str = ""
+    patient_phone: str = ""
+    category: str = ""  # injectable | lab
+    description: str = ""
+    quantity: int = 1
+    amount: float = 0.0
+    status: str = ""
+    payment_method: str = ""
+
+
+class InjectableLabBillingSummary(OutModel):
+    """Aggregated billing report for one day, combining injectable and lab payments."""
+    date: str
+    rows: List[InjectableLabBillingRow] = []
+    total: float = 0.0
+    cash_total: float = 0.0
+    upi_total: float = 0.0
+    card_total: float = 0.0
+    #: Billed but not yet collected — what the desk still has to chase.
+    pending_total: float = 0.0
+    bill_count: int = 0
+
+
 # --- Online payment: initiate → Razorpay checkout → verify ---
 
 class PaymentInitiateBody(CamelModel):
@@ -1837,6 +1872,7 @@ class VitalsUpdate(CamelModel):
     lmp: Optional[str] = None
     edd: Optional[str] = None
     pog: Optional[str] = None
+    pregnancy_status: Optional[str] = None
     notes: Optional[str] = None
 
 
@@ -1854,6 +1890,7 @@ class VitalsCreate(CamelModel):
     lmp: str = ""
     edd: str = ""
     pog: str = ""
+    pregnancy_status: str = ""
     notes: str = ""
 
 
@@ -1872,6 +1909,7 @@ class VitalsOut(OutModel):
     lmp: str = ""
     edd: str = ""
     pog: str = ""
+    pregnancy_status: str = ""
     notes: str = ""
     created_at: str
     # Resolved server-side, for the same reason as AppointmentOut.

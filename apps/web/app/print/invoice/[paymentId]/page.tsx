@@ -43,8 +43,12 @@ export default function InvoicePrintPage() {
     );
   }
 
+  // Injectables and lab tests bill on a plain page — never the hospital
+  // letterhead — regardless of whether one is configured.
+  const forcePlain = invoice.paymentType === 'injectable' || invoice.paymentType === 'lab';
+
   return (
-    <PrintSheet header={invoice.seller} docLabel="Tax Invoice" docNumber={invoice.number} ready autoPrint>
+    <PrintSheet header={invoice.seller} docLabel="Tax Invoice" docNumber={invoice.number} ready autoPrint forcePlain={forcePlain}>
       <div className="mb-6 flex flex-wrap justify-between gap-4 text-sm">
         <div>
           <p className="text-xs text-slate-500">Billed to</p>

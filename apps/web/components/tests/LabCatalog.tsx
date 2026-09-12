@@ -11,6 +11,7 @@ import type { LabTest } from '@/lib/types';
 import { TablePagination } from '@/components/TablePagination';
 import { useServerTable } from '@/hooks/useServerTable';
 import { Spinner } from '@/components/ui/spinner';
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
 
 export function LabCatalog({ session }: RoleViewProps) {
   const [viewing, setViewing] = useState<LabTest | null>(null);
@@ -50,34 +51,34 @@ export function LabCatalog({ session }: RoleViewProps) {
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b bg-slate-50">
-                    <th className="text-left py-3 px-6 font-semibold text-slate-900">Test</th>
-                    <th className="text-left py-3 px-6 font-semibold text-slate-900">Category</th>
-                    <th className="text-left py-3 px-6 font-semibold text-slate-900">Sample</th>
-                    <th className="text-left py-3 px-6 font-semibold text-slate-900">Parameters</th>
-                    <th className="text-left py-3 px-6 font-semibold text-slate-900">TAT</th>
-                    <th className="text-right py-3 px-6 font-semibold text-slate-900">Price</th>
-                    <th className="text-right py-3 px-6 font-semibold text-slate-900">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
+              <Table>
+                <TableHeader>
+                  <TableRow className="border-b bg-slate-50">
+                    <TableHead className="text-left py-3 px-6 font-semibold text-slate-900">Test</TableHead>
+                    <TableHead className="text-left py-3 px-6 font-semibold text-slate-900">Category</TableHead>
+                    <TableHead className="text-left py-3 px-6 font-semibold text-slate-900">Sample</TableHead>
+                    <TableHead className="text-left py-3 px-6 font-semibold text-slate-900">Parameters</TableHead>
+                    <TableHead className="text-left py-3 px-6 font-semibold text-slate-900">TAT</TableHead>
+                    <TableHead className="text-right py-3 px-6 font-semibold text-slate-900">Price</TableHead>
+                    <TableHead className="text-right py-3 px-6 font-semibold text-slate-900">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
                   {rows.map((t) => (
-                    <tr key={t.id} className="border-b hover:bg-slate-50">
-                      <td className="py-3 px-6 font-medium text-slate-900">{t.name}</td>
-                      <td className="py-3 px-6 text-slate-600">{t.category}</td>
-                      <td className="py-3 px-6 text-slate-600">{t.sampleType}</td>
-                      <td className="py-3 px-6 text-slate-600">{t.parameters?.length ?? 1}</td>
-                      <td className="py-3 px-6 text-slate-600">{t.turnaroundTime}</td>
-                      <td className="py-3 px-6 text-right text-slate-600">₹{t.price}</td>
-                      <td className="py-3 px-6 text-right">
+                    <TableRow key={t.id} className="border-b hover:bg-slate-50">
+                      <TableCell className="py-3 px-6 font-medium text-slate-900 whitespace-normal">{t.name}</TableCell>
+                      <TableCell className="py-3 px-6 text-slate-600 whitespace-normal">{t.category}</TableCell>
+                      <TableCell className="py-3 px-6 text-slate-600 whitespace-normal">{t.sampleType}</TableCell>
+                      <TableCell className="py-3 px-6 text-slate-600 whitespace-normal">{t.parameters?.length ?? 1}</TableCell>
+                      <TableCell className="py-3 px-6 text-slate-600 whitespace-normal">{t.turnaroundTime}</TableCell>
+                      <TableCell className="py-3 px-6 text-right text-slate-600 whitespace-normal">₹{t.price}</TableCell>
+                      <TableCell className="py-3 px-6 text-right whitespace-normal">
                         <ActionIcon icon={Eye} label="View" onClick={() => setViewing(t)} />
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   ))}
-                </tbody>
-              </table>
+                </TableBody>
+              </Table>
               <TablePagination
                 page={table.page}
                 pageSize={table.pageSize}

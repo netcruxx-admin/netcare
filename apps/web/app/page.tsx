@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { Calendar, Shield, Users, Heart } from 'lucide-react';
 import Image from 'next/image';
 import { useActiveHospital } from '@/hooks/useActiveHospital';
+import { Button } from '@/components/ui/button';
 
 export default function LandingPage() {
   const hospital = useActiveHospital();
@@ -22,12 +23,9 @@ export default function LandingPage() {
             >
               Sign In
             </Link>
-            <Link
-              href="/register"
-              className="px-6 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white font-semibold rounded-lg hover:shadow-lg transition"
-            >
-              Get Started
-            </Link>
+            <Button asChild variant="brand">
+              <Link href="/register">Get Started</Link>
+            </Button>
           </div>
         </div>
       </nav>
@@ -45,12 +43,9 @@ export default function LandingPage() {
                 Book appointments with healthcare professionals, manage your medical records, and stay on top of your health—all in one place.
               </p>
               <div className="flex gap-4 pt-4">
-                <Link
-                  href="/register"
-                  className="px-8 py-3 bg-gradient-to-r from-cyan-500 to-brand-teal text-white font-semibold rounded-lg hover:shadow-lg transition"
-                >
-                  Start Booking
-                </Link>
+                <Button asChild variant="brand" size="lg">
+                  <Link href="/register">Start Booking</Link>
+                </Button>
                 <Link
                   href="/login"
                   className="px-8 py-3 border-2 border-cyan-300 text-cyan-700 font-semibold rounded-lg hover:bg-cyan-50 transition"

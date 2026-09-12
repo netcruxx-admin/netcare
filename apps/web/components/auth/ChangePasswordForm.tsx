@@ -9,6 +9,7 @@ import { authStorage } from '@/lib/auth';
 import { apiError } from '@/lib/apiError';
 import { useChangePasswordMutation } from '@/store/api';
 import { Spinner } from '@/components/ui/spinner';
+import { Button } from '@/components/ui/button';
 
 // The one form behind both password paths: the forced first change, and the
 // voluntary one from a profile.
@@ -144,13 +145,14 @@ export function ChangePasswordForm({ forced = false, onDone }: Props) {
           </div>
         )}
 
-        <button
+        <Button
           type="submit"
-          disabled={formik.isSubmitting}
-          className="inline-flex items-center justify-center gap-2 w-full rounded-lg bg-gradient-to-r from-cyan-500 to-brand-teal py-2 font-semibold text-white transition hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-50"
+          disabled={formik.isSubmitting || !formik.dirty}
+          variant="brand"
+          className="w-full"
         >
           {formik.isSubmitting ? <Spinner size="sm" label="Saving…" /> : 'Change password'}
-        </button>
+        </Button>
       </form>
     </FormikProvider>
   );

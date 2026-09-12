@@ -11,6 +11,8 @@ import { hasPermission } from '@/lib/auth';
 import { fmtDate } from '@/lib/date';
 import { useGetSuperadminOverviewQuery, useListHospitalsQuery } from '@/store/api';
 import { Spinner } from '@/components/ui/spinner';
+import { Button } from '@/components/ui/button';
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
 
 export function PlatformOverview({ session }: RoleViewProps) {
   const router = useRouter();
@@ -66,12 +68,13 @@ export function PlatformOverview({ session }: RoleViewProps) {
               Hospitals {selectedHospitalId && <span className="text-sm font-normal text-slate-400">(filtered)</span>}
             </h2>
             {hasPermission(session, 'hospitals.manage') && (
-              <button
+              <Button
                 onClick={() => setModalOpen(true)}
-                className="flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg text-sm font-medium hover:shadow-lg transition"
+                variant="brand"
+                size="sm"
               >
                 <Plus className="w-4 h-4" /> Onboard Hospital
-              </button>
+              </Button>
             )}
           </div>
           {isLoading ? (
@@ -80,36 +83,36 @@ export function PlatformOverview({ session }: RoleViewProps) {
             <div className="py-12 text-center text-slate-400 text-sm">No hospitals found.</div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="bg-slate-50 border-b border-slate-100">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-slate-50 border-b border-slate-100">
                     {['Name', 'Subdomain', 'Category', 'Theme', 'Status', 'Created'].map((h) => (
-                      <th key={h} className="text-left py-3 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wide">{h}</th>
+                      <TableHead key={h} className="text-left py-3 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wide">{h}</TableHead>
                     ))}
-                  </tr>
-                </thead>
-                <tbody>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
                   {hospitals.map((h) => (
-                    <tr key={h.id} className="border-b border-slate-50 hover:bg-slate-50 transition">
-                      <td className="py-3 px-6 font-medium text-slate-900">{h.name}</td>
-                      <td className="py-3 px-6 font-mono text-sm text-slate-600">{h.subdomain}</td>
-                      <td className="py-3 px-6 text-slate-600 capitalize">{h.category.replace('-', ' ')}</td>
-                      <td className="py-3 px-6">
+                    <TableRow key={h.id} className="border-b border-slate-50 hover:bg-slate-50 transition">
+                      <TableCell className="py-3 px-6 font-medium text-slate-900 whitespace-normal">{h.name}</TableCell>
+                      <TableCell className="py-3 px-6 font-mono text-sm text-slate-600 whitespace-normal">{h.subdomain}</TableCell>
+                      <TableCell className="py-3 px-6 text-slate-600 capitalize whitespace-normal">{h.category.replace('-', ' ')}</TableCell>
+                      <TableCell className="py-3 px-6 whitespace-normal">
                         <div className="flex items-center gap-1.5">
                           <span className="w-5 h-5 rounded-full border border-slate-200 inline-block" style={{ background: (h.theme as Record<string, string>)?.primary ?? '#888' }} />
                           <span className="w-5 h-5 rounded-full border border-slate-200 inline-block" style={{ background: (h.theme as Record<string, string>)?.primaryDark ?? '#555' }} />
                         </div>
-                      </td>
-                      <td className="py-3 px-6">
+                      </TableCell>
+                      <TableCell className="py-3 px-6 whitespace-normal">
                         <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${h.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-600'}`}>
                           {h.status}
                         </span>
-                      </td>
-                      <td className="py-3 px-6 text-slate-500 text-sm">{fmtDate(h.createdAt)}</td>
-                    </tr>
+                      </TableCell>
+                      <TableCell className="py-3 px-6 text-slate-500 text-sm whitespace-normal">{fmtDate(h.createdAt)}</TableCell>
+                    </TableRow>
                   ))}
-                </tbody>
-              </table>
+                </TableBody>
+              </Table>
             </div>
           )}
         </div>

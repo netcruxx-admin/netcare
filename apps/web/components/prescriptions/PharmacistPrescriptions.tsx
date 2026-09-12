@@ -2,7 +2,10 @@
 
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
+import { Formik, Form } from 'formik';
+import * as Yup from 'yup';
 import { ActionIcon } from '@/components/ActionIcon';
+import { FormField } from '@/components/form/FormField';
 import { Search, Pill, Eye, Send, CheckCircle2, X } from 'lucide-react';
 import type { Prescription } from '@/lib/types';
 import {
@@ -22,6 +25,8 @@ import { TablePagination } from '@/components/TablePagination';
 import { useServerTable } from '@/hooks/useServerTable';
 import { fmtDate } from '@/lib/date';
 import { Spinner } from '@/components/ui/spinner';
+import { Button } from '@/components/ui/button';
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
 
 const toRow = (rx: Prescription) => ({
   ...rx,
@@ -33,14 +38,24 @@ const exportRow = (r: ReturnType<typeof toRow>) => [
   r.date, r.patient, r.medicineName, r.dosage, r.frequency, r.duration, r.instructions,
 ];
 
+interface QueueValues {
+  medicineId: string;
+  quantity: string;
+}
+
+const queueSchema = Yup.object({
+  quantity: Yup.string().test('qty', 'Quantity must be a whole number of at least 1', (v) => {
+    const n = Number(v);
+    return Number.isInteger(n) && n >= 1;
+  }),
+});
+
 export function PharmacistPrescriptions({ session }: RoleViewProps) {
   const table = useServerTable();
   // Sending a prescription to the queue raises a medication order, so it needs
   // the same grant the queue's own "new order" button does.
   const canQueue = hasPermission(session, 'medication_orders.manage');
   const [queueing, setQueueing] = useState<Prescription | null>(null);
-  const [medicineId, setMedicineId] = useState('');
-  const [quantity, setQuantity] = useState('1');
   const [formError, setFormError] = useState('');
 
   const { data: medicines = [] } = useListMedicinesQuery(undefined, { skip: !canQueue });
@@ -48,7 +63,7 @@ export function PharmacistPrescriptions({ session }: RoleViewProps) {
   // tell what they have already sent, and the server's refusal would be the
   // first they hear of it.
   const { data: orders = [] } = useListMedicationOrdersQuery(undefined, { skip: !canQueue });
-  const [createOrder, { isLoading: isQueueing }] = useCreateMedicationOrderMutation();
+  const [createOrder] = useCreateMedicationOrderMutation();
   const queued = useMemo(
     () => new Set(orders.filter((o) => o.prescriptionId && o.status !== 'cancelled').map((o) => o.prescriptionId)),
     [orders],
@@ -56,46 +71,14 @@ export function PharmacistPrescriptions({ session }: RoleViewProps) {
 
   const openQueue = (rx: Prescription) => {
     setFormError('');
-    setQuantity('1');
-    // Best-effort match on name so the common case is one click. The
-    // pharmacist confirms it either way — the catalogue item is what stock
-    // moves against, and a wrong guess would move the wrong stock.
-    const match = medicines.find(
-      (m) => m.name.trim().toLowerCase() === (rx.medicineName ?? '').trim().toLowerCase(),
-    );
-    setMedicineId(match?.id ?? '');
     setQueueing(rx);
   };
 
-  const confirmQueue = async () => {
-    if (!queueing) return;
-    const count = Number(quantity);
-    if (!Number.isInteger(count) || count < 1) {
-      setFormError('Quantity must be a whole number of at least 1');
-      return;
-    }
-    try {
-      await createOrder({
-        appointmentId: queueing.appointmentId,
-        patientId: queueing.patientId,
-        // The prescriber is on the prescription; the pharmacist is not it.
-        doctorId: queueing.doctorId,
-        prescriptionId: queueing.id,
-        medicineId: medicineId || undefined,
-        medicineName: queueing.medicineName,
-        quantity: count,
-        dosage: queueing.dosage,
-        route: 'Oral',
-        frequency: queueing.frequency,
-        duration: queueing.duration,
-        instructions: queueing.instructions,
-      }).unwrap();
-      toast.success('Sent to the dispense queue');
-      setQueueing(null);
-    } catch (err) {
-      setFormError(apiError(err, 'Could not queue this prescription'));
-    }
-  };
+  // Best-effort match on name so the common case is one click. The pharmacist
+  // confirms it either way — the catalogue item is what stock moves against,
+  // and a wrong guess would move the wrong stock.
+  const matchedMedicineId = (rx: Prescription) =>
+    medicines.find((m) => m.name.trim().toLowerCase() === (rx.medicineName ?? '').trim().toLowerCase())?.id ?? '';
 
   const listArgs = { q: table.q.trim() || undefined };
   const { data: prescriptionPage, isLoading } = useListPrescriptionsPagedQuery({
@@ -145,33 +128,33 @@ export function PharmacistPrescriptions({ session }: RoleViewProps) {
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b bg-slate-50">
-                    <th className="text-left py-3 px-6 font-semibold text-slate-900">Date</th>
-                    <th className="text-left py-3 px-6 font-semibold text-slate-900">Patient</th>
-                    <th className="text-left py-3 px-6 font-semibold text-slate-900">Medicine</th>
-                    <th className="text-left py-3 px-6 font-semibold text-slate-900">Dosage</th>
-                    <th className="text-left py-3 px-6 font-semibold text-slate-900">Frequency</th>
-                    <th className="text-left py-3 px-6 font-semibold text-slate-900">Duration</th>
-                    <th className="text-right py-3 px-6 font-semibold text-slate-900">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
+              <Table>
+                <TableHeader>
+                  <TableRow className="border-b bg-slate-50">
+                    <TableHead className="text-left py-3 px-6 font-semibold text-slate-900">Date</TableHead>
+                    <TableHead className="text-left py-3 px-6 font-semibold text-slate-900">Patient</TableHead>
+                    <TableHead className="text-left py-3 px-6 font-semibold text-slate-900">Medicine</TableHead>
+                    <TableHead className="text-left py-3 px-6 font-semibold text-slate-900">Dosage</TableHead>
+                    <TableHead className="text-left py-3 px-6 font-semibold text-slate-900">Frequency</TableHead>
+                    <TableHead className="text-left py-3 px-6 font-semibold text-slate-900">Duration</TableHead>
+                    <TableHead className="text-right py-3 px-6 font-semibold text-slate-900">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
                   {rows.map((r) => (
-                    <tr key={r.id} className="border-b hover:bg-slate-50">
-                      <td className="py-3 px-6 text-slate-600 whitespace-nowrap">{r.date}</td>
-                      <td className="py-3 px-6 font-medium text-slate-900">{r.patient}</td>
-                      <td className="py-3 px-6">
+                    <TableRow key={r.id} className="border-b hover:bg-slate-50">
+                      <TableCell className="py-3 px-6 text-slate-600">{r.date}</TableCell>
+                      <TableCell className="py-3 px-6 font-medium text-slate-900 whitespace-normal">{r.patient}</TableCell>
+                      <TableCell className="py-3 px-6 whitespace-normal">
                         <span className="inline-flex items-center gap-1.5 text-slate-900 font-medium">
                           <Pill className="w-4 h-4 text-cyan-600" /> {r.medicineName}
                         </span>
                         {r.instructions && <p className="text-xs text-slate-500 mt-0.5">{r.instructions}</p>}
-                      </td>
-                      <td className="py-3 px-6 text-slate-600">{r.dosage}</td>
-                      <td className="py-3 px-6 text-slate-600">{r.frequency}</td>
-                      <td className="py-3 px-6 text-slate-600">{r.duration}</td>
-                      <td className="py-3 px-6 text-right">
+                      </TableCell>
+                      <TableCell className="py-3 px-6 text-slate-600 whitespace-normal">{r.dosage}</TableCell>
+                      <TableCell className="py-3 px-6 text-slate-600 whitespace-normal">{r.frequency}</TableCell>
+                      <TableCell className="py-3 px-6 text-slate-600 whitespace-normal">{r.duration}</TableCell>
+                      <TableCell className="py-3 px-6 text-right whitespace-normal">
                         <div className="flex items-center justify-end gap-1">
                           {canQueue && (
                             queued.has(r.id) ? (
@@ -186,11 +169,11 @@ export function PharmacistPrescriptions({ session }: RoleViewProps) {
                             <ActionIcon icon={Eye} label="View appointment" />
                           </Link>
                         </div>
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   ))}
-                </tbody>
-              </table>
+                </TableBody>
+              </Table>
               <TablePagination
                 page={table.page}
                 pageSize={table.pageSize}
@@ -204,98 +187,119 @@ export function PharmacistPrescriptions({ session }: RoleViewProps) {
 
       {queueing && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg shadow-2xl max-w-md w-full p-6 space-y-4">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <h3 className="text-lg font-bold text-slate-900">Send to dispense queue</h3>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  {queueing.medicineName} for {queueing.patientName || 'the patient'}
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setQueueing(null)}
-                aria-label="Close"
-                className="text-slate-400 hover:text-slate-900 transition p-1 -m-1"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
+          <div className="bg-white rounded-lg shadow-2xl max-w-md w-full p-6">
+            <Formik<QueueValues>
+              initialValues={{ medicineId: matchedMedicineId(queueing), quantity: '1' }}
+              validationSchema={queueSchema}
+              onSubmit={async (values, { setSubmitting }) => {
+                setFormError('');
+                try {
+                  await createOrder({
+                    appointmentId: queueing.appointmentId,
+                    patientId: queueing.patientId,
+                    // The prescriber is on the prescription; the pharmacist is not it.
+                    doctorId: queueing.doctorId,
+                    prescriptionId: queueing.id,
+                    medicineId: values.medicineId || undefined,
+                    medicineName: queueing.medicineName,
+                    quantity: Number(values.quantity),
+                    dosage: queueing.dosage,
+                    route: 'Oral',
+                    frequency: queueing.frequency,
+                    duration: queueing.duration,
+                    instructions: queueing.instructions,
+                  }).unwrap();
+                  toast.success('Sent to the dispense queue');
+                  setQueueing(null);
+                } catch (err) {
+                  setFormError(apiError(err, 'Could not queue this prescription'));
+                } finally {
+                  setSubmitting(false);
+                }
+              }}
+            >
+              {({ isSubmitting }) => (
+                <Form className="space-y-4">
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <h3 className="text-lg font-bold text-slate-900">Send to dispense queue</h3>
+                      <p className="text-xs text-slate-500 mt-0.5">
+                        {queueing.medicineName} for {queueing.patientName || 'the patient'}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setQueueing(null)}
+                      aria-label="Close"
+                      className="text-slate-400 hover:text-slate-900 transition p-1 -m-1"
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
 
-            <dl className="grid grid-cols-3 gap-3 text-sm bg-slate-50 rounded-lg p-3">
-              <div>
-                <dt className="text-xs text-slate-400">Dosage</dt>
-                <dd className="text-slate-800">{queueing.dosage || '—'}</dd>
-              </div>
-              <div>
-                <dt className="text-xs text-slate-400">Frequency</dt>
-                <dd className="text-slate-800">{queueing.frequency || '—'}</dd>
-              </div>
-              <div>
-                <dt className="text-xs text-slate-400">Duration</dt>
-                <dd className="text-slate-800">{queueing.duration || '—'}</dd>
-              </div>
-            </dl>
+                  <dl className="grid grid-cols-3 gap-3 text-sm bg-slate-50 rounded-lg p-3">
+                    <div>
+                      <dt className="text-xs text-slate-400">Dosage</dt>
+                      <dd className="text-slate-800">{queueing.dosage || '—'}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-xs text-slate-400">Frequency</dt>
+                      <dd className="text-slate-800">{queueing.frequency || '—'}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-xs text-slate-400">Duration</dt>
+                      <dd className="text-slate-800">{queueing.duration || '—'}</dd>
+                    </div>
+                  </dl>
 
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">
-                Catalogue medicine
-              </label>
-              <select
-                value={medicineId}
-                onChange={(e) => setMedicineId(e.target.value)}
-                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
-              >
-                <option value="">Not stocked — dispense without touching inventory</option>
-                {medicines.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {[m.name, m.strength, m.form].filter(Boolean).join(' · ')} ({m.stock} in stock)
-                  </option>
-                ))}
-              </select>
-              <p className="text-xs text-slate-400 mt-1">
-                Stock moves against this item, so it is worth checking the match.
-              </p>
-            </div>
+                  <div>
+                    <FormField
+                      name="medicineId"
+                      label="Catalogue medicine"
+                      as="select"
+                      placeholder="Not stocked — dispense without touching inventory"
+                      options={medicines.map((m) => ({
+                        value: m.id,
+                        label: `${[m.name, m.strength, m.form].filter(Boolean).join(' · ')} (${m.stock} in stock)`,
+                      }))}
+                    />
+                    <p className="text-xs text-slate-400 mt-1">
+                      Stock moves against this item, so it is worth checking the match.
+                    </p>
+                  </div>
 
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Quantity *</label>
-              <input
-                type="number"
-                min="1"
-                step="1"
-                value={quantity}
-                onChange={(e) => setQuantity(e.target.value)}
-                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
-              />
-              <p className="text-xs text-slate-400 mt-1">
-                Units to hand over — a prescription records the dose, not the count.
-              </p>
-            </div>
+                  <div>
+                    <FormField name="quantity" label="Quantity" type="number" min="1" required />
+                    <p className="text-xs text-slate-400 mt-1">
+                      Units to hand over — a prescription records the dose, not the count.
+                    </p>
+                  </div>
 
-            {formError && (
-              <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
-                {formError}
-              </p>
-            )}
+                  {formError && (
+                    <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+                      {formError}
+                    </p>
+                  )}
 
-            <div className="flex justify-end gap-3 pt-1">
-              <button
-                type="button"
-                onClick={() => setQueueing(null)}
-                className="px-4 py-2 text-sm font-medium text-slate-600 hover:text-slate-900 transition"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={confirmQueue}
-                disabled={isQueueing}
-                className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white text-sm font-semibold rounded-lg shadow hover:opacity-95 disabled:opacity-50 transition"
-              >
-                {isQueueing ? <Spinner size="sm" label="Sending…" /> : 'Send to queue'}
-              </button>
-            </div>
+                  <div className="flex justify-end gap-3 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => setQueueing(null)}
+                      className="px-4 py-2 text-sm font-medium text-slate-600 hover:text-slate-900 transition"
+                    >
+                      Cancel
+                    </button>
+                    <Button
+                      type="submit"
+                      disabled={isSubmitting}
+                      variant="brand"
+                    >
+                      {isSubmitting ? <Spinner size="sm" label="Sending…" /> : 'Send to queue'}
+                    </Button>
+                  </div>
+                </Form>
+              )}
+            </Formik>
           </div>
         </div>
       )}

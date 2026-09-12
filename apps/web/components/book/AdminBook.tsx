@@ -9,6 +9,7 @@ import type { ConsultationFee, Doctor } from '@/lib/types';
 import { apiError } from '@/lib/apiError';
 import { blockedSlotSet } from '@/lib/schedule';
 import { useHospitalSlots } from '@/hooks/useBreakSlots';
+import { useDepartmentBookingConflict } from '@/hooks/useDepartmentBookingConflict';
 import {
   useCreateAppointmentMutation,
   useGetDoctorAvailabilityQuery,
@@ -23,6 +24,7 @@ import type { RoleViewProps } from '@/components/RoleView';
 import { FormField } from '@/components/form/FormField';
 import { Calendar } from '@/components/ui/calendar';
 import { Spinner } from '@/components/ui/spinner';
+import { Button } from '@/components/ui/button';
 import { PaymentModeField, isCounterMode, type PaymentMode } from '@/components/payments/PaymentModeField';
 
 // ---------------------------------------------------------------------------
@@ -144,9 +146,10 @@ function AdminBookForm({ session }: RoleViewProps) {
     reason: '',
   };
 
-  // Mirrors the form's doctor/date so the availability query — which is a hook,
-  // and so cannot live inside Formik's render prop — can react to them.
+  // Mirrors the form's patient/doctor/date so hooks — which cannot live inside
+  // Formik's render prop — can react to them.
   const [selection, setSelection] = useState({
+    patientId: prefill.patientId,
     doctorId: prefill.doctorId,
     date: prefill.date,
   });
@@ -159,6 +162,15 @@ function AdminBookForm({ session }: RoleViewProps) {
   const bookedSet = new Set(availability?.taken ?? []);
   const { slots: SLOTS, breakSlots } = useHospitalSlots();
   const blockedSet = blockedSlotSet(availability?.blocks ?? [], selection.doctorId, selection.date, SLOTS);
+
+  // Same one-booking-per-department-per-day rule the server enforces on
+  // create — checked here too so picking a date that already collides is
+  // caught before the rest of the form is filled in.
+  const deptConflict = useDepartmentBookingConflict(
+    selection.patientId,
+    departmentForDoctor(doctors, selection.doctorId),
+    selection.date,
+  );
 
   const patientOptions = patients.map((p) => ({
     value: p.id,
@@ -199,6 +211,10 @@ function AdminBookForm({ session }: RoleViewProps) {
               setSubmitError('');
               if (slotStatus(values.time, values.date, bookedSet, blockedSet, breakSlots) !== 'available') {
                 setFieldError('time', 'That slot is not available for the selected doctor');
+                return;
+              }
+              if (deptConflict) {
+                setSubmitError('This patient already has an appointment in this department on this date.');
                 return;
               }
 
@@ -330,6 +346,7 @@ function AdminBookForm({ session }: RoleViewProps) {
                       placeholder="Select a patient"
                       options={patientOptions}
                       required
+                      onValueChange={(patientId) => setSelection((s) => ({ ...s, patientId }))}
                     />
                     <FormField
                       name="doctorId"
@@ -443,6 +460,15 @@ function AdminBookForm({ session }: RoleViewProps) {
                     rows={3}
                   />
 
+                  {deptConflict && (
+                    <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 flex items-start gap-2">
+                      <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                      <p className="text-amber-800 text-sm">
+                        This patient already has an appointment in this department on this date. Pick a different date, or cancel the existing one first.
+                      </p>
+                    </div>
+                  )}
+
                   {/* Payment mode selector */}
                   <PaymentModeField value={paymentMode} onChange={setPaymentMode} />
 
@@ -468,13 +494,14 @@ function AdminBookForm({ session }: RoleViewProps) {
                     >
                       Cancel
                     </button>
-                    <button
+                    <Button
                       type="submit"
-                      disabled={success || paymentStatus !== 'idle'}
-                      className="flex-1 px-6 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg hover:shadow-lg transition font-semibold disabled:opacity-50 flex items-center justify-center gap-2"
+                      disabled={success || paymentStatus !== 'idle' || deptConflict}
+                      variant="brand"
+                      className="flex-1"
                     >
                       {submitLabel}
-                    </button>
+                    </Button>
                   </div>
                 </Form>
               );

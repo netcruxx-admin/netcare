@@ -6,6 +6,8 @@ import { apiError } from '@/lib/apiError';
 import { useDeleteDoctorMutation } from '@/store/api';
 import type { Doctor } from '@/lib/types';
 import { Spinner } from '@/components/ui/spinner';
+import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 
 interface Props {
   /** Doctor to delete. Pass null to close the modal. */
@@ -34,14 +36,14 @@ export function DeleteDoctorModal({ doctor, onClose, onSuccess, hospitalId }: Pr
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-lg shadow-2xl max-w-md w-full p-6">
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="max-w-md">
         <div className="flex items-start gap-4">
           <div className="w-11 h-11 rounded-full bg-red-100 flex items-center justify-center shrink-0">
             <AlertTriangle className="w-6 h-6 text-red-600" />
           </div>
           <div className="min-w-0">
-            <h3 className="text-lg font-bold text-slate-900">Delete Doctor</h3>
+            <DialogTitle className="text-lg font-bold text-slate-900">Delete Doctor</DialogTitle>
             <p className="text-slate-600 mt-1 text-sm">
               Are you sure you want to delete{' '}
               <span className="font-semibold text-slate-900">{doctor.user?.name ?? 'this doctor'}</span>?
@@ -57,15 +59,16 @@ export function DeleteDoctorModal({ doctor, onClose, onSuccess, hospitalId }: Pr
           >
             Cancel
           </button>
-          <button
+          <Button
             onClick={handleDelete}
             disabled={isLoading}
-            className="inline-flex items-center justify-center gap-2 flex-1 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 font-semibold transition disabled:opacity-50"
+            variant="destructive"
+            className="flex-1"
           >
             {isLoading ? <Spinner size="sm" label="Deleting…" /> : 'Delete'}
-          </button>
+          </Button>
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

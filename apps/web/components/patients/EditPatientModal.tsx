@@ -8,6 +8,8 @@ import { apiError } from '@/lib/apiError';
 import { useUpdatePatientMutation } from '@/store/api';
 import type { Patient } from '@/lib/types';
 import { Spinner } from '@/components/ui/spinner';
+import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import {
   PatientProfileFields,
   patientProfilePayload,
@@ -41,11 +43,11 @@ export function EditPatientModal({ patient, onClose, onSuccess, hospitalId }: Pr
   if (!patient) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-lg shadow-2xl max-w-2xl w-full max-h-[92vh] flex flex-col">
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent showCloseButton={false} className="max-w-2xl max-h-[92vh] flex flex-col p-0 gap-0">
         <div className="flex justify-between items-center px-6 py-4 border-b border-slate-100 shrink-0">
           <div>
-            <h3 className="text-lg font-bold text-slate-900">Edit Patient</h3>
+            <DialogTitle className="text-lg font-bold text-slate-900">Edit Patient</DialogTitle>
             <p className="text-xs text-slate-400">{patient.user?.name}</p>
           </div>
           <button onClick={onClose} className="text-slate-500 hover:text-slate-900">
@@ -73,7 +75,7 @@ export function EditPatientModal({ patient, onClose, onSuccess, hospitalId }: Pr
             }
           }}
         >
-          {({ isSubmitting, status }) => (
+          {({ isSubmitting, status, dirty }) => (
             <Form className="flex flex-col flex-1 min-h-0">
               <div className="px-6 py-5 space-y-6 overflow-y-auto flex-1">
                 <PatientProfileFields />
@@ -91,18 +93,19 @@ export function EditPatientModal({ patient, onClose, onSuccess, hospitalId }: Pr
                 >
                   Cancel
                 </button>
-                <button
+                <Button
                   type="submit"
-                  disabled={isSubmitting}
-                  className="inline-flex items-center justify-center gap-2 flex-1 px-4 py-2.5 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg text-sm font-semibold hover:shadow-lg transition disabled:opacity-50"
+                  disabled={isSubmitting || !dirty}
+                  variant="brand"
+                  className="flex-1"
                 >
                   {isSubmitting ? <Spinner size="sm" label="Saving…" /> : 'Save Changes'}
-                </button>
+                </Button>
               </div>
             </Form>
           )}
         </Formik>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

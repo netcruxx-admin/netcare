@@ -196,6 +196,24 @@ def administer_injection_order(
     db.commit()
     db.refresh(order)
 
+    # Billing is automatic, not a separate step the nurse takes: the shot is
+    # given, so a pending injectable Payment appears on the Billing screen for
+    # the front desk to collect. The amount is `injectable.price × quantity
+    # given`; an uncatalogued injectable bills at ₹0 for the desk to reconcile.
+    db.add(models.Payment(
+        id=new_id("pay"),
+        hospital_id=tenant_id,
+        appointment_id=None,
+        injection_order_id=order_id,
+        patient_id=order.patient_id,
+        amount=round((item.price or 0.0) * wanted, 2) if item else 0.0,
+        payment_type="injectable",
+        status="pending",
+        payment_method="",
+        created_at=now_iso(),
+    ))
+    db.commit()
+
     notify.notify_doctor(
         db, tenant_id, order.doctor_id,
         title="Injection administered",

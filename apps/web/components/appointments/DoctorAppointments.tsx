@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Formik, Form } from 'formik';
+import { Formik, Form, useFormik } from 'formik';
 import * as Yup from 'yup';
 import { Search, CalendarDays, Eye, Activity, Pill, X, CheckCircle2, FlaskConical, CalendarPlus } from 'lucide-react';
 
@@ -35,9 +35,12 @@ import {
 import { FollowUpModal } from '@/components/FollowUpModal';
 import { ActionIcon } from '@/components/ActionIcon';
 import { ExportButton } from '@/components/ExportButton';
+import { DateRangeFilter, type DateRange } from '@/components/DateRangeFilter';
 import { TablePagination } from '@/components/TablePagination';
 import { useServerTable } from '@/hooks/useServerTable';
 import { Spinner } from '@/components/ui/spinner';
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
+import { Button } from '@/components/ui/button';
 
 const PAGE_SIZE = 20;
 
@@ -74,19 +77,16 @@ export function DoctorAppointments({ session }: RoleViewProps) {
 
   const [status, setStatus] = useState<'all' | Appointment['status']>('all');
   // Today by default — this is the day's work queue, not a full history; the
-  // date picker right below still opens it up to any other day.
-  const [date, setDate] = useState(todayStr);
+  // date filter right below still opens it up to any other day or range.
+  const [dateRange, setDateRange] = useState<DateRange>({ from: todayStr, to: todayStr });
   const { sort, toggle, token: sortToken } = useAppointmentSort();
-  const table = useServerTable({ pageSize: PAGE_SIZE, filterKey: `${status}|${date}|${sortToken}` });
+  const table = useServerTable({ pageSize: PAGE_SIZE, filterKey: `${status}|${dateRange.from}|${dateRange.to}|${sortToken}` });
 
   const [addingVitals, setAddingVitals] = useState<Appointment | null>(null);
   const [prescribing, setPrescribing] = useState<Appointment | null>(null);
   const [completing, setCompleting] = useState<Appointment | null>(null);
   const [followUp, setFollowUp] = useState<Appointment | null>(null);
   const [orderingTests, setOrderingTests] = useState<Appointment | null>(null);
-  const [orderSel, setOrderSel] = useState<Set<string>>(new Set());
-  const [orderPriority, setOrderPriority] = useState<'routine' | 'urgent'>('routine');
-  const [orderNote, setOrderNote] = useState('');
   const [testQuery, setTestQuery] = useState('');
   const [toast, setToast] = useState('');
   const [vitalsError, setVitalsError] = useState('');
@@ -102,7 +102,8 @@ export function DoctorAppointments({ session }: RoleViewProps) {
   const listArgs = {
     q: table.q.trim() || undefined,
     status: status === 'all' ? undefined : status,
-    date: date || undefined,
+    dateFrom: dateRange.from || undefined,
+    dateTo: dateRange.to || undefined,
     sort: sortToken,
   };
   const { data: appointmentPage, isLoading } = useListAppointmentsPagedQuery({
@@ -159,43 +160,46 @@ export function DoctorAppointments({ session }: RoleViewProps) {
     }
   };
 
+  const orderFormik = useFormik({
+    initialValues: { testIds: [] as string[], priority: 'routine' as 'routine' | 'urgent', note: '' },
+    onSubmit: async (values, { setSubmitting }) => {
+      if (!orderingTests || !doctor || values.testIds.length === 0) { setSubmitting(false); return; }
+      const items = tests
+        .filter((t) => values.testIds.includes(t.id))
+        .map((t) => ({ testId: t.id, name: t.name, price: t.price }));
+      setOrderError('');
+      try {
+        // Status and timestamps are the server's to set; an order always starts
+        // life as "ordered".
+        await createTestOrder({
+          patientId: orderingTests.patientId,
+          doctorId: doctor.id,
+          appointmentId: orderingTests.id,
+          items,
+          priority: values.priority,
+          clinicalNote: values.note.trim(),
+        }).unwrap();
+        setOrderingTests(null);
+        flash(`Ordered ${items.length} test(s)`);
+      } catch (err) {
+        setOrderError(apiError(err, 'Could not place the order'));
+      } finally {
+        setSubmitting(false);
+      }
+    },
+  });
   const openOrder = (a: Appointment) => {
-    setOrderSel(new Set());
-    setOrderPriority('routine');
-    setOrderNote('');
+    orderFormik.resetForm();
     setTestQuery('');
     setOrderingTests(a);
   };
-  const toggleTest = (id: string) =>
-    setOrderSel((prev) => {
-      const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
-      return next;
-    });
-  const saveOrder = async () => {
-    if (!orderingTests || !doctor || orderSel.size === 0) return;
-    const items = tests
-      .filter((t) => orderSel.has(t.id))
-      .map((t) => ({ testId: t.id, name: t.name, price: t.price }));
-    setOrderError('');
-    try {
-      // Status and timestamps are the server's to set; an order always starts
-      // life as "ordered".
-      await createTestOrder({
-        patientId: orderingTests.patientId,
-        doctorId: doctor.id,
-        appointmentId: orderingTests.id,
-        items,
-        priority: orderPriority,
-        clinicalNote: orderNote.trim(),
-      }).unwrap();
-      setOrderingTests(null);
-      flash(`Ordered ${items.length} test(s)`);
-    } catch (err) {
-      setOrderError(apiError(err, 'Could not place the order'));
-    }
+  const toggleTest = (id: string) => {
+    const next = orderFormik.values.testIds.includes(id)
+      ? orderFormik.values.testIds.filter((t) => t !== id)
+      : [...orderFormik.values.testIds, id];
+    orderFormik.setFieldValue('testIds', next);
   };
-  const orderTotal = tests.filter((t) => orderSel.has(t.id)).reduce((s, t) => s + t.price, 0);
+  const orderTotal = tests.filter((t) => orderFormik.values.testIds.includes(t.id)).reduce((s, t) => s + t.price, 0);
 
   return (
     <DashboardShell role={session.user.role} userName={session.user.name} title="Appointments" subtitle="Your patient appointments">
@@ -221,19 +225,7 @@ export function DoctorAppointments({ session }: RoleViewProps) {
             <option value="completed">Completed</option>
             <option value="cancelled">Cancelled</option>
           </select>
-          <div className="flex items-center gap-2">
-            <input
-              type="date"
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-              className="bg-white rounded-lg shadow px-3 py-2 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-cyan-500"
-            />
-            {date && (
-              <button onClick={() => setDate('')} className="text-sm text-cyan-600 hover:text-cyan-700 font-medium">
-                Clear
-              </button>
-            )}
-          </div>
+          <DateRangeFilter value={dateRange} onChange={setDateRange} defaultDate={todayStr} />
           <div className="ml-auto">
             <ExportButton
               filename="my-appointments"
@@ -271,10 +263,10 @@ export function DoctorAppointments({ session }: RoleViewProps) {
           ) : (
             <>
               <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b bg-slate-50">
-                      <th className="text-left py-3 px-6 font-semibold text-slate-900">Patient</th>
+                <Table>
+                  <TableHeader>
+                    <TableRow className="border-b bg-slate-50">
+                      <TableHead className="text-left py-3 px-6 font-semibold text-slate-900">Patient</TableHead>
                       <SortableTh
                         label="Date & Time"
                         sortKey="date"
@@ -282,7 +274,7 @@ export function DoctorAppointments({ session }: RoleViewProps) {
                         onSort={toggle}
                         className="text-left py-3 px-6 font-semibold text-slate-900"
                       />
-                      <th className="text-left py-3 px-6 font-semibold text-slate-900">Reason</th>
+                      <TableHead className="text-left py-3 px-6 font-semibold text-slate-900">Reason</TableHead>
                       <SortableTh
                         label="Status"
                         sortKey="status"
@@ -290,36 +282,36 @@ export function DoctorAppointments({ session }: RoleViewProps) {
                         onSort={toggle}
                         className="text-left py-3 px-6 font-semibold text-slate-900"
                       />
-                      <th className="text-right py-3 px-6 font-semibold text-slate-900">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
+                      <TableHead className="text-right py-3 px-6 font-semibold text-slate-900">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
                     {pageRows.map((r) => (
-                      <tr key={r.id} className="border-b hover:bg-slate-50">
-                        <td className="py-3 px-6">
+                      <TableRow key={r.id} className="border-b hover:bg-slate-50">
+                        <TableCell className="py-3 px-6 whitespace-normal">
                           <p className="font-medium text-slate-900">{r.patient}</p>
                           <p className="text-xs text-slate-500">{r.phone}</p>
-                        </td>
-                        <td className="py-3 px-6 text-slate-600 whitespace-nowrap">
+                        </TableCell>
+                        <TableCell className="py-3 px-6 text-slate-600">
                           <div className="flex items-center gap-2">
                             <DateBadge date={r.date} />
                             <span>{fmtDate(r.date)} at {r.time}</span>
                           </div>
-                        </td>
-                        <td className="py-3 px-6 text-slate-600">
+                        </TableCell>
+                        <TableCell className="py-3 px-6 text-slate-600 whitespace-normal">
                           {r.reason}
                           {r.appt.followUpOf && (
                             <span className="ml-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-cyan-100 text-cyan-700 align-middle">
                               <CalendarPlus className="w-3 h-3" /> Follow-up
                             </span>
                           )}
-                        </td>
-                        <td className="py-3 px-6">
+                        </TableCell>
+                        <TableCell className="py-3 px-6 whitespace-normal">
                           <span className={`inline-block px-3 py-1 rounded-full text-sm font-semibold capitalize ${statusStyle(r.status)}`}>
                             {r.status}
                           </span>
-                        </td>
-                        <td className="py-3 px-6">
+                        </TableCell>
+                        <TableCell className="py-3 px-6 whitespace-normal">
                           <div className="flex items-center justify-end gap-1">
                             <ActionIcon icon={Eye} label="View details" href={`/appointment/${r.id}`} />
                             {canManage && <ActionIcon icon={Activity} label="Record Vitals" onClick={() => setAddingVitals(r.appt)} />}
@@ -330,11 +322,11 @@ export function DoctorAppointments({ session }: RoleViewProps) {
                               <ActionIcon icon={CheckCircle2} label="Mark Complete" tone="success" onClick={() => setCompleting(r.appt)} />
                             )}
                           </div>
-                        </td>
-                      </tr>
+                        </TableCell>
+                      </TableRow>
                     ))}
-                  </tbody>
-                </table>
+                  </TableBody>
+                </Table>
               </div>
 
               <TablePagination
@@ -361,7 +353,7 @@ export function DoctorAppointments({ session }: RoleViewProps) {
             <Formik
               initialValues={emptyVitals}
               validationSchema={vitalsSchema}
-              onSubmit={async (values) => {
+              onSubmit={async (values, { setSubmitting }) => {
                 setVitalsError('');
                 try {
                   await createVitals({
@@ -374,23 +366,27 @@ export function DoctorAppointments({ session }: RoleViewProps) {
                   flash('Vitals recorded');
                 } catch (err) {
                   setVitalsError(apiError(err, 'Could not record the vitals'));
+                } finally {
+                  setSubmitting(false);
                 }
               }}
             >
-              <Form className="grid grid-cols-2 gap-4">
-                <VitalsFormFields />
-                {vitalsError && (
-                  <p className="col-span-2 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{vitalsError}</p>
-                )}
-                <div className="col-span-2 flex gap-3 pt-2">
-                  <button type="button" onClick={() => setAddingVitals(null)} className="flex-1 px-4 py-2 bg-slate-200 text-slate-700 rounded hover:bg-slate-300 transition">
-                    Cancel
-                  </button>
-                  <button type="submit" className="flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded hover:shadow-lg font-semibold transition">
-                    Save Vitals
-                  </button>
-                </div>
-              </Form>
+              {({ isSubmitting, dirty }) => (
+                <Form className="grid grid-cols-2 gap-4">
+                  <VitalsFormFields />
+                  {vitalsError && (
+                    <p className="col-span-2 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{vitalsError}</p>
+                  )}
+                  <div className="col-span-2 flex gap-3 pt-2">
+                    <button type="button" onClick={() => setAddingVitals(null)} className="flex-1 px-4 py-2 bg-slate-200 text-slate-700 rounded hover:bg-slate-300 transition">
+                      Cancel
+                    </button>
+                    <Button type="submit" disabled={isSubmitting || !dirty} variant="brand" className="flex-1">
+                      {isSubmitting ? <Spinner size="sm" label="Saving…" /> : 'Save Vitals'}
+                    </Button>
+                  </div>
+                </Form>
+              )}
             </Formik>
           </div>
         </div>
@@ -409,7 +405,7 @@ export function DoctorAppointments({ session }: RoleViewProps) {
             <Formik
               initialValues={{ medicineName: '', dosage: '', frequency: '', duration: '', instructions: '' }}
               validationSchema={rxSchema}
-              onSubmit={async (values) => {
+              onSubmit={async (values, { setSubmitting }) => {
                 setRxError('');
                 try {
                   await createPrescription({
@@ -426,32 +422,36 @@ export function DoctorAppointments({ session }: RoleViewProps) {
                   flash('Prescription added');
                 } catch (err) {
                   setRxError(apiError(err, 'Could not save the prescription'));
+                } finally {
+                  setSubmitting(false);
                 }
               }}
             >
-              <Form className="grid sm:grid-cols-2 gap-4">
-                <div className="sm:col-span-2">
-                  <FormField name="medicineName" label="Medicine" as="select" placeholder="Select a medicine" options={medicineOptions} required />
-                </div>
-                <FormField name="dosage" label="Dosage" placeholder="e.g. 500 mg" required />
-                <FormField name="frequency" label="Frequency" placeholder="e.g. Twice a day" required />
-                <FormField name="duration" label="Duration" placeholder="e.g. 5 days" required />
-                <div className="hidden sm:block" />
-                <div className="sm:col-span-2">
-                  <FormField name="instructions" label="Instructions" as="textarea" placeholder="e.g. After meals" rows={2} />
-                </div>
-                {rxError && (
-                  <p className="sm:col-span-2 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{rxError}</p>
-                )}
-                <div className="sm:col-span-2 flex gap-3 pt-2">
-                  <button type="button" onClick={() => setPrescribing(null)} className="flex-1 px-4 py-2 bg-slate-200 text-slate-700 rounded hover:bg-slate-300 transition">
-                    Cancel
-                  </button>
-                  <button type="submit" className="flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded hover:shadow-lg font-semibold transition">
-                    Save Prescription
-                  </button>
-                </div>
-              </Form>
+              {({ isSubmitting, dirty }) => (
+                <Form className="grid sm:grid-cols-2 gap-4">
+                  <div className="sm:col-span-2">
+                    <FormField name="medicineName" label="Medicine" as="select" placeholder="Select a medicine" options={medicineOptions} required />
+                  </div>
+                  <FormField name="dosage" label="Dosage" placeholder="e.g. 500 mg" required />
+                  <FormField name="frequency" label="Frequency" placeholder="e.g. Twice a day" required />
+                  <FormField name="duration" label="Duration" placeholder="e.g. 5 days" required />
+                  <div className="hidden sm:block" />
+                  <div className="sm:col-span-2">
+                    <FormField name="instructions" label="Instructions" as="textarea" placeholder="e.g. After meals" rows={2} />
+                  </div>
+                  {rxError && (
+                    <p className="sm:col-span-2 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{rxError}</p>
+                  )}
+                  <div className="sm:col-span-2 flex gap-3 pt-2">
+                    <button type="button" onClick={() => setPrescribing(null)} className="flex-1 px-4 py-2 bg-slate-200 text-slate-700 rounded hover:bg-slate-300 transition">
+                      Cancel
+                    </button>
+                    <Button type="submit" disabled={isSubmitting || !dirty} variant="brand" className="flex-1">
+                      {isSubmitting ? <Spinner size="sm" label="Saving…" /> : 'Save Prescription'}
+                    </Button>
+                  </div>
+                </Form>
+              )}
             </Formik>
           </div>
         </div>
@@ -487,7 +487,7 @@ export function DoctorAppointments({ session }: RoleViewProps) {
               {tests
                 .filter((t) => !testQuery || t.name.toLowerCase().includes(testQuery.toLowerCase()) || t.category.toLowerCase().includes(testQuery.toLowerCase()))
                 .map((t) => {
-                  const checked = orderSel.has(t.id);
+                  const checked = orderFormik.values.testIds.includes(t.id);
                   return (
                     <label key={t.id} className={`flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer border ${checked ? 'border-cyan-400 bg-cyan-50' : 'border-transparent hover:bg-slate-50'}`}>
                       <input type="checkbox" checked={checked} onChange={() => toggleTest(t.id)} className="w-4 h-4 accent-cyan-600" />
@@ -505,18 +505,20 @@ export function DoctorAppointments({ session }: RoleViewProps) {
               <div className="flex items-center gap-3">
                 <label className="text-sm font-medium text-slate-700">Priority</label>
                 <select
-                  value={orderPriority}
-                  onChange={(e) => setOrderPriority(e.target.value as 'routine' | 'urgent')}
+                  name="priority"
+                  value={orderFormik.values.priority}
+                  onChange={orderFormik.handleChange}
                   className="px-3 py-1.5 border border-slate-300 rounded-lg text-sm focus:outline-none focus:border-cyan-500"
                 >
                   <option value="routine">Routine</option>
                   <option value="urgent">Urgent</option>
                 </select>
-                <span className="ml-auto text-sm text-slate-500">{orderSel.size} selected · ₹{orderTotal}</span>
+                <span className="ml-auto text-sm text-slate-500">{orderFormik.values.testIds.length} selected · ₹{orderTotal}</span>
               </div>
               <input
-                value={orderNote}
-                onChange={(e) => setOrderNote(e.target.value)}
+                name="note"
+                value={orderFormik.values.note}
+                onChange={orderFormik.handleChange}
                 placeholder="Clinical note / indication (optional)"
                 className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:border-cyan-500"
               />
@@ -527,13 +529,14 @@ export function DoctorAppointments({ session }: RoleViewProps) {
                 <button onClick={() => setOrderingTests(null)} className="flex-1 px-4 py-2 bg-slate-200 text-slate-700 rounded hover:bg-slate-300 transition">
                   Cancel
                 </button>
-                <button
-                  onClick={saveOrder}
-                  disabled={orderSel.size === 0}
-                  className="flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded hover:shadow-lg font-semibold transition disabled:opacity-50"
+                <Button
+                  onClick={() => orderFormik.submitForm()}
+                  disabled={orderFormik.values.testIds.length === 0 || !orderFormik.dirty || orderFormik.isSubmitting}
+                  variant="brand"
+                  className="flex-1"
                 >
-                  Place Order
-                </button>
+                  {orderFormik.isSubmitting ? <Spinner size="sm" label="Placing…" /> : 'Place Order'}
+                </Button>
               </div>
             </div>
           </div>

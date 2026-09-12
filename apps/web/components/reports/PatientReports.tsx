@@ -14,6 +14,7 @@ import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
 import { ORDER_STATUS_LABEL, ORDER_STATUS_STYLE, isAbnormal } from '@/lib/lab';
 import { Spinner } from '@/components/ui/spinner';
+import { Button } from '@/components/ui/button';
 
 export function PatientReports({ session }: RoleViewProps) {
   // All three are already narrowed to this patient by the API's "own" scope.
@@ -103,9 +104,9 @@ export function PatientReports({ session }: RoleViewProps) {
                 </div>
                 <div className="shrink-0">
                   {r.ready ? (
-                    <Link href={`/print/lab-report/${r.order.id}`} className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg text-sm font-semibold hover:shadow-lg transition">
-                      View Report
-                    </Link>
+                    <Button asChild variant="brand">
+                      <Link href={`/print/lab-report/${r.order.id}`}>View Report</Link>
+                    </Button>
                   ) : (
                     <span className="text-sm text-slate-400">Report pending</span>
                   )}

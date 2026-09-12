@@ -1,6 +1,8 @@
 'use client';
 
 import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { buttonVariants } from '@/components/ui/button';
 
 /** Page numbers to render, with gaps collapsed to an ellipsis. */
 function pageItems(current: number, total: number): (number | 'gap')[] {
@@ -77,11 +79,14 @@ export function TablePagination({
               type="button"
               onClick={() => onPageChange(item)}
               aria-current={item === page ? 'page' : undefined}
-              className={`${btn} ${
-                item === page
-                  ? 'bg-gradient-to-r from-cyan-500 to-brand-teal text-white shadow'
-                  : 'text-slate-600 hover:bg-slate-100'
-              }`}
+              className={cn(
+                btn,
+                // The same brand look every other primary action uses (see
+                // Button's "brand" variant) rather than a copy of its class
+                // string — this widget keeps its own square sizing, only the
+                // color comes from the shared definition.
+                item === page ? buttonVariants({ variant: 'brand' }) : 'text-slate-600 hover:bg-slate-100',
+              )}
             >
               {item}
             </button>
