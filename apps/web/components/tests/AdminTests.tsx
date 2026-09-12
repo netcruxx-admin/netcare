@@ -24,6 +24,8 @@ import { ExportButton } from '@/components/ExportButton';
 import { TablePagination } from '@/components/TablePagination';
 import { useServerTable } from '@/hooks/useServerTable';
 import { Spinner } from '@/components/ui/spinner';
+import { Button } from '@/components/ui/button';
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
 
 const CATEGORIES = ['Blood Test', 'Imaging', 'Urine Test', 'Cardiac', 'Prenatal Screening', 'Other'];
 const SAMPLE_TYPES = ['Blood', 'Urine', 'Swab', 'Imaging', 'None'];
@@ -124,13 +126,14 @@ export function AdminTests({ session }: RoleViewProps) {
         <div className="flex justify-between items-center px-6 py-4 border-b">
           <h3 className="text-lg font-semibold text-slate-900">Tests ({totalTests})</h3>
           {canManage && (
-            <button
+            <Button
               onClick={openAdd}
-              className="flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg text-sm font-medium hover:shadow-lg transition"
+              variant="brand"
+              size="sm"
             >
               <Plus className="w-4 h-4" />
               Add Test
-            </button>
+            </Button>
           )}
         </div>
 
@@ -141,47 +144,48 @@ export function AdminTests({ session }: RoleViewProps) {
             <FlaskConical className="w-16 h-16 text-slate-300 mx-auto mb-4" />
             <p className="text-slate-600 mb-6">No tests yet</p>
             {canManage && (
-              <button
+              <Button
                 onClick={openAdd}
-                className="inline-flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg text-sm font-medium hover:shadow-lg transition"
+                variant="brand"
+                size="sm"
               >
                 <Plus className="w-4 h-4" />
                 Add Test
-              </button>
+              </Button>
             )}
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b bg-slate-50">
-                  <th className="text-left py-3 px-6 font-semibold text-slate-900">Name</th>
-                  <th className="text-left py-3 px-6 font-semibold text-slate-900">Category</th>
-                  <th className="text-left py-3 px-6 font-semibold text-slate-900">Sample</th>
-                  <th className="text-left py-3 px-6 font-semibold text-slate-900">Price</th>
-                  <th className="text-left py-3 px-6 font-semibold text-slate-900">Turnaround</th>
-                  <th className="text-right py-3 px-6 font-semibold text-slate-900">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
+            <Table>
+              <TableHeader>
+                <TableRow className="border-b bg-slate-50">
+                  <TableHead className="text-left py-3 px-6 font-semibold text-slate-900">Name</TableHead>
+                  <TableHead className="text-left py-3 px-6 font-semibold text-slate-900">Category</TableHead>
+                  <TableHead className="text-left py-3 px-6 font-semibold text-slate-900">Sample</TableHead>
+                  <TableHead className="text-left py-3 px-6 font-semibold text-slate-900">Price</TableHead>
+                  <TableHead className="text-left py-3 px-6 font-semibold text-slate-900">Turnaround</TableHead>
+                  <TableHead className="text-right py-3 px-6 font-semibold text-slate-900">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {filtered.map((t) => (
-                  <tr key={t.id} className="border-b hover:bg-slate-50">
-                    <td className="py-3 px-6 font-medium">{t.name}</td>
-                    <td className="py-3 px-6 text-slate-600">{t.category}</td>
-                    <td className="py-3 px-6 text-slate-600">{t.sampleType}</td>
-                    <td className="py-3 px-6 text-slate-600">₹{t.price}</td>
-                    <td className="py-3 px-6 text-slate-600">{t.turnaroundTime || '—'}</td>
-                    <td className="py-3 px-6 text-right">
+                  <TableRow key={t.id} className="border-b hover:bg-slate-50">
+                    <TableCell className="py-3 px-6 font-medium whitespace-normal">{t.name}</TableCell>
+                    <TableCell className="py-3 px-6 text-slate-600 whitespace-normal">{t.category}</TableCell>
+                    <TableCell className="py-3 px-6 text-slate-600 whitespace-normal">{t.sampleType}</TableCell>
+                    <TableCell className="py-3 px-6 text-slate-600 whitespace-normal">₹{t.price}</TableCell>
+                    <TableCell className="py-3 px-6 text-slate-600 whitespace-normal">{t.turnaroundTime || '—'}</TableCell>
+                    <TableCell className="py-3 px-6 text-right whitespace-normal">
                       <div className="flex items-center justify-end gap-1">
                         <ActionIcon icon={Eye} label="View" onClick={() => setViewing(t)} />
                         {canManage && <ActionIcon icon={Pencil} label="Edit" onClick={() => openEdit(t)} />}
                         {canDelete && <ActionIcon icon={Trash2} label="Delete" tone="danger" onClick={() => setDeleting(t)} />}
                       </div>
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 ))}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
             <TablePagination
               page={table.page}
               pageSize={table.pageSize}
@@ -254,13 +258,14 @@ export function AdminTests({ session }: RoleViewProps) {
                     <button type="button" onClick={closeModal} className="flex-1 px-4 py-2 bg-slate-200 text-slate-700 rounded hover:bg-slate-300 transition">
                       Cancel
                     </button>
-                    <button
+                    <Button
                       type="submit"
                       disabled={isSubmitting || !dirty}
-                      className="inline-flex items-center justify-center gap-2 flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded hover:shadow-lg font-semibold transition disabled:opacity-50"
+                      variant="brand"
+                      className="flex-1"
                     >
                       {isSubmitting ? <Spinner size="sm" label="Saving…" /> : editing ? 'Save Changes' : 'Add Test'}
-                    </button>
+                    </Button>
                   </div>
                 </Form>
               )}

@@ -13,6 +13,8 @@ import {
 import { apiError } from '@/lib/apiError';
 import type { ConsultationFee } from '@/lib/types';
 import { fmtCurrency } from './billingFormat';
+import { Button } from '@/components/ui/button';
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
 
 /** One row, editable in place. Prices change often enough that a modal per edit
  *  would be the slowest part of the job. */
@@ -61,8 +63,8 @@ function FeeRow({ fee, hospitalId }: { fee: ConsultationFee; hospitalId?: string
   }
 
   return (
-    <tr className="border-b hover:bg-slate-50 transition">
-      <td className="py-3 px-4">
+    <TableRow className="border-b hover:bg-slate-50 transition">
+      <TableCell className="py-3 px-4 whitespace-normal">
         {editing ? (
           <input
             name="label"
@@ -74,8 +76,8 @@ function FeeRow({ fee, hospitalId }: { fee: ConsultationFee; hospitalId?: string
           <p className="text-sm font-medium text-slate-900">{fee.label}</p>
         )}
         <p className="text-xs text-slate-400 font-mono">{fee.visitType}</p>
-      </td>
-      <td className="py-3 px-4 text-right">
+      </TableCell>
+      <TableCell className="py-3 px-4 text-right whitespace-normal">
         {editing ? (
           <input
             type="number"
@@ -90,8 +92,8 @@ function FeeRow({ fee, hospitalId }: { fee: ConsultationFee; hospitalId?: string
             {fee.amount > 0 ? fmtCurrency(fee.amount) : 'Not set'}
           </span>
         )}
-      </td>
-      <td className="py-3 px-4">
+      </TableCell>
+      <TableCell className="py-3 px-4 whitespace-normal">
         <button
           onClick={toggleActive}
           className={`px-2 py-0.5 rounded-full text-xs font-medium transition ${
@@ -102,8 +104,8 @@ function FeeRow({ fee, hospitalId }: { fee: ConsultationFee; hospitalId?: string
         >
           {fee.active ? 'Offered' : 'Retired'}
         </button>
-      </td>
-      <td className="py-3 px-4 text-right">
+      </TableCell>
+      <TableCell className="py-3 px-4 text-right whitespace-normal">
         <div className="flex items-center justify-end gap-1">
           {editing ? (
             <>
@@ -143,8 +145,8 @@ function FeeRow({ fee, hospitalId }: { fee: ConsultationFee; hospitalId?: string
             </>
           )}
         </div>
-      </td>
-    </tr>
+      </TableCell>
+    </TableRow>
   );
 }
 
@@ -221,13 +223,14 @@ export function ConsultationFeesContent({ hospitalId }: { hospitalId?: string } 
         <div className="px-6 py-4 border-b flex items-center justify-between">
           <h3 className="font-semibold text-slate-900">Visit Types</h3>
           {!adding && (
-            <button
+            <Button
               onClick={() => setAdding(true)}
-              className="inline-flex items-center gap-1.5 bg-gradient-to-r from-cyan-500 to-brand-teal text-white text-sm font-medium px-3 py-1.5 rounded-lg hover:opacity-90 transition"
+              variant="brand"
+              size="sm"
             >
               <Plus className="w-4 h-4" />
               Add Visit Type
-            </button>
+            </Button>
           )}
         </div>
 
@@ -275,21 +278,21 @@ export function ConsultationFeesContent({ hospitalId }: { hospitalId?: string } 
         )}
 
         <div className="overflow-x-auto">
-          <table className="w-full text-left">
-            <thead>
-              <tr className="border-b bg-slate-50 text-xs font-semibold text-slate-600 uppercase tracking-wide">
-                <th className="py-3 px-4">Visit Type</th>
-                <th className="py-3 px-4 text-right">Fee</th>
-                <th className="py-3 px-4">Status</th>
-                <th className="py-3 px-4 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
+          <Table>
+            <TableHeader>
+              <TableRow className="border-b bg-slate-50 text-xs font-semibold text-slate-600 uppercase tracking-wide">
+                <TableHead className="py-3 px-4">Visit Type</TableHead>
+                <TableHead className="py-3 px-4 text-right">Fee</TableHead>
+                <TableHead className="py-3 px-4">Status</TableHead>
+                <TableHead className="py-3 px-4 text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {fees.map((fee) => (
                 <FeeRow key={fee.id} fee={fee} hospitalId={hospitalId} />
               ))}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         </div>
       </div>
     </div>

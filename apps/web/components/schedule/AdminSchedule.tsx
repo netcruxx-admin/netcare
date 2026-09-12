@@ -20,6 +20,7 @@ import type { RoleViewProps } from '@/components/RoleView';
 import { BlockModal } from '@/components/BlockModal';
 import { BLOCK_LABEL, BLOCK_CELL_STYLE, blockAtMinute, GRID_SLOTS } from '@/lib/schedule';
 import { useBreakSlots } from '@/hooks/useBreakSlots';
+import { Button } from '@/components/ui/button';
 
 const toDateStr = (d: Date) => {
   const y = d.getFullYear();
@@ -176,15 +177,16 @@ export function AdminSchedule({ session }: RoleViewProps) {
                 <Ban className="w-4 h-4" /> Add Block
               </button>
             )}
-            <button
+            <Button
               onClick={() => {
                 refetchAppointments();
                 refetchBlocks();
               }}
-              className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg text-sm font-semibold hover:shadow-lg transition"
+              variant="brand"
+              size="sm"
             >
               <RefreshCw className="w-4 h-4" /> Refresh
-            </button>
+            </Button>
           </div>
         </div>
 

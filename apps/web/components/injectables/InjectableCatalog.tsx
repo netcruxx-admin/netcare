@@ -14,6 +14,8 @@ import { ActionIcon } from '@/components/ActionIcon';
 import { RecordDialog } from '@/components/RecordDialog';
 import { FormField } from '@/components/form/FormField';
 import { Spinner } from '@/components/ui/spinner';
+import { Button } from '@/components/ui/button';
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
 import type { RoleViewProps } from '@/components/RoleView';
 import { hasPermission } from '@/lib/auth';
 import { apiError } from '@/lib/apiError';
@@ -224,12 +226,14 @@ export function InjectableCatalogPanel({ session }: RoleViewProps) {
               />
             </div>
             {canManage && (
-              <button
+              <Button
                 onClick={openAdd}
-                className="flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg text-sm font-medium hover:shadow-lg transition ml-auto"
+                variant="brand"
+                size="sm"
+                className="ml-auto"
               >
                 <Plus className="w-4 h-4" /> Add Injectable
-              </button>
+              </Button>
             )}
           </div>
         )}
@@ -249,44 +253,44 @@ export function InjectableCatalogPanel({ session }: RoleViewProps) {
               </div>
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b bg-slate-50">
-                      <th className="text-left py-3 px-6 font-semibold text-slate-900">Name</th>
-                      <th className="text-left py-3 px-6 font-semibold text-slate-900">Category</th>
-                      <th className="text-left py-3 px-6 font-semibold text-slate-900">Form</th>
-                      <th className="text-left py-3 px-6 font-semibold text-slate-900">Strength</th>
-                      <th className="text-left py-3 px-6 font-semibold text-slate-900">Route</th>
-                      <th className="text-left py-3 px-6 font-semibold text-slate-900">Price</th>
-                      <th className="text-left py-3 px-6 font-semibold text-slate-900">Stock</th>
-                      <th className="text-right py-3 px-6 font-semibold text-slate-900">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
+                <Table>
+                  <TableHeader>
+                    <TableRow className="border-b bg-slate-50">
+                      <TableHead className="text-left py-3 px-6 font-semibold text-slate-900">Name</TableHead>
+                      <TableHead className="text-left py-3 px-6 font-semibold text-slate-900">Category</TableHead>
+                      <TableHead className="text-left py-3 px-6 font-semibold text-slate-900">Form</TableHead>
+                      <TableHead className="text-left py-3 px-6 font-semibold text-slate-900">Strength</TableHead>
+                      <TableHead className="text-left py-3 px-6 font-semibold text-slate-900">Route</TableHead>
+                      <TableHead className="text-left py-3 px-6 font-semibold text-slate-900">Price</TableHead>
+                      <TableHead className="text-left py-3 px-6 font-semibold text-slate-900">Stock</TableHead>
+                      <TableHead className="text-right py-3 px-6 font-semibold text-slate-900">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
                     {filtered.map((i) => (
-                      <tr key={i.id} className="border-b hover:bg-slate-50">
-                        <td className="py-3 px-6 font-medium">{i.name}</td>
-                        <td className="py-3 px-6 text-slate-600">{i.category || '—'}</td>
-                        <td className="py-3 px-6 text-slate-600">{i.form || '—'}</td>
-                        <td className="py-3 px-6 text-slate-600">{i.strength || '—'}</td>
-                        <td className="py-3 px-6 text-slate-600">{i.route || '—'}</td>
-                        <td className="py-3 px-6 text-slate-600">₹{i.price}</td>
-                        <td className="py-3 px-6">
+                      <TableRow key={i.id} className="border-b hover:bg-slate-50">
+                        <TableCell className="py-3 px-6 font-medium whitespace-normal">{i.name}</TableCell>
+                        <TableCell className="py-3 px-6 text-slate-600 whitespace-normal">{i.category || '—'}</TableCell>
+                        <TableCell className="py-3 px-6 text-slate-600 whitespace-normal">{i.form || '—'}</TableCell>
+                        <TableCell className="py-3 px-6 text-slate-600 whitespace-normal">{i.strength || '—'}</TableCell>
+                        <TableCell className="py-3 px-6 text-slate-600 whitespace-normal">{i.route || '—'}</TableCell>
+                        <TableCell className="py-3 px-6 text-slate-600 whitespace-normal">₹{i.price}</TableCell>
+                        <TableCell className="py-3 px-6 whitespace-normal">
                           <span className={`inline-block px-3 py-1 rounded-full text-sm font-semibold ${stockBadge(i)}`}>
                             {i.stock}
                           </span>
-                        </td>
-                        <td className="py-3 px-6 text-right">
+                        </TableCell>
+                        <TableCell className="py-3 px-6 text-right whitespace-normal">
                           <div className="flex items-center justify-end gap-1">
                             <ActionIcon icon={Eye} label="View" onClick={() => setViewing(i)} />
                             {canManage && <ActionIcon icon={Pencil} label="Edit" onClick={() => openEdit(i)} />}
                             {canDelete && <ActionIcon icon={Trash2} label="Delete" tone="danger" onClick={() => setDeleting(i)} />}
                           </div>
-                        </td>
-                      </tr>
+                        </TableCell>
+                      </TableRow>
                     ))}
-                  </tbody>
-                </table>
+                  </TableBody>
+                </Table>
               </div>
             )}
           </div>
@@ -336,33 +340,33 @@ export function InjectableCatalogPanel({ session }: RoleViewProps) {
                 </div>
               ) : (
                 <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead>
-                      <tr className="border-b bg-slate-50">
-                        <th className="text-left py-3 px-6 font-semibold text-slate-900">Name</th>
-                        <th className="text-left py-3 px-6 font-semibold text-slate-900">Strength</th>
-                        <th className="text-left py-3 px-6 font-semibold text-slate-900">Stock</th>
-                        <th className="text-left py-3 px-6 font-semibold text-slate-900">Reorder</th>
-                        <th className="text-left py-3 px-6 font-semibold text-slate-900">Lot</th>
-                        <th className="text-left py-3 px-6 font-semibold text-slate-900">Expiry</th>
-                        {canManage && <th className="text-right py-3 px-6 font-semibold text-slate-900">Actions</th>}
-                      </tr>
-                    </thead>
-                    <tbody>
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="border-b bg-slate-50">
+                        <TableHead className="text-left py-3 px-6 font-semibold text-slate-900">Name</TableHead>
+                        <TableHead className="text-left py-3 px-6 font-semibold text-slate-900">Strength</TableHead>
+                        <TableHead className="text-left py-3 px-6 font-semibold text-slate-900">Stock</TableHead>
+                        <TableHead className="text-left py-3 px-6 font-semibold text-slate-900">Reorder</TableHead>
+                        <TableHead className="text-left py-3 px-6 font-semibold text-slate-900">Lot</TableHead>
+                        <TableHead className="text-left py-3 px-6 font-semibold text-slate-900">Expiry</TableHead>
+                        {canManage && <TableHead className="text-right py-3 px-6 font-semibold text-slate-900">Actions</TableHead>}
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
                       {injectables.map((i) => (
-                        <tr key={i.id} className="border-b hover:bg-slate-50">
-                          <td className="py-3 px-6 font-medium">{i.name}</td>
-                          <td className="py-3 px-6 text-slate-600">{i.strength || '—'}</td>
-                          <td className="py-3 px-6">
+                        <TableRow key={i.id} className="border-b hover:bg-slate-50">
+                          <TableCell className="py-3 px-6 font-medium whitespace-normal">{i.name}</TableCell>
+                          <TableCell className="py-3 px-6 text-slate-600 whitespace-normal">{i.strength || '—'}</TableCell>
+                          <TableCell className="py-3 px-6 whitespace-normal">
                             <span className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold ${stockBadge(i)}`}>
                               {i.stock}
                             </span>
-                          </td>
-                          <td className="py-3 px-6 text-slate-600">{i.reorderLevel ?? 10}</td>
-                          <td className="py-3 px-6 text-slate-600">{i.lotNumber || '—'}</td>
-                          <td className="py-3 px-6 text-slate-600">{i.expiryDate ? fmtDate(i.expiryDate) : '—'}</td>
+                          </TableCell>
+                          <TableCell className="py-3 px-6 text-slate-600 whitespace-normal">{i.reorderLevel ?? 10}</TableCell>
+                          <TableCell className="py-3 px-6 text-slate-600 whitespace-normal">{i.lotNumber || '—'}</TableCell>
+                          <TableCell className="py-3 px-6 text-slate-600 whitespace-normal">{i.expiryDate ? fmtDate(i.expiryDate) : '—'}</TableCell>
                           {canManage && (
-                            <td className="py-3 px-6 text-right">
+                            <TableCell className="py-3 px-6 text-right whitespace-normal">
                               <div className="flex items-center justify-end gap-2">
                                 <button
                                   onClick={() => openRestock(i)}
@@ -377,12 +381,12 @@ export function InjectableCatalogPanel({ session }: RoleViewProps) {
                                   <TrendingDown className="w-3 h-3" /> Adjust
                                 </button>
                               </div>
-                            </td>
+                            </TableCell>
                           )}
-                        </tr>
+                        </TableRow>
                       ))}
-                    </tbody>
-                  </table>
+                    </TableBody>
+                  </Table>
                 </div>
               )}
             </div>
@@ -401,38 +405,38 @@ export function InjectableCatalogPanel({ session }: RoleViewProps) {
                 </div>
               ) : (
                 <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead>
-                      <tr className="border-b bg-slate-50">
-                        <th className="text-left py-3 px-6 font-semibold text-slate-900">Injectable</th>
-                        <th className="text-left py-3 px-6 font-semibold text-slate-900">Type</th>
-                        <th className="text-left py-3 px-6 font-semibold text-slate-900">Qty</th>
-                        <th className="text-left py-3 px-6 font-semibold text-slate-900">By</th>
-                        <th className="text-left py-3 px-6 font-semibold text-slate-900">Date</th>
-                        <th className="text-left py-3 px-6 font-semibold text-slate-900">Notes</th>
-                      </tr>
-                    </thead>
-                    <tbody>
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="border-b bg-slate-50">
+                        <TableHead className="text-left py-3 px-6 font-semibold text-slate-900">Injectable</TableHead>
+                        <TableHead className="text-left py-3 px-6 font-semibold text-slate-900">Type</TableHead>
+                        <TableHead className="text-left py-3 px-6 font-semibold text-slate-900">Qty</TableHead>
+                        <TableHead className="text-left py-3 px-6 font-semibold text-slate-900">By</TableHead>
+                        <TableHead className="text-left py-3 px-6 font-semibold text-slate-900">Date</TableHead>
+                        <TableHead className="text-left py-3 px-6 font-semibold text-slate-900">Notes</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
                       {movements.map((m) => (
-                        <tr key={m.id} className="border-b hover:bg-slate-50">
-                          <td className="py-3 px-6 font-medium text-slate-900">{m.injectableName ?? m.injectableId}</td>
-                          <td className="py-3 px-6">
+                        <TableRow key={m.id} className="border-b hover:bg-slate-50">
+                          <TableCell className="py-3 px-6 font-medium text-slate-900 whitespace-normal">{m.injectableName ?? m.injectableId}</TableCell>
+                          <TableCell className="py-3 px-6 whitespace-normal">
                             <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-semibold ${MOVEMENT_BADGE[m.movementType]}`}>
                               {m.movementType}
                             </span>
-                          </td>
-                          <td className="py-3 px-6">
+                          </TableCell>
+                          <TableCell className="py-3 px-6 whitespace-normal">
                             <span className={m.quantity >= 0 ? 'text-green-700 font-semibold' : 'text-red-700 font-semibold'}>
                               {m.quantity >= 0 ? '+' : ''}{m.quantity}
                             </span>
-                          </td>
-                          <td className="py-3 px-6 text-slate-600">{m.performedByName ?? m.performedBy}</td>
-                          <td className="py-3 px-6 text-slate-500 whitespace-nowrap">{fmtDate(m.createdAt)}</td>
-                          <td className="py-3 px-6 text-slate-600 max-w-xs truncate">{m.notes || '—'}</td>
-                        </tr>
+                          </TableCell>
+                          <TableCell className="py-3 px-6 text-slate-600 whitespace-normal">{m.performedByName ?? m.performedBy}</TableCell>
+                          <TableCell className="py-3 px-6 text-slate-500">{fmtDate(m.createdAt)}</TableCell>
+                          <TableCell className="py-3 px-6 text-slate-600 max-w-xs truncate">{m.notes || '—'}</TableCell>
+                        </TableRow>
                       ))}
-                    </tbody>
-                  </table>
+                    </TableBody>
+                  </Table>
                 </div>
               )}
             </div>
@@ -522,13 +526,14 @@ export function InjectableCatalogPanel({ session }: RoleViewProps) {
                     <button type="button" onClick={closeModal} className="flex-1 px-4 py-2 bg-slate-200 text-slate-700 rounded hover:bg-slate-300 transition">
                       Cancel
                     </button>
-                    <button
+                    <Button
                       type="submit"
                       disabled={isSubmitting || !dirty}
-                      className="inline-flex items-center justify-center gap-2 flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded hover:shadow-lg font-semibold transition disabled:opacity-50"
+                      variant="brand"
+                      className="flex-1"
                     >
                       {isSubmitting ? <Spinner size="sm" label="Saving…" /> : editing ? 'Save Changes' : 'Add Injectable'}
-                    </button>
+                    </Button>
                   </div>
                 </Form>
               )}
@@ -597,13 +602,14 @@ export function InjectableCatalogPanel({ session }: RoleViewProps) {
               {stockError && <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{stockError}</p>}
               <div className="flex gap-3 pt-1">
                 <button onClick={() => setRestockItem(null)} className="flex-1 px-4 py-2 bg-slate-200 text-slate-700 rounded hover:bg-slate-300 transition">Cancel</button>
-                <button
+                <Button
                   onClick={handleRestock}
                   disabled={isRestocking}
-                  className="inline-flex items-center justify-center gap-2 flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded hover:shadow-lg font-semibold transition disabled:opacity-50"
+                  variant="brand"
+                  className="flex-1"
                 >
                   {isRestocking ? <Spinner size="sm" label="Saving…" /> : 'Restock'}
-                </button>
+                </Button>
               </div>
             </div>
           </div>
@@ -637,13 +643,14 @@ export function InjectableCatalogPanel({ session }: RoleViewProps) {
               {stockError && <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{stockError}</p>}
               <div className="flex gap-3 pt-1">
                 <button onClick={() => setAdjustItem(null)} className="flex-1 px-4 py-2 bg-slate-200 text-slate-700 rounded hover:bg-slate-300 transition">Cancel</button>
-                <button
+                <Button
                   onClick={handleAdjust}
                   disabled={isAdjusting}
-                  className="inline-flex items-center justify-center gap-2 flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded hover:shadow-lg font-semibold transition disabled:opacity-50"
+                  variant="brand"
+                  className="flex-1"
                 >
                   {isAdjusting ? <Spinner size="sm" label="Saving…" /> : 'Apply Adjustment'}
-                </button>
+                </Button>
               </div>
             </div>
           </div>

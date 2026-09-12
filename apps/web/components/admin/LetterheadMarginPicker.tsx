@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 import type { LetterheadMargins } from '@/store/api';
 import { Spinner } from '@/components/ui/spinner';
+import { Button } from '@/components/ui/button';
 
 const A4_W_MM = 210;
 const A4_H_MM = 297;
@@ -181,13 +182,13 @@ export function LetterheadMarginPicker({
           >
             Cancel
           </button>
-          <button
+          <Button
             onClick={() => onSave(m)}
             disabled={busy}
-            className="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-cyan-500 to-brand-teal px-4 py-2 text-sm font-semibold text-white hover:shadow-lg disabled:opacity-60"
+            variant="brand"
           >
             {busy ? <Spinner size="sm" label="Saving…" /> : 'Save letterhead'}
-          </button>
+          </Button>
         </div>
       </div>
     </div>,

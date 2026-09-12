@@ -43,6 +43,8 @@ import {
 import type { Appointment } from '@/lib/types';
 import { formatINR } from '@/lib/money';
 import { fmtDate } from '@/lib/date';
+import { Button } from '@/components/ui/button';
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
 
 interface Kpi {
   label: string;
@@ -255,15 +257,14 @@ export function AdminOverview({ session }: RoleViewProps) {
             {PERIODS.map((p) => {
               const active = period === p.value;
               return (
-                <button
+                <Button
                   key={p.label}
                   onClick={() => setPeriod(p.value)}
-                  className={`px-3 py-1.5 rounded-md text-sm font-medium transition ${
-                    active ? 'bg-gradient-to-r from-cyan-500 to-brand-teal text-white shadow' : 'text-slate-600 hover:bg-slate-100'
-                  }`}
+                  variant={active ? 'brand' : 'ghost'}
+                  size="sm"
                 >
                   {p.label}
-                </button>
+                </Button>
               );
             })}
           </div>
@@ -446,26 +447,26 @@ export function AdminOverview({ session }: RoleViewProps) {
             <div className="text-center py-12 text-slate-500">No upcoming appointments</div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b bg-slate-50">
-                    <th className="text-left py-3 px-6 font-semibold text-slate-900">Date &amp; Time</th>
-                    <th className="text-left py-3 px-6 font-semibold text-slate-900">Patient</th>
-                    <th className="text-left py-3 px-6 font-semibold text-slate-900">Doctor</th>
-                    <th className="text-left py-3 px-6 font-semibold text-slate-900">Department</th>
-                  </tr>
-                </thead>
-                <tbody>
+              <Table>
+                <TableHeader>
+                  <TableRow className="border-b bg-slate-50">
+                    <TableHead className="text-left py-3 px-6 font-semibold text-slate-900">Date &amp; Time</TableHead>
+                    <TableHead className="text-left py-3 px-6 font-semibold text-slate-900">Patient</TableHead>
+                    <TableHead className="text-left py-3 px-6 font-semibold text-slate-900">Doctor</TableHead>
+                    <TableHead className="text-left py-3 px-6 font-semibold text-slate-900">Department</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
                   {data.upcoming.map((a) => (
-                    <tr key={a.id} className="border-b hover:bg-slate-50">
-                      <td className="py-3 px-6 font-medium">{fmtDate(a.date)} at {a.time}</td>
-                      <td className="py-3 px-6 text-slate-600">{a.patient}</td>
-                      <td className="py-3 px-6 text-slate-600">{a.doctor}</td>
-                      <td className="py-3 px-6 text-slate-600">{a.dept}</td>
-                    </tr>
+                    <TableRow key={a.id} className="border-b hover:bg-slate-50">
+                      <TableCell className="py-3 px-6 font-medium whitespace-normal">{fmtDate(a.date)} at {a.time}</TableCell>
+                      <TableCell className="py-3 px-6 text-slate-600 whitespace-normal">{a.patient}</TableCell>
+                      <TableCell className="py-3 px-6 text-slate-600 whitespace-normal">{a.doctor}</TableCell>
+                      <TableCell className="py-3 px-6 text-slate-600 whitespace-normal">{a.dept}</TableCell>
+                    </TableRow>
                   ))}
-                </tbody>
-              </table>
+                </TableBody>
+              </Table>
             </div>
           )}
         </div>

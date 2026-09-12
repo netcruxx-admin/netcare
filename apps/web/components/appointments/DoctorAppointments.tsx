@@ -39,6 +39,8 @@ import { DateRangeFilter, type DateRange } from '@/components/DateRangeFilter';
 import { TablePagination } from '@/components/TablePagination';
 import { useServerTable } from '@/hooks/useServerTable';
 import { Spinner } from '@/components/ui/spinner';
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
+import { Button } from '@/components/ui/button';
 
 const PAGE_SIZE = 20;
 
@@ -261,10 +263,10 @@ export function DoctorAppointments({ session }: RoleViewProps) {
           ) : (
             <>
               <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b bg-slate-50">
-                      <th className="text-left py-3 px-6 font-semibold text-slate-900">Patient</th>
+                <Table>
+                  <TableHeader>
+                    <TableRow className="border-b bg-slate-50">
+                      <TableHead className="text-left py-3 px-6 font-semibold text-slate-900">Patient</TableHead>
                       <SortableTh
                         label="Date & Time"
                         sortKey="date"
@@ -272,7 +274,7 @@ export function DoctorAppointments({ session }: RoleViewProps) {
                         onSort={toggle}
                         className="text-left py-3 px-6 font-semibold text-slate-900"
                       />
-                      <th className="text-left py-3 px-6 font-semibold text-slate-900">Reason</th>
+                      <TableHead className="text-left py-3 px-6 font-semibold text-slate-900">Reason</TableHead>
                       <SortableTh
                         label="Status"
                         sortKey="status"
@@ -280,36 +282,36 @@ export function DoctorAppointments({ session }: RoleViewProps) {
                         onSort={toggle}
                         className="text-left py-3 px-6 font-semibold text-slate-900"
                       />
-                      <th className="text-right py-3 px-6 font-semibold text-slate-900">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
+                      <TableHead className="text-right py-3 px-6 font-semibold text-slate-900">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
                     {pageRows.map((r) => (
-                      <tr key={r.id} className="border-b hover:bg-slate-50">
-                        <td className="py-3 px-6">
+                      <TableRow key={r.id} className="border-b hover:bg-slate-50">
+                        <TableCell className="py-3 px-6 whitespace-normal">
                           <p className="font-medium text-slate-900">{r.patient}</p>
                           <p className="text-xs text-slate-500">{r.phone}</p>
-                        </td>
-                        <td className="py-3 px-6 text-slate-600 whitespace-nowrap">
+                        </TableCell>
+                        <TableCell className="py-3 px-6 text-slate-600">
                           <div className="flex items-center gap-2">
                             <DateBadge date={r.date} />
                             <span>{fmtDate(r.date)} at {r.time}</span>
                           </div>
-                        </td>
-                        <td className="py-3 px-6 text-slate-600">
+                        </TableCell>
+                        <TableCell className="py-3 px-6 text-slate-600 whitespace-normal">
                           {r.reason}
                           {r.appt.followUpOf && (
                             <span className="ml-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-cyan-100 text-cyan-700 align-middle">
                               <CalendarPlus className="w-3 h-3" /> Follow-up
                             </span>
                           )}
-                        </td>
-                        <td className="py-3 px-6">
+                        </TableCell>
+                        <TableCell className="py-3 px-6 whitespace-normal">
                           <span className={`inline-block px-3 py-1 rounded-full text-sm font-semibold capitalize ${statusStyle(r.status)}`}>
                             {r.status}
                           </span>
-                        </td>
-                        <td className="py-3 px-6">
+                        </TableCell>
+                        <TableCell className="py-3 px-6 whitespace-normal">
                           <div className="flex items-center justify-end gap-1">
                             <ActionIcon icon={Eye} label="View details" href={`/appointment/${r.id}`} />
                             {canManage && <ActionIcon icon={Activity} label="Record Vitals" onClick={() => setAddingVitals(r.appt)} />}
@@ -320,11 +322,11 @@ export function DoctorAppointments({ session }: RoleViewProps) {
                               <ActionIcon icon={CheckCircle2} label="Mark Complete" tone="success" onClick={() => setCompleting(r.appt)} />
                             )}
                           </div>
-                        </td>
-                      </tr>
+                        </TableCell>
+                      </TableRow>
                     ))}
-                  </tbody>
-                </table>
+                  </TableBody>
+                </Table>
               </div>
 
               <TablePagination
@@ -379,9 +381,9 @@ export function DoctorAppointments({ session }: RoleViewProps) {
                     <button type="button" onClick={() => setAddingVitals(null)} className="flex-1 px-4 py-2 bg-slate-200 text-slate-700 rounded hover:bg-slate-300 transition">
                       Cancel
                     </button>
-                    <button type="submit" disabled={isSubmitting || !dirty} className="flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded hover:shadow-lg font-semibold transition disabled:opacity-50">
+                    <Button type="submit" disabled={isSubmitting || !dirty} variant="brand" className="flex-1">
                       {isSubmitting ? <Spinner size="sm" label="Saving…" /> : 'Save Vitals'}
-                    </button>
+                    </Button>
                   </div>
                 </Form>
               )}
@@ -444,9 +446,9 @@ export function DoctorAppointments({ session }: RoleViewProps) {
                     <button type="button" onClick={() => setPrescribing(null)} className="flex-1 px-4 py-2 bg-slate-200 text-slate-700 rounded hover:bg-slate-300 transition">
                       Cancel
                     </button>
-                    <button type="submit" disabled={isSubmitting || !dirty} className="flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded hover:shadow-lg font-semibold transition disabled:opacity-50">
+                    <Button type="submit" disabled={isSubmitting || !dirty} variant="brand" className="flex-1">
                       {isSubmitting ? <Spinner size="sm" label="Saving…" /> : 'Save Prescription'}
-                    </button>
+                    </Button>
                   </div>
                 </Form>
               )}
@@ -527,13 +529,14 @@ export function DoctorAppointments({ session }: RoleViewProps) {
                 <button onClick={() => setOrderingTests(null)} className="flex-1 px-4 py-2 bg-slate-200 text-slate-700 rounded hover:bg-slate-300 transition">
                   Cancel
                 </button>
-                <button
+                <Button
                   onClick={() => orderFormik.submitForm()}
                   disabled={orderFormik.values.testIds.length === 0 || !orderFormik.dirty || orderFormik.isSubmitting}
-                  className="flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded hover:shadow-lg font-semibold transition disabled:opacity-50"
+                  variant="brand"
+                  className="flex-1"
                 >
                   {orderFormik.isSubmitting ? <Spinner size="sm" label="Placing…" /> : 'Place Order'}
-                </button>
+                </Button>
               </div>
             </div>
           </div>

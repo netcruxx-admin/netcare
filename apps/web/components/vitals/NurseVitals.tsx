@@ -24,6 +24,8 @@ import { useServerTable } from '@/hooks/useServerTable';
 import { DateRangeFilter, type DateRange } from '@/components/DateRangeFilter';
 import { fmtDate } from '@/lib/date';
 import { Spinner } from '@/components/ui/spinner';
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
+import { Button } from '@/components/ui/button';
 
 const todayStr = new Date().toISOString().split('T')[0];
 
@@ -125,47 +127,48 @@ function NurseVitalsInner({ session }: RoleViewProps) {
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b bg-slate-50">
-                    <th className="text-left py-3 px-6 font-semibold text-slate-900">Date / Time</th>
-                    <th className="text-left py-3 px-6 font-semibold text-slate-900">Patient</th>
-                    <th className="text-left py-3 px-6 font-semibold text-slate-900">Doctor</th>
-                    <th className="text-left py-3 px-6 font-semibold text-slate-900">Vitals</th>
-                    <th className="text-right py-3 px-6 font-semibold text-slate-900">Action</th>
-                  </tr>
-                </thead>
-                <tbody>
+              <Table>
+                <TableHeader>
+                  <TableRow className="border-b bg-slate-50">
+                    <TableHead className="text-left py-3 px-6 font-semibold text-slate-900">Date / Time</TableHead>
+                    <TableHead className="text-left py-3 px-6 font-semibold text-slate-900">Patient</TableHead>
+                    <TableHead className="text-left py-3 px-6 font-semibold text-slate-900">Doctor</TableHead>
+                    <TableHead className="text-left py-3 px-6 font-semibold text-slate-900">Vitals</TableHead>
+                    <TableHead className="text-right py-3 px-6 font-semibold text-slate-900">Action</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
                   {rows.map((a) => (
-                    <tr key={a.id} className="border-b hover:bg-slate-50">
-                      <td className="py-3 px-6 whitespace-nowrap">
+                    <TableRow key={a.id} className="border-b hover:bg-slate-50">
+                      <TableCell className="py-3 px-6">
                         <div className="flex items-center gap-2 mb-0.5">
                           <DateBadge date={a.date} />
                           <p className="font-medium text-slate-900">{fmtDate(a.date)}</p>
                         </div>
                         <p className="text-xs text-slate-500">{a.time}</p>
-                      </td>
-                      <td className="py-3 px-6 text-slate-700">{a.patient}</td>
-                      <td className="py-3 px-6 text-slate-600">{a.doctor}</td>
-                      <td className="py-3 px-6">
+                      </TableCell>
+                      <TableCell className="py-3 px-6 text-slate-700 whitespace-normal">{a.patient}</TableCell>
+                      <TableCell className="py-3 px-6 text-slate-600 whitespace-normal">{a.doctor}</TableCell>
+                      <TableCell className="py-3 px-6 whitespace-normal">
                         {a.hasVitals ? (
                           <span className="inline-block px-2.5 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-700">Recorded</span>
                         ) : (
                           <span className="inline-block px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-700">Pending</span>
                         )}
-                      </td>
-                      <td className="py-3 px-6 text-right">
-                        <button
+                      </TableCell>
+                      <TableCell className="py-3 px-6 text-right whitespace-normal">
+                        <Button
                           onClick={() => setRecording(a)}
-                          className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-cyan-500 to-brand-teal text-white text-sm font-semibold hover:shadow transition"
+                          variant="brand"
+                          size="sm"
                         >
                           {a.hasVitals ? 'Add again' : 'Record'}
-                        </button>
-                      </td>
-                    </tr>
+                        </Button>
+                      </TableCell>
+                    </TableRow>
                   ))}
-                </tbody>
-              </table>
+                </TableBody>
+              </Table>
               <TablePagination
                 page={table.page}
                 pageSize={table.pageSize}
@@ -226,9 +229,9 @@ function NurseVitalsInner({ session }: RoleViewProps) {
                     <button type="button" onClick={() => setRecording(null)} className="flex-1 px-4 py-2 bg-slate-200 text-slate-700 rounded hover:bg-slate-300 transition">
                       Cancel
                     </button>
-                    <button type="submit" disabled={isSubmitting || !dirty} className="flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded hover:shadow-lg font-semibold transition disabled:opacity-50">
+                    <Button type="submit" disabled={isSubmitting || !dirty} variant="brand" className="flex-1">
                       {isSubmitting ? <Spinner size="sm" label="Saving…" /> : 'Save Vitals'}
-                    </button>
+                    </Button>
                   </div>
                 </Form>
               )}

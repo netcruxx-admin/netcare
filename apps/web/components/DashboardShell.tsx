@@ -27,6 +27,8 @@ import {
 import { CommandPalette } from '@/components/CommandPalette';
 import { useCareContext } from '@/hooks/useCareContext';
 import { Spinner } from '@/components/ui/spinner';
+import { Button, buttonVariants } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 
 export function DashboardShell({
   role,
@@ -268,10 +270,13 @@ export function DashboardShell({
                  route (~2s cold vs ~25ms warm). */
               prefetch={false}
               onClick={() => setOpen(false)}
-              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition ${active
-                  ? 'bg-gradient-to-r from-cyan-500 to-brand-teal text-white shadow'
-                  : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
-                }`}
+              className={cn(
+                'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition',
+                // Same brand look every primary action uses (Button's "brand"
+                // variant), not a copy of its class string — this nav item
+                // keeps its own left-aligned, full-width layout.
+                active ? buttonVariants({ variant: 'brand' }) : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
+              )}
             >
               <Icon className="w-5 h-5 shrink-0" />
               {item.label}
@@ -322,12 +327,11 @@ export function DashboardShell({
               </li>
             ))}
           </ul>
-          <Link
-            href="/dashboard/profile#consent-section"
-            className="block w-full py-2.5 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg font-semibold hover:shadow-lg transition text-sm"
-          >
-            Go to Profile &amp; complete consents
-          </Link>
+          <Button asChild variant="brand" className="w-full">
+            <Link href="/dashboard/profile#consent-section">
+              Go to Profile &amp; complete consents
+            </Link>
+          </Button>
         </div>
       </div>
     );

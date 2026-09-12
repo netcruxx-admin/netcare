@@ -9,6 +9,8 @@ import type { PermissionGrant, RoleInfo } from '@/store/api';
 import { PermissionMatrix } from '@/components/roles/PermissionMatrix';
 import { FormField } from '@/components/form/FormField';
 import { Spinner } from '@/components/ui/spinner';
+import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 
 interface Props {
   open: boolean;
@@ -47,8 +49,6 @@ export function RoleModal({ open, onClose, onSuccess, role }: Props) {
     setError('');
   }, [role, open]);
 
-  if (!open) return null;
-
   const initialValues: RoleFormValues = {
     code: role?.code ?? '',
     label: role?.label ?? '',
@@ -60,10 +60,10 @@ export function RoleModal({ open, onClose, onSuccess, role }: Props) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl flex flex-col max-h-[90vh]">
+    <Dialog open={open} onOpenChange={(next) => !next && onClose()}>
+      <DialogContent showCloseButton={false} className="max-w-2xl flex flex-col max-h-[90vh] p-0 gap-0">
         <div className="flex justify-between items-center px-6 py-4 border-b border-slate-100 shrink-0">
-          <h3 className="text-lg font-bold text-slate-900">{isEdit ? 'Edit Role' : 'Add Role'}</h3>
+          <DialogTitle className="text-lg font-bold text-slate-900">{isEdit ? 'Edit Role' : 'Add Role'}</DialogTitle>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-900 p-1"><X className="w-5 h-5" /></button>
         </div>
         <Formik
@@ -170,14 +170,14 @@ export function RoleModal({ open, onClose, onSuccess, role }: Props) {
               {/* Sticky footer buttons */}
               <div className="flex gap-3 px-6 py-4 border-t border-slate-100 shrink-0">
                 <button type="button" onClick={onClose} className="flex-1 px-4 py-2.5 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 text-sm font-medium transition">Cancel</button>
-                <button type="submit" disabled={isSubmitting || !dirty} className="inline-flex items-center justify-center gap-2 flex-1 px-4 py-2.5 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg text-sm font-semibold hover:shadow-lg transition disabled:opacity-50">
+                <Button type="submit" disabled={isSubmitting || !dirty} variant="brand" className="flex-1">
                   {isSubmitting ? <Spinner size="sm" label="Saving…" /> : isEdit ? 'Save Changes' : 'Add Role'}
-                </button>
+                </Button>
               </div>
             </Form>
           )}
         </Formik>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

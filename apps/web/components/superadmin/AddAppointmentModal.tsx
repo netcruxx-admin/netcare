@@ -8,6 +8,8 @@ import { superadminPost, superadminGet } from '@/lib/superadminFetch';
 import type { HospitalInfo } from '@/store/api';
 import type { Patient, Doctor, Department, ConsultationFee } from '@/lib/types';
 import { Spinner } from '@/components/ui/spinner';
+import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { FormField } from '@/components/form/FormField';
 import { PaymentModeField, type CounterPaymentMode } from '@/components/payments/PaymentModeField';
 
@@ -77,8 +79,6 @@ export function AddAppointmentModal({ open, onClose, onSuccess, preselectedHospi
       .finally(() => setLoadingOptions(false));
   }, [hospitalId, open]);
 
-  if (!open) return null;
-
   const handleClose = () => {
     formikRef.current?.resetForm({ values: EMPTY_FORM });
     setError(''); setHospitalId(preselectedHospitalId); setPaymentMode('cash');
@@ -91,10 +91,10 @@ export function AddAppointmentModal({ open, onClose, onSuccess, preselectedHospi
   const doctorLabel = (d: Doctor) => d.user?.name ?? d.userId;
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 overflow-y-auto">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg my-8">
-        <div className="flex justify-between items-center px-6 py-4 border-b border-slate-100">
-          <h3 className="text-lg font-bold text-slate-900">Add Appointment</h3>
+    <Dialog open={open} onOpenChange={(next) => !next && handleClose()}>
+      <DialogContent showCloseButton={false} className="max-w-lg max-h-[90vh] flex flex-col p-0 gap-0">
+        <div className="flex justify-between items-center px-6 py-4 border-b border-slate-100 shrink-0">
+          <DialogTitle className="text-lg font-bold text-slate-900">Add Appointment</DialogTitle>
           <button onClick={handleClose} className="text-slate-400 hover:text-slate-900 p-1"><X className="w-5 h-5" /></button>
         </div>
         <Formik
@@ -121,7 +121,7 @@ export function AddAppointmentModal({ open, onClose, onSuccess, preselectedHospi
           }}
         >
           {({ isSubmitting, dirty }) => (
-            <Form className="px-6 py-5 space-y-4">
+            <Form className="flex flex-col flex-1 min-h-0 px-6 py-5 space-y-4 overflow-y-auto">
               {/* Hospital picker */}
               {!preselectedHospitalId ? (
                 <div>
@@ -203,12 +203,12 @@ export function AddAppointmentModal({ open, onClose, onSuccess, preselectedHospi
               {error && <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</p>}
               <div className="flex gap-3 pt-1">
                 <button type="button" onClick={handleClose} className="flex-1 px-4 py-2.5 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 text-sm font-medium transition">Cancel</button>
-                <button type="submit" disabled={isSubmitting || !dirty || !hospitalId} className="inline-flex items-center justify-center gap-2 flex-1 px-4 py-2.5 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg text-sm font-semibold hover:shadow-lg transition disabled:opacity-50">{isSubmitting ? <Spinner size="sm" label="Booking…" /> : 'Book Appointment'}</button>
+                <Button type="submit" disabled={isSubmitting || !dirty || !hospitalId} variant="brand" className="flex-1">{isSubmitting ? <Spinner size="sm" label="Booking…" /> : 'Book Appointment'}</Button>
               </div>
             </Form>
           )}
         </Formik>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

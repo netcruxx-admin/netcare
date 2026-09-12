@@ -16,6 +16,7 @@ import type { RoleViewProps } from '@/components/RoleView';
 import { FormField } from '@/components/form/FormField';
 import { Calendar } from '@/components/ui/calendar';
 import { Spinner } from '@/components/ui/spinner';
+import { Button } from '@/components/ui/button';
 import { PaymentModeField, type CounterPaymentMode } from '@/components/payments/PaymentModeField';
 
 function toDateStr(d: Date) {
@@ -347,13 +348,14 @@ function SuperadminBookForm({ session }: RoleViewProps) {
                   >
                     Cancel
                   </button>
-                  <button
+                  <Button
                     type="submit"
                     disabled={success || !dirty || !hospitalId}
-                    className="flex-1 px-6 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg hover:shadow-lg transition font-semibold disabled:opacity-50"
+                    variant="brand"
+                    className="flex-1"
                   >
                     Book Appointment
-                  </button>
+                  </Button>
                 </div>
               </Form>
             )}

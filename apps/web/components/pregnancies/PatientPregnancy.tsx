@@ -17,6 +17,7 @@ import {
   useListPregnanciesQuery,
 } from '@/store/api';
 import { DashboardShell } from '@/components/DashboardShell';
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
 import type { RoleViewProps } from '@/components/RoleView';
 import {
   ANC_MILESTONES,
@@ -198,32 +199,32 @@ export function PatientPregnancy({ session }: RoleViewProps) {
             <p className="text-sm text-slate-500 px-5 pb-5">No antenatal visits recorded yet.</p>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-left text-xs text-slate-500 border-y border-slate-100 bg-slate-50">
-                    <th className="px-5 py-2 font-medium">Date</th>
-                    <th className="px-3 py-2 font-medium">Week</th>
-                    <th className="px-3 py-2 font-medium">Weight</th>
-                    <th className="px-3 py-2 font-medium">BP</th>
-                    <th className="px-3 py-2 font-medium">Fundal ht.</th>
-                    <th className="px-3 py-2 font-medium">Hb</th>
-                    <th className="px-3 py-2 font-medium">FHR</th>
-                  </tr>
-                </thead>
-                <tbody>
+              <Table>
+                <TableHeader>
+                  <TableRow className="text-left text-xs text-slate-500 border-y border-slate-100 bg-slate-50">
+                    <TableHead className="px-5 py-2 font-medium">Date</TableHead>
+                    <TableHead className="px-3 py-2 font-medium">Week</TableHead>
+                    <TableHead className="px-3 py-2 font-medium">Weight</TableHead>
+                    <TableHead className="px-3 py-2 font-medium">BP</TableHead>
+                    <TableHead className="px-3 py-2 font-medium">Fundal ht.</TableHead>
+                    <TableHead className="px-3 py-2 font-medium">Hb</TableHead>
+                    <TableHead className="px-3 py-2 font-medium">FHR</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
                   {[...visits].reverse().map((v) => (
-                    <tr key={v.id} className="border-b border-slate-50 last:border-0">
-                      <td className="px-5 py-2 text-slate-700">{new Date(v.date + 'T00:00:00').toLocaleDateString('en-IN')}</td>
-                      <td className="px-3 py-2 text-slate-700">{v.weeks}w</td>
-                      <td className="px-3 py-2 text-slate-700">{v.weight ? `${v.weight} kg` : '—'}</td>
-                      <td className="px-3 py-2 text-slate-700">{v.systolic ? `${v.systolic}/${v.diastolic}` : '—'}</td>
-                      <td className="px-3 py-2 text-slate-700">{v.fundalHeight ? `${v.fundalHeight} cm` : '—'}</td>
-                      <td className="px-3 py-2 text-slate-700">{v.hemoglobin ? `${v.hemoglobin}` : '—'}</td>
-                      <td className="px-3 py-2 text-slate-700">{v.fetalHeartRate ? `${v.fetalHeartRate}` : '—'}</td>
-                    </tr>
+                    <TableRow key={v.id} className="border-b border-slate-50 last:border-0">
+                      <TableCell className="px-5 py-2 text-slate-700">{new Date(v.date + 'T00:00:00').toLocaleDateString('en-IN')}</TableCell>
+                      <TableCell className="px-3 py-2 text-slate-700 whitespace-normal">{v.weeks}w</TableCell>
+                      <TableCell className="px-3 py-2 text-slate-700 whitespace-normal">{v.weight ? `${v.weight} kg` : '—'}</TableCell>
+                      <TableCell className="px-3 py-2 text-slate-700 whitespace-normal">{v.systolic ? `${v.systolic}/${v.diastolic}` : '—'}</TableCell>
+                      <TableCell className="px-3 py-2 text-slate-700 whitespace-normal">{v.fundalHeight ? `${v.fundalHeight} cm` : '—'}</TableCell>
+                      <TableCell className="px-3 py-2 text-slate-700 whitespace-normal">{v.hemoglobin ? `${v.hemoglobin}` : '—'}</TableCell>
+                      <TableCell className="px-3 py-2 text-slate-700 whitespace-normal">{v.fetalHeartRate ? `${v.fetalHeartRate}` : '—'}</TableCell>
+                    </TableRow>
                   ))}
-                </tbody>
-              </table>
+                </TableBody>
+              </Table>
             </div>
           )}
         </div>

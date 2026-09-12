@@ -20,6 +20,7 @@ import {
 } from '@/lib/hospitalCategories';
 import type { HospitalModules } from '@/lib/types';
 import { Spinner } from '@/components/ui/spinner';
+import { Button } from '@/components/ui/button';
 
 // Human labels for the module flags, in display order.
 const MODULE_LABELS: { key: keyof HospitalModules; label: string }[] = [
@@ -287,13 +288,13 @@ export function HospitalSetup({ session }: RoleViewProps) {
                 />
                 Replace this hospital&apos;s departments with the {selected.label} template
               </label>
-              <button
+              <Button
                 onClick={handleApply}
                 disabled={!applyDepartments || busy}
-                className="inline-flex items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-cyan-500 to-brand-teal text-white text-sm font-semibold px-5 py-2.5 shadow hover:opacity-95 disabled:opacity-40 disabled:cursor-not-allowed"
+                variant="brand"
               >
                 {busy ? <Spinner size="sm" label="Applying…" /> : 'Apply department template'}
-              </button>
+              </Button>
             </div>
             <p className="text-xs text-amber-600 mt-2">
               This deletes the hospital&apos;s current departments and recreates

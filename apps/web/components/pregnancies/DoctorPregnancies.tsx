@@ -21,6 +21,7 @@ import { TablePagination } from '@/components/TablePagination';
 import { useServerTable } from '@/hooks/useServerTable';
 import { eddFromLmp, evaluateRisks, formatGA, gestationalAge, trimester } from '@/lib/anc';
 import { Spinner } from '@/components/ui/spinner';
+import { Button } from '@/components/ui/button';
 
 const today = () => new Date().toISOString().split('T')[0];
 
@@ -77,12 +78,13 @@ export function DoctorPregnancies({ session }: RoleViewProps) {
             <option value="closed">Closed</option>
           </select>
           {canManage && (
-            <button
+            <Button
               onClick={() => setShowNew(true)}
-              className="ml-auto inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-cyan-500 to-brand-teal text-white text-sm font-semibold px-4 py-2 shadow hover:opacity-95"
+              variant="brand"
+              className="ml-auto"
             >
               <Plus className="w-4 h-4" /> New pregnancy record
-            </button>
+            </Button>
           )}
         </div>
 
@@ -281,9 +283,9 @@ function NewPregnancyModal({ onClose, onSaved }: { onClose: () => void; onSaved:
             {error && <p className="text-sm text-red-600">{error}</p>}
             <div className="flex justify-end gap-2 pt-1">
               <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-slate-600 hover:text-slate-900">Cancel</button>
-              <button type="submit" disabled={isSubmitting || !dirty} className="px-4 py-2 text-sm font-semibold text-white bg-gradient-to-r from-cyan-500 to-brand-teal rounded-lg disabled:opacity-50">
+              <Button type="submit" disabled={isSubmitting || !dirty} variant="brand">
                 {isSubmitting ? 'Saving…' : 'Save record'}
-              </button>
+              </Button>
             </div>
           </Form>
         )}
@@ -375,9 +377,9 @@ function NewVisitModal({
               {error && <p className="text-sm text-red-600">{error}</p>}
               <div className="flex justify-end gap-2 pt-1">
                 <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-slate-600 hover:text-slate-900">Cancel</button>
-                <button type="submit" disabled={isSubmitting || !dirty} className="px-4 py-2 text-sm font-semibold text-white bg-gradient-to-r from-cyan-500 to-brand-teal rounded-lg disabled:opacity-50">
+                <Button type="submit" disabled={isSubmitting || !dirty} variant="brand">
                   {isSubmitting ? 'Saving…' : 'Save visit'}
-                </button>
+                </Button>
               </div>
             </Form>
           </Modal>

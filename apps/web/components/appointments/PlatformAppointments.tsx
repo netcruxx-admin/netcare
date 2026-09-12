@@ -41,6 +41,8 @@ import {
   useCreateVitalsMutation,
 } from '@/store/api';
 import { Spinner } from '@/components/ui/spinner';
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
+import { Button } from '@/components/ui/button';
 
 const STATUS_STYLES: Record<string, string> = {
   scheduled: 'bg-blue-100 text-blue-700',
@@ -266,12 +268,13 @@ export function PlatformAppointments({ session }: RoleViewProps) {
             {(selectedHospitalId || table.search || statusFilter !== 'all' || dateRange.from || dateRange.to) && <span className="text-slate-400"> (filtered)</span>}
           </p>
           {hasPermission(session, 'appointments.create') && (
-            <button
+            <Button
               onClick={() => router.push(selectedHospitalId ? `/dashboard/book?h=${selectedHospitalId}` : '/dashboard/book')}
-              className="flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg text-sm font-medium hover:shadow-lg transition"
+              variant="brand"
+              size="sm"
             >
               <Plus className="w-4 h-4" /> Add Appointment
-            </button>
+            </Button>
           )}
         </div>
         {isLoading ? (
@@ -283,10 +286,10 @@ export function PlatformAppointments({ session }: RoleViewProps) {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="bg-slate-50 border-b border-slate-100">
-                  {showHospital && <th className="text-left py-3 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wide">Hospital</th>}
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-slate-50 border-b border-slate-100">
+                  {showHospital && <TableHead className="text-left py-3 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wide">Hospital</TableHead>}
                   {['Date', 'Time', 'Patient', 'Doctor', 'Status', 'Mode'].map((h) =>
                     h === 'Date' || h === 'Status' ? (
                       <SortableTh
@@ -298,36 +301,36 @@ export function PlatformAppointments({ session }: RoleViewProps) {
                         className="text-left py-3 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wide"
                       />
                     ) : (
-                      <th key={h} className="text-left py-3 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wide">{h}</th>
+                      <TableHead key={h} className="text-left py-3 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wide">{h}</TableHead>
                     ),
                   )}
-                  <th className="text-right py-3 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wide">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
+                  <TableHead className="text-right py-3 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wide">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {appointments.map((a) => (
-                  <tr key={a.id} className="border-b border-slate-50 hover:bg-slate-50 transition">
+                  <TableRow key={a.id} className="border-b border-slate-50 hover:bg-slate-50 transition">
                     {showHospital && (
-                      <td className="py-3 px-6">
+                      <TableCell className="py-3 px-6 whitespace-normal">
                         <HospitalBadge hospitalId={a.hospitalId} hospitals={hospitals} />
-                      </td>
+                      </TableCell>
                     )}
-                    <td className="py-3 px-6 text-slate-900 text-sm whitespace-nowrap">
+                    <TableCell className="py-3 px-6 text-slate-900 text-sm">
                       <div className="flex items-center gap-2">
                         <DateBadge date={a.date} />
                         <span>{fmtDate(a.date)}</span>
                       </div>
-                    </td>
-                    <td className="py-3 px-6 text-slate-600 text-sm">{a.time}</td>
-                    <td className="py-3 px-6 text-slate-600 text-sm">{patientName(a)}</td>
-                    <td className="py-3 px-6 text-slate-600 text-sm">{doctorName(a)}</td>
-                    <td className="py-3 px-6">
+                    </TableCell>
+                    <TableCell className="py-3 px-6 text-slate-600 text-sm whitespace-normal">{a.time}</TableCell>
+                    <TableCell className="py-3 px-6 text-slate-600 text-sm whitespace-normal">{patientName(a)}</TableCell>
+                    <TableCell className="py-3 px-6 text-slate-600 text-sm whitespace-normal">{doctorName(a)}</TableCell>
+                    <TableCell className="py-3 px-6 whitespace-normal">
                       <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${STATUS_STYLES[a.status] ?? 'bg-slate-100 text-slate-600'}`}>
                         {a.status}
                       </span>
-                    </td>
-                    <td className="py-3 px-6 text-slate-600 capitalize text-sm">{a.mode ?? 'in-person'}</td>
-                    <td className="py-3 px-6 text-right">
+                    </TableCell>
+                    <TableCell className="py-3 px-6 text-slate-600 capitalize text-sm whitespace-normal">{a.mode ?? 'in-person'}</TableCell>
+                    <TableCell className="py-3 px-6 text-right whitespace-normal">
                       <div className="flex items-center justify-end gap-1">
                         <ActionIcon icon={Eye} label="View" href={`/appointment/${a.id}${a.hospitalId ? `?h=${a.hospitalId}` : ''}`} />
                         {hasPermission(session, 'appointments.manage') && <ActionIcon icon={Pencil} label="Edit" onClick={() => setEditing(a)} />}
@@ -336,11 +339,11 @@ export function PlatformAppointments({ session }: RoleViewProps) {
                         {hasPermission(session, 'appointments.manage') && <ActionIcon icon={Activity} label="Add Vitals" onClick={() => { setVitalsError(''); setAddingVitals(a); }} />}
                         {hasPermission(session, 'appointments.delete') && <ActionIcon icon={Trash2} label="Delete" tone="danger" onClick={() => setDeleting(a)} />}
                       </div>
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 ))}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
             <TablePagination
               page={table.page}
               pageSize={table.pageSize}
@@ -392,9 +395,9 @@ export function PlatformAppointments({ session }: RoleViewProps) {
                   <FormField name="reason" label="Reason" as="textarea" placeholder="Reason for visit" />
                   <div className="flex gap-3 pt-2">
                     <button type="button" onClick={() => setEditing(null)} className="flex-1 px-4 py-2 bg-slate-200 text-slate-700 rounded hover:bg-slate-300 transition">Cancel</button>
-                    <button type="submit" disabled={isSubmitting || !dirty} className="flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded hover:shadow-lg font-semibold transition disabled:opacity-50">
+                    <Button type="submit" disabled={isSubmitting || !dirty} variant="brand" className="flex-1">
                       {isSubmitting ? <Spinner size="sm" label="Saving…" /> : 'Save Changes'}
-                    </button>
+                    </Button>
                   </div>
                 </Form>
               )}
@@ -450,9 +453,9 @@ export function PlatformAppointments({ session }: RoleViewProps) {
             </div>
             <div className="flex gap-3 mt-6">
               <button onClick={() => setRescheduling(null)} disabled={rescheduleFormik.isSubmitting} className="flex-1 px-4 py-2 bg-slate-200 text-slate-700 rounded hover:bg-slate-300 transition disabled:opacity-50">Cancel</button>
-              <button onClick={() => rescheduleFormik.submitForm()} disabled={!reDate || !reTime || !rescheduleFormik.dirty || rescheduleFormik.isSubmitting} className="flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded hover:shadow-lg font-semibold transition disabled:opacity-50">
+              <Button onClick={() => rescheduleFormik.submitForm()} disabled={!reDate || !reTime || !rescheduleFormik.dirty || rescheduleFormik.isSubmitting} variant="brand" className="flex-1">
                 {rescheduleFormik.isSubmitting ? <Spinner size="sm" label="Saving…" /> : 'Reschedule'}
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -496,9 +499,9 @@ export function PlatformAppointments({ session }: RoleViewProps) {
                   )}
                   <div className="col-span-2 flex gap-3 pt-2">
                     <button type="button" onClick={() => setAddingVitals(null)} className="flex-1 px-4 py-2 bg-slate-200 text-slate-700 rounded hover:bg-slate-300 transition">Cancel</button>
-                    <button type="submit" disabled={isSubmitting || !dirty} className="flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded hover:shadow-lg font-semibold transition disabled:opacity-50">
+                    <Button type="submit" disabled={isSubmitting || !dirty} variant="brand" className="flex-1">
                       {isSubmitting ? <Spinner size="sm" label="Saving…" /> : 'Save Vitals'}
-                    </button>
+                    </Button>
                   </div>
                 </Form>
               )}

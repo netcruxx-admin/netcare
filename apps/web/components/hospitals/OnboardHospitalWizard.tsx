@@ -57,6 +57,7 @@ import {
   RegistrationStep,
 } from './onboarding/StepPanels';
 import { Spinner } from '@/components/ui/spinner';
+import { Button } from '@/components/ui/button';
 
 interface Props {
   open: boolean;
@@ -296,25 +297,25 @@ export function OnboardHospitalWizard({ open, onClose, onCreated }: Props) {
                         </button>
                       )}
                       {isLast ? (
-                        <button
+                        <Button
                           type="submit"
                           disabled={isSubmitting || !dirty}
-                          className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg font-semibold text-sm hover:shadow-lg transition disabled:opacity-50"
+                          variant="brand"
                         >
                           {isSubmitting ? (
                             <Spinner size="sm" label="Creating…" />
                           ) : (
                             <><Check className="w-4 h-4" /> Create Hospital</>
                           )}
-                        </button>
+                        </Button>
                       ) : (
-                        <button
+                        <Button
                           type="button"
                           onClick={goNext}
-                          className="flex items-center gap-1.5 px-5 py-2.5 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg font-semibold text-sm hover:shadow-lg transition"
+                          variant="brand"
                         >
                           Next <ArrowRight className="w-4 h-4" />
-                        </button>
+                        </Button>
                       )}
                     </div>
                   </div>
@@ -461,12 +462,12 @@ function SuccessPanel({
         >
           Add another
         </button>
-        <button
+        <Button
           onClick={onDone}
-          className="px-5 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg text-sm font-medium hover:shadow-lg transition"
+          variant="brand"
         >
           Done
-        </button>
+        </Button>
       </div>
     </div>
   );

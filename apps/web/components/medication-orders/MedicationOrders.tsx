@@ -26,6 +26,8 @@ import { fmtDate } from '@/lib/date';
 import { formatINR } from '@/lib/money';
 import { openInvoicePrint } from '@/components/payments/printInvoice';
 import { Spinner } from '@/components/ui/spinner';
+import { Button } from '@/components/ui/button';
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
 
 type StatusTab = 'all' | MedicationOrderStatus;
 
@@ -248,13 +250,15 @@ export function MedicationOrders({ session }: RoleViewProps) {
           </div>
 
           {canCreate && role === doctorRole && (
-            <button
+            <Button
               onClick={() => setNewOrderOpen(true)}
-              className="flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg text-sm font-medium hover:shadow-lg transition ml-auto"
+              variant="brand"
+              size="sm"
+              className="ml-auto"
             >
               <Plus className="w-4 h-4" />
               New Order
-            </button>
+            </Button>
           )}
         </div>
 
@@ -275,30 +279,30 @@ export function MedicationOrders({ session }: RoleViewProps) {
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b bg-slate-50">
-                    <th className="text-left py-3 px-4 font-semibold text-slate-900">Medicine</th>
-                    <th className="text-right py-3 px-4 font-semibold text-slate-900">Qty</th>
-                    {canDispense && <th className="text-right py-3 px-4 font-semibold text-slate-900">Total</th>}
-                    <th className="text-left py-3 px-4 font-semibold text-slate-900">Dosage</th>
-                    <th className="text-left py-3 px-4 font-semibold text-slate-900">Route</th>
-                    <th className="text-left py-3 px-4 font-semibold text-slate-900">Doctor</th>
-                    <th className="text-left py-3 px-4 font-semibold text-slate-900">Ordered</th>
-                    <th className="text-left py-3 px-4 font-semibold text-slate-900">Status</th>
-                    {showActions && <th className="text-right py-3 px-4 font-semibold text-slate-900">Actions</th>}
-                  </tr>
-                </thead>
+              <Table>
+                <TableHeader>
+                  <TableRow className="border-b bg-slate-50">
+                    <TableHead className="text-left py-3 px-4 font-semibold text-slate-900">Medicine</TableHead>
+                    <TableHead className="text-right py-3 px-4 font-semibold text-slate-900">Qty</TableHead>
+                    {canDispense && <TableHead className="text-right py-3 px-4 font-semibold text-slate-900">Total</TableHead>}
+                    <TableHead className="text-left py-3 px-4 font-semibold text-slate-900">Dosage</TableHead>
+                    <TableHead className="text-left py-3 px-4 font-semibold text-slate-900">Route</TableHead>
+                    <TableHead className="text-left py-3 px-4 font-semibold text-slate-900">Doctor</TableHead>
+                    <TableHead className="text-left py-3 px-4 font-semibold text-slate-900">Ordered</TableHead>
+                    <TableHead className="text-left py-3 px-4 font-semibold text-slate-900">Status</TableHead>
+                    {showActions && <TableHead className="text-right py-3 px-4 font-semibold text-slate-900">Actions</TableHead>}
+                  </TableRow>
+                </TableHeader>
                 {grouped.map((group) => {
                   const open = openPatients.has(group.patientId);
                   const pending = group.orders.filter((o) => o.status === 'pending').length;
                   return (
-                <tbody key={group.patientId}>
-                  <tr
+                <TableBody key={group.patientId}>
+                  <TableRow
                     onClick={() => togglePatient(group.patientId)}
                     className="border-b bg-slate-50/60 hover:bg-slate-100 cursor-pointer"
                   >
-                    <td colSpan={COLUMN_COUNT} className="py-3 px-4">
+                    <TableCell colSpan={COLUMN_COUNT} className="py-3 px-4">
                       <div className="flex items-center gap-3">
                         <ChevronRight
                           className={`w-4 h-4 text-slate-400 transition-transform ${open ? 'rotate-90' : ''}`}
@@ -318,37 +322,37 @@ export function MedicationOrders({ session }: RoleViewProps) {
                           )}
                         </span>
                       </div>
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                   {open && group.orders.map((order) => (
-                    <tr key={order.id} className="border-b hover:bg-slate-50">
-                      <td className="py-3 px-4 text-slate-700 pl-11">{order.medicineName}</td>
-                      <td className="py-3 px-4 text-right font-medium text-slate-900 tabular-nums">
+                    <TableRow key={order.id} className="border-b hover:bg-slate-50">
+                      <TableCell className="py-3 px-4 text-slate-700 pl-11 whitespace-normal">{order.medicineName}</TableCell>
+                      <TableCell className="py-3 px-4 text-right font-medium text-slate-900 tabular-nums whitespace-normal">
                         {order.quantity}
-                      </td>
+                      </TableCell>
                       {canDispense && (
-                        <td className="py-3 px-4 text-right tabular-nums text-slate-700">
+                        <TableCell className="py-3 px-4 text-right tabular-nums text-slate-700 whitespace-normal">
                           {order.unitPrice > 0
                             ? formatINR(order.unitPrice * order.quantity)
                             : '—'}
-                        </td>
+                        </TableCell>
                       )}
-                      <td className="py-3 px-4 text-slate-600">{order.dosage}</td>
-                      <td className="py-3 px-4 text-slate-600">{order.route}</td>
-                      <td className="py-3 px-4 text-slate-600">
+                      <TableCell className="py-3 px-4 text-slate-600 whitespace-normal">{order.dosage}</TableCell>
+                      <TableCell className="py-3 px-4 text-slate-600 whitespace-normal">{order.route}</TableCell>
+                      <TableCell className="py-3 px-4 text-slate-600 whitespace-normal">
                         {order.doctorName ?? order.doctorId}
-                      </td>
-                      <td className="py-3 px-4 text-slate-500 whitespace-nowrap">
+                      </TableCell>
+                      <TableCell className="py-3 px-4 text-slate-500">
                         {fmtDate(order.orderedAt)}
-                      </td>
-                      <td className="py-3 px-4">
+                      </TableCell>
+                      <TableCell className="py-3 px-4 whitespace-normal">
                         <span
                           className={`inline-block px-2 py-0.5 rounded-full text-xs font-semibold ${STATUS_BADGE[order.status]}`}
                         >
                           {order.status}
                         </span>
-                      </td>
-                      {showActions && <td className="py-3 px-4 text-right">
+                      </TableCell>
+                      {showActions && <TableCell className="py-3 px-4 text-right whitespace-normal">
                         <div className="flex items-center justify-end gap-2">
                           {canDispense && order.status === 'pending' && (
                             <button
@@ -385,13 +389,13 @@ export function MedicationOrders({ session }: RoleViewProps) {
                             </button>
                           )}
                         </div>
-                      </td>}
-                    </tr>
+                      </TableCell>}
+                    </TableRow>
                   ))}
-                </tbody>
+                </TableBody>
                   );
                 })}
-              </table>
+              </Table>
             </div>
           )}
         </div>
@@ -501,13 +505,14 @@ export function MedicationOrders({ session }: RoleViewProps) {
                     >
                       Cancel
                     </button>
-                    <button
+                    <Button
                       type="submit"
                       disabled={isSubmitting || !dirty || isCreating}
-                      className="inline-flex items-center justify-center gap-2 flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded hover:shadow-lg font-semibold transition disabled:opacity-50"
+                      variant="brand"
+                      className="flex-1"
                     >
                       {isSubmitting || isCreating ? <Spinner size="sm" label="Creating…" /> : 'Create Order'}
-                    </button>
+                    </Button>
                   </div>
                 </Form>
               )}
@@ -538,15 +543,16 @@ export function MedicationOrders({ session }: RoleViewProps) {
               >
                 Close
               </button>
-              <button
+              <Button
                 onClick={() => {
                   openInvoicePrint(printable);
                   setPrintable(null);
                 }}
-                className="flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded font-semibold hover:shadow-lg transition"
+                variant="brand"
+                className="flex-1"
               >
                 Print bill
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -717,17 +723,18 @@ export function MedicationOrders({ session }: RoleViewProps) {
                       >
                         Cancel
                       </button>
-                      <button
+                      <Button
                         type="submit"
                         disabled={isSubmitting}
-                        className="flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded hover:shadow-lg font-semibold transition disabled:opacity-50"
+                        variant="brand"
+                        className="flex-1"
                       >
                         {isSubmitting
                           ? 'Processing…'
                           : billOrder.status === 'pending'
                           ? 'Dispense & Bill'
                           : 'Bill'}
-                      </button>
+                      </Button>
                     </div>
                   </Form>
                 </div>
@@ -787,16 +794,17 @@ export function MedicationOrders({ session }: RoleViewProps) {
                     >
                       Cancel
                     </button>
-                    <button
+                    <Button
                       type="submit"
                       // Notes-only submission is a legitimate no-touch click (nothing
                       // to fill in); a required injection site is not, so that route
                       // still needs a real edit before Mark Administered lights up.
                       disabled={isSubmitting || (['IV', 'IM', 'SC'].includes(administerOrder.route) && !dirty)}
-                      className="flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded hover:shadow-lg font-semibold transition disabled:opacity-50"
+                      variant="brand"
+                      className="flex-1"
                     >
                       {isSubmitting ? <Spinner size="sm" label="Saving…" /> : 'Mark Administered'}
-                    </button>
+                    </Button>
                   </div>
                 </Form>
               )}

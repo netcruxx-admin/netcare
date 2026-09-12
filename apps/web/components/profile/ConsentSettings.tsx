@@ -12,6 +12,7 @@ import { apiError } from '@/lib/apiError';
 import { fmtDate } from '@/lib/date';
 import { ageFromDateOfBirth, AGE_OF_MAJORITY } from '@/app/register/registrationSchemas';
 import { Spinner } from '@/components/ui/spinner';
+import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 
 interface Props {
@@ -231,14 +232,14 @@ export function ConsentSettings({ dateOfBirth }: Props) {
       </div>
 
       <div className="flex justify-end pt-2">
-        <button
+        <Button
           type="button"
           onClick={handleSave}
           disabled={!hasChanges || busy}
-          className="px-6 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg font-semibold hover:shadow-lg transition disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2"
+          variant="brand"
         >
           {saving ? <Spinner size="sm" label="Saving…" /> : 'Save Preferences'}
-        </button>
+        </Button>
       </div>
     </div>
   );

@@ -27,6 +27,7 @@ import type { RoleViewProps } from '@/components/RoleView';
 import { FormField } from '@/components/form/FormField';
 import { Calendar } from '@/components/ui/calendar';
 import { Spinner } from '@/components/ui/spinner';
+import { Button } from '@/components/ui/button';
 import { PaymentModeField, isCounterMode, type PaymentMode } from '@/components/payments/PaymentModeField';
 
 // ---------------------------------------------------------------------------
@@ -587,7 +588,7 @@ export function PatientBook({ session }: RoleViewProps) {
                         >
                           Back
                         </button>
-                        <button
+                        <Button
                           type="button"
                           disabled={deptDoctors.length === 0 || deptConflict}
                           onClick={async () => {
@@ -596,10 +597,11 @@ export function PatientBook({ session }: RoleViewProps) {
                             const errs = await validateForm();
                             if (!errs.date && !errs.time) setStep(3);
                           }}
-                          className="flex-1 px-6 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg hover:shadow-lg transition disabled:opacity-40 disabled:cursor-not-allowed"
+                          variant="brand"
+                          className="flex-1"
                         >
                           Next
-                        </button>
+                        </Button>
                       </div>
                     </div>
                   )}

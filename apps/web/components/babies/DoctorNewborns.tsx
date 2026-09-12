@@ -24,6 +24,7 @@ import { TablePagination } from '@/components/TablePagination';
 import { useServerTable } from '@/hooks/useServerTable';
 import { ageDisplay, scheduleForDob, immStatus } from '@/lib/baby';
 import { Spinner } from '@/components/ui/spinner';
+import { Button } from '@/components/ui/button';
 
 const today = () => new Date().toISOString().split('T')[0];
 const inputCls = 'w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/30 focus:border-cyan-500';
@@ -62,9 +63,9 @@ export function DoctorNewborns({ session }: RoleViewProps) {
             />
           </div>
           {canManage && (
-            <button onClick={() => setShowRegister(true)} className="ml-auto inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-cyan-500 to-brand-teal text-white text-sm font-semibold px-4 py-2 shadow hover:opacity-95">
+            <Button onClick={() => setShowRegister(true)} variant="brand" className="ml-auto">
               <Plus className="w-4 h-4" /> Register newborn
-            </button>
+            </Button>
           )}
         </div>
 
@@ -263,9 +264,9 @@ function RegisterBabyModal({ onClose, onSaved }: { onClose: () => void; onSaved:
             {error && <p className="text-sm text-red-600">{error}</p>}
             <div className="flex justify-end gap-2 pt-1">
               <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-slate-600 hover:text-slate-900">Cancel</button>
-              <button type="submit" disabled={isSubmitting || !dirty} className="px-4 py-2 text-sm font-semibold text-white bg-gradient-to-r from-cyan-500 to-brand-teal rounded-lg disabled:opacity-50">
+              <Button type="submit" disabled={isSubmitting || !dirty} variant="brand">
                 {isSubmitting ? 'Registering…' : 'Register'}
-              </button>
+              </Button>
             </div>
           </Form>
         )}
@@ -322,9 +323,9 @@ function GrowthModal({ baby, canManage, onClose }: { baby: Baby; canManage: bool
             </div>
             {error && <p className="text-sm text-red-600">{error}</p>}
             {canManage && (
-              <button type="submit" disabled={isSubmitting || !dirty} className="w-full py-2 rounded-lg bg-gradient-to-r from-cyan-500 to-brand-teal text-white text-sm font-semibold disabled:opacity-50">
+              <Button type="submit" disabled={isSubmitting || !dirty} variant="brand" className="w-full">
                 {isSubmitting ? 'Adding…' : 'Add measurement'}
-              </button>
+              </Button>
             )}
           </Form>
         )}

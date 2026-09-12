@@ -16,6 +16,7 @@ import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
 import { BlockModal } from '@/components/BlockModal';
 import { BLOCK_LABEL, BLOCK_CELL_STYLE, blockAtMinute } from '@/lib/schedule';
+import { Button } from '@/components/ui/button';
 
 function toDateStr(d: Date) {
   const y = d.getFullYear();
@@ -146,9 +147,9 @@ export function DoctorSchedule({ session }: RoleViewProps) {
             <button onClick={() => setWeekOffset((w) => w + 1)} className="flex items-center gap-1 px-3 py-2 bg-slate-500 text-white rounded-lg text-sm font-medium hover:bg-slate-600 transition">
               Next <ChevronRight className="w-4 h-4" />
             </button>
-            <button onClick={() => setBlockOpen(true)} className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg text-sm font-semibold hover:shadow-lg transition">
+            <Button onClick={() => setBlockOpen(true)} variant="brand" size="sm">
               <Ban className="w-4 h-4" /> Add Block
-            </button>
+            </Button>
           </div>
         </div>
 

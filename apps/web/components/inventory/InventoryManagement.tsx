@@ -21,6 +21,8 @@ import {
 } from '@/store/api';
 import { fmtDate } from '@/lib/date';
 import { Spinner } from '@/components/ui/spinner';
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
+import { Button } from '@/components/ui/button';
 
 const MOVEMENT_BADGE: Record<InventoryMovementType, string> = {
   restock: 'bg-green-100 text-green-700',
@@ -159,36 +161,36 @@ export function InventoryStockPanel({ session }: RoleViewProps) {
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b bg-slate-50">
-                    <th className="text-left py-3 px-4 font-semibold text-slate-900">Name</th>
-                    <th className="text-left py-3 px-4 font-semibold text-slate-900">Form</th>
-                    <th className="text-left py-3 px-4 font-semibold text-slate-900">Strength</th>
-                    <th className="text-left py-3 px-4 font-semibold text-slate-900">Category</th>
-                    <th className="text-left py-3 px-4 font-semibold text-slate-900">Stock</th>
-                    <th className="text-left py-3 px-4 font-semibold text-slate-900">Reorder</th>
-                    <th className="text-left py-3 px-4 font-semibold text-slate-900">Location</th>
-                    <th className="text-left py-3 px-4 font-semibold text-slate-900">Unit</th>
-                    <th className="text-right py-3 px-4 font-semibold text-slate-900">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
+              <Table>
+                <TableHeader>
+                  <TableRow className="border-b bg-slate-50">
+                    <TableHead className="text-left py-3 px-4 font-semibold text-slate-900">Name</TableHead>
+                    <TableHead className="text-left py-3 px-4 font-semibold text-slate-900">Form</TableHead>
+                    <TableHead className="text-left py-3 px-4 font-semibold text-slate-900">Strength</TableHead>
+                    <TableHead className="text-left py-3 px-4 font-semibold text-slate-900">Category</TableHead>
+                    <TableHead className="text-left py-3 px-4 font-semibold text-slate-900">Stock</TableHead>
+                    <TableHead className="text-left py-3 px-4 font-semibold text-slate-900">Reorder</TableHead>
+                    <TableHead className="text-left py-3 px-4 font-semibold text-slate-900">Location</TableHead>
+                    <TableHead className="text-left py-3 px-4 font-semibold text-slate-900">Unit</TableHead>
+                    <TableHead className="text-right py-3 px-4 font-semibold text-slate-900">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
                   {medicines.map((med) => (
-                    <tr key={med.id} className="border-b hover:bg-slate-50">
-                      <td className="py-3 px-4 font-medium text-slate-900">{med.name}</td>
-                      <td className="py-3 px-4 text-slate-600">{med.form || '—'}</td>
-                      <td className="py-3 px-4 text-slate-600">{med.strength || '—'}</td>
-                      <td className="py-3 px-4 text-slate-600">{med.category || '—'}</td>
-                      <td className="py-3 px-4">
+                    <TableRow key={med.id} className="border-b hover:bg-slate-50">
+                      <TableCell className="py-3 px-4 font-medium text-slate-900 whitespace-normal">{med.name}</TableCell>
+                      <TableCell className="py-3 px-4 text-slate-600 whitespace-normal">{med.form || '—'}</TableCell>
+                      <TableCell className="py-3 px-4 text-slate-600 whitespace-normal">{med.strength || '—'}</TableCell>
+                      <TableCell className="py-3 px-4 text-slate-600 whitespace-normal">{med.category || '—'}</TableCell>
+                      <TableCell className="py-3 px-4 whitespace-normal">
                         <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-semibold ${stockBadgeClass(med)}`}>
                           {med.stock}
                         </span>
-                      </td>
-                      <td className="py-3 px-4 text-slate-600">{med.reorderLevel ?? 10}</td>
-                      <td className="py-3 px-4 text-slate-600">{med.location || '—'}</td>
-                      <td className="py-3 px-4 text-slate-600">{med.unit || '—'}</td>
-                      <td className="py-3 px-4 text-right">
+                      </TableCell>
+                      <TableCell className="py-3 px-4 text-slate-600 whitespace-normal">{med.reorderLevel ?? 10}</TableCell>
+                      <TableCell className="py-3 px-4 text-slate-600 whitespace-normal">{med.location || '—'}</TableCell>
+                      <TableCell className="py-3 px-4 text-slate-600 whitespace-normal">{med.unit || '—'}</TableCell>
+                      <TableCell className="py-3 px-4 text-right whitespace-normal">
                         <div className="flex items-center justify-end gap-2">
                           <ActionIcon icon={Eye} label="View" onClick={() => setViewing(med)} />
                           {canManage && (
@@ -208,11 +210,11 @@ export function InventoryStockPanel({ session }: RoleViewProps) {
                             </>
                           )}
                         </div>
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   ))}
-                </tbody>
-              </table>
+                </TableBody>
+              </Table>
             </div>
           )}
         </div>
@@ -233,46 +235,46 @@ export function InventoryStockPanel({ session }: RoleViewProps) {
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b bg-slate-50">
-                    <th className="text-left py-3 px-4 font-semibold text-slate-900">Medicine</th>
-                    <th className="text-left py-3 px-4 font-semibold text-slate-900">Type</th>
-                    <th className="text-left py-3 px-4 font-semibold text-slate-900">Qty</th>
-                    <th className="text-left py-3 px-4 font-semibold text-slate-900">Lot No.</th>
-                    <th className="text-left py-3 px-4 font-semibold text-slate-900">Performed By</th>
-                    <th className="text-left py-3 px-4 font-semibold text-slate-900">Date</th>
-                    <th className="text-left py-3 px-4 font-semibold text-slate-900">Notes</th>
-                  </tr>
-                </thead>
-                <tbody>
+              <Table>
+                <TableHeader>
+                  <TableRow className="border-b bg-slate-50">
+                    <TableHead className="text-left py-3 px-4 font-semibold text-slate-900">Medicine</TableHead>
+                    <TableHead className="text-left py-3 px-4 font-semibold text-slate-900">Type</TableHead>
+                    <TableHead className="text-left py-3 px-4 font-semibold text-slate-900">Qty</TableHead>
+                    <TableHead className="text-left py-3 px-4 font-semibold text-slate-900">Lot No.</TableHead>
+                    <TableHead className="text-left py-3 px-4 font-semibold text-slate-900">Performed By</TableHead>
+                    <TableHead className="text-left py-3 px-4 font-semibold text-slate-900">Date</TableHead>
+                    <TableHead className="text-left py-3 px-4 font-semibold text-slate-900">Notes</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
                   {movements.map((m) => (
-                    <tr key={m.id} className="border-b hover:bg-slate-50">
-                      <td className="py-3 px-4 font-medium text-slate-900">
+                    <TableRow key={m.id} className="border-b hover:bg-slate-50">
+                      <TableCell className="py-3 px-4 font-medium text-slate-900 whitespace-normal">
                         {m.medicineName ?? m.medicineId}
-                      </td>
-                      <td className="py-3 px-4">
+                      </TableCell>
+                      <TableCell className="py-3 px-4 whitespace-normal">
                         <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-semibold ${MOVEMENT_BADGE[m.movementType]}`}>
                           {m.movementType}
                         </span>
-                      </td>
-                      <td className="py-3 px-4">
+                      </TableCell>
+                      <TableCell className="py-3 px-4 whitespace-normal">
                         <span className={m.quantity >= 0 ? 'text-green-700 font-semibold' : 'text-red-700 font-semibold'}>
                           {m.quantity >= 0 ? '+' : ''}{m.quantity}
                         </span>
-                      </td>
-                      <td className="py-3 px-4 text-slate-600">{m.lotNumber || '—'}</td>
-                      <td className="py-3 px-4 text-slate-600">
+                      </TableCell>
+                      <TableCell className="py-3 px-4 text-slate-600 whitespace-normal">{m.lotNumber || '—'}</TableCell>
+                      <TableCell className="py-3 px-4 text-slate-600 whitespace-normal">
                         {m.performedByName ?? m.performedBy}
-                      </td>
-                      <td className="py-3 px-4 text-slate-500 whitespace-nowrap">
+                      </TableCell>
+                      <TableCell className="py-3 px-4 text-slate-500">
                         {fmtDate(m.createdAt)}
-                      </td>
-                      <td className="py-3 px-4 text-slate-600 max-w-xs truncate">{m.notes || '—'}</td>
-                    </tr>
+                      </TableCell>
+                      <TableCell className="py-3 px-4 text-slate-600 max-w-xs truncate">{m.notes || '—'}</TableCell>
+                    </TableRow>
                   ))}
-                </tbody>
-              </table>
+                </TableBody>
+              </Table>
             </div>
           )}
         </div>
@@ -327,13 +329,14 @@ export function InventoryStockPanel({ session }: RoleViewProps) {
                     <button type="button" onClick={() => setRestockMed(null)} className="flex-1 px-4 py-2 bg-slate-200 text-slate-700 rounded hover:bg-slate-300 transition">
                       Cancel
                     </button>
-                    <button
+                    <Button
                       type="submit"
                       disabled={isSubmitting || !dirty || isRestocking}
-                      className="inline-flex items-center justify-center gap-2 flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded hover:shadow-lg font-semibold transition disabled:opacity-50"
+                      variant="brand"
+                      className="flex-1"
                     >
                       {isSubmitting || isRestocking ? <Spinner size="sm" label="Saving…" /> : 'Restock'}
-                    </button>
+                    </Button>
                   </div>
                 </Form>
               )}
@@ -393,13 +396,14 @@ export function InventoryStockPanel({ session }: RoleViewProps) {
                     <button type="button" onClick={() => setAdjustMed(null)} className="flex-1 px-4 py-2 bg-slate-200 text-slate-700 rounded hover:bg-slate-300 transition">
                       Cancel
                     </button>
-                    <button
+                    <Button
                       type="submit"
                       disabled={isSubmitting || !dirty || isAdjusting}
-                      className="inline-flex items-center justify-center gap-2 flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded hover:shadow-lg font-semibold transition disabled:opacity-50"
+                      variant="brand"
+                      className="flex-1"
                     >
                       {isSubmitting || isAdjusting ? <Spinner size="sm" label="Saving…" /> : 'Apply Adjustment'}
-                    </button>
+                    </Button>
                   </div>
                 </Form>
               )}

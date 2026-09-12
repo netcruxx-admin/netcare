@@ -7,6 +7,7 @@ import type { Appointment } from '@/lib/types';
 import { useActiveHospital } from '@/hooks/useActiveHospital';
 import type { ConfirmAction } from '../useAppointmentDetail';
 import { InlineConfirmBar } from './InlineConfirm';
+import { Button } from '@/components/ui/button';
 
 const CONFIRM_COPY: Partial<Record<Exclude<ConfirmAction, null>, { label: string; body: string; tone: string }>> = {
   complete: { label: 'Mark Complete', body: 'Mark this appointment as completed?', tone: 'bg-green-600 hover:bg-green-700' },
@@ -69,12 +70,13 @@ export function AppointmentDetailsCard({
       ) : (
         <div className="flex flex-wrap gap-2">
           {modules.telemedicine && appointment.mode === 'video' && appointment.status === 'scheduled' && (
-            <button
+            <Button
               onClick={() => router.push(`/dashboard/consult/${appointmentId}`)}
-              className="inline-flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg hover:shadow-lg transition font-semibold text-sm"
+              variant="brand"
+              size="sm"
             >
               <Video className="w-4 h-4" /> Join Video Consult
-            </button>
+            </Button>
           )}
           {canComplete && (
             <button

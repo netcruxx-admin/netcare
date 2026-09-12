@@ -10,6 +10,8 @@ import type { RoleViewProps } from '@/components/RoleView';
 import { useGetPatientPaymentsQuery } from '@/store/api';
 import { openInvoicePrint } from '@/components/payments/printInvoice';
 import { Spinner } from '@/components/ui/spinner';
+import { Button } from '@/components/ui/button';
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -87,31 +89,31 @@ export function PatientPayments({ session }: RoleViewProps) {
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b">
-                    <th className="text-left py-3 px-4 font-semibold text-slate-900">Date</th>
-                    <th className="text-left py-3 px-4 font-semibold text-slate-900">Type</th>
-                    <th className="text-left py-3 px-4 font-semibold text-slate-900">Amount</th>
-                    <th className="text-left py-3 px-4 font-semibold text-slate-900">Status</th>
-                    <th className="text-right py-3 px-4 font-semibold text-slate-900">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
+              <Table>
+                <TableHeader>
+                  <TableRow className="border-b">
+                    <TableHead className="text-left py-3 px-4 font-semibold text-slate-900">Date</TableHead>
+                    <TableHead className="text-left py-3 px-4 font-semibold text-slate-900">Type</TableHead>
+                    <TableHead className="text-left py-3 px-4 font-semibold text-slate-900">Amount</TableHead>
+                    <TableHead className="text-left py-3 px-4 font-semibold text-slate-900">Status</TableHead>
+                    <TableHead className="text-right py-3 px-4 font-semibold text-slate-900">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
                   {payments.map((payment) => (
-                    <tr key={payment.id} className="border-b hover:bg-slate-50">
-                      <td className="py-3 px-4 text-slate-700">
+                    <TableRow key={payment.id} className="border-b hover:bg-slate-50">
+                      <TableCell className="py-3 px-4 text-slate-700 whitespace-normal">
                         {fmtDate(payment.createdAt)}
-                      </td>
-                      <td className="py-3 px-4 text-slate-700">
+                      </TableCell>
+                      <TableCell className="py-3 px-4 text-slate-700 whitespace-normal">
                         <p className="font-medium">{paymentTypeLabel(payment.paymentType)}</p>
                         <p className="text-xs text-slate-500 mt-0.5">
                           {paymentMethodIcon(payment.paymentMethod)}
                           {paymentMethodLabel(payment.paymentMethod)}
                         </p>
-                      </td>
-                      <td className="py-3 px-4 font-semibold text-slate-900">{formatINR(payment.amount)}</td>
-                      <td className="py-3 px-4">
+                      </TableCell>
+                      <TableCell className="py-3 px-4 font-semibold text-slate-900 whitespace-normal">{formatINR(payment.amount)}</TableCell>
+                      <TableCell className="py-3 px-4 whitespace-normal">
                         <span
                           className={`inline-block px-3 py-1 rounded-full text-sm font-semibold ${
                             payment.status === 'completed'
@@ -123,8 +125,8 @@ export function PatientPayments({ session }: RoleViewProps) {
                         >
                           {payment.status.charAt(0).toUpperCase() + payment.status.slice(1)}
                         </span>
-                      </td>
-                      <td className="py-3 px-4 text-right space-x-3">
+                      </TableCell>
+                      <TableCell className="py-3 px-4 text-right space-x-3 whitespace-normal">
                         {payment.status === 'pending' && payment.paymentMethod === 'cash' && (
                           <span className="text-xs text-orange-600 font-medium">Pay at counter</span>
                         )}
@@ -142,11 +144,11 @@ export function PatientPayments({ session }: RoleViewProps) {
                           <Download className="w-4 h-4 inline mr-1" />
                           Download
                         </button>
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   ))}
-                </tbody>
-              </table>
+                </TableBody>
+              </Table>
             </div>
           )}
         </div>
@@ -240,13 +242,14 @@ function InvoiceModal({
           >
             Close
           </button>
-          <button
+          <Button
             onClick={() => onPrint(payment.id)}
-            className="flex-1 px-6 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg hover:shadow-lg transition"
+            variant="brand"
+            className="flex-1"
           >
             <Download className="w-4 h-4 inline mr-2" />
             Print / Save PDF
-          </button>
+          </Button>
         </div>
       </div>
     </div>

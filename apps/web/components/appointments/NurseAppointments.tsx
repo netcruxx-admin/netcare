@@ -18,6 +18,7 @@ import { useServerTable } from '@/hooks/useServerTable';
 import { SortableTh, useAppointmentSort } from './appointmentSort';
 import { fmtDate } from '@/lib/date';
 import { Spinner } from '@/components/ui/spinner';
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
 
 const todayStr = new Date().toISOString().split('T')[0];
 
@@ -125,9 +126,9 @@ export function NurseAppointments({ session }: RoleViewProps) {
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b bg-slate-50">
+              <Table>
+                <TableHeader>
+                  <TableRow className="border-b bg-slate-50">
                     <SortableTh
                       label="Date / Time"
                       sortKey="date"
@@ -135,8 +136,8 @@ export function NurseAppointments({ session }: RoleViewProps) {
                       onSort={toggle}
                       className="text-left py-3 px-6 font-semibold text-slate-900"
                     />
-                    <th className="text-left py-3 px-6 font-semibold text-slate-900">Patient</th>
-                    <th className="text-left py-3 px-6 font-semibold text-slate-900">Doctor</th>
+                    <TableHead className="text-left py-3 px-6 font-semibold text-slate-900">Patient</TableHead>
+                    <TableHead className="text-left py-3 px-6 font-semibold text-slate-900">Doctor</TableHead>
                     <SortableTh
                       label="Status"
                       sortKey="status"
@@ -144,35 +145,35 @@ export function NurseAppointments({ session }: RoleViewProps) {
                       onSort={toggle}
                       className="text-left py-3 px-6 font-semibold text-slate-900"
                     />
-                    <th className="text-left py-3 px-6 font-semibold text-slate-900">Vitals</th>
-                    <th className="text-right py-3 px-6 font-semibold text-slate-900">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
+                    <TableHead className="text-left py-3 px-6 font-semibold text-slate-900">Vitals</TableHead>
+                    <TableHead className="text-right py-3 px-6 font-semibold text-slate-900">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
                   {rows.map((a) => (
-                    <tr key={a.id} className="border-b hover:bg-slate-50">
-                      <td className="py-3 px-6 whitespace-nowrap">
+                    <TableRow key={a.id} className="border-b hover:bg-slate-50">
+                      <TableCell className="py-3 px-6">
                         <div className="flex items-center gap-2 mb-0.5">
                           <DateBadge date={a.date} />
                           <p className="font-medium text-slate-900">{fmtDate(a.date)}</p>
                         </div>
                         <p className="text-xs text-slate-500">{a.time}</p>
-                      </td>
-                      <td className="py-3 px-6 text-slate-700">{a.patient}</td>
-                      <td className="py-3 px-6 text-slate-600">{a.doctor}</td>
-                      <td className="py-3 px-6">
+                      </TableCell>
+                      <TableCell className="py-3 px-6 text-slate-700 whitespace-normal">{a.patient}</TableCell>
+                      <TableCell className="py-3 px-6 text-slate-600 whitespace-normal">{a.doctor}</TableCell>
+                      <TableCell className="py-3 px-6 whitespace-normal">
                         <span className={`inline-block px-2.5 py-1 rounded-full text-xs font-semibold capitalize ${STATUS_STYLE[a.status]}`}>
                           {a.status}
                         </span>
-                      </td>
-                      <td className="py-3 px-6">
+                      </TableCell>
+                      <TableCell className="py-3 px-6 whitespace-normal">
                         {a.hasVitals ? (
                           <span className="inline-block px-2.5 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-700">Recorded</span>
                         ) : (
                           <span className="inline-block px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-700">Pending</span>
                         )}
-                      </td>
-                      <td className="py-3 px-6">
+                      </TableCell>
+                      <TableCell className="py-3 px-6 whitespace-normal">
                         <div className="flex items-center justify-end gap-1">
                           <ActionIcon icon={Eye} label="View appointment" href={`/appointment/${a.id}`} />
                           {canRecordVitals && a.status !== 'cancelled' && (
@@ -184,11 +185,11 @@ export function NurseAppointments({ session }: RoleViewProps) {
                             />
                           )}
                         </div>
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   ))}
-                </tbody>
-              </table>
+                </TableBody>
+              </Table>
               <TablePagination
                 page={table.page}
                 pageSize={table.pageSize}

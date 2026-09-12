@@ -6,6 +6,7 @@ import * as Yup from 'yup';
 import { X, CalendarPlus, AlertCircle } from 'lucide-react';
 import { Calendar } from '@/components/ui/calendar';
 import { Spinner } from '@/components/ui/spinner';
+import { Button } from '@/components/ui/button';
 import type { Appointment } from '@/lib/types';
 import { apiError } from '@/lib/apiError';
 import {
@@ -268,9 +269,9 @@ export function FollowUpModal({
                   <button type="button" onClick={onClose} className="flex-1 px-4 py-2 bg-slate-200 text-slate-700 rounded hover:bg-slate-300 transition">
                     Cancel
                   </button>
-                  <button type="submit" disabled={isSubmitting || !dirty || deptConflict} className="inline-flex items-center justify-center gap-2 flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded hover:shadow-lg font-semibold transition disabled:opacity-50">
+                  <Button type="submit" disabled={isSubmitting || !dirty || deptConflict} variant="brand" className="flex-1">
                     {isSubmitting ? <Spinner size="sm" label="Saving…" /> : 'Schedule Follow-Up'}
-                  </button>
+                  </Button>
                 </div>
               </Form>
             );

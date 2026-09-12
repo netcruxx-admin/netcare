@@ -6,6 +6,8 @@ import { FileText, Pencil, Plus, Trash2 } from 'lucide-react';
 import { apiError } from '@/lib/apiError';
 import { fmtDate } from '@/lib/date';
 import { Spinner } from '@/components/ui/spinner';
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
+import { Button } from '@/components/ui/button';
 import { useCreateVitalsMutation, useDeleteVitalsMutation, useUpdateVitalsMutation } from '@/store/api';
 import {
   Autofill,
@@ -71,22 +73,22 @@ export function VitalsSection({ vitals, appointmentId, patientId, doctorId, canM
       </div>
 
       <div className="overflow-x-auto rounded-lg border border-slate-100">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="bg-slate-50 border-b border-slate-100">
+        <Table>
+          <TableHeader>
+            <TableRow className="bg-slate-50 border-b border-slate-100">
               {[...HEAD, ...(canManage ? ['Actions'] : [])].map((h) => (
-                <th key={h} className="py-2.5 px-4 text-left text-xs font-semibold text-slate-500 whitespace-nowrap">
+                <TableHead key={h} className="py-2.5 px-4 text-left text-xs font-semibold text-slate-500">
                   {h}
-                </th>
+                </TableHead>
               ))}
-            </tr>
-          </thead>
-          <tbody className="bg-white">
+            </TableRow>
+          </TableHeader>
+          <TableBody className="bg-white">
             {vitals.map((v) => {
               if (editingId === v.id) {
                 return (
-                  <tr key={v.id} className="border-b border-slate-50 bg-cyan-50/30">
-                    <td colSpan={colSpan} className="p-4">
+                  <TableRow key={v.id} className="border-b border-slate-50 bg-cyan-50/30">
+                    <TableCell colSpan={colSpan} className="p-4">
                       <EditVitalsForm
                         vitals={v}
                         onCancel={() => setEditingId(null)}
@@ -95,38 +97,38 @@ export function VitalsSection({ vitals, appointmentId, patientId, doctorId, canM
                           setEditingId(null);
                         }}
                       />
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 );
               }
               if (deleteId === v.id) {
                 return (
-                  <tr key={v.id} className="border-b border-slate-50">
-                    <td colSpan={colSpan} className="p-4">
+                  <TableRow key={v.id} className="border-b border-slate-50">
+                    <TableCell colSpan={colSpan} className="p-4">
                       <InlineConfirmBar
                         message="Permanently delete this vitals record? This cannot be undone."
                         loading={deleting}
                         onConfirm={confirmDelete}
                         onCancel={() => setDeleteId(null)}
                       />
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 );
               }
               return (
-                <tr key={v.id} className="border-b border-slate-50 hover:bg-slate-50">
-                  <td className="py-3 px-4 text-slate-600">{v.bloodPressure || '—'}</td>
-                  <td className="py-3 px-4 text-slate-600">{v.height ? `${v.height} cm` : '—'}</td>
-                  <td className="py-3 px-4 text-slate-600">{v.heartRate ? `${v.heartRate} bpm` : '—'}</td>
-                  <td className="py-3 px-4 text-slate-600">{v.weight ? `${v.weight} kg` : '—'}</td>
-                  <td className="py-3 px-4 text-slate-600">{v.temperature ? `${v.temperature}°F` : '—'}</td>
-                  <td className="py-3 px-4 text-slate-600">{v.bmi ? `${v.bmi}` : '—'}</td>
-                  <td className="py-3 px-4 text-slate-600">{PREGNANCY_LABEL[v.pregnancyStatus] ?? '—'}</td>
-                  <td className="py-3 px-4 text-slate-600">{fmtDate(v.lmp)}</td>
-                  <td className="py-3 px-4 text-slate-600">{fmtDate(v.edd)}</td>
-                  <td className="py-3 px-4 text-slate-600">{v.pog || '—'}</td>
+                <TableRow key={v.id} className="border-b border-slate-50 hover:bg-slate-50">
+                  <TableCell className="py-3 px-4 text-slate-600 whitespace-normal">{v.bloodPressure || '—'}</TableCell>
+                  <TableCell className="py-3 px-4 text-slate-600 whitespace-normal">{v.height ? `${v.height} cm` : '—'}</TableCell>
+                  <TableCell className="py-3 px-4 text-slate-600 whitespace-normal">{v.heartRate ? `${v.heartRate} bpm` : '—'}</TableCell>
+                  <TableCell className="py-3 px-4 text-slate-600 whitespace-normal">{v.weight ? `${v.weight} kg` : '—'}</TableCell>
+                  <TableCell className="py-3 px-4 text-slate-600 whitespace-normal">{v.temperature ? `${v.temperature}°F` : '—'}</TableCell>
+                  <TableCell className="py-3 px-4 text-slate-600 whitespace-normal">{v.bmi ? `${v.bmi}` : '—'}</TableCell>
+                  <TableCell className="py-3 px-4 text-slate-600 whitespace-normal">{PREGNANCY_LABEL[v.pregnancyStatus] ?? '—'}</TableCell>
+                  <TableCell className="py-3 px-4 text-slate-600 whitespace-normal">{fmtDate(v.lmp)}</TableCell>
+                  <TableCell className="py-3 px-4 text-slate-600 whitespace-normal">{fmtDate(v.edd)}</TableCell>
+                  <TableCell className="py-3 px-4 text-slate-600 whitespace-normal">{v.pog || '—'}</TableCell>
                   {canManage && (
-                    <td className="py-2 px-3 whitespace-nowrap">
+                    <TableCell className="py-2 px-3">
                       <div className="flex items-center gap-1">
                         <button onClick={() => setEditingId(v.id)} title="Edit" className="p-1.5 text-slate-400 hover:text-cyan-600 hover:bg-cyan-50 rounded transition">
                           <Pencil className="w-3.5 h-3.5" />
@@ -137,9 +139,9 @@ export function VitalsSection({ vitals, appointmentId, patientId, doctorId, canM
                           </button>
                         )}
                       </div>
-                    </td>
+                    </TableCell>
                   )}
-                </tr>
+                </TableRow>
               );
             })}
             {canManage && (
@@ -156,8 +158,8 @@ export function VitalsSection({ vitals, appointmentId, patientId, doctorId, canM
                 }}
               />
             )}
-          </tbody>
-        </table>
+          </TableBody>
+        </Table>
       </div>
       {addError && (
         <p className="mt-2 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{addError}</p>
@@ -199,37 +201,37 @@ function NewVitalsRow({
   return (
     <FormikProvider value={formik}>
       <Autofill />
-      <tr className="bg-cyan-50/20">
-        <td className="p-1.5">
+      <TableRow className="bg-cyan-50/20">
+        <TableCell className="p-1.5">
           <input name="bloodPressure" value={formik.values.bloodPressure} onChange={formik.handleChange} placeholder="120/80" className={cell} />
-        </td>
-        <td className="p-1.5">
+        </TableCell>
+        <TableCell className="p-1.5">
           <input name="height" type="number" value={formik.values.height} onChange={formik.handleChange} placeholder="165" className={cell} />
-        </td>
-        <td className="p-1.5">
+        </TableCell>
+        <TableCell className="p-1.5">
           <input name="heartRate" type="number" value={formik.values.heartRate} onChange={formik.handleChange} placeholder="78" className={cell} />
-        </td>
-        <td className="p-1.5">
+        </TableCell>
+        <TableCell className="p-1.5">
           <input name="weight" type="number" value={formik.values.weight} onChange={formik.handleChange} placeholder="68" className={cell} />
-        </td>
-        <td className="p-1.5">
+        </TableCell>
+        <TableCell className="p-1.5">
           <input name="temperature" type="number" value={formik.values.temperature} onChange={formik.handleChange} placeholder="98.4" className={cell} />
-        </td>
-        <td className="p-1.5">
+        </TableCell>
+        <TableCell className="p-1.5">
           <input name="bmi" type="number" value={formik.values.bmi} onChange={formik.handleChange} placeholder="auto" className={cell} />
-        </td>
-        <td className="p-1.5">
+        </TableCell>
+        <TableCell className="p-1.5">
           <select name="pregnancyStatus" value={formik.values.pregnancyStatus} onChange={formik.handleChange} className={cell}>
             <option value="">Not recorded</option>
             {pregnancyStatusOptions.map((o) => (
               <option key={o.value} value={o.value}>{o.label}</option>
             ))}
           </select>
-        </td>
-        <td className="p-1.5">
+        </TableCell>
+        <TableCell className="p-1.5">
           <input name="lmp" type="date" value={formik.values.lmp} onChange={formik.handleChange} disabled={formik.values.pregnancyStatus === 'menopause'} className={`${cell} disabled:bg-slate-100 disabled:text-slate-400`} />
-        </td>
-        <td className="p-1.5">
+        </TableCell>
+        <TableCell className="p-1.5">
           <input
             name="edd"
             type="date"
@@ -238,8 +240,8 @@ function NewVitalsRow({
             disabled={formik.values.pregnancyStatus !== 'pregnant'}
             className={`${cell} disabled:bg-slate-100 disabled:text-slate-400`}
           />
-        </td>
-        <td className="p-1.5">
+        </TableCell>
+        <TableCell className="p-1.5">
           <input
             name="pog"
             value={formik.values.pog}
@@ -248,8 +250,8 @@ function NewVitalsRow({
             disabled={formik.values.pregnancyStatus !== 'pregnant'}
             className={`${cell} disabled:bg-slate-100 disabled:text-slate-400`}
           />
-        </td>
-        <td className="p-1.5 whitespace-nowrap">
+        </TableCell>
+        <TableCell className="p-1.5">
           <button
             type="button"
             onClick={() => formik.submitForm()}
@@ -259,14 +261,14 @@ function NewVitalsRow({
           >
             {formik.isSubmitting ? <Spinner size="sm" /> : <Plus className="w-4 h-4" />}
           </button>
-        </td>
-      </tr>
+        </TableCell>
+      </TableRow>
       {err && (
-        <tr>
-          <td colSpan={colSpan} className="px-2 pb-2">
+        <TableRow>
+          <TableCell colSpan={colSpan} className="px-2 pb-2">
             <p className="text-xs text-red-600">{err}</p>
-          </td>
-        </tr>
+          </TableCell>
+        </TableRow>
       )}
     </FormikProvider>
   );
@@ -307,13 +309,13 @@ function EditVitalsForm({
             <button type="button" onClick={onCancel} className="px-4 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-white transition text-sm">
               Cancel
             </button>
-            <button
+            <Button
               type="submit"
               disabled={isSubmitting || !dirty}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg hover:shadow-lg font-semibold transition text-sm disabled:opacity-50"
+              variant="brand"
             >
               {isSubmitting ? <Spinner size="sm" label="Saving…" /> : 'Save Changes'}
-            </button>
+            </Button>
           </div>
         </Form>
       )}

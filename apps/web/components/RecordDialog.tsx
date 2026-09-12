@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, type ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import { X } from 'lucide-react';
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 
 /** One labelled fact about the record. */
 export interface DetailField {
@@ -31,6 +32,11 @@ const isBlank = (value: ReactNode): boolean =>
  * Fields with no value are kept rather than dropped: "Expiry —" tells the
  * reader the field exists and is empty, while omitting the row leaves them
  * wondering whether the system tracks it at all.
+ *
+ * Escape and a backdrop click both close it — Dialog's own behavior, not
+ * something this component wires up itself. A read-only dialog should be
+ * dismissible without aiming for a button — there is nothing here to lose by
+ * closing it.
  */
 export function RecordDialog({
   open,
@@ -48,37 +54,12 @@ export function RecordDialog({
   /** Optional extra block under the fields — a table of line items, say. */
   footer?: ReactNode;
 }) {
-  // Escape closes. A read-only dialog should be dismissible without aiming for
-  // a button — there is nothing here to lose by closing it.
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [open, onClose]);
-
-  if (!open) return null;
-
   return (
-    <div
-      className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50"
-      onClick={onClose}
-      role="presentation"
-    >
-      <div
-        className="bg-white rounded-lg shadow-2xl max-w-lg w-full max-h-[85vh] flex flex-col"
-        role="dialog"
-        aria-modal="true"
-        aria-label={title}
-        // The backdrop closes; a click that started inside the card must not
-        // bubble out and close it too.
-        onClick={(e) => e.stopPropagation()}
-      >
+    <Dialog open={open} onOpenChange={(next) => !next && onClose()}>
+      <DialogContent showCloseButton={false} className="max-w-lg max-h-[85vh] flex flex-col p-0 gap-0">
         <div className="flex items-start justify-between gap-4 p-6 pb-4 border-b border-slate-100">
           <div className="min-w-0">
-            <h3 className="text-lg font-bold text-slate-900 truncate">{title}</h3>
+            <DialogTitle className="text-lg font-bold text-slate-900 truncate">{title}</DialogTitle>
             {subtitle && <p className="text-xs text-slate-500 mt-0.5">{subtitle}</p>}
           </div>
           <button
@@ -120,7 +101,7 @@ export function RecordDialog({
             Close
           </button>
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

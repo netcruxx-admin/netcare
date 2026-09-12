@@ -3,6 +3,7 @@
 import { useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { Printer, X } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 export interface LetterheadMargins {
   top: number;
@@ -127,12 +128,12 @@ export function PrintSheet({ header, docLabel, docNumber, ready = true, autoPrin
         >
           <X className="h-4 w-4" /> Close
         </button>
-        <button
+        <Button
           onClick={() => window.print()}
-          className="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-cyan-500 to-brand-teal px-4 py-2 text-sm font-semibold text-white transition hover:shadow-lg"
+          variant="brand"
         >
           <Printer className="h-4 w-4" /> Print / Save PDF
-        </button>
+        </Button>
       </div>
 
       {header.letterheadUrl && !forcePlain ? (

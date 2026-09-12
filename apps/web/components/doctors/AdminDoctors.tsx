@@ -20,6 +20,8 @@ import {
   useListDepartmentsQuery,
 } from '@/store/api';
 import { Spinner } from '@/components/ui/spinner';
+import { Button } from '@/components/ui/button';
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
 
 const exportRow = (d: Doctor, deptName?: string) => [
   d.user?.name ?? '—',
@@ -101,13 +103,14 @@ export function AdminDoctors({ session }: RoleViewProps) {
         <div className="flex items-center justify-between px-6 py-4 border-b">
           <h3 className="text-lg font-semibold text-slate-900">Doctors ({totalDoctors})</h3>
           {canManage && (
-            <button
+            <Button
               onClick={() => setShowAddModal(true)}
-              className="flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg text-sm font-medium hover:shadow-lg transition"
+              variant="brand"
+              size="sm"
             >
               <UserPlus className="w-4 h-4" />
               Add Doctor
-            </button>
+            </Button>
           )}
         </div>
 
@@ -120,30 +123,30 @@ export function AdminDoctors({ session }: RoleViewProps) {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b bg-slate-50">
-                  <th className="text-left py-3 px-6 font-semibold text-slate-900">Name</th>
-                  <th className="text-left py-3 px-6 font-semibold text-slate-900">Department</th>
-                  <th className="text-left py-3 px-6 font-semibold text-slate-900">Specialization</th>
-                  <th className="text-left py-3 px-6 font-semibold text-slate-900">Qualification</th>
-                  <th className="text-left py-3 px-6 font-semibold text-slate-900">Experience</th>
-                  <th className="text-left py-3 px-6 font-semibold text-slate-900">Status</th>
-                  <th className="text-right py-3 px-6 font-semibold text-slate-900">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
+            <Table>
+              <TableHeader>
+                <TableRow className="border-b bg-slate-50">
+                  <TableHead className="text-left py-3 px-6 font-semibold text-slate-900">Name</TableHead>
+                  <TableHead className="text-left py-3 px-6 font-semibold text-slate-900">Department</TableHead>
+                  <TableHead className="text-left py-3 px-6 font-semibold text-slate-900">Specialization</TableHead>
+                  <TableHead className="text-left py-3 px-6 font-semibold text-slate-900">Qualification</TableHead>
+                  <TableHead className="text-left py-3 px-6 font-semibold text-slate-900">Experience</TableHead>
+                  <TableHead className="text-left py-3 px-6 font-semibold text-slate-900">Status</TableHead>
+                  <TableHead className="text-right py-3 px-6 font-semibold text-slate-900">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {filtered.map((doctor) => (
-                  <tr key={doctor.id} className="border-b hover:bg-slate-50">
-                    <td className="py-3 px-6">
+                  <TableRow key={doctor.id} className="border-b hover:bg-slate-50">
+                    <TableCell className="py-3 px-6 whitespace-normal">
                       <p className="font-medium text-slate-900">{doctor.user?.name ?? '—'}</p>
                       <p className="text-xs text-slate-500 mt-0.5">{doctor.user?.email ?? ''}</p>
-                    </td>
-                    <td className="py-3 px-6 text-slate-600">{deptById.get(doctor.departmentId ?? '') ?? '—'}</td>
-                    <td className="py-3 px-6 text-slate-600">{doctor.specialization || '—'}</td>
-                    <td className="py-3 px-6 text-slate-600">{doctor.qualification || '—'}</td>
-                    <td className="py-3 px-6 text-slate-600">{doctor.experienceYears} yrs</td>
-                    <td className="py-3 px-6">
+                    </TableCell>
+                    <TableCell className="py-3 px-6 text-slate-600 whitespace-normal">{deptById.get(doctor.departmentId ?? '') ?? '—'}</TableCell>
+                    <TableCell className="py-3 px-6 text-slate-600 whitespace-normal">{doctor.specialization || '—'}</TableCell>
+                    <TableCell className="py-3 px-6 text-slate-600 whitespace-normal">{doctor.qualification || '—'}</TableCell>
+                    <TableCell className="py-3 px-6 text-slate-600 whitespace-normal">{doctor.experienceYears} yrs</TableCell>
+                    <TableCell className="py-3 px-6 whitespace-normal">
                       <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
                         doctor.verificationStatus === 'verified'
                           ? 'bg-green-100 text-green-700'
@@ -153,18 +156,18 @@ export function AdminDoctors({ session }: RoleViewProps) {
                       }`}>
                         {doctor.verificationStatus ?? 'verified'}
                       </span>
-                    </td>
-                    <td className="py-3 px-6 text-right">
+                    </TableCell>
+                    <TableCell className="py-3 px-6 text-right whitespace-normal">
                       <div className="flex items-center justify-end gap-1">
                         <ActionIcon icon={Eye} label="View" onClick={() => setViewing(doctor)} />
                         {canManage && <ActionIcon icon={Pencil} label="Edit" onClick={() => setEditing(doctor)} />}
                         {canDelete && <ActionIcon icon={Trash2} label="Delete" tone="danger" onClick={() => setDeleting(doctor)} />}
                       </div>
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 ))}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
             <TablePagination
               page={table.page}
               pageSize={table.pageSize}

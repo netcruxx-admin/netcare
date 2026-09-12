@@ -34,6 +34,8 @@ import {
   type ResultFlag,
 } from '@/lib/lab';
 import { Spinner } from '@/components/ui/spinner';
+import { Button } from '@/components/ui/button';
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
 
 interface DraftRow extends TestResultParameter {
   low?: number;
@@ -281,27 +283,27 @@ function LabOrdersInner({ session }: RoleViewProps) {
           ) : (
             <>
             <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b bg-slate-50">
-                    <th className="text-left py-3 px-6 font-semibold text-slate-900">Patient</th>
-                    <th className="text-left py-3 px-6 font-semibold text-slate-900">Tests</th>
-                    <th className="text-left py-3 px-6 font-semibold text-slate-900">Priority</th>
-                    <th className="text-left py-3 px-6 font-semibold text-slate-900">Status</th>
-                    <th className="text-right py-3 px-6 font-semibold text-slate-900">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
+              <Table>
+                <TableHeader>
+                  <TableRow className="border-b bg-slate-50">
+                    <TableHead className="text-left py-3 px-6 font-semibold text-slate-900">Patient</TableHead>
+                    <TableHead className="text-left py-3 px-6 font-semibold text-slate-900">Tests</TableHead>
+                    <TableHead className="text-left py-3 px-6 font-semibold text-slate-900">Priority</TableHead>
+                    <TableHead className="text-left py-3 px-6 font-semibold text-slate-900">Status</TableHead>
+                    <TableHead className="text-right py-3 px-6 font-semibold text-slate-900">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
                   {rows.map((r) => {
                     const next = nextLabStatus(r.order.status);
                     return (
-                      <tr key={r.order.id} className="border-b hover:bg-slate-50">
-                        <td className="py-3 px-6">
+                      <TableRow key={r.order.id} className="border-b hover:bg-slate-50">
+                        <TableCell className="py-3 px-6 whitespace-normal">
                           <p className="font-medium text-slate-900">{r.patient}</p>
                           <p className="text-xs text-slate-400 font-mono">{r.order.id}</p>
-                        </td>
-                        <td className="py-3 px-6 text-slate-600 max-w-xs">{r.tests}</td>
-                        <td className="py-3 px-6">
+                        </TableCell>
+                        <TableCell className="py-3 px-6 text-slate-600 max-w-xs whitespace-normal">{r.tests}</TableCell>
+                        <TableCell className="py-3 px-6 whitespace-normal">
                           {r.order.priority === 'urgent' ? (
                             <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-700">
                               <AlertTriangle className="w-3 h-3" /> Urgent
@@ -309,21 +311,23 @@ function LabOrdersInner({ session }: RoleViewProps) {
                           ) : (
                             <span className="text-slate-500 text-sm">Routine</span>
                           )}
-                        </td>
-                        <td className="py-3 px-6">
+                        </TableCell>
+                        <TableCell className="py-3 px-6 whitespace-normal">
                           <span className={`inline-block px-2.5 py-1 rounded-full text-xs font-semibold ${ORDER_STATUS_STYLE[r.order.status]}`}>
                             {ORDER_STATUS_LABEL[r.order.status]}
                           </span>
-                        </td>
-                        <td className="py-3 px-6 text-right">
+                        </TableCell>
+                        <TableCell className="py-3 px-6 text-right whitespace-normal">
                           <div className="flex items-center justify-end gap-2">
                             {next && (
-                              <button
+                              <Button
                                 onClick={() => advance(r.order)}
-                                className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-gradient-to-r from-cyan-500 to-brand-teal text-white hover:shadow transition whitespace-nowrap"
+                                variant="brand"
+                                size="sm"
+                                className="whitespace-nowrap"
                               >
                                 → {ORDER_STATUS_LABEL[next]}
-                              </button>
+                              </Button>
                             )}
                             <button
                               onClick={() => openResults(r.order)}
@@ -354,12 +358,12 @@ function LabOrdersInner({ session }: RoleViewProps) {
                               </button>
                             )}
                           </div>
-                        </td>
-                      </tr>
+                        </TableCell>
+                      </TableRow>
                     );
                   })}
-                </tbody>
-              </table>
+                </TableBody>
+              </Table>
             </div>
             <TablePagination
               page={page}
@@ -393,31 +397,31 @@ function LabOrdersInner({ session }: RoleViewProps) {
                 <div key={t.testId} className="border border-slate-200 rounded-lg overflow-hidden">
                   <div className="bg-slate-50 px-4 py-2.5 font-semibold text-slate-800 text-sm">{t.testName}</div>
                   <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="text-slate-500 border-b">
-                          <th className="text-left py-2 px-4 font-medium">Parameter</th>
-                          <th className="text-left py-2 px-4 font-medium">Value</th>
-                          <th className="text-left py-2 px-4 font-medium">Unit</th>
-                          <th className="text-left py-2 px-4 font-medium">Reference</th>
-                          <th className="text-left py-2 px-4 font-medium">Flag</th>
-                        </tr>
-                      </thead>
-                      <tbody>
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="text-slate-500 border-b">
+                          <TableHead className="text-left py-2 px-4 font-medium">Parameter</TableHead>
+                          <TableHead className="text-left py-2 px-4 font-medium">Value</TableHead>
+                          <TableHead className="text-left py-2 px-4 font-medium">Unit</TableHead>
+                          <TableHead className="text-left py-2 px-4 font-medium">Reference</TableHead>
+                          <TableHead className="text-left py-2 px-4 font-medium">Flag</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
                         {t.rows.map((r, ri) => (
-                          <tr key={ri} className="border-b last:border-0">
-                            <td className="py-2 px-4 text-slate-800">{r.name}</td>
-                            <td className="py-2 px-4">
+                          <TableRow key={ri} className="border-b last:border-0">
+                            <TableCell className="py-2 px-4 text-slate-800 whitespace-normal">{r.name}</TableCell>
+                            <TableCell className="py-2 px-4 whitespace-normal">
                               <input
                                 value={r.value}
                                 onChange={(e) => setRowValue(ti, ri, e.target.value)}
                                 placeholder="—"
                                 className="w-24 px-2 py-1 border border-slate-300 rounded focus:outline-none focus:border-cyan-500"
                               />
-                            </td>
-                            <td className="py-2 px-4 text-slate-500">{r.unit || '—'}</td>
-                            <td className="py-2 px-4 text-slate-500 whitespace-nowrap">{r.referenceRange || '—'}</td>
-                            <td className="py-2 px-4">
+                            </TableCell>
+                            <TableCell className="py-2 px-4 text-slate-500 whitespace-normal">{r.unit || '—'}</TableCell>
+                            <TableCell className="py-2 px-4 text-slate-500">{r.referenceRange || '—'}</TableCell>
+                            <TableCell className="py-2 px-4 whitespace-normal">
                               <select
                                 value={r.flag}
                                 onChange={(e) => setRowFlag(ti, ri, e.target.value as ResultFlag)}
@@ -427,11 +431,11 @@ function LabOrdersInner({ session }: RoleViewProps) {
                                   <option key={f} value={f}>{FLAG_LABEL[f]}</option>
                                 ))}
                               </select>
-                            </td>
-                          </tr>
+                            </TableCell>
+                          </TableRow>
                         ))}
-                      </tbody>
-                    </table>
+                      </TableBody>
+                    </Table>
                   </div>
                   <div className="px-4 py-3 border-t border-slate-100">
                     <input
@@ -452,9 +456,9 @@ function LabOrdersInner({ session }: RoleViewProps) {
               <button onClick={() => saveResults(false)} className="flex-1 px-4 py-2 bg-white border border-cyan-500 text-cyan-700 rounded hover:bg-cyan-50 font-semibold transition">
                 Save Draft
               </button>
-              <button onClick={() => saveResults(true)} className="flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded hover:shadow-lg font-semibold transition">
+              <Button onClick={() => saveResults(true)} variant="brand" className="flex-1">
                 Save &amp; Publish
-              </button>
+              </Button>
             </div>
           </div>
         </div>

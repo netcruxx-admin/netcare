@@ -13,6 +13,8 @@ import { SortableTh, compareAppointments, useAppointmentSort } from './appointme
 import { hasPermission } from '@/lib/auth';
 import { ActionIcon } from '../ActionIcon';
 import { Spinner } from '@/components/ui/spinner';
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
+import { Button } from '@/components/ui/button';
 import { DateRangeFilter, type DateRange } from '@/components/DateRangeFilter';
 
 const todayStr = new Date().toISOString().split('T')[0];
@@ -67,12 +69,11 @@ export function PatientAppointments({ session }: RoleViewProps) {
         </select>
         <DateRangeFilter value={dateRange} onChange={setDateRange} defaultDate={todayStr} />
         {canBook && (
-          <Link
-            href="/dashboard/book"
-            className="ml-auto flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg text-sm font-semibold hover:shadow-lg transition"
-          >
-            <Plus className="w-4 h-4" /> Book Appointment
-          </Link>
+          <Button asChild variant="brand" className="ml-auto">
+            <Link href="/dashboard/book">
+              <Plus className="w-4 h-4" /> Book Appointment
+            </Link>
+          </Button>
         )}
       </div>
 
@@ -100,19 +101,16 @@ export function PatientAppointments({ session }: RoleViewProps) {
               </button>
             )}
             {canBook && (
-              <Link
-                href="/dashboard/book"
-                className="inline-block px-6 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg hover:shadow-lg transition"
-              >
-                Book an Appointment
-              </Link>
+              <Button asChild variant="brand">
+                <Link href="/dashboard/book">Book an Appointment</Link>
+              </Button>
             )}
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b bg-slate-50">
+            <Table>
+              <TableHeader>
+                <TableRow className="border-b bg-slate-50">
                   {(
                     [
                       ['Date & Time', 'date'],
@@ -131,44 +129,44 @@ export function PatientAppointments({ session }: RoleViewProps) {
                       className="text-left py-3 px-6 font-semibold text-slate-900"
                     />
                   ))}
-                  <th className="text-right py-3 px-6 font-semibold text-slate-900">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
+                  <TableHead className="text-right py-3 px-6 font-semibold text-slate-900">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {sorted.map((apt) => (
-                  <tr key={apt.id} className="border-b hover:bg-slate-50">
-                    <td className="py-3 px-6 font-medium whitespace-nowrap">
+                  <TableRow key={apt.id} className="border-b hover:bg-slate-50">
+                    <TableCell className="py-3 px-6 font-medium">
                       <div className="flex items-center gap-2">
                         <DateBadge date={apt.date} />
                         <span>{fmtDate(apt.date)} at {apt.time}</span>
                       </div>
-                    </td>
-                    <td className="py-3 px-6 text-slate-600">{apt.doctorName ? `Dr. ${apt.doctorName}` : 'Doctor'}</td>
-                    <td className="py-3 px-6 text-slate-600">
+                    </TableCell>
+                    <TableCell className="py-3 px-6 text-slate-600 whitespace-normal">{apt.doctorName ? `Dr. ${apt.doctorName}` : 'Doctor'}</TableCell>
+                    <TableCell className="py-3 px-6 text-slate-600 whitespace-normal">
                       {apt.reason || '—'}
                       {apt.followUpOf && (
                         <span className="ml-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-cyan-100 text-cyan-700">
                           <CalendarPlus className="w-3 h-3" /> Follow-up
                         </span>
                       )}
-                    </td>
-                    <td className="py-3 px-6">
+                    </TableCell>
+                    <TableCell className="py-3 px-6 whitespace-normal">
                       <span className={`inline-block px-3 py-1 rounded-full text-sm font-semibold capitalize ${statusStyle(apt.status)}`}>
                         {apt.status}
                       </span>
-                    </td>
-                    <td className="py-3 px-6">
+                    </TableCell>
+                    <TableCell className="py-3 px-6 whitespace-normal">
                       <PaymentBadge appointment={apt} />
-                    </td>
-                    <td className="py-3 px-6 text-right">
+                    </TableCell>
+                    <TableCell className="py-3 px-6 text-right whitespace-normal">
                       <div className="flex items-center justify-end gap-1">
                         <ActionIcon icon={Eye} label="View" href={`/appointment/${apt.id}`} />
                       </div>
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 ))}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </div>
         )}
       </div>

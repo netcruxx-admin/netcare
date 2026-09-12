@@ -4,6 +4,7 @@ import { useCallback, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 import { Spinner } from '@/components/ui/spinner';
+import { Button } from '@/components/ui/button';
 
 /** Portrait A4, width / height. */
 const A4_RATIO = 210 / 297;
@@ -282,13 +283,13 @@ export function LetterheadCropModal({
             >
               Cancel
             </button>
-            <button
+            <Button
               onClick={finish}
               disabled={busy || working || !rect || tooSmall}
-              className="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-cyan-500 to-brand-teal px-4 py-2 text-sm font-semibold text-white hover:shadow-lg disabled:opacity-60"
+              variant="brand"
             >
               {working ? <Spinner size="sm" label="Preparing…" /> : 'Continue'}
-            </button>
+            </Button>
           </div>
         </div>
       </div>

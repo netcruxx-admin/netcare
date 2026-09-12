@@ -10,6 +10,7 @@ import { FormField } from '@/components/form/FormField';
 import { useForgotPasswordMutation, useGetCurrentHospitalQuery } from '@/store/api';
 import { currentSubdomain } from '@/lib/tenant';
 import { Spinner } from '@/components/ui/spinner';
+import { Button } from '@/components/ui/button';
 
 const schema = Yup.object({
   email: Yup.string().email('Please enter a valid email').required('Email is required'),
@@ -104,13 +105,14 @@ export default function ForgotPasswordPage() {
                   </div>
                 )}
 
-                <button
+                <Button
                   type="submit"
                   disabled={formik.isSubmitting || !formik.dirty}
-                  className="inline-flex items-center justify-center gap-2 w-full bg-gradient-to-r from-cyan-500 to-brand-teal text-white py-2 rounded-lg font-semibold hover:shadow-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
+                  variant="brand"
+                  className="w-full"
                 >
                   {formik.isSubmitting ? <Spinner size="sm" label="Sending…" /> : 'Send reset link'}
-                </button>
+                </Button>
 
                 <div className="text-center">
                   <Link

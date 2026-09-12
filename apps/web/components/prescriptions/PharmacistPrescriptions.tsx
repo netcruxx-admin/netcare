@@ -25,6 +25,8 @@ import { TablePagination } from '@/components/TablePagination';
 import { useServerTable } from '@/hooks/useServerTable';
 import { fmtDate } from '@/lib/date';
 import { Spinner } from '@/components/ui/spinner';
+import { Button } from '@/components/ui/button';
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
 
 const toRow = (rx: Prescription) => ({
   ...rx,
@@ -126,33 +128,33 @@ export function PharmacistPrescriptions({ session }: RoleViewProps) {
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b bg-slate-50">
-                    <th className="text-left py-3 px-6 font-semibold text-slate-900">Date</th>
-                    <th className="text-left py-3 px-6 font-semibold text-slate-900">Patient</th>
-                    <th className="text-left py-3 px-6 font-semibold text-slate-900">Medicine</th>
-                    <th className="text-left py-3 px-6 font-semibold text-slate-900">Dosage</th>
-                    <th className="text-left py-3 px-6 font-semibold text-slate-900">Frequency</th>
-                    <th className="text-left py-3 px-6 font-semibold text-slate-900">Duration</th>
-                    <th className="text-right py-3 px-6 font-semibold text-slate-900">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
+              <Table>
+                <TableHeader>
+                  <TableRow className="border-b bg-slate-50">
+                    <TableHead className="text-left py-3 px-6 font-semibold text-slate-900">Date</TableHead>
+                    <TableHead className="text-left py-3 px-6 font-semibold text-slate-900">Patient</TableHead>
+                    <TableHead className="text-left py-3 px-6 font-semibold text-slate-900">Medicine</TableHead>
+                    <TableHead className="text-left py-3 px-6 font-semibold text-slate-900">Dosage</TableHead>
+                    <TableHead className="text-left py-3 px-6 font-semibold text-slate-900">Frequency</TableHead>
+                    <TableHead className="text-left py-3 px-6 font-semibold text-slate-900">Duration</TableHead>
+                    <TableHead className="text-right py-3 px-6 font-semibold text-slate-900">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
                   {rows.map((r) => (
-                    <tr key={r.id} className="border-b hover:bg-slate-50">
-                      <td className="py-3 px-6 text-slate-600 whitespace-nowrap">{r.date}</td>
-                      <td className="py-3 px-6 font-medium text-slate-900">{r.patient}</td>
-                      <td className="py-3 px-6">
+                    <TableRow key={r.id} className="border-b hover:bg-slate-50">
+                      <TableCell className="py-3 px-6 text-slate-600">{r.date}</TableCell>
+                      <TableCell className="py-3 px-6 font-medium text-slate-900 whitespace-normal">{r.patient}</TableCell>
+                      <TableCell className="py-3 px-6 whitespace-normal">
                         <span className="inline-flex items-center gap-1.5 text-slate-900 font-medium">
                           <Pill className="w-4 h-4 text-cyan-600" /> {r.medicineName}
                         </span>
                         {r.instructions && <p className="text-xs text-slate-500 mt-0.5">{r.instructions}</p>}
-                      </td>
-                      <td className="py-3 px-6 text-slate-600">{r.dosage}</td>
-                      <td className="py-3 px-6 text-slate-600">{r.frequency}</td>
-                      <td className="py-3 px-6 text-slate-600">{r.duration}</td>
-                      <td className="py-3 px-6 text-right">
+                      </TableCell>
+                      <TableCell className="py-3 px-6 text-slate-600 whitespace-normal">{r.dosage}</TableCell>
+                      <TableCell className="py-3 px-6 text-slate-600 whitespace-normal">{r.frequency}</TableCell>
+                      <TableCell className="py-3 px-6 text-slate-600 whitespace-normal">{r.duration}</TableCell>
+                      <TableCell className="py-3 px-6 text-right whitespace-normal">
                         <div className="flex items-center justify-end gap-1">
                           {canQueue && (
                             queued.has(r.id) ? (
@@ -167,11 +169,11 @@ export function PharmacistPrescriptions({ session }: RoleViewProps) {
                             <ActionIcon icon={Eye} label="View appointment" />
                           </Link>
                         </div>
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   ))}
-                </tbody>
-              </table>
+                </TableBody>
+              </Table>
               <TablePagination
                 page={table.page}
                 pageSize={table.pageSize}
@@ -287,13 +289,13 @@ export function PharmacistPrescriptions({ session }: RoleViewProps) {
                     >
                       Cancel
                     </button>
-                    <button
+                    <Button
                       type="submit"
                       disabled={isSubmitting}
-                      className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white text-sm font-semibold rounded-lg shadow hover:opacity-95 disabled:opacity-50 transition"
+                      variant="brand"
                     >
                       {isSubmitting ? <Spinner size="sm" label="Sending…" /> : 'Send to queue'}
-                    </button>
+                    </Button>
                   </div>
                 </Form>
               )}

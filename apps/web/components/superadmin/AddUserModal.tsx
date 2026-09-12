@@ -18,6 +18,8 @@ import {
 import type { HospitalInfo, RoleOption } from '@/store/api';
 import type { User } from '@/lib/types';
 import { Spinner } from '@/components/ui/spinner';
+import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 
 const EMPTY_ROLES: RoleOption[] = [];
 
@@ -73,18 +75,16 @@ export function AddUserModal({
     [isEditing, roleOptions],
   );
 
-  if (!open) return null;
-
   const handleClose = () => {
     setHospitalId(preselectedHospitalId);
     onClose();
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg">
-        <div className="flex justify-between items-center px-6 py-4 border-b border-slate-100">
-          <h3 className="text-lg font-bold text-slate-900">{isEditing ? 'Edit User' : 'Add User'}</h3>
+    <Dialog open={open} onOpenChange={(next) => !next && handleClose()}>
+      <DialogContent showCloseButton={false} className="max-w-lg max-h-[90vh] flex flex-col p-0 gap-0">
+        <div className="flex justify-between items-center px-6 py-4 border-b border-slate-100 shrink-0">
+          <DialogTitle className="text-lg font-bold text-slate-900">{isEditing ? 'Edit User' : 'Add User'}</DialogTitle>
           <button onClick={handleClose} className="text-slate-400 hover:text-slate-900 p-1">
             <X className="w-5 h-5" />
           </button>
@@ -142,7 +142,7 @@ export function AddUserModal({
           }}
         >
           {({ isSubmitting, status, dirty }) => (
-            <Form className="px-6 py-5 space-y-4" autoComplete="off">
+            <Form className="flex flex-col flex-1 min-h-0 px-6 py-5 space-y-4 overflow-y-auto" autoComplete="off">
               {/* Hospital selector — superadmin only, create only */}
               {isSuperadmin && !isEditing && (
                 preselectedHospitalId ? (
@@ -203,18 +203,19 @@ export function AddUserModal({
                 >
                   Cancel
                 </button>
-                <button
+                <Button
                   type="submit"
                   disabled={isSubmitting || !dirty}
-                  className="inline-flex items-center justify-center gap-2 flex-1 px-4 py-2.5 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg text-sm font-semibold hover:shadow-lg transition disabled:opacity-50"
+                  variant="brand"
+                  className="flex-1"
                 >
                   {isSubmitting ? <Spinner size="sm" label="Saving…" /> : isEditing ? 'Save Changes' : 'Add User'}
-                </button>
+                </Button>
               </div>
             </Form>
           )}
         </Formik>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

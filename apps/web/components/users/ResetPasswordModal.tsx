@@ -6,6 +6,7 @@ import { apiError } from '@/lib/apiError';
 import { useResetUserPasswordMutation } from '@/store/api';
 import type { User } from '@/lib/types';
 import { Spinner } from '@/components/ui/spinner';
+import { Button } from '@/components/ui/button';
 
 // Issuing a temporary password for someone who cannot sign in.
 //
@@ -129,13 +130,14 @@ export function ResetPasswordModal({
               </p>
             </div>
 
-            <button
+            <Button
               type="button"
               onClick={onClose}
-              className="w-full rounded-lg bg-gradient-to-r from-cyan-500 to-brand-teal px-4 py-2 font-semibold text-white hover:shadow-lg"
+              variant="brand"
+              className="w-full"
             >
               Done
-            </button>
+            </Button>
           </>
         )}
       </div>

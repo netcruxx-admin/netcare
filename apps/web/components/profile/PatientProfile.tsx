@@ -30,6 +30,8 @@ import { requireEmailOrPhone } from '@/lib/contactMethod';
 import { maskAadhaar } from '@/lib/aadhaar';
 import { ConsentSettings } from './ConsentSettings';
 import { Spinner } from '@/components/ui/spinner';
+import { Button, buttonVariants } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 
 interface FormValues {
   name: string;
@@ -117,11 +119,12 @@ function WizardContent({ isSaving }: { isSaving: boolean }) {
             <button
               type="button"
               onClick={() => setCurrentStep(step.number)}
-              className={`w-10 h-10 rounded-full flex items-center justify-center font-bold transition ${
+              className={cn(
+                'w-10 h-10 rounded-full flex items-center justify-center font-bold transition',
                 step.number <= currentStep
-                  ? 'bg-gradient-to-r from-cyan-500 to-brand-teal text-white'
-                  : 'bg-slate-200 text-slate-600'
-              }`}
+                  ? buttonVariants({ variant: 'brand' })
+                  : 'bg-slate-200 text-slate-600',
+              )}
             >
               {step.number}
             </button>
@@ -240,23 +243,25 @@ function WizardContent({ isSaving }: { isSaving: boolean }) {
           </button>
         )}
         {currentStep < 4 ? (
-          <button
+          <Button
             key="next"
             type="button"
             onClick={handleNext}
-            className="flex-1 px-6 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white font-semibold rounded-lg hover:shadow-lg transition flex items-center justify-center gap-2"
+            variant="brand"
+            className="flex-1"
           >
             Next <ChevronRight className="w-5 h-5" />
-          </button>
+          </Button>
         ) : (
-          <button
+          <Button
             key="submit"
             type="submit"
             disabled={isSubmitting || isSaving || !dirty}
-            className="inline-flex items-center justify-center gap-2 flex-1 px-6 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white font-semibold rounded-lg hover:shadow-lg transition disabled:opacity-50"
+            variant="brand"
+            className="flex-1"
           >
             {isSubmitting || isSaving ? <Spinner size="sm" label="Saving…" /> : 'Save Profile'}
-          </button>
+          </Button>
         )}
       </div>
     </>

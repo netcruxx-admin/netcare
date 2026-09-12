@@ -13,6 +13,7 @@ import {
 import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
 import { fmtDate } from '@/lib/date';
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
 
 export function PharmacistDashboard({ session }: RoleViewProps) {
   const { data: orders = [], isLoading } = useListMedicationOrdersQuery();
@@ -133,45 +134,45 @@ export function PharmacistDashboard({ session }: RoleViewProps) {
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b bg-slate-50">
-                    <th className="text-left py-3 px-6 font-semibold text-slate-900">Patient</th>
-                    <th className="text-left py-3 px-6 font-semibold text-slate-900">Medicine</th>
-                    <th className="text-right py-3 px-6 font-semibold text-slate-900">Qty</th>
-                    <th className="text-left py-3 px-6 font-semibold text-slate-900">Dosage</th>
-                    <th className="text-left py-3 px-6 font-semibold text-slate-900">Ordered</th>
-                    <th className="text-right py-3 px-6 font-semibold text-slate-900">Action</th>
-                  </tr>
-                </thead>
-                <tbody>
+              <Table>
+                <TableHeader>
+                  <TableRow className="border-b bg-slate-50">
+                    <TableHead className="text-left py-3 px-6 font-semibold text-slate-900">Patient</TableHead>
+                    <TableHead className="text-left py-3 px-6 font-semibold text-slate-900">Medicine</TableHead>
+                    <TableHead className="text-right py-3 px-6 font-semibold text-slate-900">Qty</TableHead>
+                    <TableHead className="text-left py-3 px-6 font-semibold text-slate-900">Dosage</TableHead>
+                    <TableHead className="text-left py-3 px-6 font-semibold text-slate-900">Ordered</TableHead>
+                    <TableHead className="text-right py-3 px-6 font-semibold text-slate-900">Action</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
                   {model.queue.slice(0, 8).map((o) => (
-                    <tr key={o.id} className="border-b hover:bg-slate-50">
-                      <td className="py-3 px-6 font-medium text-slate-900">
+                    <TableRow key={o.id} className="border-b hover:bg-slate-50">
+                      <TableCell className="py-3 px-6 font-medium text-slate-900 whitespace-normal">
                         {o.patientName ?? o.patientId}
-                      </td>
-                      <td className="py-3 px-6 text-slate-700">{o.medicineName}</td>
-                      <td className="py-3 px-6 text-right font-medium text-slate-900 tabular-nums">
+                      </TableCell>
+                      <TableCell className="py-3 px-6 text-slate-700 whitespace-normal">{o.medicineName}</TableCell>
+                      <TableCell className="py-3 px-6 text-right font-medium text-slate-900 tabular-nums whitespace-normal">
                         {o.quantity}
-                      </td>
-                      <td className="py-3 px-6 text-slate-600">
+                      </TableCell>
+                      <TableCell className="py-3 px-6 text-slate-600 whitespace-normal">
                         {[o.dosage, o.frequency].filter(Boolean).join(' · ')}
-                      </td>
-                      <td className="py-3 px-6 text-slate-500 whitespace-nowrap">
+                      </TableCell>
+                      <TableCell className="py-3 px-6 text-slate-500">
                         {fmtDate(o.orderedAt)}
-                      </td>
-                      <td className="py-3 px-6 text-right">
+                      </TableCell>
+                      <TableCell className="py-3 px-6 text-right whitespace-normal">
                         <Link
                           href="/dashboard/medication-orders"
                           className="text-cyan-600 hover:text-cyan-700 font-semibold text-sm"
                         >
                           Dispense
                         </Link>
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   ))}
-                </tbody>
-              </table>
+                </TableBody>
+              </Table>
             </div>
           )}
         </div>

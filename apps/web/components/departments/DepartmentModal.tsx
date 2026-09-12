@@ -15,6 +15,8 @@ import {
 import type { HospitalInfo } from '@/store/api';
 import type { Department } from '@/lib/types';
 import { Spinner } from '@/components/ui/spinner';
+import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 
 const departmentSchema = Yup.object({
   name: Yup.string().trim().required('Name is required').max(100, 'Keep it under 100 characters'),
@@ -47,20 +49,18 @@ export function DepartmentModal({
   const [createDepartment] = useCreateDepartmentMutation();
   const [updateDepartment] = useUpdateDepartmentMutation();
 
-  if (!open) return null;
-
   const handleClose = () => {
     setHospitalId(preselectedHospitalId);
     onClose();
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-lg shadow-2xl max-w-md w-full p-6">
+    <Dialog open={open} onOpenChange={(next) => !next && handleClose()}>
+      <DialogContent showCloseButton={false} className="max-w-md">
         <div className="flex justify-between items-center mb-4">
-          <h3 className="text-lg font-bold text-slate-900">
+          <DialogTitle className="text-lg font-bold text-slate-900">
             {isEditing ? 'Edit Department' : 'Add Department'}
-          </h3>
+          </DialogTitle>
           <button onClick={handleClose} className="text-slate-500 hover:text-slate-900">
             <X className="w-5 h-5" />
           </button>
@@ -160,18 +160,19 @@ export function DepartmentModal({
                 >
                   Cancel
                 </button>
-                <button
+                <Button
                   type="submit"
                   disabled={isSubmitting || !dirty}
-                  className="inline-flex items-center justify-center gap-2 flex-1 px-4 py-2.5 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg text-sm font-semibold hover:shadow-lg transition disabled:opacity-50"
+                  variant="brand"
+                  className="flex-1"
                 >
                   {isSubmitting ? <Spinner size="sm" label="Saving…" /> : isEditing ? 'Save Changes' : 'Add Department'}
-                </button>
+                </Button>
               </div>
             </Form>
           )}
         </Formik>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

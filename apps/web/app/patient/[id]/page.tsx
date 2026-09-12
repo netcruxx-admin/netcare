@@ -43,6 +43,7 @@ import { formatPatientAddress, formatRelationLine } from '@/components/patients/
 import { maskAadhaar } from '@/lib/aadhaar';
 import { fmtAge, fmtDate } from '@/lib/date';
 import { daysRemaining, formatGA, gestationalAge, trimester } from '@/lib/anc';
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
 
 const todayStr = new Date().toISOString().split('T')[0];
 
@@ -290,24 +291,24 @@ export default function PatientDetailPage() {
           ) : (
             <TableWrap head={['Date & Time', 'Doctor', 'Reason', 'Status', '']}>
               {model.appointments.map((a) => (
-                <tr key={a.id} className="border-b hover:bg-slate-50">
-                  <td className="py-3 px-6 text-slate-600 whitespace-nowrap">{a.date} at {a.time}</td>
-                  <td className="py-3 px-6 text-slate-600">{a.doctor}</td>
-                  <td className="py-3 px-6 text-slate-600">
+                <TableRow key={a.id} className="border-b hover:bg-slate-50">
+                  <TableCell className="py-3 px-6 text-slate-600">{a.date} at {a.time}</TableCell>
+                  <TableCell className="py-3 px-6 text-slate-600 whitespace-normal">{a.doctor}</TableCell>
+                  <TableCell className="py-3 px-6 text-slate-600 whitespace-normal">
                     {a.reason || 'Consultation'}
                     {a.followUpOf && (
                       <span className="ml-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-cyan-100 text-cyan-700 align-middle">
                         <CalendarPlus className="w-3 h-3" /> Follow-up
                       </span>
                     )}
-                  </td>
-                  <td className="py-3 px-6">
+                  </TableCell>
+                  <TableCell className="py-3 px-6 whitespace-normal">
                     <span className={`inline-block px-2.5 py-1 rounded-full text-xs font-semibold capitalize ${statusStyle(a.status)}`}>{a.status}</span>
-                  </td>
-                  <td className="py-3 px-6 text-right">
+                  </TableCell>
+                  <TableCell className="py-3 px-6 text-right whitespace-normal">
                     <Link href={`/appointment/${a.id}`} className="text-cyan-600 hover:text-cyan-700 font-semibold text-sm">View</Link>
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               ))}
             </TableWrap>
           )}
@@ -320,18 +321,18 @@ export default function PatientDetailPage() {
           ) : (
             <TableWrap head={['Date', 'BP', 'Height', 'Pulse', 'Weight', 'Temp', 'BMI', 'LMP', 'EDD', 'POG']}>
               {model.vitals.map((v) => (
-                <tr key={v.id} className="border-b hover:bg-slate-50">
-                  <td className="py-3 px-6 text-slate-600 whitespace-nowrap">{v.createdAt.split('T')[0]}</td>
-                  <td className="py-3 px-6 text-slate-600">{v.bloodPressure || '—'}</td>
-                  <td className="py-3 px-6 text-slate-600">{v.height ? `${v.height} cm` : '—'}</td>
-                  <td className="py-3 px-6 text-slate-600">{v.heartRate ? `${v.heartRate} bpm` : '—'}</td>
-                  <td className="py-3 px-6 text-slate-600">{v.weight ? `${v.weight} kg` : '—'}</td>
-                  <td className="py-3 px-6 text-slate-600">{v.temperature ? `${v.temperature}°F` : '—'}</td>
-                  <td className="py-3 px-6 text-slate-600">{v.bmi ? `${v.bmi}` : '—'}</td>
-                  <td className="py-3 px-6 text-slate-600">{fmtDate(v.lmp)}</td>
-                  <td className="py-3 px-6 text-slate-600">{fmtDate(v.edd)}</td>
-                  <td className="py-3 px-6 text-slate-600">{v.pog || '—'}</td>
-                </tr>
+                <TableRow key={v.id} className="border-b hover:bg-slate-50">
+                  <TableCell className="py-3 px-6 text-slate-600">{v.createdAt.split('T')[0]}</TableCell>
+                  <TableCell className="py-3 px-6 text-slate-600 whitespace-normal">{v.bloodPressure || '—'}</TableCell>
+                  <TableCell className="py-3 px-6 text-slate-600 whitespace-normal">{v.height ? `${v.height} cm` : '—'}</TableCell>
+                  <TableCell className="py-3 px-6 text-slate-600 whitespace-normal">{v.heartRate ? `${v.heartRate} bpm` : '—'}</TableCell>
+                  <TableCell className="py-3 px-6 text-slate-600 whitespace-normal">{v.weight ? `${v.weight} kg` : '—'}</TableCell>
+                  <TableCell className="py-3 px-6 text-slate-600 whitespace-normal">{v.temperature ? `${v.temperature}°F` : '—'}</TableCell>
+                  <TableCell className="py-3 px-6 text-slate-600 whitespace-normal">{v.bmi ? `${v.bmi}` : '—'}</TableCell>
+                  <TableCell className="py-3 px-6 text-slate-600 whitespace-normal">{fmtDate(v.lmp)}</TableCell>
+                  <TableCell className="py-3 px-6 text-slate-600 whitespace-normal">{fmtDate(v.edd)}</TableCell>
+                  <TableCell className="py-3 px-6 text-slate-600 whitespace-normal">{v.pog || '—'}</TableCell>
+                </TableRow>
               ))}
             </TableWrap>
           )}
@@ -344,17 +345,17 @@ export default function PatientDetailPage() {
           ) : (
             <TableWrap head={['Date', 'Medicine', 'Dosage', 'Frequency', 'Duration', 'Prescribed by']}>
               {model.prescriptions.map((rx) => (
-                <tr key={rx.id} className="border-b hover:bg-slate-50">
-                  <td className="py-3 px-6 text-slate-600 whitespace-nowrap">{rx.date}</td>
-                  <td className="py-3 px-6">
+                <TableRow key={rx.id} className="border-b hover:bg-slate-50">
+                  <TableCell className="py-3 px-6 text-slate-600">{rx.date}</TableCell>
+                  <TableCell className="py-3 px-6 whitespace-normal">
                     <span className="inline-flex items-center gap-1.5 font-medium text-slate-900"><Pill className="w-4 h-4 text-cyan-600" /> {rx.medicineName}</span>
                     {rx.instructions && <p className="text-xs text-slate-500 mt-0.5">{rx.instructions}</p>}
-                  </td>
-                  <td className="py-3 px-6 text-slate-600">{rx.dosage}</td>
-                  <td className="py-3 px-6 text-slate-600">{rx.frequency}</td>
-                  <td className="py-3 px-6 text-slate-600">{rx.duration}</td>
-                  <td className="py-3 px-6 text-slate-600">{rx.doctor}</td>
-                </tr>
+                  </TableCell>
+                  <TableCell className="py-3 px-6 text-slate-600 whitespace-normal">{rx.dosage}</TableCell>
+                  <TableCell className="py-3 px-6 text-slate-600 whitespace-normal">{rx.frequency}</TableCell>
+                  <TableCell className="py-3 px-6 text-slate-600 whitespace-normal">{rx.duration}</TableCell>
+                  <TableCell className="py-3 px-6 text-slate-600 whitespace-normal">{rx.doctor}</TableCell>
+                </TableRow>
               ))}
             </TableWrap>
           )}
@@ -367,28 +368,28 @@ export default function PatientDetailPage() {
           ) : (
             <TableWrap head={['Date', 'Medicine', 'Dosage', 'Route', 'Doctor', 'Status', 'Notes']}>
               {model.medicationOrders.map((o) => (
-                <tr key={o.id} className="border-b hover:bg-slate-50">
-                  <td className="py-3 px-6 text-slate-600 whitespace-nowrap">{o.orderedAt.split('T')[0]}</td>
-                  <td className="py-3 px-6 font-medium text-slate-900">{o.medicineName}</td>
-                  <td className="py-3 px-6 text-slate-600">{o.dosage}</td>
-                  <td className="py-3 px-6">
+                <TableRow key={o.id} className="border-b hover:bg-slate-50">
+                  <TableCell className="py-3 px-6 text-slate-600">{o.orderedAt.split('T')[0]}</TableCell>
+                  <TableCell className="py-3 px-6 font-medium text-slate-900 whitespace-normal">{o.medicineName}</TableCell>
+                  <TableCell className="py-3 px-6 text-slate-600 whitespace-normal">{o.dosage}</TableCell>
+                  <TableCell className="py-3 px-6 whitespace-normal">
                     <span className={`inline-block px-2 py-0.5 rounded text-xs font-semibold ${
                       ['IV','IM','SC'].includes(o.route)
                         ? 'bg-orange-100 text-orange-700'
                         : 'bg-slate-100 text-slate-600'
                     }`}>{o.route}</span>
-                  </td>
-                  <td className="py-3 px-6 text-slate-600">{o.doctorName ?? '—'}</td>
-                  <td className="py-3 px-6">
+                  </TableCell>
+                  <TableCell className="py-3 px-6 text-slate-600 whitespace-normal">{o.doctorName ?? '—'}</TableCell>
+                  <TableCell className="py-3 px-6 whitespace-normal">
                     <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-semibold ${
                       o.status === 'administered' ? 'bg-green-100 text-green-700' :
                       o.status === 'dispensed'    ? 'bg-blue-100 text-blue-700' :
                       o.status === 'cancelled'    ? 'bg-slate-100 text-slate-500' :
                                                     'bg-amber-100 text-amber-700'
                     }`}>{o.status}</span>
-                  </td>
-                  <td className="py-3 px-6 text-slate-500 max-w-xs truncate">{o.notes || '—'}</td>
-                </tr>
+                  </TableCell>
+                  <TableCell className="py-3 px-6 text-slate-500 max-w-xs truncate">{o.notes || '—'}</TableCell>
+                </TableRow>
               ))}
             </TableWrap>
           )}
@@ -497,16 +498,16 @@ function Section({ title, icon: Icon, count, children }: { title: string; icon: 
 function TableWrap({ head, children }: { head: string[]; children: React.ReactNode }) {
   return (
     <div className="overflow-x-auto">
-      <table className="w-full">
-        <thead>
-          <tr className="border-b bg-slate-50">
+      <Table>
+        <TableHeader>
+          <TableRow className="border-b bg-slate-50">
             {head.map((h, i) => (
-              <th key={i} className={`py-3 px-6 font-semibold text-slate-900 ${i === head.length - 1 && h === '' ? 'text-right' : 'text-left'}`}>{h}</th>
+              <TableHead key={i} className={`py-3 px-6 font-semibold text-slate-900 ${i === head.length - 1 && h === '' ? 'text-right' : 'text-left'}`}>{h}</TableHead>
             ))}
-          </tr>
-        </thead>
-        <tbody>{children}</tbody>
-      </table>
+          </TableRow>
+        </TableHeader>
+        <TableBody>{children}</TableBody>
+      </Table>
     </div>
   );
 }

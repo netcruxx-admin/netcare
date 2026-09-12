@@ -19,6 +19,7 @@ import { TablePagination } from '@/components/TablePagination';
 import { useServerTable } from '@/hooks/useServerTable';
 import { ORDER_STATUS_LABEL, ORDER_STATUS_STYLE } from '@/lib/lab';
 import { Spinner } from '@/components/ui/spinner';
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
 
 /**
  * `patientName`, `hasResults` and `abnormal` all arrive on the order. This
@@ -116,36 +117,36 @@ export function DoctorLabOrders({ session }: RoleViewProps) {
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b bg-slate-50">
-                    <th className="text-left py-3 px-6 font-semibold text-slate-900">Patient</th>
-                    <th className="text-left py-3 px-6 font-semibold text-slate-900">Tests</th>
-                    <th className="text-left py-3 px-6 font-semibold text-slate-900">Status</th>
-                    <th className="text-right py-3 px-6 font-semibold text-slate-900">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
+              <Table>
+                <TableHeader>
+                  <TableRow className="border-b bg-slate-50">
+                    <TableHead className="text-left py-3 px-6 font-semibold text-slate-900">Patient</TableHead>
+                    <TableHead className="text-left py-3 px-6 font-semibold text-slate-900">Tests</TableHead>
+                    <TableHead className="text-left py-3 px-6 font-semibold text-slate-900">Status</TableHead>
+                    <TableHead className="text-right py-3 px-6 font-semibold text-slate-900">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
                   {rows.map((r) => (
-                    <tr key={r.order.id} className="border-b hover:bg-slate-50">
-                      <td className="py-3 px-6">
+                    <TableRow key={r.order.id} className="border-b hover:bg-slate-50">
+                      <TableCell className="py-3 px-6 whitespace-normal">
                         <p className="font-medium text-slate-900">{r.patient}</p>
                         <p className="text-xs text-slate-400 font-mono">{r.order.id}</p>
-                      </td>
-                      <td className="py-3 px-6 text-slate-600 max-w-xs">
+                      </TableCell>
+                      <TableCell className="py-3 px-6 text-slate-600 max-w-xs whitespace-normal">
                         {r.tests}
                         {r.abnormal && (
                           <span className="ml-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-700 align-middle">
                             <AlertTriangle className="w-3 h-3" /> Abnormal
                           </span>
                         )}
-                      </td>
-                      <td className="py-3 px-6">
+                      </TableCell>
+                      <TableCell className="py-3 px-6 whitespace-normal">
                         <span className={`inline-block px-2.5 py-1 rounded-full text-xs font-semibold ${ORDER_STATUS_STYLE[r.order.status]}`}>
                           {ORDER_STATUS_LABEL[r.order.status]}
                         </span>
-                      </td>
-                      <td className="py-3 px-6 text-right whitespace-nowrap">
+                      </TableCell>
+                      <TableCell className="py-3 px-6 text-right">
                         <div className="flex items-center justify-end gap-2">
                           {r.hasResults && (
                             <Link href={`/print/lab-report/${r.order.id}`}>
@@ -162,11 +163,11 @@ export function DoctorLabOrders({ session }: RoleViewProps) {
                             </button>
                           )}
                         </div>
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   ))}
-                </tbody>
-              </table>
+                </TableBody>
+              </Table>
               <TablePagination
                 page={table.page}
                 pageSize={table.pageSize}

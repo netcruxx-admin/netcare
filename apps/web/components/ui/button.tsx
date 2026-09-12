@@ -19,6 +19,16 @@ const buttonVariants = cva(
         ghost:
           'hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50',
         link: 'text-primary underline-offset-4 hover:underline',
+        // The app's one primary-action look, used on every "save this form" /
+        // "book this" / "confirm this" button across every dashboard screen.
+        // Written in the literal cyan/teal utility classes (not bg-primary)
+        // on purpose: DashboardShell's `.hospital-branded` wrapper remaps
+        // those same utilities to the signed-in hospital's brand colour (see
+        // app/globals.css), so a tenant's theme repaints this variant with no
+        // change here. Before this variant existed, ~80 files each typed this
+        // gradient by hand with slightly different padding/radius/weight —
+        // this is the one copy all of them are being moved onto.
+        brand: 'bg-gradient-to-r from-cyan-500 to-brand-teal text-white font-semibold hover:shadow-lg disabled:cursor-not-allowed',
       },
       size: {
         default: 'h-9 px-4 py-2 has-[>svg]:px-3',

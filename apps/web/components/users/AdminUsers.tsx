@@ -22,6 +22,8 @@ import {
 } from '@/store/api';
 import type { RoleOption } from '@/store/api';
 import { Spinner } from '@/components/ui/spinner';
+import { Button } from '@/components/ui/button';
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
 
 // Badge colours for the roles that ship with the product.
 const roleStyle: Record<string, string> = {
@@ -121,58 +123,59 @@ export function AdminUsers({ session }: RoleViewProps) {
         <div className="flex justify-between items-center px-6 py-4 border-b">
           <h3 className="text-lg font-semibold text-slate-900">Users ({totalUsers})</h3>
           {canManage && (
-            <button
+            <Button
               onClick={openAdd}
-              className="flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg text-sm font-medium hover:shadow-lg transition"
+              variant="brand"
+              size="sm"
             >
               <Plus className="w-4 h-4" />
               Add User
-            </button>
+            </Button>
           )}
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b bg-slate-50">
-                <th className="text-left py-3 px-6 font-semibold text-slate-900">Name</th>
-                <th className="text-left py-3 px-6 font-semibold text-slate-900">Email</th>
-                <th className="text-left py-3 px-6 font-semibold text-slate-900">Phone</th>
-                <th className="text-left py-3 px-6 font-semibold text-slate-900">Role</th>
-                <th className="text-right py-3 px-6 font-semibold text-slate-900">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
+          <Table>
+            <TableHeader>
+              <TableRow className="border-b bg-slate-50">
+                <TableHead className="text-left py-3 px-6 font-semibold text-slate-900">Name</TableHead>
+                <TableHead className="text-left py-3 px-6 font-semibold text-slate-900">Email</TableHead>
+                <TableHead className="text-left py-3 px-6 font-semibold text-slate-900">Phone</TableHead>
+                <TableHead className="text-left py-3 px-6 font-semibold text-slate-900">Role</TableHead>
+                <TableHead className="text-right py-3 px-6 font-semibold text-slate-900">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {isLoading && (
-                <tr>
-                  <td colSpan={canManage ? 5 : 4}>
+                <TableRow>
+                  <TableCell colSpan={canManage ? 5 : 4}>
                     <Spinner variant="block" />
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               )}
               {!isLoading && filtered.length === 0 && (
-                <tr>
-                  <td colSpan={canManage ? 5 : 4} className="py-10 text-center">
+                <TableRow>
+                  <TableCell colSpan={canManage ? 5 : 4} className="py-10 text-center">
                     <Users className="w-12 h-12 text-slate-300 mx-auto mb-2" />
                     <p className="text-slate-500 text-sm">No users found.</p>
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               )}
               {filtered.map((user) => {
                 const isSelf = user.id === session.user.id;
                 return (
-                  <tr key={user.id} className="border-b hover:bg-slate-50">
-                    <td className="py-3 px-6 font-medium">
+                  <TableRow key={user.id} className="border-b hover:bg-slate-50">
+                    <TableCell className="py-3 px-6 font-medium whitespace-normal">
                       {user.name}
                       {isSelf && <span className="ml-2 text-xs text-slate-400">(you)</span>}
-                    </td>
-                    <td className="py-3 px-6 text-slate-600">{user.email}</td>
-                    <td className="py-3 px-6 text-slate-600">{user.phone || '—'}</td>
-                    <td className="py-3 px-6">
+                    </TableCell>
+                    <TableCell className="py-3 px-6 text-slate-600 whitespace-normal">{user.email}</TableCell>
+                    <TableCell className="py-3 px-6 text-slate-600 whitespace-normal">{user.phone || '—'}</TableCell>
+                    <TableCell className="py-3 px-6 whitespace-normal">
                       <span className={`inline-block px-3 py-1 rounded-full text-sm capitalize ${roleStyle[user.role] ?? FALLBACK_ROLE_STYLE}`}>
                         {user.role}
                       </span>
-                    </td>
-                    <td className="py-3 px-6 text-right">
+                    </TableCell>
+                    <TableCell className="py-3 px-6 text-right whitespace-normal">
                       <div className="flex items-center justify-end gap-1">
                         <ActionIcon icon={Eye} label="View" onClick={() => setViewing(user)} />
                         {canManage && (
@@ -200,12 +203,12 @@ export function AdminUsers({ session }: RoleViewProps) {
                           </>
                         )}
                       </div>
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 );
               })}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
           <TablePagination
             page={table.page}
             pageSize={table.pageSize}

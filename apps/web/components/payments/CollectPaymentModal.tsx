@@ -1,9 +1,9 @@
 'use client';
 
-import { X } from 'lucide-react';
 import { Formik, Form } from 'formik';
 import { toast } from 'sonner';
 import { Spinner } from '@/components/ui/spinner';
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { apiError } from '@/lib/apiError';
 import { formatINR } from '@/lib/money';
 import { useUpdatePaymentMutation } from '@/store/api';
@@ -42,19 +42,11 @@ export function CollectPaymentModal({
 }) {
   const [updatePayment] = useUpdatePaymentMutation();
 
-  if (!open) return null;
-
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-md">
+    <Dialog open={open} onOpenChange={(next) => !next && onClose()}>
+      <DialogContent className="max-w-md p-0 gap-0">
         <div className="flex items-center justify-between px-6 py-4 border-b">
-          <h3 className="font-semibold text-slate-900">Collect Payment</h3>
-          <button
-            onClick={onClose}
-            className="p-1 rounded text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <DialogTitle className="font-semibold text-slate-900">Collect Payment</DialogTitle>
         </div>
 
         <Formik
@@ -118,7 +110,7 @@ export function CollectPaymentModal({
             </Form>
           )}
         </Formik>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

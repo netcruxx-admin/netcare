@@ -69,6 +69,8 @@ import {
   PaginationEllipsis,
 } from '@/components/ui/pagination';
 import { Spinner } from '@/components/ui/spinner';
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
+import { Button } from '@/components/ui/button';
 
 const PAGE_SIZE = 20;
 
@@ -382,12 +384,11 @@ export function AdminAppointments({ session }: RoleViewProps) {
               }}
             />
             {hasPermission(session, 'appointments.create') && (
-              <Link
-                href="/dashboard/book"
-                className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg text-sm font-semibold hover:shadow-lg transition"
-              >
-                <Plus className="w-4 h-4" /> New Appointment
-              </Link>
+              <Button asChild variant="brand">
+                <Link href="/dashboard/book">
+                  <Plus className="w-4 h-4" /> New Appointment
+                </Link>
+              </Button>
             )}
           </div>
         </div>
@@ -408,10 +409,10 @@ export function AdminAppointments({ session }: RoleViewProps) {
           ) : (
             <>
               <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b bg-slate-50">
-                      <th className="text-left py-3 px-6 font-semibold text-slate-900">Patient</th>
+                <Table>
+                  <TableHeader>
+                    <TableRow className="border-b bg-slate-50">
+                      <TableHead className="text-left py-3 px-6 font-semibold text-slate-900">Patient</TableHead>
                       <SortableTh
                         label="Date & Time"
                         sortKey="date"
@@ -419,8 +420,8 @@ export function AdminAppointments({ session }: RoleViewProps) {
                         onSort={toggle}
                         className="text-left py-3 px-6 font-semibold text-slate-900"
                       />
-                      <th className="text-left py-3 px-6 font-semibold text-slate-900">Doctor</th>
-                      <th className="text-left py-3 px-6 font-semibold text-slate-900">Department</th>
+                      <TableHead className="text-left py-3 px-6 font-semibold text-slate-900">Doctor</TableHead>
+                      <TableHead className="text-left py-3 px-6 font-semibold text-slate-900">Department</TableHead>
                       <SortableTh
                         label="Status"
                         sortKey="status"
@@ -428,18 +429,18 @@ export function AdminAppointments({ session }: RoleViewProps) {
                         onSort={toggle}
                         className="text-left py-3 px-6 font-semibold text-slate-900"
                       />
-                      <th className="text-left py-3 px-6 font-semibold text-slate-900">Payment</th>
-                      <th className="text-right py-3 px-6 font-semibold text-slate-900">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
+                      <TableHead className="text-left py-3 px-6 font-semibold text-slate-900">Payment</TableHead>
+                      <TableHead className="text-right py-3 px-6 font-semibold text-slate-900">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
                     {pageRows.map((r) => (
-                      <tr key={r.id} className="border-b hover:bg-slate-50">
-                        <td className="py-3 px-6">
+                      <TableRow key={r.id} className="border-b hover:bg-slate-50">
+                        <TableCell className="py-3 px-6 whitespace-normal">
                           <p className="font-medium text-slate-900">{r.patient}</p>
                           <p className="text-xs text-slate-500">{r.phone}</p>
-                        </td>
-                        <td className="py-3 px-6 text-slate-600 whitespace-nowrap">
+                        </TableCell>
+                        <TableCell className="py-3 px-6 text-slate-600">
                           <div className="flex items-center gap-2">
                             <DateBadge date={r.date} />
                             <span>{fmtDate(r.date)} at {r.time}</span>
@@ -449,15 +450,15 @@ export function AdminAppointments({ session }: RoleViewProps) {
                               </span>
                             )}
                           </div>
-                        </td>
-                        <td className="py-3 px-6 text-slate-600">{r.doctor}</td>
-                        <td className="py-3 px-6 text-slate-600">{r.dept}</td>
-                        <td className="py-3 px-6">
+                        </TableCell>
+                        <TableCell className="py-3 px-6 text-slate-600 whitespace-normal">{r.doctor}</TableCell>
+                        <TableCell className="py-3 px-6 text-slate-600 whitespace-normal">{r.dept}</TableCell>
+                        <TableCell className="py-3 px-6 whitespace-normal">
                           <span className={`inline-block px-3 py-1 rounded-full text-sm font-semibold capitalize ${statusStyle(r.status)}`}>
                             {r.status}
                           </span>
-                        </td>
-                        <td className="py-3 px-6">
+                        </TableCell>
+                        <TableCell className="py-3 px-6 whitespace-normal">
                           <PaymentBadge
                             appointment={r.appt}
                             onCollect={
@@ -466,8 +467,8 @@ export function AdminAppointments({ session }: RoleViewProps) {
                                 : undefined
                             }
                           />
-                        </td>
-                        <td className="py-3 px-6">
+                        </TableCell>
+                        <TableCell className="py-3 px-6 whitespace-normal">
                           <div className="flex items-center justify-end gap-1">
                             <ActionIcon icon={Eye} label="View" href={`/appointment/${r.id}`} />
                             {canManage && (
@@ -482,11 +483,11 @@ export function AdminAppointments({ session }: RoleViewProps) {
                               <ActionIcon icon={Trash2} label="Delete" tone="danger" onClick={() => setDeleting(r.appt)} />
                             )}
                           </div>
-                        </td>
-                      </tr>
+                        </TableCell>
+                      </TableRow>
                     ))}
-                  </tbody>
-                </table>
+                  </TableBody>
+                </Table>
               </div>
 
               {totalPages > 1 && (
@@ -575,13 +576,14 @@ export function AdminAppointments({ session }: RoleViewProps) {
                     <button type="button" onClick={() => setEditing(null)} className="flex-1 px-4 py-2 bg-slate-200 text-slate-700 rounded hover:bg-slate-300 transition">
                       Cancel
                     </button>
-                    <button
+                    <Button
                       type="submit"
                       disabled={isSubmitting || !dirty}
-                      className="inline-flex items-center justify-center gap-2 flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded hover:shadow-lg font-semibold transition disabled:opacity-50"
+                      variant="brand"
+                      className="flex-1"
                     >
                       {isSubmitting ? <Spinner size="sm" label="Saving…" /> : 'Save Changes'}
-                    </button>
+                    </Button>
                   </div>
                 </Form>
               )}
@@ -641,13 +643,14 @@ export function AdminAppointments({ session }: RoleViewProps) {
               <button onClick={() => setRescheduling(null)} disabled={rescheduleFormik.isSubmitting} className="flex-1 px-4 py-2 bg-slate-200 text-slate-700 rounded hover:bg-slate-300 transition disabled:opacity-50">
                 Cancel
               </button>
-              <button
+              <Button
                 onClick={() => rescheduleFormik.submitForm()}
                 disabled={!rescheduleFormik.values.date || !rescheduleFormik.values.time || !rescheduleFormik.dirty || rescheduleFormik.isSubmitting}
-                className="inline-flex items-center justify-center gap-2 flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded hover:shadow-lg font-semibold transition disabled:opacity-50"
+                variant="brand"
+                className="flex-1"
               >
                 {rescheduleFormik.isSubmitting ? <Spinner size="sm" label="Saving…" /> : 'Reschedule'}
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -694,13 +697,14 @@ export function AdminAppointments({ session }: RoleViewProps) {
                     <button type="button" onClick={() => setAddingVitals(null)} className="flex-1 px-4 py-2 bg-slate-200 text-slate-700 rounded hover:bg-slate-300 transition">
                       Cancel
                     </button>
-                    <button
+                    <Button
                       type="submit"
                       disabled={isSubmitting || !dirty}
-                      className="inline-flex items-center justify-center gap-2 flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded hover:shadow-lg font-semibold transition disabled:opacity-50"
+                      variant="brand"
+                      className="flex-1"
                     >
                       {isSubmitting ? <Spinner size="sm" label="Saving…" /> : 'Save Vitals'}
-                    </button>
+                    </Button>
                   </div>
                 </Form>
               )}

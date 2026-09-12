@@ -21,6 +21,8 @@ import {
   useListHospitalsQuery,
 } from '@/store/api';
 import { Spinner } from '@/components/ui/spinner';
+import { Button } from '@/components/ui/button';
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
 
 export function PlatformPatients({ session }: RoleViewProps) {
   const searchParams = useSearchParams();
@@ -74,12 +76,13 @@ export function PlatformPatients({ session }: RoleViewProps) {
             {(selectedHospitalId || table.search) && <span className="text-slate-400"> (filtered)</span>}
           </p>
           {hasPermission(session, 'patients.manage') && (
-            <button
+            <Button
               onClick={() => setAddModalOpen(true)}
-              className="flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg text-sm font-medium hover:shadow-lg transition"
+              variant="brand"
+              size="sm"
             >
               <Plus className="w-4 h-4" /> Add Patient
-            </button>
+            </Button>
           )}
         </div>
         {isLoading ? (
@@ -91,50 +94,50 @@ export function PlatformPatients({ session }: RoleViewProps) {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="bg-slate-50 border-b border-slate-100">
-                  {showHospital && <th className="text-left py-3 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wide">Hospital</th>}
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-slate-50 border-b border-slate-100">
+                  {showHospital && <TableHead className="text-left py-3 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wide">Hospital</TableHead>}
                   {/* "Visits", not "Appointments": the API counts completed ones. */}
                   {['Name', 'Email', 'Gender', 'Age', 'Blood Group', 'Phone', 'Visits'].map((h) => (
-                    <th key={h} className="text-left py-3 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wide">{h}</th>
+                    <TableHead key={h} className="text-left py-3 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wide">{h}</TableHead>
                   ))}
-                  <th className="text-right py-3 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wide">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
+                  <TableHead className="text-right py-3 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wide">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {patients.map((p) => (
-                  <tr key={p.id} className="border-b border-slate-50 hover:bg-slate-50 transition">
+                  <TableRow key={p.id} className="border-b border-slate-50 hover:bg-slate-50 transition">
                     {showHospital && (
-                      <td className="py-3 px-6">
+                      <TableCell className="py-3 px-6 whitespace-normal">
                         <HospitalBadge hospitalId={p.hospitalId} hospitals={hospitals} />
-                      </td>
+                      </TableCell>
                     )}
-                    <td className="py-3 px-6 font-medium text-slate-900">
+                    <TableCell className="py-3 px-6 font-medium text-slate-900 whitespace-normal">
                       {p.user?.name ?? '—'}
                       {formatRelationLine(p.relationType, p.relationName) && (
                         <span className="block text-xs font-normal text-slate-500">
                           {formatRelationLine(p.relationType, p.relationName)}
                         </span>
                       )}
-                    </td>
-                    <td className="py-3 px-6 text-slate-600 text-sm">{p.user?.email ?? '—'}</td>
-                    <td className="py-3 px-6 text-slate-600 capitalize">{p.gender || '—'}</td>
-                    <td className="py-3 px-6 text-slate-600">{fmtAge(p.dateOfBirth)}</td>
-                    <td className="py-3 px-6 text-slate-600">{p.bloodGroup || '—'}</td>
-                    <td className="py-3 px-6 text-slate-600 text-sm">{p.user?.phone || '—'}</td>
-                    <td className="py-3 px-6 font-semibold text-slate-900">{p.visitCount ?? 0}</td>
-                    <td className="py-3 px-6 text-right">
+                    </TableCell>
+                    <TableCell className="py-3 px-6 text-slate-600 text-sm whitespace-normal">{p.user?.email ?? '—'}</TableCell>
+                    <TableCell className="py-3 px-6 text-slate-600 capitalize whitespace-normal">{p.gender || '—'}</TableCell>
+                    <TableCell className="py-3 px-6 text-slate-600 whitespace-normal">{fmtAge(p.dateOfBirth)}</TableCell>
+                    <TableCell className="py-3 px-6 text-slate-600 whitespace-normal">{p.bloodGroup || '—'}</TableCell>
+                    <TableCell className="py-3 px-6 text-slate-600 text-sm whitespace-normal">{p.user?.phone || '—'}</TableCell>
+                    <TableCell className="py-3 px-6 font-semibold text-slate-900 whitespace-normal">{p.visitCount ?? 0}</TableCell>
+                    <TableCell className="py-3 px-6 text-right whitespace-normal">
                       <div className="flex items-center justify-end gap-1">
                         <ActionIcon icon={Eye} label="View" href={`/patient/${p.id}${p.hospitalId ? `?h=${p.hospitalId}` : ''}`} />
                         {hasPermission(session, 'patients.manage') && <ActionIcon icon={Pencil} label="Edit" onClick={() => setEditing(p)} />}
                         {hasPermission(session, 'patients.delete') && <ActionIcon icon={Trash2} label="Delete" tone="danger" onClick={() => setDeleting(p)} />}
                       </div>
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 ))}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
             <TablePagination
               page={table.page}
               pageSize={table.pageSize}

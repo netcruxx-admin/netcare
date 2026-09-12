@@ -18,6 +18,7 @@ import type { PharmacyBillingRow } from '@/lib/types';
 import { openInvoicePrint } from '@/components/payments/printInvoice';
 import { fmtCurrency, fmtTime, methodBadgeClass, methodLabel, todayIso } from './billingFormat';
 import { DateRangeFilter, type DateRange } from '@/components/DateRangeFilter';
+import { Table, TableHeader, TableBody, TableFooter, TableRow, TableHead, TableCell } from '@/components/ui/table';
 
 // ── KPI card ─────────────────────────────────────────────────────────────────
 
@@ -52,38 +53,38 @@ function KpiCard({ label, amount, count, icon, tint }: KpiCardProps) {
 
 function BillingRow({ row, onPrint }: { row: PharmacyBillingRow; onPrint: (id: string) => void }) {
   return (
-    <tr className="border-b hover:bg-slate-50 transition">
-      <td className="py-3 px-4 text-xs font-mono text-slate-500 whitespace-nowrap">
+    <TableRow className="border-b hover:bg-slate-50 transition">
+      <TableCell className="py-3 px-4 text-xs font-mono text-slate-500">
         {row.invoiceNumber}
-      </td>
-      <td className="py-3 px-4 text-sm text-slate-500 whitespace-nowrap">
+      </TableCell>
+      <TableCell className="py-3 px-4 text-sm text-slate-500">
         {fmtTime(row.createdAt)}
-      </td>
-      <td className="py-3 px-4">
+      </TableCell>
+      <TableCell className="py-3 px-4 whitespace-normal">
         <p className="text-sm font-medium text-slate-900">{row.patientName || '—'}</p>
         {row.patientPhone && (
           <p className="text-xs text-slate-400">{row.patientPhone}</p>
         )}
-      </td>
-      <td className="py-3 px-4">
+      </TableCell>
+      <TableCell className="py-3 px-4 whitespace-normal">
         <p className="text-sm text-slate-800">{row.medicineName || '—'}</p>
         {row.dosage && <p className="text-xs text-slate-400">{row.dosage}</p>}
-      </td>
-      <td className="py-3 px-4 text-right text-sm tabular-nums text-slate-700">
+      </TableCell>
+      <TableCell className="py-3 px-4 text-right text-sm tabular-nums text-slate-700 whitespace-normal">
         {row.quantity}
-      </td>
-      <td className="py-3 px-4 text-right text-sm tabular-nums text-slate-700">
+      </TableCell>
+      <TableCell className="py-3 px-4 text-right text-sm tabular-nums text-slate-700 whitespace-normal">
         {fmtCurrency(row.unitPrice)}
-      </td>
-      <td className="py-3 px-4 text-right text-sm font-semibold tabular-nums text-slate-900">
+      </TableCell>
+      <TableCell className="py-3 px-4 text-right text-sm font-semibold tabular-nums text-slate-900 whitespace-normal">
         {fmtCurrency(row.amount)}
-      </td>
-      <td className="py-3 px-4">
+      </TableCell>
+      <TableCell className="py-3 px-4 whitespace-normal">
         <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${methodBadgeClass(row.paymentMethod)}`}>
           {methodLabel(row.paymentMethod)}
         </span>
-      </td>
-      <td className="py-3 px-4 text-right">
+      </TableCell>
+      <TableCell className="py-3 px-4 text-right whitespace-normal">
         <button
           onClick={() => onPrint(row.paymentId)}
           title="Print invoice"
@@ -91,8 +92,8 @@ function BillingRow({ row, onPrint }: { row: PharmacyBillingRow; onPrint: (id: s
         >
           <Printer className="w-4 h-4" />
         </button>
-      </td>
-    </tr>
+      </TableCell>
+    </TableRow>
   );
 }
 
@@ -190,37 +191,37 @@ export function PharmacyBillingContent() {
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-left">
-                <thead>
-                  <tr className="border-b bg-slate-50 text-xs font-semibold text-slate-600 uppercase tracking-wide">
-                    <th className="py-3 px-4">Invoice</th>
-                    <th className="py-3 px-4">Time</th>
-                    <th className="py-3 px-4">Patient</th>
-                    <th className="py-3 px-4">Medicine</th>
-                    <th className="py-3 px-4 text-right">Qty</th>
-                    <th className="py-3 px-4 text-right">Unit Price</th>
-                    <th className="py-3 px-4 text-right">Amount</th>
-                    <th className="py-3 px-4">Method</th>
-                    <th className="py-3 px-4 text-right">Print</th>
-                  </tr>
-                </thead>
-                <tbody>
+              <Table>
+                <TableHeader>
+                  <TableRow className="border-b bg-slate-50 text-xs font-semibold text-slate-600 uppercase tracking-wide">
+                    <TableHead className="py-3 px-4">Invoice</TableHead>
+                    <TableHead className="py-3 px-4">Time</TableHead>
+                    <TableHead className="py-3 px-4">Patient</TableHead>
+                    <TableHead className="py-3 px-4">Medicine</TableHead>
+                    <TableHead className="py-3 px-4 text-right">Qty</TableHead>
+                    <TableHead className="py-3 px-4 text-right">Unit Price</TableHead>
+                    <TableHead className="py-3 px-4 text-right">Amount</TableHead>
+                    <TableHead className="py-3 px-4">Method</TableHead>
+                    <TableHead className="py-3 px-4 text-right">Print</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
                   {summary.rows.map((row) => (
                     <BillingRow key={row.paymentId} row={row} onPrint={openInvoicePrint} />
                   ))}
-                </tbody>
-                <tfoot>
-                  <tr className="border-t bg-slate-50">
-                    <td colSpan={6} className="py-3 px-4 text-sm font-semibold text-slate-700 text-right">
+                </TableBody>
+                <TableFooter>
+                  <TableRow className="border-t bg-slate-50">
+                    <TableCell colSpan={6} className="py-3 px-4 text-sm font-semibold text-slate-700 text-right">
                       Total
-                    </td>
-                    <td className="py-3 px-4 text-right text-sm font-bold text-slate-900 tabular-nums">
+                    </TableCell>
+                    <TableCell className="py-3 px-4 text-right text-sm font-bold text-slate-900 tabular-nums">
                       {fmtCurrency(summary.total)}
-                    </td>
-                    <td colSpan={2} />
-                  </tr>
-                </tfoot>
-              </table>
+                    </TableCell>
+                    <TableCell colSpan={2} />
+                  </TableRow>
+                </TableFooter>
+              </Table>
             </div>
           )}
         </div>

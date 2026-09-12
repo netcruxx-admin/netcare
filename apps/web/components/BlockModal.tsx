@@ -10,6 +10,7 @@ import { useCreateScheduleBlockMutation } from '@/store/api';
 import { BLOCK_TYPE_OPTIONS, GRID_SLOTS, slotMin } from '@/lib/schedule';
 import { FormField } from '@/components/form/FormField';
 import { Spinner } from '@/components/ui/spinner';
+import { Button } from '@/components/ui/button';
 
 // Start options exclude the last slot; end options exclude the first (end is exclusive).
 const START_SLOTS = GRID_SLOTS.slice(0, -1);
@@ -126,13 +127,14 @@ export function BlockModal({
 
               <div className="flex gap-3 px-6 py-4 border-t">
                 <button type="button" onClick={onClose} className="flex-1 px-4 py-2 bg-slate-200 text-slate-700 rounded hover:bg-slate-300 transition">Cancel</button>
-                <button
+                <Button
                   type="submit"
                   disabled={isSubmitting}
-                  className="inline-flex items-center justify-center gap-2 flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded hover:shadow-lg font-semibold transition disabled:opacity-50"
+                  variant="brand"
+                  className="flex-1"
                 >
                   {isSubmitting ? <Spinner size="sm" label="Adding…" /> : 'Add Block'}
-                </button>
+                </Button>
               </div>
             </Form>
           )}

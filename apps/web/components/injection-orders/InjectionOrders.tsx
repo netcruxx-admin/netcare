@@ -23,6 +23,8 @@ import {
 import { doctorRole, nurseRole, pharmacistRole } from '@/lib/roles';
 import { fmtDate } from '@/lib/date';
 import { Spinner } from '@/components/ui/spinner';
+import { Button } from '@/components/ui/button';
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
 
 type StatusTab = 'all' | InjectionOrderStatus;
 
@@ -186,13 +188,15 @@ export function InjectionOrders({ session }: RoleViewProps) {
           </div>
 
           {canOrder && role === doctorRole && (
-            <button
+            <Button
               onClick={() => { setFormError(''); setNewOrderOpen(true); }}
-              className="flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg text-sm font-medium hover:shadow-lg transition ml-auto"
+              variant="brand"
+              size="sm"
+              className="ml-auto"
             >
               <Plus className="w-4 h-4" />
               New Injection Order
-            </button>
+            </Button>
           )}
         </div>
 
@@ -211,28 +215,28 @@ export function InjectionOrders({ session }: RoleViewProps) {
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b bg-slate-50">
-                    <th className="text-left py-3 px-4 font-semibold text-slate-900">Patient</th>
-                    <th className="text-left py-3 px-4 font-semibold text-slate-900">Injectable</th>
-                    <th className="text-left py-3 px-4 font-semibold text-slate-900">Dose</th>
-                    <th className="text-left py-3 px-4 font-semibold text-slate-900">Route</th>
-                    <th className="text-right py-3 px-4 font-semibold text-slate-900">Qty</th>
-                    <th className="text-left py-3 px-4 font-semibold text-slate-900">Doctor</th>
-                    <th className="text-left py-3 px-4 font-semibold text-slate-900">Ordered</th>
-                    <th className="text-left py-3 px-4 font-semibold text-slate-900">Status</th>
-                    {showActions && <th className="text-right py-3 px-4 font-semibold text-slate-900">Actions</th>}
-                  </tr>
-                </thead>
-                <tbody>
+              <Table>
+                <TableHeader>
+                  <TableRow className="border-b bg-slate-50">
+                    <TableHead className="text-left py-3 px-4 font-semibold text-slate-900">Patient</TableHead>
+                    <TableHead className="text-left py-3 px-4 font-semibold text-slate-900">Injectable</TableHead>
+                    <TableHead className="text-left py-3 px-4 font-semibold text-slate-900">Dose</TableHead>
+                    <TableHead className="text-left py-3 px-4 font-semibold text-slate-900">Route</TableHead>
+                    <TableHead className="text-right py-3 px-4 font-semibold text-slate-900">Qty</TableHead>
+                    <TableHead className="text-left py-3 px-4 font-semibold text-slate-900">Doctor</TableHead>
+                    <TableHead className="text-left py-3 px-4 font-semibold text-slate-900">Ordered</TableHead>
+                    <TableHead className="text-left py-3 px-4 font-semibold text-slate-900">Status</TableHead>
+                    {showActions && <TableHead className="text-right py-3 px-4 font-semibold text-slate-900">Actions</TableHead>}
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
                   {sorted.map((order) => (
-                    <tr key={order.id} className="border-b hover:bg-slate-50">
-                      <td className="py-3 px-4">
+                    <TableRow key={order.id} className="border-b hover:bg-slate-50">
+                      <TableCell className="py-3 px-4 whitespace-normal">
                         <p className="font-medium text-slate-900">{order.patientName ?? order.patientId}</p>
                         {order.patientPhone && <p className="text-xs text-slate-500">{order.patientPhone}</p>}
-                      </td>
-                      <td className="py-3 px-4 text-slate-700">
+                      </TableCell>
+                      <TableCell className="py-3 px-4 text-slate-700 whitespace-normal">
                         {order.injectableName}
                         {shortStock(order) && (
                           <span className="ml-2 inline-flex items-center gap-1 text-xs text-red-600 font-medium">
@@ -240,19 +244,19 @@ export function InjectionOrders({ session }: RoleViewProps) {
                             {order.stockOnHand} in stock
                           </span>
                         )}
-                      </td>
-                      <td className="py-3 px-4 text-slate-600">{order.dose || '—'}</td>
-                      <td className="py-3 px-4 text-slate-600">{order.route}</td>
-                      <td className="py-3 px-4 text-right tabular-nums font-medium text-slate-900">{order.quantity}</td>
-                      <td className="py-3 px-4 text-slate-600">{order.doctorName ?? order.doctorId}</td>
-                      <td className="py-3 px-4 text-slate-500 whitespace-nowrap">{fmtDate(order.orderedAt)}</td>
-                      <td className="py-3 px-4">
+                      </TableCell>
+                      <TableCell className="py-3 px-4 text-slate-600 whitespace-normal">{order.dose || '—'}</TableCell>
+                      <TableCell className="py-3 px-4 text-slate-600 whitespace-normal">{order.route}</TableCell>
+                      <TableCell className="py-3 px-4 text-right tabular-nums font-medium text-slate-900 whitespace-normal">{order.quantity}</TableCell>
+                      <TableCell className="py-3 px-4 text-slate-600 whitespace-normal">{order.doctorName ?? order.doctorId}</TableCell>
+                      <TableCell className="py-3 px-4 text-slate-500">{fmtDate(order.orderedAt)}</TableCell>
+                      <TableCell className="py-3 px-4 whitespace-normal">
                         <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-semibold ${STATUS_BADGE[order.status]}`}>
                           {order.status}
                         </span>
-                      </td>
+                      </TableCell>
                       {showActions && (
-                        <td className="py-3 px-4 text-right">
+                        <TableCell className="py-3 px-4 text-right whitespace-normal">
                           <div className="flex items-center justify-end gap-2">
                             {canAdminister && order.status === 'ordered' && (
                               <button
@@ -271,12 +275,12 @@ export function InjectionOrders({ session }: RoleViewProps) {
                               </button>
                             )}
                           </div>
-                        </td>
+                        </TableCell>
                       )}
-                    </tr>
+                    </TableRow>
                   ))}
-                </tbody>
-              </table>
+                </TableBody>
+              </Table>
             </div>
           )}
         </div>
@@ -384,13 +388,14 @@ export function InjectionOrders({ session }: RoleViewProps) {
                     >
                       Cancel
                     </button>
-                    <button
+                    <Button
                       type="submit"
                       disabled={isSubmitting || !dirty || isCreating}
-                      className="inline-flex items-center justify-center gap-2 flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded hover:shadow-lg font-semibold transition disabled:opacity-50"
+                      variant="brand"
+                      className="flex-1"
                     >
                       {isSubmitting || isCreating ? <Spinner size="sm" label="Ordering…" /> : 'Order Injection'}
-                    </button>
+                    </Button>
                   </div>
                 </Form>
               )}
@@ -455,13 +460,14 @@ export function InjectionOrders({ session }: RoleViewProps) {
                     >
                       Cancel
                     </button>
-                    <button
+                    <Button
                       type="submit"
                       disabled={isSubmitting || !dirty || isGiving}
-                      className="inline-flex items-center justify-center gap-2 flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded hover:shadow-lg font-semibold transition disabled:opacity-50"
+                      variant="brand"
+                      className="flex-1"
                     >
                       {isSubmitting || isGiving ? <Spinner size="sm" label="Saving…" /> : 'Mark Given'}
-                    </button>
+                    </Button>
                   </div>
                 </Form>
               )}

@@ -24,6 +24,7 @@ import type { RoleViewProps } from '@/components/RoleView';
 import { FormField } from '@/components/form/FormField';
 import { Calendar } from '@/components/ui/calendar';
 import { Spinner } from '@/components/ui/spinner';
+import { Button } from '@/components/ui/button';
 import { PaymentModeField, isCounterMode, type PaymentMode } from '@/components/payments/PaymentModeField';
 
 // ---------------------------------------------------------------------------
@@ -493,13 +494,14 @@ function AdminBookForm({ session }: RoleViewProps) {
                     >
                       Cancel
                     </button>
-                    <button
+                    <Button
                       type="submit"
                       disabled={success || paymentStatus !== 'idle' || deptConflict}
-                      className="flex-1 px-6 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg hover:shadow-lg transition font-semibold disabled:opacity-50 flex items-center justify-center gap-2"
+                      variant="brand"
+                      className="flex-1"
                     >
                       {submitLabel}
-                    </button>
+                    </Button>
                   </div>
                 </Form>
               );

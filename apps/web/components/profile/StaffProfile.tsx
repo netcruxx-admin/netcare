@@ -21,6 +21,7 @@ import { PhoneField, toPhoneDigits, withPrefix } from '@/components/form/PhoneFi
 import { doctorRole } from '@/lib/roles';
 import type { AuthSession } from '@/lib/types';
 import { Spinner } from '@/components/ui/spinner';
+import { Button } from '@/components/ui/button';
 
 /**
  * The account form shared by clinical staff. The doctor and nurse pages this
@@ -274,13 +275,13 @@ export function StaffProfile({ session }: RoleViewProps) {
                   </>
                 )}
                 <div className="sm:col-span-2 flex justify-end pt-2">
-                  <button
+                  <Button
                     type="submit"
                     disabled={isSubmitting || !dirty}
-                    className="inline-flex items-center justify-center gap-2 px-6 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg hover:shadow-lg font-semibold transition disabled:opacity-50"
+                    variant="brand"
                   >
                     {isSubmitting ? <Spinner size="sm" label="Saving…" /> : 'Save Changes'}
-                  </button>
+                  </Button>
                 </div>
               </Form>
               )}
