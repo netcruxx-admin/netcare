@@ -325,7 +325,7 @@ export function EditHospitalModal({ open, hospital, onClose, onSuccess }: Props)
                     </select>
                   </div>
                   {values.nabhStatus && values.nabhStatus !== 'none' && (
-                    <FormField name="nabhValidTill" label="NABH Valid Till" type="date" />
+                    <FormField name="nabhValidTill" label="NABH Valid Till" type="date" required />
                   )}
                 </div>
 

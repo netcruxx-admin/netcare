@@ -141,6 +141,7 @@ export function IdentityStep({ meta }: StepProps) {
 // --- 2. Registration & Tax ---------------------------------------------------
 
 export function RegistrationStep({ meta }: StepProps) {
+  const { values } = useFormikContext<WizardValues>();
   return (
     <div className="space-y-6">
       <div className="space-y-4">
@@ -189,6 +190,7 @@ export function RegistrationStep({ meta }: StepProps) {
             label="Accredited Till"
             type="date"
             min={tomorrowISO()}
+            required={!!values.nabhStatus && values.nabhStatus !== 'none'}
           />
         </FieldGrid>
         <p className="text-xs text-slate-400">
@@ -400,7 +402,9 @@ export function LicencesStep({ meta }: StepProps) {
                 {/* Row 1: Type · Number · Delete */}
                 <div className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto] gap-3 items-start">
                   <div>
-                    <label className="block text-xs font-medium text-slate-600 mb-1">Licence Type</label>
+                    <label className="block text-xs font-medium text-slate-600 mb-1">
+                      Licence Type<span className="text-red-500 ml-0.5">*</span>
+                    </label>
                     <select
                       value={row.type}
                       onChange={(e) => update(index, 'type', e.target.value)}
@@ -413,7 +417,9 @@ export function LicencesStep({ meta }: StepProps) {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-slate-600 mb-1">Licence Number</label>
+                    <label className="block text-xs font-medium text-slate-600 mb-1">
+                      Licence Number<span className="text-red-500 ml-0.5">*</span>
+                    </label>
                     <input
                       value={row.number}
                       onChange={(e) => update(index, 'number', e.target.value)}
@@ -441,7 +447,7 @@ export function LicencesStep({ meta }: StepProps) {
                 {row.type === 'other' && (
                   <div>
                     <label className="block text-xs font-medium text-slate-600 mb-1">
-                      Licence name
+                      Licence name<span className="text-red-500 ml-0.5">*</span>
                     </label>
                     <input
                       value={row.customType ?? ''}

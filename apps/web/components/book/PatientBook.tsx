@@ -495,7 +495,9 @@ export function PatientBook({ session }: RoleViewProps) {
                       <div className="grid md:grid-cols-2 gap-6">
                         {/* Calendar */}
                         <div>
-                          <label className="block text-sm font-medium text-slate-700 mb-2">Choose a date</label>
+                          <label className="block text-sm font-medium text-slate-700 mb-2">
+                            Choose a date <span className="text-red-500">*</span>
+                          </label>
                           <Calendar
                             mode="single"
                             selected={values.date ? new Date(`${values.date}T00:00:00`) : undefined}
@@ -519,7 +521,7 @@ export function PatientBook({ session }: RoleViewProps) {
                         {/* Time slots */}
                         <div>
                           <label className="block text-sm font-medium text-slate-700 mb-2">
-                            Available time slots
+                            Available time slots <span className="text-red-500">*</span>
                           </label>
                           {!values.date ? (
                             <div className="min-h-[220px] flex items-center justify-center text-slate-400 text-sm border border-dashed border-slate-300 rounded-lg">

@@ -142,7 +142,7 @@ export function ConsentStep({ formik, onBack, isMinor, inlineError }: ConsentSte
             these consents.
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <FormField name="guardianName" label="Parent / Guardian Name" placeholder="Full name" />
+            <FormField name="guardianName" label="Parent / Guardian Name" placeholder="Full name" required />
             <FormField
               name="guardianRelationship"
               label="Relationship"

@@ -102,11 +102,11 @@ export function BlockModal({
                 )}
 
                 {doctorOptions && (
-                  <FormField name="doctor" label="Doctor" as="select" options={doctorOptions} />
+                  <FormField name="doctor" label="Doctor" as="select" options={doctorOptions} required />
                 )}
 
                 <div className="grid grid-cols-2 gap-4">
-                  <FormField name="date" label="Date" type="date" />
+                  <FormField name="date" label="Date" type="date" required />
                   <FormField name="type" label="Type" as="select" options={BLOCK_TYPE_OPTIONS} />
                   <FormField
                     name="start"

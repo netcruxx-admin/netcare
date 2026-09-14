@@ -276,7 +276,8 @@ function RazorpaySettingsSection({ canEdit }: { canEdit: boolean }) {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Key ID <span className="text-xs text-slate-400">(rzp_test_… or rzp_live_…)</span>
+                  Key ID<span className="text-red-500 ml-0.5">*</span>{' '}
+                  <span className="text-xs text-slate-400">(rzp_test_… or rzp_live_…)</span>
                 </label>
                 <input
                   type="text"
@@ -288,7 +289,7 @@ function RazorpaySettingsSection({ canEdit }: { canEdit: boolean }) {
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Key Secret
+                  Key Secret<span className="text-red-500 ml-0.5">*</span>
                 </label>
                 <div className="relative">
                   <input

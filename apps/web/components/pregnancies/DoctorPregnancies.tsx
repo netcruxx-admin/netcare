@@ -240,7 +240,7 @@ function NewPregnancyModal({ onClose, onSaved }: { onClose: () => void; onSaved:
       >
         {({ values, handleChange, setFieldValue, isSubmitting, dirty }) => (
           <Form className="space-y-3">
-            <Field label="Patient">
+            <Field label="Patient" required>
               <select
                 name="patientId"
                 value={values.patientId}
@@ -258,7 +258,7 @@ function NewPregnancyModal({ onClose, onSaved }: { onClose: () => void; onSaved:
               </select>
             </Field>
             <div className="grid grid-cols-2 gap-3">
-              <Field label="LMP (last period)">
+              <Field label="LMP (last period)" required>
                 <input type="date" name="lmp" value={values.lmp} max={today()} onChange={handleChange} className={inputCls} />
               </Field>
               <Field label="EDD (auto)">
@@ -392,10 +392,13 @@ function NewVisitModal({
 // --- Small UI helpers --------------------------------------------------------
 const inputCls = 'w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/30 focus:border-cyan-500';
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
   return (
     <label className="block">
-      <span className="text-xs font-medium text-slate-600">{label}</span>
+      <span className="text-xs font-medium text-slate-600">
+        {label}
+        {required && <span className="text-red-500 ml-0.5">*</span>}
+      </span>
       <div className="mt-1">{children}</div>
     </label>
   );
