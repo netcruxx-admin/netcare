@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
 import { hasPermission } from '@/lib/auth';
-import { permissionScope, pharmacistRole } from '@/lib/roles';
+import { permissionScope, pharmacistRole, receptionistRole } from '@/lib/roles';
 import { ConsultationBillingContent } from './ConsultationBillingContent';
 import { ConsultationFeesContent } from './ConsultationFeesContent';
 import { PharmacyBillingContent } from './PharmacyBillingPage';
@@ -36,9 +36,14 @@ export function BillingPage({ session }: RoleViewProps) {
     session.user.role === pharmacistRole ? 'pharmacy' : 'consultation',
   );
 
+  // The front desk settles consultation and injectable/lab bills, but pharmacy
+  // dispensing is the pharmacist's counter — a receptionist has no reason to
+  // work that queue, so the tab stays off their board entirely.
+  const isReceptionist = session.user.role === receptionistRole;
+
   const tabs: { id: Tab; label: string }[] = [
     { id: 'consultation', label: 'Consultations' },
-    { id: 'pharmacy', label: 'Pharmacy' },
+    ...(isReceptionist ? [] : [{ id: 'pharmacy' as Tab, label: 'Pharmacy' }]),
     { id: 'injectableLab', label: 'Injectables & Lab' },
     ...(canManageFees ? [{ id: 'fees' as Tab, label: 'Fee Schedule' }] : []),
   ];
@@ -73,7 +78,7 @@ export function BillingPage({ session }: RoleViewProps) {
         {tab === 'consultation' && (
           <ConsultationBillingContent canCollect={canCollect} showBookedByFilter={showBookedByFilter} />
         )}
-        {tab === 'pharmacy' && <PharmacyBillingContent />}
+        {tab === 'pharmacy' && !isReceptionist && <PharmacyBillingContent />}
         {tab === 'injectableLab' && <InjectableLabBillingContent canCollect={canCollect} />}
         {tab === 'fees' && canManageFees && <ConsultationFeesContent />}
       </div>
