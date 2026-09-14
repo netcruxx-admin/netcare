@@ -333,8 +333,11 @@ export function PlatformAppointments({ session }: RoleViewProps) {
                     <TableCell className="py-3 px-6 text-right whitespace-normal">
                       <div className="flex items-center justify-end gap-1">
                         <ActionIcon icon={Eye} label="View" href={`/appointment/${a.id}${a.hospitalId ? `?h=${a.hospitalId}` : ''}`} />
-                        {hasPermission(session, 'appointments.manage') && <ActionIcon icon={Pencil} label="Edit" onClick={() => setEditing(a)} />}
-                        {hasPermission(session, 'appointments.manage') && <ActionIcon icon={CalendarClock} label="Reschedule" onClick={() => openReschedule(a)} />}
+                        {/* A completed visit is a closed record — the backend refuses the
+                            same edit/reschedule PUT once status is "completed", so the
+                            buttons that only ever send that PUT stay hidden too. */}
+                        {a.status !== 'completed' && hasPermission(session, 'appointments.manage') && <ActionIcon icon={Pencil} label="Edit" onClick={() => setEditing(a)} />}
+                        {a.status !== 'completed' && hasPermission(session, 'appointments.manage') && <ActionIcon icon={CalendarClock} label="Reschedule" onClick={() => openReschedule(a)} />}
                         {hasPermission(session, 'appointments.manage') && <ActionIcon icon={CalendarPlus} label="Schedule Follow-Up" onClick={() => setFollowUp(a)} />}
                         {hasPermission(session, 'appointments.manage') && <ActionIcon icon={Activity} label="Add Vitals" onClick={() => { setVitalsError(''); setAddingVitals(a); }} />}
                         {hasPermission(session, 'appointments.delete') && <ActionIcon icon={Trash2} label="Delete" tone="danger" onClick={() => setDeleting(a)} />}
