@@ -30,7 +30,7 @@ import { requireEmailOrPhone } from '@/lib/contactMethod';
 import { maskAadhaar } from '@/lib/aadhaar';
 import { ConsentSettings } from './ConsentSettings';
 import { Spinner } from '@/components/ui/spinner';
-import { Button, buttonVariants } from '@/components/ui/button';
+import { Button, brandGradient } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
 interface FormValues {
@@ -122,7 +122,7 @@ function WizardContent({ isSaving }: { isSaving: boolean }) {
               className={cn(
                 'w-10 h-10 rounded-full flex items-center justify-center font-bold transition',
                 step.number <= currentStep
-                  ? buttonVariants({ variant: 'brand' })
+                  ? brandGradient
                   : 'bg-slate-200 text-slate-600',
               )}
             >

@@ -4,6 +4,13 @@ import { cva, type VariantProps } from 'class-variance-authority'
 
 import { cn } from '@/lib/utils'
 
+/** Color/weight only — no layout, sizing or shape classes. `buttonVariants`
+ *  bundles those in (h-9, rounded-md, inline-flex, …), which is right for an
+ *  actual <Button> but clobbers a caller's own sizing (a nav link's `flex
+ *  w-full`, a circular step indicator, a pagination tile's `h-8`) if they
+ *  merge in `buttonVariants({ variant: 'brand' })` instead of just this. */
+export const brandGradient = 'bg-gradient-to-r from-cyan-500 to-brand-teal text-white font-semibold hover:shadow-lg disabled:cursor-not-allowed'
+
 const buttonVariants = cva(
   "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-all disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive",
   {
@@ -28,7 +35,7 @@ const buttonVariants = cva(
         // change here. Before this variant existed, ~80 files each typed this
         // gradient by hand with slightly different padding/radius/weight —
         // this is the one copy all of them are being moved onto.
-        brand: 'bg-gradient-to-r from-cyan-500 to-brand-teal text-white font-semibold hover:shadow-lg disabled:cursor-not-allowed',
+        brand: brandGradient,
       },
       size: {
         default: 'h-9 px-4 py-2 has-[>svg]:px-3',

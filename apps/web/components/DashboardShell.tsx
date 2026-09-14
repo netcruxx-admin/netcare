@@ -27,7 +27,7 @@ import {
 import { CommandPalette } from '@/components/CommandPalette';
 import { useCareContext } from '@/hooks/useCareContext';
 import { Spinner } from '@/components/ui/spinner';
-import { Button, buttonVariants } from '@/components/ui/button';
+import { Button, brandGradient } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
 export function DashboardShell({
@@ -275,7 +275,7 @@ export function DashboardShell({
                 // Same brand look every primary action uses (Button's "brand"
                 // variant), not a copy of its class string — this nav item
                 // keeps its own left-aligned, full-width layout.
-                active ? buttonVariants({ variant: 'brand' }) : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
+                active ? brandGradient : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
               )}
             >
               <Icon className="w-5 h-5 shrink-0" />
