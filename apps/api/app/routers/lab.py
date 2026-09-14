@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy import String, cast, func, or_
 from sqlalchemy.orm import Session, aliased
 
-from .. import models, notify, schemas
+from .. import billing_config, models, notify, schemas
 from ..auth import get_current_user
 from ..authz import SCOPE_OWN, caller_doctor_id, caller_patient_id, own_record_filter, require_permission
 from ..database import get_db
@@ -196,16 +196,38 @@ def update_test_order(
         )
         if not already_billed:
             items = order.items or []
+            profile = (
+                db.query(models.HospitalProfile)
+                .filter(models.HospitalProfile.hospital_id == tenant_id)
+                .first()
+            )
+            field_cfg = billing_config.resolve_bill_field_config(
+                profile.bill_field_config if profile else None
+            )["lab"]
+            subtotal = round(sum(float(i.get("price") or 0) for i in items), 2)
+            # GST is added on top of the catalogue price, not backed out of
+            # it — the hospital's rate at the moment of billing, snapshotted
+            # so a later rate change never rewrites what was already charged.
+            gst_rate = field_cfg["gst_rate"] if field_cfg["show_gst"] else None
+            gst_amount = round(subtotal * gst_rate / 100, 2) if gst_rate else 0.0
+            gst_split = field_cfg["split_gst"] if field_cfg["show_gst"] else False
             db.add(models.Payment(
                 id=new_id("pay"),
                 hospital_id=tenant_id,
                 appointment_id=None,
                 test_order_id=order.id,
                 patient_id=order.patient_id,
-                amount=round(sum(float(i.get("price") or 0) for i in items), 2),
+                amount=round(subtotal + gst_amount, 2),
                 payment_type="lab",
                 status="pending",
                 payment_method="",
+                bill_breakdown={
+                    "subtotal": subtotal,
+                    "gst_rate": gst_rate,
+                    "gst_amount": gst_amount,
+                    "gst_split": gst_split,
+                    "field_config": field_cfg,
+                },
                 created_at=now_iso(),
             ))
             db.commit()

@@ -180,6 +180,31 @@ export interface HospitalProfileBody {
   letterheadMarginLeftMm?: number;
   letterheadMarginRightMm?: number;
   notes?: string;
+  billFieldConfig?: BillFieldConfig;
+}
+
+/** Which optional columns a printed injectable bill shows. All default on —
+ *  see `apps/api/app/billing_config.py` for the merge with a hospital that
+ *  has never touched the setting. */
+export interface InjectableBillFieldConfig {
+  showSerialNumber: boolean;
+  showName: boolean;
+  showPrice: boolean;
+  showDiscount: boolean;
+  showTotal: boolean;
+}
+
+/** Whether/how a lab bill carries GST. `gstRate` only applies when
+ *  `showGst` is on; `splitGst` renders CGST + SGST instead of one line. */
+export interface LabBillFieldConfig {
+  showGst: boolean;
+  splitGst: boolean;
+  gstRate: number;
+}
+
+export interface BillFieldConfig {
+  injectable: InjectableBillFieldConfig;
+  lab: LabBillFieldConfig;
 }
 
 export interface HospitalProfile extends HospitalProfileBody {
@@ -216,6 +241,7 @@ export type HospitalSelfUpdateBody = Pick<
   name?: string;
   tagline?: string;
   theme?: Record<string, string>;
+  billFieldConfig?: BillFieldConfig;
 };
 
 /** What GET /hospitals/current returns — a tenant's public branding.
@@ -260,9 +286,13 @@ export interface InvoiceSeller {
 }
 
 export interface InvoiceLine {
+  /** Only set for an injectable bill — 1-based position in `lines`. */
+  serialNumber?: number | null;
   description: string;
   quantity: number;
   unitPrice: number;
+  /** Only meaningful for an injectable bill; 0 everywhere else. */
+  discount: number;
   amount: number;
 }
 
@@ -279,6 +309,27 @@ export interface Invoice {
   patientPhone: string;
   lines: InvoiceLine[];
   total: number;
+
+  /** Pre-discount (injectable) / pre-GST (lab) amount. Undefined otherwise. */
+  subtotal?: number | null;
+  /** Injectable only — knocked off `subtotal` at collection time. */
+  discount: number;
+  /** Lab only — the rate actually charged. Null means GST was not applied
+   *  to this bill (a fact snapshotted at billing time, not read live). */
+  gstRate?: number | null;
+  gstAmount: number;
+  gstSplit: boolean;
+  cgstAmount?: number | null;
+  sgstAmount?: number | null;
+
+  // Display flags for the print page. Undefined (non-injectable/lab bills)
+  // means "use the original fixed four-column layout".
+  showSerialNumber?: boolean | null;
+  showItemName?: boolean | null;
+  showPrice?: boolean | null;
+  showDiscount?: boolean | null;
+  showTotal?: boolean | null;
+  showGst?: boolean | null;
 }
 
 /** The hospital identity block on top of anything printed — a lab report today,
@@ -1645,7 +1696,10 @@ export const api = createApi({
     /** Settle or correct a bill. Invalidates Appointment too: paid/unpaid is
      *  shown on the appointment list, so collecting at the desk has to refresh
      *  the board the desk is looking at. */
-    updatePayment: build.mutation<Payment, { id: string; body: Partial<Payment> }>({
+    updatePayment: build.mutation<
+      Payment,
+      { id: string; body: Partial<Payment> & { discount?: number } }
+    >({
       query: ({ id, body }) => ({ url: `/payments/${id}`, method: 'PUT', body }),
       invalidatesTags: [{ type: 'Payment', id: 'LIST' }, { type: 'Appointment', id: 'LIST' }],
     }),

@@ -295,6 +295,7 @@ export function InjectableLabBillingContent({ canCollect = false }: { canCollect
           paymentId={collecting?.paymentId ?? ''}
           amount={collecting?.amount ?? 0}
           patientName={collecting?.patientName}
+          allowDiscount={collecting?.category === 'injectable'}
         />
       </div>
   );

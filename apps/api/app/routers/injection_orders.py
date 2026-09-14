@@ -18,7 +18,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session, aliased
 
-from .. import models, notify, schemas
+from .. import billing_config, models, notify, schemas
 from ..auth import get_current_user
 from ..authz import SCOPE_OWN, require_permission
 from ..database import get_db
@@ -200,16 +200,28 @@ def administer_injection_order(
     # given, so a pending injectable Payment appears on the Billing screen for
     # the front desk to collect. The amount is `injectable.price × quantity
     # given`; an uncatalogued injectable bills at ₹0 for the desk to reconcile.
+    # A discount, if any, is applied later by the desk at collection time
+    # (`PUT /payments/{id}`) — so subtotal == amount here, discount 0.
+    profile = (
+        db.query(models.HospitalProfile)
+        .filter(models.HospitalProfile.hospital_id == tenant_id)
+        .first()
+    )
+    field_cfg = billing_config.resolve_bill_field_config(
+        profile.bill_field_config if profile else None
+    )["injectable"]
+    subtotal = round((item.price or 0.0) * wanted, 2) if item else 0.0
     db.add(models.Payment(
         id=new_id("pay"),
         hospital_id=tenant_id,
         appointment_id=None,
         injection_order_id=order_id,
         patient_id=order.patient_id,
-        amount=round((item.price or 0.0) * wanted, 2) if item else 0.0,
+        amount=subtotal,
         payment_type="injectable",
         status="pending",
         payment_method="",
+        bill_breakdown={"subtotal": subtotal, "discount": 0.0, "field_config": field_cfg},
         created_at=now_iso(),
     ))
     db.commit()

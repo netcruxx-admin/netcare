@@ -5,7 +5,7 @@ import { Formik, Form } from 'formik';
 import * as Yup from 'yup';
 import {
   Building2, MapPin, Phone, UserCog, BedDouble, Clock, Image as ImageIcon,
-   Upload, Trash2, Palette,
+   Upload, Trash2, Palette, Receipt,
   ShieldCheck, FileText, CreditCard, Lock, Smartphone, CheckCircle2, Eye, EyeOff,
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -90,6 +90,120 @@ function ReadOnly({ label, value }: { label: string; value?: string | number | n
       <dd className={`mt-1 text-sm break-words ${blank ? 'text-slate-400' : 'text-slate-900'}`}>
         {blank ? '—' : value}
       </dd>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Bill field configuration — live previews of a sample injectable/lab bill,
+// mirroring the column logic in app/print/invoice/[paymentId]/page.tsx so
+// what the admin sees here is what actually prints.
+// ---------------------------------------------------------------------------
+
+type InjectableFieldConfig = {
+  showSerialNumber: boolean;
+  showName: boolean;
+  showPrice: boolean;
+  showDiscount: boolean;
+  showTotal: boolean;
+};
+
+function InjectableBillPreview({ config }: { config: InjectableFieldConfig }) {
+  const sample = { name: 'Inj. Ceftriaxone 1g', qty: 1, price: 500, discount: 50 };
+  const total = sample.price * sample.qty - sample.discount;
+  return (
+    <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-4">
+      <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Preview</p>
+      <table className="w-full text-xs">
+        <thead>
+          <tr className="border-b border-slate-300 text-left text-slate-500">
+            {config.showSerialNumber && <th className="py-1 pr-2 font-medium">S.No</th>}
+            {config.showName && <th className="py-1 pr-2 font-medium">Injectable</th>}
+            <th className="py-1 pr-2 text-right font-medium">Qty</th>
+            {config.showPrice && <th className="py-1 pr-2 text-right font-medium">Price</th>}
+            {config.showDiscount && <th className="py-1 pr-2 text-right font-medium">Discount</th>}
+            {config.showTotal && <th className="py-1 text-right font-medium">Total</th>}
+          </tr>
+        </thead>
+        <tbody>
+          <tr className="text-slate-700">
+            {config.showSerialNumber && <td className="py-1.5 pr-2">1</td>}
+            {config.showName && <td className="py-1.5 pr-2">{sample.name}</td>}
+            <td className="py-1.5 pr-2 text-right">{sample.qty}</td>
+            {config.showPrice && <td className="py-1.5 pr-2 text-right">₹{sample.price.toFixed(2)}</td>}
+            {config.showDiscount && <td className="py-1.5 pr-2 text-right">₹{sample.discount.toFixed(2)}</td>}
+            {config.showTotal && <td className="py-1.5 text-right font-semibold">₹{total.toFixed(2)}</td>}
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+type LabFieldConfig = { showGst: boolean; splitGst: boolean; gstRate: number };
+
+function LabBillPreview({ config }: { config: LabFieldConfig }) {
+  const subtotal = 1200;
+  const rate = Number(config.gstRate) || 0;
+  const gstAmount = config.showGst ? Math.round(subtotal * rate) / 100 : 0;
+  const total = subtotal + gstAmount;
+  return (
+    <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-4">
+      <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Preview</p>
+      <table className="w-full text-xs mb-2">
+        <thead>
+          <tr className="border-b border-slate-300 text-left text-slate-500">
+            <th className="py-1 pr-2 font-medium">Description</th>
+            <th className="py-1 pr-2 text-right font-medium">Qty</th>
+            <th className="py-1 pr-2 text-right font-medium">Rate</th>
+            <th className="py-1 text-right font-medium">Amount</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr className="text-slate-700">
+            <td className="py-1.5 pr-2">CBC</td>
+            <td className="py-1.5 pr-2 text-right">1</td>
+            <td className="py-1.5 pr-2 text-right">₹700.00</td>
+            <td className="py-1.5 text-right">₹700.00</td>
+          </tr>
+          <tr className="text-slate-700">
+            <td className="py-1.5 pr-2">Lipid Profile</td>
+            <td className="py-1.5 pr-2 text-right">1</td>
+            <td className="py-1.5 pr-2 text-right">₹500.00</td>
+            <td className="py-1.5 text-right">₹500.00</td>
+          </tr>
+        </tbody>
+      </table>
+      <div className="space-y-0.5 text-xs text-slate-700">
+        {config.showGst && (
+          <div className="flex justify-between">
+            <span>Subtotal</span>
+            <span>₹{subtotal.toFixed(2)}</span>
+          </div>
+        )}
+        {config.showGst &&
+          (config.splitGst ? (
+            <>
+              <div className="flex justify-between">
+                <span>CGST</span>
+                <span>₹{(gstAmount / 2).toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>SGST</span>
+                <span>₹{(gstAmount / 2).toFixed(2)}</span>
+              </div>
+            </>
+          ) : (
+            <div className="flex justify-between">
+              <span>GST ({rate}%)</span>
+              <span>₹{gstAmount.toFixed(2)}</span>
+            </div>
+          ))}
+        <div className="flex justify-between font-semibold text-slate-900 pt-1 border-t border-slate-300">
+          <span>Total</span>
+          <span>₹{total.toFixed(2)}</span>
+        </div>
+      </div>
     </div>
   );
 }
@@ -302,6 +416,20 @@ export function HospitalSettings({ session }: RoleViewProps) {
     patientBookingWindowEnd: profile?.patientBookingWindowEnd ?? '',
     signatureUrl: profile?.signatureUrl ?? '',
     notes: profile?.notes ?? '',
+    billFieldConfig: {
+      injectable: {
+        showSerialNumber: profile?.billFieldConfig?.injectable?.showSerialNumber ?? true,
+        showName: profile?.billFieldConfig?.injectable?.showName ?? true,
+        showPrice: profile?.billFieldConfig?.injectable?.showPrice ?? true,
+        showDiscount: profile?.billFieldConfig?.injectable?.showDiscount ?? true,
+        showTotal: profile?.billFieldConfig?.injectable?.showTotal ?? true,
+      },
+      lab: {
+        showGst: profile?.billFieldConfig?.lab?.showGst ?? true,
+        splitGst: profile?.billFieldConfig?.lab?.splitGst ?? false,
+        gstRate: profile?.billFieldConfig?.lab?.gstRate ?? 18,
+      },
+    },
     theme: {
       primary: hospital?.theme?.primary ?? '#00509f',
       primaryDark: hospital?.theme?.primaryDark ?? '#019695',
@@ -766,6 +894,105 @@ export function HospitalSettings({ session }: RoleViewProps) {
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <FormField name="signatureUrl" label="Signature URL" />
                       <FormField name="notes" label="Internal notes" />
+                    </div>
+                  </Section>
+
+                  <Section
+                    icon={Receipt}
+                    title="Bill field configuration"
+                    blurb="What a printed injectable or lab bill shows. Applies to bills raised after you save — a bill already billed keeps the settings it was printed under."
+                  >
+                    <div className="space-y-6">
+                      <div>
+                        <p className="text-sm font-medium text-slate-700 mb-2">Injectable bills</p>
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                          <div className="flex flex-wrap content-start gap-2">
+                            {(
+                              [
+                                ['showSerialNumber', 'Serial number'],
+                                ['showName', 'Injectable name'],
+                                ['showPrice', 'Price'],
+                                ['showDiscount', 'Discount'],
+                                ['showTotal', 'Total'],
+                              ] as const
+                            ).map(([key, label]) => (
+                              <label
+                                key={key}
+                                className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm cursor-pointer transition h-fit ${
+                                  values.billFieldConfig.injectable[key]
+                                    ? 'border-cyan-400 bg-cyan-50 text-slate-900'
+                                    : 'border-slate-200 text-slate-500'
+                                }`}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={values.billFieldConfig.injectable[key]}
+                                  onChange={(e) =>
+                                    setFieldValue(`billFieldConfig.injectable.${key}`, e.target.checked)
+                                  }
+                                  className="rounded border-slate-300 text-cyan-600 focus:ring-cyan-500"
+                                />
+                                {label}
+                              </label>
+                            ))}
+                          </div>
+                          <InjectableBillPreview config={values.billFieldConfig.injectable} />
+                        </div>
+                      </div>
+
+                      <div className="pt-5 border-t border-slate-100">
+                        <p className="text-sm font-medium text-slate-700 mb-2">Lab bills</p>
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                          <div className="space-y-3">
+                            <label
+                              className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm cursor-pointer transition w-fit ${
+                                values.billFieldConfig.lab.showGst
+                                  ? 'border-cyan-400 bg-cyan-50 text-slate-900'
+                                  : 'border-slate-200 text-slate-500'
+                              }`}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={values.billFieldConfig.lab.showGst}
+                                onChange={(e) => setFieldValue('billFieldConfig.lab.showGst', e.target.checked)}
+                                className="rounded border-slate-300 text-cyan-600 focus:ring-cyan-500"
+                              />
+                              Include GST
+                            </label>
+                            {values.billFieldConfig.lab.showGst && (
+                              <>
+                                <div className="max-w-40">
+                                  <FormField
+                                    name="billFieldConfig.lab.gstRate"
+                                    label="GST rate (%)"
+                                    type="number"
+                                    min="0"
+                                    max="100"
+                                  />
+                                </div>
+                                <label
+                                  className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm cursor-pointer transition w-fit ${
+                                    values.billFieldConfig.lab.splitGst
+                                      ? 'border-cyan-400 bg-cyan-50 text-slate-900'
+                                      : 'border-slate-200 text-slate-500'
+                                  }`}
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={values.billFieldConfig.lab.splitGst}
+                                    onChange={(e) =>
+                                      setFieldValue('billFieldConfig.lab.splitGst', e.target.checked)
+                                    }
+                                    className="rounded border-slate-300 text-cyan-600 focus:ring-cyan-500"
+                                  />
+                                  Split into CGST / SGST
+                                </label>
+                              </>
+                            )}
+                          </div>
+                          <LabBillPreview config={values.billFieldConfig.lab} />
+                        </div>
+                      </div>
                     </div>
                   </Section>
                 </fieldset>

@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
-from .. import consent as consent_lib, models, pricing, printing, schemas
+from .. import billing_config, consent as consent_lib, models, pricing, printing, schemas
 from ..auth import get_current_user
 from ..authz import SCOPE_OWN, caller_patient_id, own_record_filter, require_permission
 from ..config import settings
@@ -517,6 +517,10 @@ def get_invoice(
     # obvious next step, and a caller that already handles a list will not need
     # changing for it.
     lines: list[schemas.InvoiceLine] = []
+    # Extra InvoiceOut fields for injectable/lab bills — the money breakdown
+    # and which optional columns to show, both from the snapshot taken at
+    # billing time (see app/billing_config.py), never today's live config.
+    extra: dict = {}
     if payment.payment_type == "pharmacy" and payment.medication_order_id:
         order = (
             scoped(db, models.MedicationOrder, tenant_id)
@@ -543,12 +547,28 @@ def get_invoice(
         description = (order.injectable_name if order else "") or "Injectable"
         if order and order.dose:
             description = f"{description} ({order.dose})"
+        breakdown = payment.bill_breakdown or {}
+        subtotal = breakdown.get("subtotal", payment.amount)
+        discount = breakdown.get("discount", 0.0)
+        field_cfg = breakdown.get("field_config") or billing_config.DEFAULT_BILL_FIELD_CONFIG["injectable"]
         lines.append(schemas.InvoiceLine(
+            serial_number=1,
             description=description,
             quantity=quantity,
-            unit_price=round(payment.amount / quantity, 2) if quantity else payment.amount,
+            unit_price=round(subtotal / quantity, 2) if quantity else subtotal,
+            discount=discount,
+            # Net of discount — what was actually collected, not the sticker price.
             amount=payment.amount,
         ))
+        extra = dict(
+            subtotal=subtotal,
+            discount=discount,
+            show_serial_number=field_cfg.get("show_serial_number", True),
+            show_item_name=field_cfg.get("show_name", True),
+            show_price=field_cfg.get("show_price", True),
+            show_discount=field_cfg.get("show_discount", True),
+            show_total=field_cfg.get("show_total", True),
+        )
     elif payment.payment_type == "lab" and payment.test_order_id:
         order = (
             scoped(db, models.TestOrder, tenant_id)
@@ -571,6 +591,22 @@ def get_invoice(
                 description="Lab tests", quantity=1,
                 unit_price=payment.amount, amount=payment.amount,
             ))
+        breakdown = payment.bill_breakdown or {}
+        subtotal = breakdown.get("subtotal", payment.amount)
+        gst_rate = breakdown.get("gst_rate")
+        gst_amount = breakdown.get("gst_amount", 0.0) or 0.0
+        gst_split = bool(breakdown.get("gst_split"))
+        extra = dict(
+            subtotal=subtotal,
+            gst_rate=gst_rate,
+            gst_amount=gst_amount,
+            gst_split=gst_split,
+            cgst_amount=round(gst_amount / 2, 2) if gst_split and gst_amount else None,
+            sgst_amount=round(gst_amount / 2, 2) if gst_split and gst_amount else None,
+            # gst_rate is the snapshot fact of whether GST was actually
+            # charged on this bill — never the hospital's current setting.
+            show_gst=gst_rate is not None,
+        )
     else:
         description = "Consultation"
         if payment.appointment_id:
@@ -608,6 +644,7 @@ def get_invoice(
         patient_phone=patient_phone,
         lines=lines,
         total=payment.amount,
+        **extra,
     )
 
 
@@ -651,7 +688,31 @@ def update_payment(
     )
     if payment is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Payment not found")
-    for field, value in body.model_dump(exclude_unset=True).items():
+
+    changes = body.model_dump(exclude_unset=True)
+    discount = changes.pop("discount", None)
+    if discount is not None:
+        # A discount is the desk adjusting what an injectable bill collects,
+        # not a generic field — it is not a column, so it cannot go through
+        # the passthrough loop below. Kept off every other payment_type: a
+        # consultation/pharmacy/lab bill has no "sticker price" concept here
+        # to discount from.
+        if payment.payment_type != "injectable":
+            raise HTTPException(
+                status.HTTP_422_UNPROCESSABLE_ENTITY,
+                "Discount only applies to an injectable bill",
+            )
+        breakdown = payment.bill_breakdown or {}
+        subtotal = breakdown.get("subtotal", payment.amount)
+        if discount > subtotal:
+            raise HTTPException(
+                status.HTTP_422_UNPROCESSABLE_ENTITY,
+                f"Discount cannot exceed the bill amount ({subtotal})",
+            )
+        payment.bill_breakdown = {**breakdown, "subtotal": subtotal, "discount": discount}
+        payment.amount = round(subtotal - discount, 2)
+
+    for field, value in changes.items():
         setattr(payment, field, value)
     db.commit()
     db.refresh(payment)
