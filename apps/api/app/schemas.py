@@ -661,6 +661,11 @@ class HospitalAdminCreate(CamelModel):
     name: Optional[str] = None
     phone: Optional[str] = ""
 
+    @field_validator("email", mode="before")
+    @classmethod
+    def _normalise_email(cls, v: object) -> object:
+        return _normalise_email_value(v)
+
 
 class DepartmentSeed(CamelModel):
     """A department to create with the hospital.
@@ -730,6 +735,11 @@ class HospitalCreate(CamelModel):
     admin_email: Optional[str] = None
     admin_password: Optional[str] = None
     admin_name: Optional[str] = None
+
+    @field_validator("admin_email", mode="before")
+    @classmethod
+    def _normalise_admin_email(cls, v: object) -> object:
+        return _normalise_email_value(v)
 
     @field_validator("name")
     @classmethod
@@ -1077,6 +1087,15 @@ class PatientProfileFields(CamelModel):
         return values
 
 
+def _normalise_email_value(v: object) -> object:
+    """Shared body of every per-class `email` validator below — kept as a
+    free function so the seven classes that carry a login email don't each
+    reimplement the isinstance check."""
+    if isinstance(v, str):
+        return identity.normalise_email(v)
+    return v
+
+
 def _require_email_or_phone(body):
     """An account with neither has no way to sign in and no way to reset a
     password — the one self-service recovery path that exists is email-based.
@@ -1118,6 +1137,11 @@ class RegisterRequest(PatientProfileFields):
     guardian_name: str = ""
     guardian_relationship: str = ""
 
+    @field_validator("email", mode="before")
+    @classmethod
+    def _normalise_email(cls, v: object) -> object:
+        return _normalise_email_value(v)
+
     @model_validator(mode="after")
     def _require_a_way_to_sign_in(self):
         return _require_email_or_phone(self)
@@ -1147,6 +1171,11 @@ class UserCreate(PatientProfileFields):
     qualification: Optional[str] = None
     experience_years: Optional[int] = None
 
+    @field_validator("email", mode="before")
+    @classmethod
+    def _normalise_email(cls, v: object) -> object:
+        return _normalise_email_value(v)
+
     @model_validator(mode="after")
     def _require_a_way_to_sign_in(self):
         return _require_email_or_phone(self)
@@ -1162,6 +1191,11 @@ class UserUpdate(CamelModel):
     role: Optional[str] = None
     password: Optional[str] = None
 
+    @field_validator("email", mode="before")
+    @classmethod
+    def _normalise_email(cls, v: object) -> object:
+        return _normalise_email_value(v)
+
 
 class OwnAccountUpdate(CamelModel):
     """What a user may change about themselves. Deliberately excludes role and
@@ -1171,17 +1205,29 @@ class OwnAccountUpdate(CamelModel):
     email: Optional[str] = None
     phone: Optional[str] = None
 
+    @field_validator("email", mode="before")
+    @classmethod
+    def _normalise_email(cls, v: object) -> object:
+        return _normalise_email_value(v)
+
 
 class LoginRequest(CamelModel):
     # Either an email or a phone number — see /auth login for how the two are
     # told apart. Named for what it is rather than "email", now that it can be
     # either, so a reader doesn't have to open the endpoint to learn that.
+    # Not normalised here: the login route itself decides which of email or
+    # phone this is before it can know which normaliser applies.
     identifier: str
     password: str
 
 
 class ForgotPasswordRequest(CamelModel):
     email: str
+
+    @field_validator("email", mode="before")
+    @classmethod
+    def _normalise_email(cls, v: object) -> object:
+        return _normalise_email_value(v)
 
 
 # ---------- FCM tokens ----------
@@ -1314,6 +1360,11 @@ class DoctorUpdate(CamelModel):
     medical_council: Optional[str] = None
     registration_year: Optional[str] = None
     verification_status: Optional[str] = None
+
+    @field_validator("email", mode="before")
+    @classmethod
+    def _normalise_email(cls, v: object) -> object:
+        return _normalise_email_value(v)
 
 
 class DoctorAvailabilityOut(OutModel):

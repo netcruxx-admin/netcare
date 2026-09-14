@@ -332,10 +332,11 @@ def onboard_hospital(
         # Caught here rather than at the unique index so the wizard can point at
         # the field. Platform users (hospital_id IS NULL) count too: an email
         # that already signs in as a superadmin must not also be minted as a
-        # tenant admin.
+        # tenant admin. admin.email is already normalised (HospitalAdminCreate's
+        # own validator), so this compares like for like against stored emails.
         clash = (
             db.query(models.User)
-            .filter(models.User.email == admin.email.strip().lower())
+            .filter(models.User.email == admin.email)
             .first()
         )
         if clash is not None and clash.hospital_id is None:
@@ -371,7 +372,7 @@ def onboard_hospital(
             else None
         ),
         subscription=body.subscription.model_dump() if body.subscription else None,
-        admin_email=(admin.email or "").strip().lower() or None,
+        admin_email=admin.email or None,
         admin_password=admin.password or "password123",
         admin_name=admin.name,
         admin_phone=admin.phone or "",
