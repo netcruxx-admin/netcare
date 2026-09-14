@@ -23,7 +23,7 @@ export default function LandingPage() {
             >
               Sign In
             </Link>
-            <Button asChild variant="brand">
+            <Button asChild variant="brand" className="h-auto px-6 py-2">
               <Link href="/register">Get Started</Link>
             </Button>
           </div>
@@ -43,7 +43,7 @@ export default function LandingPage() {
                 Book appointments with healthcare professionals, manage your medical records, and stay on top of your health—all in one place.
               </p>
               <div className="flex gap-4 pt-4">
-                <Button asChild variant="brand" size="lg">
+                <Button asChild variant="brand" className="h-auto px-8 py-3">
                   <Link href="/register">Start Booking</Link>
                 </Button>
                 <Link
