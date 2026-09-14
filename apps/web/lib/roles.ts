@@ -232,7 +232,12 @@ export const dashboardRoutes: DashboardRoute[] = [
     path: '/dashboard/doctors',
     label: 'Doctors',
     icon: Stethoscope,
-    viewRoles: [superadminRole, adminRole, receptionistRole],
+    // Receptionist keeps doctors.read — AdminBook's doctor picker and the
+    // appointments board's doctor filter/reassignment both depend on it — but
+    // has no use for the standalone directory screen, so it stays out of their
+    // sidebar. See the field doc on viewRoles: this hides the link, it does
+    // not revoke the read.
+    viewRoles: [superadminRole, adminRole],
     permission: 'doctors.read',
   },
 
