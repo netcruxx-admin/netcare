@@ -175,7 +175,7 @@ function LoginForm() {
                 name="identifier"
                 label="Email or Phone"
                 type="text"
-                placeholder="your.email@example.com or 98765 43210"
+                placeholder="Your Email or Phone number"
                 icon={Mail}
                 required
               />
