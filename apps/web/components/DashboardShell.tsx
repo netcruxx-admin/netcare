@@ -6,6 +6,8 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { LogOut, Menu, ShieldCheck, X, Search } from 'lucide-react';
 import Image from 'next/image';
 import { authStorage } from '@/lib/auth';
+import { currentSubdomain } from '@/lib/tenant';
+import { hospitalThemeCache } from '@/lib/hospitalTheme';
 import type { HospitalModules } from '@/lib/types';
 import {
   doctorRole,
@@ -63,6 +65,15 @@ export function DashboardShell({
   const [storedSession] = useState(() => authStorage.getSession());
   const storedGrants: PermissionGrant[] | undefined = storedSession?.permissions;
 
+  // Same idea for the tenant's brand colours: read whatever this browser last
+  // saw for this subdomain synchronously, so the first frame already paints
+  // in it instead of the generic default while GET /hospitals/current is
+  // still in flight — see lib/hospitalTheme.ts.
+  const subdomain = currentSubdomain();
+  const [cachedTheme] = useState(() =>
+    role === superadminRole ? null : hospitalThemeCache.get(subdomain),
+  );
+
   // Live permissions from the server. Refetched when the cached copy is older
   // than 30s or the window refocuses, so a revoked permission leaves the sidebar
   // without a re-login — without re-fetching on every single navigation. The
@@ -92,9 +103,11 @@ export function DashboardShell({
       name: hospitalData?.name ?? '…',
       logoUrl: hospitalData?.logoUrl ?? '',
       theme: {
-        // Unbranded tenants fall back to the logo's blue → teal, matching the icon beside it.
-        primary: (hospitalData?.theme as Record<string, string>)?.primary ?? '#00509f',
-        primaryDark: (hospitalData?.theme as Record<string, string>)?.primaryDark ?? '#019695',
+        // Live value once fetched; the cached one from a previous visit while
+        // that fetch is still in flight; the logo's blue → teal only for a
+        // tenant neither has ever supplied a colour for.
+        primary: (hospitalData?.theme as Record<string, string>)?.primary ?? cachedTheme?.primary ?? '#00509f',
+        primaryDark: (hospitalData?.theme as Record<string, string>)?.primaryDark ?? cachedTheme?.primaryDark ?? '#019695',
       },
       // The backend returns whichever modules this tenant has; anything
       // missing counts as disabled rather than being asserted into existence.
@@ -116,6 +129,16 @@ export function DashboardShell({
     backgroundClip: 'text',
     color: 'transparent',
   } as React.CSSProperties;
+
+  // Once the live theme lands, cache it so the *next* visit to this
+  // subdomain paints it immediately instead of the cachedTheme fallback (or
+  // the generic default) above.
+  useEffect(() => {
+    const live = hospitalData?.theme as Record<string, string> | undefined;
+    if (role !== superadminRole && live?.primary && live?.primaryDark) {
+      hospitalThemeCache.set(subdomain, { primary: live.primary, primaryDark: live.primaryDark });
+    }
+  }, [role, subdomain, hospitalData?.theme]);
 
   // Cmd/Ctrl+K opens the command palette.
   useEffect(() => {
