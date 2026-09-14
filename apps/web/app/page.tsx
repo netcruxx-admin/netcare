@@ -14,7 +14,12 @@ export default function LandingPage() {
       <nav className="bg-white shadow-lg border-b-2 border-cyan-100">
         <div className="max-w-6xl mx-auto px-6 py-2 flex justify-between items-center">
           <div className="flex items-center">
-            <Image src="/logo/logo-full.png" alt={hospital.name} width={80} height={80} className="w-20 h-20 object-contain" />
+            {hospital.logoUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={hospital.logoUrl} alt={hospital.name} className="w-20 h-20 object-contain" />
+            ) : (
+              <Image src="/logo/logo-full.png" alt={hospital.name} width={80} height={80} className="w-20 h-20 object-contain" />
+            )}
           </div>
           <div className="flex gap-3">
             <Link

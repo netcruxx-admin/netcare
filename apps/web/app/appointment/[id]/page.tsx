@@ -23,7 +23,12 @@ function Chrome({ children }: { children: React.ReactNode }) {
     <div className="min-h-screen bg-gradient-to-br from-cyan-50 via-white to-teal-50 flex flex-col">
       <div className="bg-white shadow-md border-b-2 border-cyan-100">
         <div className="max-w-7xl mx-auto px-6 py-4 flex items-center gap-3">
-          <Image src="/logo/logo-full.png" alt={hospital.name} width={80} height={80} className="w-20 h-20 object-contain" />
+          {hospital.logoUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={hospital.logoUrl} alt={hospital.name} className="w-20 h-20 object-contain" />
+          ) : (
+            <Image src="/logo/logo-full.png" alt={hospital.name} width={80} height={80} className="w-20 h-20 object-contain" />
+          )}
         </div>
       </div>
       {children}
@@ -36,7 +41,8 @@ function Chrome({ children }: { children: React.ReactNode }) {
 // that's usable is already open and ready to fill.
 export default function AppointmentDetailPage() {
   const router = useRouter();
-  const { modules } = useActiveHospital();
+  const hospital = useActiveHospital();
+  const { modules } = hospital;
   const {
     appointmentId,
     loading,
@@ -96,7 +102,12 @@ export default function AppointmentDetailPage() {
       {/* Header — just the app chrome, nothing patient- or visit-specific */}
       <div className="bg-white shadow-md border-b-2 border-cyan-100">
         <div className="max-w-7xl mx-auto px-6 py-3 flex items-center justify-between">
-          <Image src="/logo/logo-icon.png" alt="Logo" width={36} height={36} className="w-9 h-9 object-contain" />
+          {hospital.logoUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={hospital.logoUrl} alt={hospital.name} className="w-9 h-9 object-contain" />
+          ) : (
+            <Image src="/logo/logo-icon.png" alt="Logo" width={36} height={36} className="w-9 h-9 object-contain" />
+          )}
           <button onClick={() => router.back()} className="flex items-center gap-2 text-cyan-600 hover:text-cyan-700 text-sm">
             <ArrowLeft className="w-4 h-4" />
             Back
