@@ -1,2 +1,11 @@
 [[plugins]]
 package = "@netlify/plugin-nextjs"
+
+[build.environment]
+  # The Firebase *web* config (API key, auth domain, project/app/sender ids) is
+  # not secret — it ships in every browser bundle by design, and is written
+  # verbatim into public/firebase-messaging-sw.js because a service worker
+  # cannot read build-time env vars. Netlify's secret scanner still flags any
+  # env-var value it finds in the output, which fails the build. Exclude just
+  # these keys from the scan; everything else is still scanned.
+  SECRETS_SCAN_OMIT_KEYS = "NEXT_PUBLIC_FIREBASE_API_KEY,NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,NEXT_PUBLIC_FIREBASE_PROJECT_ID,NEXT_PUBLIC_FIREBASE_APP_ID,NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,NEXT_PUBLIC_FIREBASE_VAPID_KEY"
