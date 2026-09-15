@@ -1,9 +1,11 @@
 'use client';
 
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
 import Image from 'next/image';
+import { toast } from 'sonner';
 import { useAppointmentDetail } from './useAppointmentDetail';
 import { AppointmentDetailsCard } from './components/AppointmentDetailsCard';
 import { VitalsSection } from './components/VitalsSection';
@@ -11,6 +13,8 @@ import { PrescriptionsSection } from './components/PrescriptionsSection';
 import { ClinicalNotesSection } from './components/ClinicalNotesSection';
 import { InjectionOrdersSection } from './components/InjectionOrdersSection';
 import { LabOrdersSection } from './components/LabOrdersSection';
+import { RescheduleModal } from '@/components/RescheduleModal';
+import { FollowUpModal } from '@/components/FollowUpModal';
 import { useActiveHospital } from '@/hooks/useActiveHospital';
 import { Spinner } from '@/components/ui/spinner';
 import { ageFromDob } from '@/lib/date';
@@ -60,8 +64,12 @@ export default function AppointmentDetailPage() {
     canDeleteTestOrder,
     canComplete,
     canCancel,
+    canReschedule,
+    canFollowUp,
     medicineOptions,
   } = useAppointmentDetail();
+  const [showReschedule, setShowReschedule] = useState(false);
+  const [showFollowUp, setShowFollowUp] = useState(false);
 
   if (loading) {
     return (
@@ -95,7 +103,11 @@ export default function AppointmentDetailPage() {
   const age = patient ? ageFromDob(patient.dateOfBirth) : null;
   const displayName = `${patientName}${age !== null ? ` (${age})` : ''}${relationLine ? ` ${relationLine}` : ''}`;
   const showActions =
-    canComplete || canCancel || (modules.telemedicine && appointment.mode === 'video' && appointment.status === 'scheduled');
+    canComplete ||
+    canCancel ||
+    canReschedule ||
+    canFollowUp ||
+    (modules.telemedicine && appointment.mode === 'video' && appointment.status === 'scheduled');
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-cyan-50 via-white to-teal-50">
@@ -130,9 +142,13 @@ export default function AppointmentDetailPage() {
               appointmentId={appointmentId}
               canComplete={canComplete}
               canCancel={canCancel}
+              canReschedule={canReschedule}
+              canFollowUp={canFollowUp}
               confirmAction={confirmAction}
               setConfirmAction={setConfirmAction}
               runConfirm={runConfirm}
+              onReschedule={() => setShowReschedule(true)}
+              onFollowUp={() => setShowFollowUp(true)}
             />
           )}
         </div>
@@ -196,6 +212,28 @@ export default function AppointmentDetailPage() {
           </div>
         </div>
       </div>
+
+      {showReschedule && (
+        <RescheduleModal
+          appointment={appointment}
+          onClose={() => setShowReschedule(false)}
+          onRescheduled={(message) => {
+            setShowReschedule(false);
+            toast.success(message);
+          }}
+        />
+      )}
+
+      {showFollowUp && (
+        <FollowUpModal
+          appointment={appointment}
+          onClose={() => setShowFollowUp(false)}
+          onCreated={(message) => {
+            setShowFollowUp(false);
+            toast.success(message);
+          }}
+        />
+      )}
     </div>
   );
 }

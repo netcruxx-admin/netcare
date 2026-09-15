@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { CheckCircle2, Video, XCircle } from 'lucide-react';
+import { CalendarClock, CalendarPlus, CheckCircle2, Video, XCircle } from 'lucide-react';
 import type { Appointment } from '@/lib/types';
 import { useActiveHospital } from '@/hooks/useActiveHospital';
 import type { ConfirmAction } from '../useAppointmentDetail';
@@ -19,23 +19,32 @@ interface Props {
   appointmentId: string;
   canComplete: boolean;
   canCancel: boolean;
+  canReschedule: boolean;
+  canFollowUp: boolean;
   confirmAction: ConfirmAction;
   setConfirmAction: (a: ConfirmAction) => void;
   runConfirm: () => Promise<void>;
+  onReschedule: () => void;
+  onFollowUp: () => void;
 }
 
-// Compact by design: just the two actions a doctor actually reaches for
-// while finishing a visit, plus the video-join link when there's a call to
-// join. Date, status, and reason are already visible in the page header and
-// each clinical section — this bar isn't the place to re-edit them.
+// Compact by design: just the actions a doctor or admin actually reaches for
+// while finishing a visit — complete, cancel, reschedule, book a follow-up —
+// plus the video-join link when there's a call to join. Date, status, and
+// reason are already visible in the page header and each clinical section —
+// this bar isn't the place to re-edit them.
 export function AppointmentDetailsCard({
   appointment,
   appointmentId,
   canComplete,
   canCancel,
+  canReschedule,
+  canFollowUp,
   confirmAction,
   setConfirmAction,
   runConfirm,
+  onReschedule,
+  onFollowUp,
 }: Props) {
   const router = useRouter();
   const { modules } = useActiveHospital();
@@ -52,7 +61,13 @@ export function AppointmentDetailsCard({
 
   const copy = confirmAction ? CONFIRM_COPY[confirmAction] : undefined;
 
-  if (!canComplete && !canCancel && !(modules.telemedicine && appointment.mode === 'video' && appointment.status === 'scheduled')) {
+  if (
+    !canComplete &&
+    !canCancel &&
+    !canReschedule &&
+    !canFollowUp &&
+    !(modules.telemedicine && appointment.mode === 'video' && appointment.status === 'scheduled')
+  ) {
     return null;
   }
 
@@ -92,6 +107,22 @@ export function AppointmentDetailsCard({
               className="inline-flex items-center gap-2 px-3 py-1.5 bg-white border border-amber-300 text-amber-700 rounded-lg hover:bg-amber-50 transition font-semibold text-sm"
             >
               <XCircle className="w-4 h-4" /> Mark Cancelled
+            </button>
+          )}
+          {canReschedule && (
+            <button
+              onClick={onReschedule}
+              className="inline-flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition font-semibold text-sm"
+            >
+              <CalendarClock className="w-4 h-4" /> Reschedule
+            </button>
+          )}
+          {canFollowUp && (
+            <button
+              onClick={onFollowUp}
+              className="inline-flex items-center gap-2 px-3 py-1.5 bg-white border border-cyan-300 text-cyan-700 rounded-lg hover:bg-cyan-50 transition font-semibold text-sm"
+            >
+              <CalendarPlus className="w-4 h-4" /> Schedule Follow-Up
             </button>
           )}
         </div>

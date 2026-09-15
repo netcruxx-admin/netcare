@@ -133,11 +133,20 @@ export function useAppointmentDetail() {
 
   const isPast = !!appointment && appointment.date < today;
   const notCancelled = appointment?.status !== 'cancelled';
-  const canReschedule =
-    !!appointment && notCancelled && appointment.status !== 'completed' && (canManage || (isPatient && !isPast));
+  // Rescheduling PUTs the appointment, which needs appointments.manage —
+  // canManage-only, unlike cancel below. A patient can cancel their own
+  // upcoming booking (appointments.create/read scope "own" covers that
+  // through cancel's own endpoint) but never holds appointments.manage, so a
+  // reschedule button offered to them would only ever 403.
+  const canReschedule = !!appointment && notCancelled && appointment.status !== 'completed' && canManage;
   const canComplete = canManage && appointment?.status === 'scheduled';
   const canCancel =
     !!appointment && notCancelled && appointment.status !== 'completed' && (canManage || (isPatient && !isPast));
+  // Unlike the appointment boards' Schedule Follow-Up action (offered
+  // regardless of status), this detail page only offers it once the visit
+  // this appointment represents has actually happened — booking the next
+  // visit before this one is even done doesn't fit "follow-up".
+  const canFollowUp = canManage && appointment?.status === 'completed';
 
   // Only prescribers need the medicine catalog, and only they can read it.
   const { data: medicines = [] } = useListMedicinesQuery(undefined, { skip: !canManage });
@@ -171,6 +180,7 @@ export function useAppointmentDetail() {
     canReschedule,
     canComplete,
     canCancel,
+    canFollowUp,
     medicineOptions,
   };
 }

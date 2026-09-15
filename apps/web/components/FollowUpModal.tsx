@@ -43,6 +43,10 @@ const SLOTS = [
 type SlotStatus = 'available' | 'booked' | 'blocked';
 function slotStatus(slot: string, date: string, booked: Set<string>, blocked: Set<string>, breakSlots: Set<string>): SlotStatus {
   if (breakSlots.has(slot) || blocked.has(slot)) return 'blocked';
+  // A whole day already gone — not just a past time today. YYYY-MM-DD
+  // strings sort lexicographically the same as the dates they name, so a
+  // plain string compare is enough.
+  if (date < todayStr) return 'blocked';
   if (date === todayStr) {
     const now = new Date();
     if (slotToMinutes(slot) <= now.getHours() * 60 + now.getMinutes()) return 'blocked';
@@ -63,11 +67,6 @@ function bookedSlotsFrom(appointments: Appointment[], doctorId: string, date: st
 // pricing.seed_default_fees; a hospital that retired or never priced it gets a
 // booking with no bill rather than one billed at the new-patient rate.
 const FOLLOW_UP_VISIT_TYPE = 'follow_up';
-
-// A default follow-up is a fortnight out — sensible starting point the user can change.
-function defaultFollowUpDate() {
-  return toDateStr(new Date(Date.now() + 14 * 24 * 60 * 60 * 1000));
-}
 
 interface FollowUpFormValues {
   date: string;
@@ -92,7 +91,7 @@ export function FollowUpModal({
   const [error, setError] = useState('');
   // Mirrors the form's date so the conflict check — a hook, and so cannot live
   // inside Formik's render prop — can react to it.
-  const [selectedDate, setSelectedDate] = useState(defaultFollowUpDate());
+  const [selectedDate, setSelectedDate] = useState(todayStr);
 
   const [createAppointment] = useCreateAppointmentMutation();
   const { data: appointments = [], isLoading: loadingAppointments } = useListAppointmentsQuery({ doctorId: appointment.doctorId });
@@ -113,7 +112,11 @@ export function FollowUpModal({
   );
 
   const initialValues: FollowUpFormValues = {
-    date: defaultFollowUpDate(),
+    // Opens on today, same as Reschedule — same reasoning: a pre-filled date
+    // that isn't what's actually about to be submitted is how a wrong date
+    // goes through unnoticed. The user picks how far out the follow-up
+    // actually is.
+    date: todayStr,
     time: '',
     reason: `Follow-up: ${appointment.reason || 'Consultation'}`,
   };
@@ -209,6 +212,12 @@ export function FollowUpModal({
                           setSelectedDate(ds);
                         }}
                         disabled={{ before: new Date(new Date().setHours(0, 0, 0, 0)) }}
+                        // Opening on today means today starts out both "today"
+                        // and "selected" — one cell, no ambiguity. But once the
+                        // user picks a later date, the default "today" accent
+                        // would light up next to it as a second candidate date
+                        // (see RescheduleModal). Suppressed for the same reason.
+                        classNames={{ today: '' }}
                         className="[--cell-size:2rem] rounded-lg border border-slate-200 w-full max-w-full overflow-hidden"
                       />
                     </div>
