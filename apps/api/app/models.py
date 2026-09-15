@@ -198,6 +198,12 @@ class HospitalProfile(Base):
     invoice_series_start = Column(Integer, default=1)
     mrn_prefix = Column(String, default="MRN")
     mrn_format = Column(String, default="{prefix}-{seq:06d}")
+    # Which optional columns a printed injectable/lab bill shows, and the lab
+    # GST rate/split — see app/billing_config.py for the default shape and
+    # merge. NULL/missing keys fall back to the defaults rather than the
+    # column being backfilled, so a hospital that never opens the settings
+    # screen for this still gets the documented defaults.
+    bill_field_config = Column(JSON, nullable=True)
 
     # --- Branding assets --------------------------------------------------
     logo_url = Column(String, default="")
@@ -642,6 +648,12 @@ class Appointment(Base):
     # Raised by the server when a booked date/time is moved — a fact about what
     # happened, so it is never taken from the request body.
     rescheduled = Column(Boolean, default=False, nullable=False)
+    # Who placed the booking — a patient booking themselves, a doctor's own
+    # follow-up, or staff booking for someone else — and their role at the
+    # time, snapshotted rather than joined so it survives a later role change.
+    # Both null for anything booked before this existed.
+    booked_by_user_id = Column(String, index=True, nullable=True)
+    booked_by_role = Column(String, nullable=True)
     created_at = Column(String, nullable=False)
 
 
@@ -707,6 +719,13 @@ class Payment(Base):
     # checkout callback), and the presence of both confirms the signature was checked.
     gateway_order_id = Column(String, nullable=True)
     gateway_payment_id = Column(String, nullable=True)
+    # Snapshot of the money breakdown and bill-field config at billing time —
+    # injectable/lab only. {"subtotal", "discount"} for an injectable bill;
+    # {"subtotal", "gst_rate", "gst_amount", "gst_split"} for a lab bill; both
+    # carry a "field_config" (see app/billing_config.py). Snapshotted rather
+    # than re-derived from the hospital's *current* settings, so a reprint
+    # matches what was actually charged even after the admin changes a rate.
+    bill_breakdown = Column(JSON, nullable=True)
     created_at = Column(String, nullable=False)
 
 

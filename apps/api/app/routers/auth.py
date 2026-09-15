@@ -19,7 +19,7 @@ from ..auth import (
 from ..authz import effective_permissions
 from ..config import settings
 from ..database import get_db
-from ..identity import normalise_phone
+from ..identity import normalise_email, normalise_phone
 from ..tenancy import resolve_public_tenant
 from ..utils import assert_aadhaar_unused, new_id, now_iso
 
@@ -232,7 +232,7 @@ def login(
     # unambiguous — no need to try both and see what sticks.
     if "@" in identifier:
         lookup_column = models.User.email
-        lookup_value = identifier
+        lookup_value = normalise_email(identifier)
     else:
         lookup_column = models.User.phone
         lookup_value = normalise_phone(identifier)

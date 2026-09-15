@@ -230,7 +230,7 @@ function RegisterBabyModal({ onClose, onSaved }: { onClose: () => void; onSaved:
       >
         {({ values, handleChange, isSubmitting, dirty }) => (
           <Form className="space-y-3">
-            <Field label="Mother">
+            <Field label="Mother" required>
               <select name="motherPatientId" value={values.motherPatientId} onChange={handleChange} className={inputCls}>
                 <option value="">Select mother…</option>
                 {mothers.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
@@ -238,7 +238,7 @@ function RegisterBabyModal({ onClose, onSaved }: { onClose: () => void; onSaved:
             </Field>
             <div className="grid grid-cols-2 gap-3">
               <Field label="Baby's name"><input name="name" value={values.name} onChange={handleChange} placeholder="Baby / given name" className={inputCls} /></Field>
-              <Field label="Date of birth"><input type="date" name="dob" value={values.dob} max={today()} onChange={handleChange} className={inputCls} /></Field>
+              <Field label="Date of birth" required><input type="date" name="dob" value={values.dob} max={today()} onChange={handleChange} className={inputCls} /></Field>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <Field label="Sex">
@@ -406,10 +406,13 @@ function ImmunizationModal({ baby, canManage, onClose }: { baby: Baby; canManage
 }
 
 // --- shared bits -------------------------------------------------------------
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
   return (
     <label className="block">
-      <span className="text-xs font-medium text-slate-600">{label}</span>
+      <span className="text-xs font-medium text-slate-600">
+        {label}
+        {required && <span className="text-red-500 ml-0.5">*</span>}
+      </span>
       <div className="mt-1">{children}</div>
     </label>
   );

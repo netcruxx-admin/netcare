@@ -237,6 +237,8 @@ def create_appointment(
         id=new_id("apt"),
         hospital_id=tenant_id,
         created_at=now_iso(),
+        booked_by_user_id=user.id,
+        booked_by_role=user.role,
         **fields,
     )
     db.add(appointment)
@@ -359,6 +361,16 @@ def update_appointment(
     if appointment is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Appointment not found"
+        )
+    # A completed visit is a closed record — the encounter already happened,
+    # so its date, doctor, reason and so on are a fact of what happened, not
+    # something a later edit gets to rewrite. Nothing changes that, including
+    # a caller who manages every appointment; the only door out of "completed"
+    # is a fresh appointment.
+    if appointment.status == "completed":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="A completed appointment cannot be edited",
         )
     changes = body.model_dump(exclude_unset=True)
 

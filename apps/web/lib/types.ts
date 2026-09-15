@@ -273,6 +273,9 @@ export interface ConsultationBillingRow {
   amount: number;
   status: string;
   paymentMethod: string;
+  /** Who placed the booking. Empty for anything booked before this was tracked. */
+  bookedByName: string;
+  bookedByRole: string;
 }
 
 export interface ConsultationBillingSummary {
@@ -756,8 +759,11 @@ export interface AuthSession {
    *  it lands on. Optional so pre-existing stored sessions stay valid. */
   role?: { code: string; label: string; homePath: string };
   /** What this user may do, as resolved by the server (role grants ∩ the
-   *  hospital's modules). Never computed on the client. */
-  permissions?: { code: string; scope?: 'own' | 'all' | null }[];
+   *  hospital's modules). Never computed on the client. Scope is usually
+   *  'own' or 'all', but not always — a handful of permissions (e.g. a
+   *  receptionist's `payments.read`) carry a narrower, endpoint-specific
+   *  value the server alone interprets. */
+  permissions?: { code: string; scope?: string | null }[];
   /** Short-lived access token (minutes). Renewed silently by store/baseQuery. */
   token: string;
   /** Opaque, long-lived, and the only thing that can mint a new access token.

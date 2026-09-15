@@ -6,6 +6,7 @@ import Image from 'next/image';
 import { ChangePasswordForm } from '@/components/auth/ChangePasswordForm';
 import { authStorage } from '@/lib/auth';
 import { resolveHomePath } from '@/lib/roles';
+import { useActiveHospital } from '@/hooks/useActiveHospital';
 
 // The forced first change.
 //
@@ -15,6 +16,7 @@ import { resolveHomePath } from '@/lib/roles';
 // with failed requests behind it.
 export default function ChangePasswordPage() {
   const router = useRouter();
+  const hospital = useActiveHospital();
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
@@ -45,13 +47,18 @@ export default function ChangePasswordPage() {
     <div className="flex min-h-screen flex-col bg-gradient-to-br from-cyan-50 via-white to-teal-50">
       <div className="border-b-2 border-cyan-100 bg-white shadow-md">
         <div className="mx-auto flex max-w-6xl items-center gap-3 px-6 py-2">
-          <Image
-            src="/logo/logo-full.png"
-            alt="NetCare"
-            width={80}
-            height={80}
-            className="h-20 w-20 object-contain"
-          />
+          {hospital.logoUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={hospital.logoUrl} alt={hospital.name} className="h-20 w-20 object-contain" />
+          ) : (
+            <Image
+              src="/logo/logo-full.png"
+              alt="NetCare"
+              width={80}
+              height={80}
+              className="h-20 w-20 object-contain"
+            />
+          )}
         </div>
       </div>
 

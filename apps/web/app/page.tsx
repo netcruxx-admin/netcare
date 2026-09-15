@@ -14,7 +14,12 @@ export default function LandingPage() {
       <nav className="bg-white shadow-lg border-b-2 border-cyan-100">
         <div className="max-w-6xl mx-auto px-6 py-2 flex justify-between items-center">
           <div className="flex items-center">
-            <Image src="/logo/logo-full.png" alt={hospital.name} width={80} height={80} className="w-20 h-20 object-contain" />
+            {hospital.logoUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={hospital.logoUrl} alt={hospital.name} className="w-20 h-20 object-contain" />
+            ) : (
+              <Image src="/logo/logo-full.png" alt={hospital.name} width={80} height={80} className="w-20 h-20 object-contain" />
+            )}
           </div>
           <div className="flex gap-3">
             <Link
@@ -23,7 +28,7 @@ export default function LandingPage() {
             >
               Sign In
             </Link>
-            <Button asChild variant="brand">
+            <Button asChild variant="brand" className="h-auto px-6 py-2">
               <Link href="/register">Get Started</Link>
             </Button>
           </div>
@@ -43,7 +48,7 @@ export default function LandingPage() {
                 Book appointments with healthcare professionals, manage your medical records, and stay on top of your health—all in one place.
               </p>
               <div className="flex gap-4 pt-4">
-                <Button asChild variant="brand" size="lg">
+                <Button asChild variant="brand" className="h-auto px-8 py-3">
                   <Link href="/register">Start Booking</Link>
                 </Button>
                 <Link

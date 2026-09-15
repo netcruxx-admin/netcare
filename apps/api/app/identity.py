@@ -102,6 +102,21 @@ def normalise_phone(value: str) -> str:
     return f"+91{digits}"
 
 
+def normalise_email(value: str) -> str:
+    """Trimmed and lowercased.
+
+    Email matching is case-insensitive everywhere in this app — sign-up,
+    login, every uniqueness check — because the alternative is a login that
+    silently stops working the moment a phone keyboard's autocapitalize turns
+    "email@x.com" into "Email@x.com" on one visit and not the next. The local
+    part of an address is technically case-sensitive per RFC 5321, but no
+    mail provider anyone actually uses treats it that way, and neither does
+    this app: everywhere an email is stored or looked up goes through this
+    first, so two records can never differ only by case.
+    """
+    return value.strip().lower()
+
+
 def normalise_pincode(value: str) -> str:
     """Six digits, or a ValueError. Indian PIN codes never start with 0."""
     digits = value.strip()

@@ -52,8 +52,6 @@ export function LabOrdersSection({ testOrders, appointmentId, patientId, doctorI
   const { data: tests = [] } = useListLabTestsQuery(undefined, { skip: !canOrder });
   const [addError, setAddError] = useState('');
 
-  if (!canOrder && testOrders.length === 0) return null;
-
   const colSpan = HEAD.length + (canDelete ? 1 : 0);
 
   const confirmCancel = async () => {
@@ -75,6 +73,9 @@ export function LabOrdersSection({ testOrders, appointmentId, patientId, doctorI
         <span className="text-xs text-slate-400 font-normal">({testOrders.length})</span>
       </div>
 
+      {!canOrder && testOrders.length === 0 ? (
+        <p className="text-sm text-slate-500">No lab or test orders recorded yet.</p>
+      ) : (
       <div className="overflow-x-auto rounded-lg border border-slate-100">
         <Table>
           <TableHeader>
@@ -178,6 +179,7 @@ export function LabOrdersSection({ testOrders, appointmentId, patientId, doctorI
           </TableBody>
         </Table>
       </div>
+      )}
       {addError && (
         <p className="mt-2 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{addError}</p>
       )}

@@ -445,7 +445,7 @@ export function InjectionOrders({ session }: RoleViewProps) {
                   <div className="grid gap-3 mb-4">
                     <FormField name="site" label="Injection site" required placeholder="e.g. Left deltoid, Right thigh, IV line A" autoFocus />
                     <div>
-                      <FormField name="quantity" label="Vials used" type="number" min="1" />
+                      <FormField name="quantity" label="Vials used" type="number" min="1" required />
                       {giving.injectableId != null && giving.stockOnHand != null && (
                         <p className="text-xs text-slate-400 mt-1">{giving.stockOnHand} in stock</p>
                       )}

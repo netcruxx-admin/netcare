@@ -49,8 +49,6 @@ export function VitalsSection({ vitals, appointmentId, patientId, doctorId, canM
   const [deleting, setDeleting] = useState(false);
   const [addError, setAddError] = useState('');
 
-  if (!canManage && vitals.length === 0) return null;
-
   const colSpan = HEAD.length + (canManage ? 1 : 0);
 
   const confirmDelete = async () => {
@@ -72,6 +70,9 @@ export function VitalsSection({ vitals, appointmentId, patientId, doctorId, canM
         <span className="text-xs text-slate-400 font-normal">({vitals.length})</span>
       </div>
 
+      {!canManage && vitals.length === 0 ? (
+        <p className="text-sm text-slate-500">No vitals recorded yet.</p>
+      ) : (
       <div className="overflow-x-auto rounded-lg border border-slate-100">
         <Table>
           <TableHeader>
@@ -161,6 +162,7 @@ export function VitalsSection({ vitals, appointmentId, patientId, doctorId, canM
           </TableBody>
         </Table>
       </div>
+      )}
       {addError && (
         <p className="mt-2 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{addError}</p>
       )}

@@ -213,6 +213,45 @@ class HospitalOut(OutModel):
     created_at: str
 
 
+class InjectableBillFieldConfig(CamelModel):
+    """Which optional columns a printed injectable bill shows.
+
+    Item name/price/total are what makes a bill legible at all, but the ask
+    was column-level control, so admin can turn any of them off too — the
+    field names double as the defaults: all on."""
+    show_serial_number: bool = True
+    show_name: bool = True
+    show_price: bool = True
+    show_discount: bool = True
+    show_total: bool = True
+
+
+class LabBillFieldConfig(CamelModel):
+    """Whether/how a lab bill carries GST. `gst_rate` is only applied when
+    `show_gst` is on; `split_gst` renders it as CGST + SGST instead of one
+    combined GST line."""
+    show_gst: bool = True
+    split_gst: bool = False
+    gst_rate: float = 18.0
+
+    @field_validator("gst_rate")
+    @classmethod
+    def _gst_rate_range(cls, value: float) -> float:
+        if value is not None and not (0 <= value <= 100):
+            raise ValueError("GST rate must be between 0 and 100")
+        return value
+
+
+class BillFieldConfig(CamelModel):
+    """Per-hospital control over what a printed injectable/lab bill shows.
+
+    Read via `app/billing_config.py` and snapshotted onto the `Payment` at
+    billing time — a reprint has to keep showing the rate that was actually
+    charged, even after the admin changes the hospital's default."""
+    injectable: InjectableBillFieldConfig = InjectableBillFieldConfig()
+    lab: LabBillFieldConfig = LabBillFieldConfig()
+
+
 class HospitalProfileBase(CamelModel):
     """The registration detail behind a hospital. Every field optional: a tenant
     is routinely created for a trial long before the paperwork lands, and a
@@ -291,6 +330,8 @@ class HospitalProfileBase(CamelModel):
     letterhead_margin_right_mm: int = 18
 
     notes: str = ""
+
+    bill_field_config: BillFieldConfig = BillFieldConfig()
 
     @field_validator("pincode")
     @classmethod
@@ -440,6 +481,8 @@ class HospitalSelfUpdate(CamelModel):
     letterhead_margin_right_mm: Optional[int] = None
 
     notes: Optional[str] = None
+
+    bill_field_config: Optional[BillFieldConfig] = None
 
     @field_validator("pincode")
     @classmethod
@@ -618,6 +661,11 @@ class HospitalAdminCreate(CamelModel):
     name: Optional[str] = None
     phone: Optional[str] = ""
 
+    @field_validator("email", mode="before")
+    @classmethod
+    def _normalise_email(cls, v: object) -> object:
+        return _normalise_email_value(v)
+
 
 class DepartmentSeed(CamelModel):
     """A department to create with the hospital.
@@ -687,6 +735,11 @@ class HospitalCreate(CamelModel):
     admin_email: Optional[str] = None
     admin_password: Optional[str] = None
     admin_name: Optional[str] = None
+
+    @field_validator("admin_email", mode="before")
+    @classmethod
+    def _normalise_admin_email(cls, v: object) -> object:
+        return _normalise_email_value(v)
 
     @field_validator("name")
     @classmethod
@@ -1034,6 +1087,15 @@ class PatientProfileFields(CamelModel):
         return values
 
 
+def _normalise_email_value(v: object) -> object:
+    """Shared body of every per-class `email` validator below — kept as a
+    free function so the seven classes that carry a login email don't each
+    reimplement the isinstance check."""
+    if isinstance(v, str):
+        return identity.normalise_email(v)
+    return v
+
+
 def _require_email_or_phone(body):
     """An account with neither has no way to sign in and no way to reset a
     password — the one self-service recovery path that exists is email-based.
@@ -1075,6 +1137,11 @@ class RegisterRequest(PatientProfileFields):
     guardian_name: str = ""
     guardian_relationship: str = ""
 
+    @field_validator("email", mode="before")
+    @classmethod
+    def _normalise_email(cls, v: object) -> object:
+        return _normalise_email_value(v)
+
     @model_validator(mode="after")
     def _require_a_way_to_sign_in(self):
         return _require_email_or_phone(self)
@@ -1104,6 +1171,11 @@ class UserCreate(PatientProfileFields):
     qualification: Optional[str] = None
     experience_years: Optional[int] = None
 
+    @field_validator("email", mode="before")
+    @classmethod
+    def _normalise_email(cls, v: object) -> object:
+        return _normalise_email_value(v)
+
     @model_validator(mode="after")
     def _require_a_way_to_sign_in(self):
         return _require_email_or_phone(self)
@@ -1119,6 +1191,11 @@ class UserUpdate(CamelModel):
     role: Optional[str] = None
     password: Optional[str] = None
 
+    @field_validator("email", mode="before")
+    @classmethod
+    def _normalise_email(cls, v: object) -> object:
+        return _normalise_email_value(v)
+
 
 class OwnAccountUpdate(CamelModel):
     """What a user may change about themselves. Deliberately excludes role and
@@ -1128,17 +1205,29 @@ class OwnAccountUpdate(CamelModel):
     email: Optional[str] = None
     phone: Optional[str] = None
 
+    @field_validator("email", mode="before")
+    @classmethod
+    def _normalise_email(cls, v: object) -> object:
+        return _normalise_email_value(v)
+
 
 class LoginRequest(CamelModel):
     # Either an email or a phone number — see /auth login for how the two are
     # told apart. Named for what it is rather than "email", now that it can be
     # either, so a reader doesn't have to open the endpoint to learn that.
+    # Not normalised here: the login route itself decides which of email or
+    # phone this is before it can know which normaliser applies.
     identifier: str
     password: str
 
 
 class ForgotPasswordRequest(CamelModel):
     email: str
+
+    @field_validator("email", mode="before")
+    @classmethod
+    def _normalise_email(cls, v: object) -> object:
+        return _normalise_email_value(v)
 
 
 # ---------- FCM tokens ----------
@@ -1272,6 +1361,11 @@ class DoctorUpdate(CamelModel):
     registration_year: Optional[str] = None
     verification_status: Optional[str] = None
 
+    @field_validator("email", mode="before")
+    @classmethod
+    def _normalise_email(cls, v: object) -> object:
+        return _normalise_email_value(v)
+
 
 class DoctorAvailabilityOut(OutModel):
     """What a booker needs to pick a slot, and nothing more: the times already
@@ -1387,6 +1481,10 @@ class AppointmentOut(OutModel):
     visit_type: str = "new"
     follow_up_of: Optional[str] = None
     rescheduled: bool = False
+    #: Who placed the booking, and their role at the time. Null for anything
+    #: booked before this was tracked.
+    booked_by_user_id: Optional[str] = None
+    booked_by_role: Optional[str] = None
     created_at: str
     # Display fields resolved server-side. Without them a table of appointments
     # has to fetch every patient in the hospital just to turn an id into a name,
@@ -1500,6 +1598,11 @@ class PaymentOut(OutModel):
     id: str
     appointment_id: Optional[str] = None
     medication_order_id: Optional[str] = None
+    # Added alongside the columns (migration c2d3e4f5a6b7) but never surfaced
+    # here — the only way to find an injectable/lab payment for a given order
+    # was through the dedicated billing-summary row, not the generic Payment.
+    injection_order_id: Optional[str] = None
+    test_order_id: Optional[str] = None
     patient_id: str
     amount: float
     payment_type: str = "consultation"
@@ -1574,9 +1677,13 @@ class InvoiceSeller(OutModel):
 
 
 class InvoiceLine(OutModel):
+    #: Only populated for an injectable bill — 1-based position in `lines`.
+    serial_number: Optional[int] = None
     description: str
     quantity: int = 1
     unit_price: float = 0.0
+    #: Only meaningful for an injectable bill; 0 everywhere else.
+    discount: float = 0.0
     amount: float = 0.0
 
 
@@ -1589,6 +1696,15 @@ class InvoiceOut(OutModel):
     an old bill reprints under the new name. Correct behaviour needs snapshot
     columns on `payments`; until then a reissued bill is not guaranteed
     byte-identical to the one handed over at the counter.
+
+    The money breakdown below (`subtotal`/`discount`/`gst_*`) and the
+    `show_*` display flags are the opposite: both come from `Payment.
+    bill_breakdown`, a snapshot taken at billing time (see
+    `app/billing_config.py`), so a reprint always matches what was actually
+    charged even after the admin changes the hospital's bill-field settings.
+    They are only populated for `payment_type` `injectable`/`lab`; every
+    other bill leaves them at their defaults and the frontend renders its
+    original fixed four-column layout.
     """
 
     payment_id: str
@@ -1603,6 +1719,27 @@ class InvoiceOut(OutModel):
     patient_phone: str = ""
     lines: List[InvoiceLine] = []
     total: float = 0.0
+
+    #: Pre-discount (injectable) / pre-GST (lab) amount. None for other types.
+    subtotal: Optional[float] = None
+    #: Injectable only — amount knocked off `subtotal` at collection time.
+    discount: float = 0.0
+    #: Lab only — the rate actually charged; None means GST was not applied.
+    gst_rate: Optional[float] = None
+    gst_amount: float = 0.0
+    gst_split: bool = False
+    cgst_amount: Optional[float] = None
+    sgst_amount: Optional[float] = None
+
+    # Display flags — which optional columns/rows the printed bill should
+    # show. None (the default, for non-injectable/lab bills) means "use the
+    # frontend's original fixed layout", not "hide everything".
+    show_serial_number: Optional[bool] = None
+    show_item_name: Optional[bool] = None
+    show_price: Optional[bool] = None
+    show_discount: Optional[bool] = None
+    show_total: Optional[bool] = None
+    show_gst: Optional[bool] = None
 
 
 class PharmacyBillingRow(OutModel):
@@ -1647,6 +1784,10 @@ class ConsultationBillingRow(OutModel):
     amount: float = 0.0
     status: str = ""
     payment_method: str = ""
+    #: Who placed the booking. Empty for anything booked before this was
+    #: tracked — not the same as a patient booking, and shown as such.
+    booked_by_name: str = ""
+    booked_by_role: str = ""
 
 
 class ConsultationBillingSummary(OutModel):
@@ -1920,6 +2061,16 @@ class VitalsOut(OutModel):
 class PaymentUpdate(CamelModel):
     status: Optional[PaymentStatus] = None
     payment_method: Optional[str] = None
+    #: Injectable bills only — the front desk applying a discount while
+    #: collecting. Rejected on any other payment_type; see `update_payment`.
+    discount: Optional[float] = None
+
+    @field_validator("discount")
+    @classmethod
+    def _discount_non_negative(cls, value: Optional[float]) -> Optional[float]:
+        if value is not None and value < 0:
+            raise ValueError("Discount cannot be negative")
+        return value
 
 
 # ---------- Medicine (pharmacy catalog) ----------

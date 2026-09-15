@@ -50,8 +50,6 @@ export function ClinicalNotesSection({ appointmentId, patientId, doctorId, recor
   const [updateMedicalRecord] = useUpdateMedicalRecordMutation();
   const [error, setError] = useState('');
 
-  if (!canManage && !record) return null;
-
   return (
     <div>
       <div className="flex items-center gap-2 mb-3">
@@ -233,7 +231,9 @@ export function ClinicalNotesSection({ appointmentId, patientId, doctorId, recor
             </div>
           )}
         </div>
-      ) : null}
+      ) : (
+        <p className="text-sm text-slate-500">No clinical notes recorded yet.</p>
+      )}
     </div>
   );
 }

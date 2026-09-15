@@ -237,7 +237,9 @@ export function ConsultationFeesContent({ hospitalId }: { hospitalId?: string } 
         {adding && (
           <div className="px-6 py-4 border-b bg-slate-50 flex flex-wrap items-end gap-3">
             <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">Name</label>
+              <label className="block text-xs font-medium text-slate-600 mb-1">
+                Name<span className="text-red-500 ml-0.5">*</span>
+              </label>
               <input
                 name="label"
                 value={addFormik.values.label}

@@ -29,6 +29,7 @@ export function CollectPaymentModal({
   amount,
   patientName,
   defaultMode = 'cash',
+  allowDiscount = false,
 }: {
   open: boolean;
   onClose: () => void;
@@ -39,6 +40,10 @@ export function CollectPaymentModal({
    *  one click. The desk can still change it — what was intended at booking and
    *  what actually happened at the counter are different facts. */
   defaultMode?: CounterPaymentMode;
+  /** Injectable bills only — lets the desk knock an amount off `amount`
+   *  before collecting. The server rejects a discount on any other
+   *  payment_type, so this must only be passed true for one. */
+  allowDiscount?: boolean;
 }) {
   const [updatePayment] = useUpdatePaymentMutation();
 
@@ -50,15 +55,20 @@ export function CollectPaymentModal({
         </div>
 
         <Formik
-          initialValues={{ mode: defaultMode }}
+          initialValues={{ mode: defaultMode, discount: 0 }}
           enableReinitialize
           onSubmit={async (values, { setSubmitting }) => {
+            const discount = allowDiscount ? Number(values.discount) || 0 : 0;
             try {
               await updatePayment({
                 id: paymentId,
-                body: { status: 'completed', paymentMethod: values.mode },
+                body: {
+                  status: 'completed',
+                  paymentMethod: values.mode,
+                  ...(discount > 0 ? { discount } : {}),
+                },
               }).unwrap();
-              toast.success(`Collected ${formatINR(amount, { paise: false })}`);
+              toast.success(`Collected ${formatINR(amount - discount, { paise: false })}`);
               onClose();
             } catch (err) {
               toast.error(apiError(err, 'Could not record the payment'));
@@ -67,7 +77,10 @@ export function CollectPaymentModal({
             }
           }}
         >
-          {({ values, setFieldValue, isSubmitting }) => (
+          {({ values, setFieldValue, isSubmitting }) => {
+            const discount = allowDiscount ? Number(values.discount) || 0 : 0;
+            const due = Math.max(0, amount - discount);
+            return (
             <Form>
               <div className="px-6 py-5 space-y-5">
                 <div className="flex items-baseline justify-between bg-slate-50 rounded-lg px-4 py-3">
@@ -76,9 +89,31 @@ export function CollectPaymentModal({
                     {patientName && <p className="text-sm text-slate-700 mt-0.5">{patientName}</p>}
                   </div>
                   <p className="text-2xl font-bold text-slate-900 tabular-nums">
-                    {formatINR(amount, { paise: false })}
+                    {formatINR(due, { paise: false })}
                   </p>
                 </div>
+
+                {allowDiscount && (
+                  <div className="space-y-1.5">
+                    <label className="block text-sm font-medium text-slate-700">Discount</label>
+                    <input
+                      type="number"
+                      min={0}
+                      max={amount}
+                      step="0.01"
+                      value={values.discount}
+                      disabled={isSubmitting}
+                      onChange={(e) => {
+                        const raw = e.target.value === '' ? 0 : Number(e.target.value);
+                        setFieldValue('discount', Math.min(Math.max(raw, 0), amount));
+                      }}
+                      className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                    />
+                    <p className="text-xs text-slate-500">
+                      Knocked off {formatINR(amount, { paise: false })} before collection.
+                    </p>
+                  </div>
+                )}
 
                 <PaymentModeField
                   allowOnline={false}
@@ -108,7 +143,8 @@ export function CollectPaymentModal({
                 </button>
               </div>
             </Form>
-          )}
+            );
+          }}
         </Formik>
       </DialogContent>
     </Dialog>

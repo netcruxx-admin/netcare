@@ -651,7 +651,7 @@ export function MedicationOrders({ session }: RoleViewProps) {
                           )}
                         </div>
                         <div>
-                          <FormField name="quantity" label="Quantity handed over" type="number" min="1" />
+                          <FormField name="quantity" label="Quantity handed over" type="number" min="1" required />
                           {billedMedicine && billedQuantity > (billedMedicine.stock ?? 0) && (
                             <p className="text-xs text-red-600 mt-1">
                               Only {billedMedicine.stock} in stock — dispensing will be refused.

@@ -3,10 +3,10 @@ import hmac
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
-from .. import consent as consent_lib, models, pricing, printing, schemas
+from .. import billing_config, consent as consent_lib, models, pricing, printing, schemas
 from ..auth import get_current_user
 from ..authz import SCOPE_OWN, caller_patient_id, own_record_filter, require_permission
 from ..config import settings
@@ -16,6 +16,16 @@ from ..utils import ListQuery, list_params, new_id, now_iso, paginate, text_sear
 from ..utils import assert_no_duplicate_department_booking, doctor_display, patient_display
 
 router = APIRouter(prefix="/payments", tags=["payments"])
+
+# Scope value for `payments.read`, granted only to receptionist
+# (migration d3e4f5a6b7c8) and understood only by the consultation-billing
+# report below. Deliberately not in authz.py: SCOPE_OWN there means patient/
+# doctor identity, which is not what this permission needs to mean for a
+# receptionist's day-report, and every other endpoint gated on
+# `payments.read` only special-cases SCOPE_OWN — an unrecognized scope value
+# falls through to their existing unfiltered behavior, so this cannot widen
+# or narrow anything but the one report that checks for it.
+SCOPE_BOOKED_BY_ME = "booked"
 
 
 # ---------------------------------------------------------------------------
@@ -131,9 +141,10 @@ def get_consultation_billing_summary(
     date: Optional[str] = Query(default=None, description="YYYY-MM-DD, defaults to today"),
     date_from: Optional[str] = Query(default=None, alias="dateFrom"),
     date_to: Optional[str] = Query(default=None, alias="dateTo"),
+    include_others: bool = Query(default=False, alias="includeOthers"),
     db: Session = Depends(get_db),
     user: models.User = Depends(get_current_user),
-    _scope: str = Depends(require_permission("payments.read")),
+    scope: str = Depends(require_permission("payments.read")),
     tenant_id: str = Depends(get_tenant_id),
 ):
     """Day- or range-level consultation billing for the front desk.
@@ -143,6 +154,14 @@ def get_consultation_billing_summary(
     as, and the method breakdown. `pending_total` is billed-but-uncollected — the
     number the desk chases before close of day, and the reason status travels on
     each row rather than being filtered out.
+
+    Scope `SCOPE_BOOKED_BY_ME` (granted only to receptionist, see migration
+    `d3e4f5a6b7c8`) narrows this one report to bookings the caller made
+    themselves, plus anything booked before that scope existed (`NULL`,
+    treated as unattributed rather than hidden) — widened with `include_others`
+    to every receptionist's bookings, but never a patient's own. Every other
+    consumer of `payments.read` only special-cases `SCOPE_OWN`, so this scope
+    value changes nothing about reprinting a bill or the other billing tabs.
     """
     import datetime as dt
 
@@ -153,6 +172,20 @@ def get_consultation_billing_summary(
         .filter(models.Payment.payment_type == "consultation")
     )
     query = _billing_date_filter(query, date, date_from, date_to)
+
+    if scope == SCOPE_BOOKED_BY_ME:
+        booked_condition = or_(
+            models.Appointment.booked_by_user_id == user.id,
+            models.Appointment.booked_by_user_id.is_(None),
+        )
+        if include_others:
+            booked_condition = or_(
+                booked_condition, models.Appointment.booked_by_role == "receptionist"
+            )
+        query = query.join(
+            models.Appointment, models.Appointment.id == models.Payment.appointment_id
+        ).filter(booked_condition)
+
     payments = query.order_by(models.Payment.created_at.asc()).all()
 
     # Resolve display names in one query each, rather than per row.
@@ -175,6 +208,16 @@ def get_consultation_billing_summary(
         d.id: d.name for d in scoped(db, models.Department, tenant_id).all()
     }
     visit_labels = pricing.label_map(db, tenant_id)
+
+    booker_ids = {
+        a.booked_by_user_id for a in appointment_map.values() if a.booked_by_user_id
+    }
+    booker_map: dict = {}
+    if booker_ids:
+        booker_map = {
+            u.id: u.name
+            for u in db.query(models.User).filter(models.User.id.in_(booker_ids)).all()
+        }
 
     rows: list[schemas.ConsultationBillingRow] = []
     total = cash_total = upi_total = card_total = pending_total = 0.0
@@ -199,6 +242,8 @@ def get_consultation_billing_summary(
             amount=payment.amount,
             status=payment.status or "",
             payment_method=payment.payment_method or "",
+            booked_by_name=booker_map.get(appointment.booked_by_user_id, "") if appointment else "",
+            booked_by_role=(appointment.booked_by_role or "") if appointment else "",
         ))
 
         # Only money actually collected counts toward the day's takings; the
@@ -472,6 +517,10 @@ def get_invoice(
     # obvious next step, and a caller that already handles a list will not need
     # changing for it.
     lines: list[schemas.InvoiceLine] = []
+    # Extra InvoiceOut fields for injectable/lab bills — the money breakdown
+    # and which optional columns to show, both from the snapshot taken at
+    # billing time (see app/billing_config.py), never today's live config.
+    extra: dict = {}
     if payment.payment_type == "pharmacy" and payment.medication_order_id:
         order = (
             scoped(db, models.MedicationOrder, tenant_id)
@@ -498,12 +547,28 @@ def get_invoice(
         description = (order.injectable_name if order else "") or "Injectable"
         if order and order.dose:
             description = f"{description} ({order.dose})"
+        breakdown = payment.bill_breakdown or {}
+        subtotal = breakdown.get("subtotal", payment.amount)
+        discount = breakdown.get("discount", 0.0)
+        field_cfg = breakdown.get("field_config") or billing_config.DEFAULT_BILL_FIELD_CONFIG["injectable"]
         lines.append(schemas.InvoiceLine(
+            serial_number=1,
             description=description,
             quantity=quantity,
-            unit_price=round(payment.amount / quantity, 2) if quantity else payment.amount,
+            unit_price=round(subtotal / quantity, 2) if quantity else subtotal,
+            discount=discount,
+            # Net of discount — what was actually collected, not the sticker price.
             amount=payment.amount,
         ))
+        extra = dict(
+            subtotal=subtotal,
+            discount=discount,
+            show_serial_number=field_cfg.get("show_serial_number", True),
+            show_item_name=field_cfg.get("show_name", True),
+            show_price=field_cfg.get("show_price", True),
+            show_discount=field_cfg.get("show_discount", True),
+            show_total=field_cfg.get("show_total", True),
+        )
     elif payment.payment_type == "lab" and payment.test_order_id:
         order = (
             scoped(db, models.TestOrder, tenant_id)
@@ -526,6 +591,22 @@ def get_invoice(
                 description="Lab tests", quantity=1,
                 unit_price=payment.amount, amount=payment.amount,
             ))
+        breakdown = payment.bill_breakdown or {}
+        subtotal = breakdown.get("subtotal", payment.amount)
+        gst_rate = breakdown.get("gst_rate")
+        gst_amount = breakdown.get("gst_amount", 0.0) or 0.0
+        gst_split = bool(breakdown.get("gst_split"))
+        extra = dict(
+            subtotal=subtotal,
+            gst_rate=gst_rate,
+            gst_amount=gst_amount,
+            gst_split=gst_split,
+            cgst_amount=round(gst_amount / 2, 2) if gst_split and gst_amount else None,
+            sgst_amount=round(gst_amount / 2, 2) if gst_split and gst_amount else None,
+            # gst_rate is the snapshot fact of whether GST was actually
+            # charged on this bill — never the hospital's current setting.
+            show_gst=gst_rate is not None,
+        )
     else:
         description = "Consultation"
         if payment.appointment_id:
@@ -563,6 +644,7 @@ def get_invoice(
         patient_phone=patient_phone,
         lines=lines,
         total=payment.amount,
+        **extra,
     )
 
 
@@ -606,7 +688,31 @@ def update_payment(
     )
     if payment is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Payment not found")
-    for field, value in body.model_dump(exclude_unset=True).items():
+
+    changes = body.model_dump(exclude_unset=True)
+    discount = changes.pop("discount", None)
+    if discount is not None:
+        # A discount is the desk adjusting what an injectable bill collects,
+        # not a generic field — it is not a column, so it cannot go through
+        # the passthrough loop below. Kept off every other payment_type: a
+        # consultation/pharmacy/lab bill has no "sticker price" concept here
+        # to discount from.
+        if payment.payment_type != "injectable":
+            raise HTTPException(
+                status.HTTP_422_UNPROCESSABLE_ENTITY,
+                "Discount only applies to an injectable bill",
+            )
+        breakdown = payment.bill_breakdown or {}
+        subtotal = breakdown.get("subtotal", payment.amount)
+        if discount > subtotal:
+            raise HTTPException(
+                status.HTTP_422_UNPROCESSABLE_ENTITY,
+                f"Discount cannot exceed the bill amount ({subtotal})",
+            )
+        payment.bill_breakdown = {**breakdown, "subtotal": subtotal, "discount": discount}
+        payment.amount = round(subtotal - discount, 2)
+
+    for field, value in changes.items():
         setattr(payment, field, value)
     db.commit()
     db.refresh(payment)
@@ -799,6 +905,8 @@ def verify_payment(
         id=new_id("apt"),
         hospital_id=tenant_id,
         created_at=now_iso(),
+        booked_by_user_id=user.id,
+        booked_by_role=user.role,
         patient_id=body.patient_id,
         doctor_id=body.doctor_id,
         department_id=body.department_id,

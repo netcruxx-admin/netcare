@@ -473,8 +473,15 @@ export function AdminAppointments({ session }: RoleViewProps) {
                             <ActionIcon icon={Eye} label="View" href={`/appointment/${r.id}`} />
                             {canManage && (
                               <>
-                                <ActionIcon icon={Pencil} label="Edit" onClick={() => setEditing(r.appt)} />
-                                <ActionIcon icon={CalendarClock} label="Reschedule" onClick={() => openReschedule(r.appt)} />
+                                {/* A completed visit is a closed record — the backend refuses
+                                    the same edit/reschedule PUT once status is "completed", so
+                                    the buttons that only ever send that PUT stay hidden too. */}
+                                {r.appt.status !== 'completed' && (
+                                  <>
+                                    <ActionIcon icon={Pencil} label="Edit" onClick={() => setEditing(r.appt)} />
+                                    <ActionIcon icon={CalendarClock} label="Reschedule" onClick={() => openReschedule(r.appt)} />
+                                  </>
+                                )}
                                 <ActionIcon icon={CalendarPlus} label="Schedule Follow-Up" onClick={() => setFollowUp(r.appt)} />
                                 <ActionIcon icon={Activity} label="Add Vitals" onClick={() => setAddingVitals(r.appt)} />
                               </>

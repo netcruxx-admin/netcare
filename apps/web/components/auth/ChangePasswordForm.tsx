@@ -119,18 +119,21 @@ export function ChangePasswordForm({ forced = false, onDone }: Props) {
           label={forced ? 'The password you were given' : 'Current password'}
           type="password"
           autoComplete="current-password"
+          required
         />
         <FormField
           name="newPassword"
           label="New password"
           type="password"
           autoComplete="new-password"
+          required
         />
         <FormField
           name="confirmPassword"
           label="Confirm new password"
           type="password"
           autoComplete="new-password"
+          required
         />
 
         <p className="text-xs text-slate-500">

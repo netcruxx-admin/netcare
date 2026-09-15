@@ -46,6 +46,8 @@ export default function InvoicePrintPage() {
   // Injectables and lab tests bill on a plain page — never the hospital
   // letterhead — regardless of whether one is configured.
   const forcePlain = invoice.paymentType === 'injectable' || invoice.paymentType === 'lab';
+  const isInjectable = invoice.paymentType === 'injectable';
+  const isLab = invoice.paymentType === 'lab';
 
   return (
     <PrintSheet header={invoice.seller} docLabel="Tax Invoice" docNumber={invoice.number} ready autoPrint forcePlain={forcePlain}>
@@ -66,30 +68,94 @@ export default function InvoicePrintPage() {
         </div>
       </div>
 
-      <table className="w-full border-collapse text-sm">
-        <thead>
-          <tr className="border-b-2 border-slate-800 text-left text-xs uppercase tracking-wide text-slate-500">
-            <th className="py-2">Description</th>
-            <th className="py-2 text-right">Qty</th>
-            <th className="py-2 text-right">Rate</th>
-            <th className="py-2 text-right">Amount</th>
-          </tr>
-        </thead>
-        <tbody>
-          {invoice.lines.map((line, i) => (
-            <tr key={i} className="border-b border-slate-100">
-              <td className="py-2.5 text-slate-800">{line.description}</td>
-              <td className="py-2.5 text-right tabular-nums">{line.quantity}</td>
-              <td className="py-2.5 text-right tabular-nums">{money(line.unitPrice)}</td>
-              <td className="py-2.5 text-right tabular-nums">{money(line.amount)}</td>
+      {isInjectable ? (
+        <table className="w-full border-collapse text-sm">
+          <thead>
+            <tr className="border-b-2 border-slate-800 text-left text-xs uppercase tracking-wide text-slate-500">
+              {invoice.showSerialNumber !== false && <th className="py-2 w-10">S.No</th>}
+              {invoice.showItemName !== false && <th className="py-2">Injectable</th>}
+              <th className="py-2 text-right">Qty</th>
+              {invoice.showPrice !== false && <th className="py-2 text-right">Price</th>}
+              {invoice.showDiscount !== false && <th className="py-2 text-right">Discount</th>}
+              {invoice.showTotal !== false && <th className="py-2 text-right">Total</th>}
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {invoice.lines.map((line, i) => (
+              <tr key={i} className="border-b border-slate-100">
+                {invoice.showSerialNumber !== false && (
+                  <td className="py-2.5 text-slate-800">{line.serialNumber ?? i + 1}</td>
+                )}
+                {invoice.showItemName !== false && (
+                  <td className="py-2.5 text-slate-800">{line.description}</td>
+                )}
+                <td className="py-2.5 text-right tabular-nums">{line.quantity}</td>
+                {invoice.showPrice !== false && (
+                  <td className="py-2.5 text-right tabular-nums">{money(line.unitPrice)}</td>
+                )}
+                {invoice.showDiscount !== false && (
+                  <td className="py-2.5 text-right tabular-nums">{money(line.discount || 0)}</td>
+                )}
+                {invoice.showTotal !== false && (
+                  <td className="py-2.5 text-right tabular-nums">{money(line.amount)}</td>
+                )}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      ) : (
+        <table className="w-full border-collapse text-sm">
+          <thead>
+            <tr className="border-b-2 border-slate-800 text-left text-xs uppercase tracking-wide text-slate-500">
+              <th className="py-2">Description</th>
+              <th className="py-2 text-right">Qty</th>
+              <th className="py-2 text-right">Rate</th>
+              <th className="py-2 text-right">Amount</th>
+            </tr>
+          </thead>
+          <tbody>
+            {invoice.lines.map((line, i) => (
+              <tr key={i} className="border-b border-slate-100">
+                <td className="py-2.5 text-slate-800">{line.description}</td>
+                <td className="py-2.5 text-right tabular-nums">{line.quantity}</td>
+                <td className="py-2.5 text-right tabular-nums">{money(line.unitPrice)}</td>
+                <td className="py-2.5 text-right tabular-nums">{money(line.amount)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
 
-      <div className="mt-4 flex justify-end gap-10 text-base font-bold text-slate-900">
-        <span>Total ({invoice.currency || 'INR'})</span>
-        <span className="tabular-nums">{money(invoice.total)}</span>
+      <div className="mt-4 space-y-1.5 text-sm text-slate-700">
+        {isLab && invoice.showGst && (
+          <>
+            <div className="flex justify-end gap-10">
+              <span>Subtotal</span>
+              <span className="tabular-nums">{money(invoice.subtotal ?? invoice.total)}</span>
+            </div>
+            {invoice.gstSplit ? (
+              <>
+                <div className="flex justify-end gap-10">
+                  <span>CGST</span>
+                  <span className="tabular-nums">{money(invoice.cgstAmount ?? 0)}</span>
+                </div>
+                <div className="flex justify-end gap-10">
+                  <span>SGST</span>
+                  <span className="tabular-nums">{money(invoice.sgstAmount ?? 0)}</span>
+                </div>
+              </>
+            ) : (
+              <div className="flex justify-end gap-10">
+                <span>GST{invoice.gstRate ? ` (${invoice.gstRate}%)` : ''}</span>
+                <span className="tabular-nums">{money(invoice.gstAmount ?? 0)}</span>
+              </div>
+            )}
+          </>
+        )}
+        <div className="flex justify-end gap-10 text-base font-bold text-slate-900">
+          <span>Total ({invoice.currency || 'INR'})</span>
+          <span className="tabular-nums">{money(invoice.total)}</span>
+        </div>
       </div>
 
       {invoice.seller.gstin && (

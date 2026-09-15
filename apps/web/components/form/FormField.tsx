@@ -61,6 +61,16 @@ export function FormField({
   const onChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>,
   ) => {
+    // Matching lower() on every read (login, uniqueness checks) is what makes
+    // email matching case-insensitive; lowering it here too is just so what
+    // the person sees on screen is what will actually be compared, rather
+    // than only silently rewritten once the form hits the API.
+    if (type === 'email') {
+      const next = e.target.value.toLowerCase();
+      helpers.setValue(next);
+      onValueChange?.(next);
+      return;
+    }
     field.onChange(e);
     onValueChange?.(e.target.value);
   };

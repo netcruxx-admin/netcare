@@ -1,6 +1,8 @@
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from .identity import normalise_email
+
 
 class Settings(BaseSettings):
     # Postgres for dev and prod. Local Homebrew Postgres uses trust auth, so no
@@ -127,6 +129,11 @@ class Settings(BaseSettings):
     @classmethod
     def _strip(cls, v: object) -> object:
         return v.strip() if isinstance(v, str) else v
+
+    @field_validator("superadmin_email", mode="before")
+    @classmethod
+    def _normalise_superadmin_email(cls, v: object) -> object:
+        return normalise_email(v) if isinstance(v, str) else v
 
     @property
     def is_production(self) -> bool:
