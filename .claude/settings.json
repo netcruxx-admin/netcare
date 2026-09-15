@@ -24,7 +24,7 @@
       "Bash(sed -i '' \"s|import type { Immunization } from './db';|import type { Immunization } from './types';|\" lib/baby.ts)",
       "Bash(curl -s http://localhost:8111/hospitals/current -H 'X-Hospital-Id: sunrise')",
       "Bash(python3 -c \"import sys,json;d=json.load\\(sys.stdin\\);print\\('  role:',d['user']['role'],'| perms:',len\\(d['permissions']\\),'| home:',d['role']['homePath']\\)\")",
-      "Bash(awk '/^## 2\\\\./,/^## 3\\\\./' API_ENDPOINTS.md)",
+      "Bash(awk '/^## 2\\\\./,/^## 3\\\\./' docs/API_ENDPOINTS.md)",
       "Bash(awk -F: '{s+=$2} END {print s}')",
       "Bash(grep -oE '`[a-z_]+\\\\.[a-z_]+`')",
       "Bash(psql -d medicare -t -A -c \"select code from permissions\")",
