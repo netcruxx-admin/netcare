@@ -234,18 +234,18 @@ export function PatientBook({ session }: RoleViewProps) {
       <div className="max-w-3xl mx-auto">
         <div className="bg-white rounded-lg shadow-xl p-8 space-y-8">
           {/* Progress Steps */}
-          <div className="flex justify-between items-center mb-8">
+          <div className="flex justify-center items-center mb-8">
             {[1, 2, 3].map((s) => (
-              <div key={s} className="flex items-center flex-1">
+              <div key={s} className="flex items-center">
                 <div
-                  className={`w-10 h-10 rounded-full flex items-center justify-center font-bold ${
+                  className={`w-10 h-10 rounded-full flex items-center justify-center font-bold shrink-0 ${
                     s <= step ? 'bg-cyan-600 text-white' : 'bg-slate-200 text-slate-600'
                   }`}
                 >
                   {s}
                 </div>
                 {s < 3 && (
-                  <div className={`flex-1 h-1 mx-2 ${s < step ? 'bg-cyan-600' : 'bg-slate-200'}`} />
+                  <div className={`w-16 sm:w-24 h-1 mx-2 ${s < step ? 'bg-cyan-600' : 'bg-slate-200'}`} />
                 )}
               </div>
             ))}
@@ -406,7 +406,7 @@ export function PatientBook({ session }: RoleViewProps) {
               }
             }}
           >
-            {({ values, errors, touched, setFieldValue, setFieldTouched, validateForm, isSubmitting, dirty }) => {
+            {({ values, errors, touched, setFieldValue, setFieldTouched, setValues, validateForm, isSubmitting, dirty }) => {
               // Resolve the doctor's name for the selected slot so the patient
               // can see who they'll see — but only after they've picked a time.
               const assignedDoc = (() => {
@@ -444,10 +444,18 @@ export function PatientBook({ session }: RoleViewProps) {
                             key={dept.id}
                             type="button"
                             onClick={() => {
-                              setFieldValue('department', dept.id);
-                              setFieldValue('date', '');
-                              setFieldValue('time', '');
-                              setSelection({ department: dept.id, date: '' });
+                              // A single setValues (rather than three sequential
+                              // setFieldValue calls) validates once against the
+                              // fully merged object — sequential calls each
+                              // validate against a stale pre-update snapshot of
+                              // the others, which is what let step 2 flash
+                              // errors that hadn't actually been triggered yet.
+                              setValues((v) => ({ ...v, department: dept.id, date: today, time: '' }));
+                              // Default to today so the calendar's "today"
+                              // highlight (which looks selected either way)
+                              // matches real state and availability loads
+                              // immediately, instead of needing a redundant click.
+                              setSelection({ department: dept.id, date: today });
                               setStep(2);
                             }}
                             className={`p-4 rounded-lg border-2 transition text-left ${
@@ -503,8 +511,10 @@ export function PatientBook({ session }: RoleViewProps) {
                             selected={values.date ? new Date(`${values.date}T00:00:00`) : undefined}
                             onSelect={(d) => {
                               const ds = d ? toDateStr(d) : '';
-                              setFieldValue('date', ds);
-                              setFieldValue('time', '');
+                              // See the department onClick above: one setValues
+                              // call, not two setFieldValue calls, so date and
+                              // time validate against the same merged snapshot.
+                              setValues((v) => ({ ...v, date: ds, time: '' }));
                               setSelection((s) => ({ ...s, date: ds }));
                             }}
                             disabled={{ before: new Date(new Date().setHours(0, 0, 0, 0)) }}
@@ -585,7 +595,17 @@ export function PatientBook({ session }: RoleViewProps) {
                       <div className="flex gap-3">
                         <button
                           type="button"
-                          onClick={() => setStep(1)}
+                          onClick={() => {
+                            // Going back to step 1 clears the whole selection —
+                            // department included — rather than leaving the old
+                            // card highlighted with stale date/time (and their
+                            // touched state) behind it.
+                            setValues((v) => ({ ...v, department: '', date: '', time: '' }));
+                            setFieldTouched('date', false, false);
+                            setFieldTouched('time', false, false);
+                            setSelection({ department: '', date: '' });
+                            setStep(1);
+                          }}
                           className="flex-1 px-6 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition"
                         >
                           Back
