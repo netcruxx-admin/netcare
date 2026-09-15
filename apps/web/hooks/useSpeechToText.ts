@@ -9,6 +9,7 @@
 // exposed as `interim` for a live preview but never sent to `onResult`.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { claimDictation, releaseDictation } from '@/lib/activeDictation';
 
 // --- minimal typings (the DOM lib does not ship these everywhere) ------------
 
@@ -81,6 +82,9 @@ export function useSpeechToText({ onResult, lang = 'en-IN', onError }: UseSpeech
   const [interim, setInterim] = useState('');
 
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
+  // Stable identity for the cross-field mutex — one per hook instance, for
+  // the lifetime of the component (never per-render).
+  const idRef = useRef<symbol>(Symbol('dictation'));
   // Latest callbacks, so the long-lived recognition handlers never close over
   // a stale render.
   const onResultRef = useRef(onResult);
@@ -145,6 +149,7 @@ export function useSpeechToText({ onResult, lang = 'en-IN', onError }: UseSpeech
     recognitionRef.current = recognition;
     return () => {
       wantListeningRef.current = false;
+      releaseDictation(idRef.current);
       recognition.onresult = null;
       recognition.onerror = null;
       recognition.onend = null;
@@ -153,25 +158,34 @@ export function useSpeechToText({ onResult, lang = 'en-IN', onError }: UseSpeech
     };
   }, [lang]);
 
-  const start = useCallback(() => {
-    const recognition = recognitionRef.current;
-    if (!recognition || wantListeningRef.current) return;
-    wantListeningRef.current = true;
-    setListening(true);
-    try {
-      recognition.start();
-    } catch {
-      // start() throws if called while already running — treat as listening.
-    }
-  }, []);
-
   const stop = useCallback(() => {
     const recognition = recognitionRef.current;
     wantListeningRef.current = false;
     setListening(false);
     setInterim('');
+    releaseDictation(idRef.current);
     try { recognition?.stop(); } catch { /* already stopped */ }
   }, []);
+
+  const start = useCallback(() => {
+    const recognition = recognitionRef.current;
+    if (!recognition || wantListeningRef.current) return;
+    // Only one SpeechRecognition session may run at a time — cleanly stop
+    // whichever field currently holds the mic before claiming it here.
+    // Without this, a second concurrent start() corrupts both sessions.
+    claimDictation(idRef.current, stop);
+    wantListeningRef.current = true;
+    setListening(true);
+    try {
+      recognition.start();
+    } catch {
+      // start() actually failed (not just "already running", which the
+      // guard above already excludes) — don't leave the UI stuck listening.
+      wantListeningRef.current = false;
+      setListening(false);
+      releaseDictation(idRef.current);
+    }
+  }, [stop]);
 
   const toggle = useCallback(() => {
     if (wantListeningRef.current) stop();
