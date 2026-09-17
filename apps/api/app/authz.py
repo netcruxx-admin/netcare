@@ -82,9 +82,12 @@ def own_patients_filter(db: Session, user: models.User):
     read off the row like it can everywhere else. "Own" therefore means:
 
       * the patient record the caller *is* (a patient viewing themselves), or
-      * patients the caller treats — anyone they have an appointment with.
+      * patients the caller treats — anyone they have an appointment with, or
+        an IPD admission with (a doctor who only ever meets a patient through
+        an emergency admission, with no prior OPD appointment, must still see
+        that patient under an "own" grant).
 
-    Without the second arm a doctor holding `patients.read: own` would see an
+    Without the doctor arms a doctor holding `patients.read: own` would see an
     empty patient list, which is what happens if you reuse own_record_filter here.
     """
     from sqlalchemy import false, or_, select
@@ -96,10 +99,14 @@ def own_patients_filter(db: Session, user: models.User):
 
     doctor_id = caller_doctor_id(db, user)
     if doctor_id:
-        treated = select(models.Appointment.patient_id).where(
+        treated_via_appointment = select(models.Appointment.patient_id).where(
             models.Appointment.doctor_id == doctor_id
         )
-        conditions.append(models.Patient.id.in_(treated))
+        conditions.append(models.Patient.id.in_(treated_via_appointment))
+        treated_via_admission = select(models.Admission.patient_id).where(
+            models.Admission.doctor_id == doctor_id
+        )
+        conditions.append(models.Patient.id.in_(treated_via_admission))
 
     if not conditions:
         return false()

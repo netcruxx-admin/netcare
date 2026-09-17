@@ -218,6 +218,8 @@ def test_every_fk_carrying_schema_has_a_guarded_handler():
         "appointment_id": "Appointment", "pregnancy_id": "PregnancyRecord",
         "baby_id": "Baby", "order_id": "TestOrder", "test_id": "LabTest",
         "medicine_id": "Medicine", "prescription_id": "Prescription",
+        "ward_id": "Ward", "bed_id": "Bed", "admission_id": "Admission",
+        "referring_doctor_id": "Doctor",
     }
     fk_fields = {f: t for f, t in fk_fields.items() if t in owned}
 

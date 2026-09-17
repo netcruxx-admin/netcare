@@ -35,6 +35,12 @@ const ALL_ON: HospitalModules = {
   medicalRecords: true,
   telemedicine: true,
   anc: false,
+  // Off by default for every category, including multi-specialty, even
+  // though its signature-features list already names "IPD / Bed Management".
+  // Turning it on for a category template is a separate product decision —
+  // see docs/IPD_MODULE_CHANGELOG.md §7 — not a side effect of the module
+  // existing. A superadmin enables it per hospital from the hospital edit UI.
+  ipd: false,
 };
 
 export const HOSPITAL_CATEGORIES: Record<HospitalCategoryId, HospitalCategory> = {

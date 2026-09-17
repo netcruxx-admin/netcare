@@ -108,6 +108,7 @@ def _body_foreign_keys() -> dict:
                 "patient_id": models.Patient,
                 "mother_patient_id": models.Patient,
                 "doctor_id": models.Doctor,
+                "referring_doctor_id": models.Doctor,
                 "department_id": models.Department,
                 "appointment_id": models.Appointment,
                 "pregnancy_id": models.PregnancyRecord,
@@ -117,6 +118,9 @@ def _body_foreign_keys() -> dict:
                 "medicine_id": models.Medicine,
                 "injectable_id": models.Injectable,
                 "prescription_id": models.Prescription,
+                "ward_id": models.Ward,
+                "bed_id": models.Bed,
+                "admission_id": models.Admission,
             }
         )
     return _BODY_FOREIGN_KEYS

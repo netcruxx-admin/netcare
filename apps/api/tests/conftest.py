@@ -367,3 +367,67 @@ def hospital_b(client, database) -> Tenant:
     # category is a provisioning template rather than a runtime branch, which is
     # what makes onboarding a multi-specialty hospital a data change.
     return _build_tenant(client, "Beta General Hospital", "beta", "multi-specialty")
+
+
+def _enable_ipd(client: TestClient, tenant: Tenant) -> None:
+    """Turn the `ipd` module on for an already-built tenant, and give it one
+    ward/bed/admission — the IPD counterpart of the appointment/vitals/
+    prescription set `_build_tenant` already creates for OPD.
+
+    Deliberately not something `hospital_a`/`hospital_b` get: those two exist
+    to prove ordinary OPD behavior, and the whole point of this module is that
+    a hospital without it enabled is untouched (see test_ipd_module_gating.py
+    and test_ipd_does_not_affect_opd_vitals.py). A third/fourth tenant pair
+    opts in instead, through the same PATCH /hospitals/{id} a superadmin would
+    use from the Hospital Setup screen — never by writing the row directly.
+    """
+    su = _superadmin_token(client)
+    # PATCH replaces `modules` wholesale, so the existing set (lab, pharmacy,
+    # etc. from the category template) has to be carried forward, not just ipd.
+    modules = dict(tenant.hospital.get("modules") or {})
+    modules["ipd"] = True
+    response = client.patch(
+        f"/hospitals/{tenant.id}",
+        headers={"Authorization": f"Bearer {su}"},
+        json={"modules": modules},
+    )
+    assert response.status_code == 200, response.text
+
+    ward = tenant.post("/wards", {"name": "General Ward", "wardType": "general"})
+    assert ward.status_code == 201, ward.text
+    tenant.ids["ward"] = ward.json()["id"]
+
+    bed = tenant.post(
+        "/beds", {"wardId": tenant.ids["ward"], "bedNumber": "1", "dailyRate": 1000}
+    )
+    assert bed.status_code == 201, bed.text
+    tenant.ids["bed"] = bed.json()["id"]
+
+    admission = tenant.post(
+        "/admissions",
+        {
+            "patientId": tenant.ids["patient"],
+            "doctorId": tenant.ids["doctor"],
+            "bedId": tenant.ids["bed"],
+            "provisionalDiagnosis": f"{tenant.subdomain} admission",
+        },
+    )
+    assert admission.status_code == 201, admission.text
+    tenant.ids["admission"] = admission.json()["id"]
+
+
+@pytest.fixture(scope="session")
+def hospital_c(client, database) -> Tenant:
+    """An IPD-enabled tenant, for everything that needs the module actually on."""
+    tenant = _build_tenant(client, "Gamma IPD Hospital", "gamma", "multi-specialty")
+    _enable_ipd(client, tenant)
+    return tenant
+
+
+@pytest.fixture(scope="session")
+def hospital_d(client, database) -> Tenant:
+    """A second IPD-enabled tenant, so IPD's own tables get the same
+    two-hospital isolation coverage every other table has."""
+    tenant = _build_tenant(client, "Delta IPD Hospital", "delta", "multi-specialty")
+    _enable_ipd(client, tenant)
+    return tenant

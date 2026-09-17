@@ -20,6 +20,7 @@
 import type { LucideIcon } from 'lucide-react';
 import {
   Baby,
+  BedDouble,
   Building2,
   CalendarDays,
   CalendarPlus,
@@ -31,6 +32,7 @@ import {
   FileText,
   FlaskConical,
   HeartPulse,
+  Hospital,
   LayoutDashboard,
   Package,
   Pill,
@@ -217,6 +219,39 @@ export const dashboardRoutes: DashboardRoute[] = [
     icon: CalendarRange,
     viewRoles: [adminRole, doctorRole, patientRole],
     permission: 'schedule.read',
+  },
+
+  // ── IPD (wards, beds, admissions) ───────────────────────────────────────────
+  {
+    path: '/dashboard/wards',
+    label: 'Wards & Beds',
+    icon: BedDouble,
+    viewRoles: [superadminRole, adminRole],
+    // beds.read (broader than wards.manage) is enough to open the screen —
+    // it decides for itself whether to show edit controls, the same relation
+    // inventory.read has to inventory.manage.
+    permission: 'beds.read',
+    module: 'ipd',
+  },
+  {
+    path: '/dashboard/admit',
+    label: 'Admit Patient',
+    icon: Hospital,
+    viewRoles: [superadminRole, adminRole, doctorRole, receptionistRole],
+    permission: 'admissions.create',
+    module: 'ipd',
+    // Reached from the Admissions screen, the same relation /dashboard/book
+    // has to /dashboard/appointments.
+    hideInNav: true,
+  },
+  {
+    path: '/dashboard/admissions',
+    label: 'Admissions',
+    icon: Hospital,
+    viewRoles: [superadminRole, adminRole, doctorRole, nurseRole, receptionistRole],
+    permission: 'admissions.read',
+    module: 'ipd',
+    labelByRole: { [doctorRole]: 'My Admissions' },
   },
 
   // ── People ────────────────────────────────────────────────────────────────
@@ -450,8 +485,13 @@ export const platformOnlyPaths = [
 export const alwaysAllowedPaths = ['/dashboard'];
 
 /** Subtrees any signed-in user may open — detail pages reached from a link,
- *  which authorize against the record itself rather than the role. */
-export const alwaysAllowedPathPrefixes = ['/dashboard/consult'];
+ *  which authorize against the record itself rather than the role.
+ *  '/dashboard/ipd/[admissionId]' is the per-stay workspace, named distinctly
+ *  from the '/dashboard/admissions' list (the way '/dashboard/consult' is
+ *  named distinctly from '/dashboard/appointments') specifically so this
+ *  prefix cannot also swallow the list's own permission gate — see the
+ *  equals-or-startsWith check in canAccessPath below. */
+export const alwaysAllowedPathPrefixes = ['/dashboard/consult', '/dashboard/ipd'];
 
 // -----------------------------------------------------------------------------
 // Lookups

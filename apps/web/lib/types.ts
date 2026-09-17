@@ -153,6 +153,120 @@ export interface Department {
   description: string;
 }
 
+// -----------------------------------------------------------------------------
+// IPD — wards, beds, admissions. Mirrors apps/api/app/models.py's Ward/Bed/
+// Admission/ProgressNote/DischargeSummary/AdmissionChargeItem. Gated behind
+// the `ipd` hospital module (see HospitalModules below).
+// -----------------------------------------------------------------------------
+
+export type WardType = 'general' | 'icu' | 'nicu' | 'maternity' | 'private' | 'semi_private';
+
+export interface Ward {
+  id: string;
+  hospitalId?: string;
+  name: string;
+  wardType: WardType;
+  departmentId?: string | null;
+  floor: string;
+  description: string;
+}
+
+export type BedStatus = 'vacant' | 'occupied' | 'maintenance' | 'reserved';
+
+export interface Bed {
+  id: string;
+  hospitalId?: string;
+  wardId: string;
+  bedNumber: string;
+  bedType: string;
+  dailyRate: number;
+  status: BedStatus;
+}
+
+export type AdmissionType = 'planned' | 'emergency';
+export type AdmissionStatus = 'admitted' | 'discharged' | 'dama' | 'deceased' | 'transferred_out';
+export type PayerType = 'cash' | 'insurance' | 'corporate';
+
+export interface Admission {
+  id: string;
+  hospitalId?: string;
+  admissionNumber: string;
+  patientId: string;
+  /** Display fields resolved server-side, same pattern as Appointment. */
+  patientName?: string;
+  patientPhone?: string;
+  doctorId: string;
+  doctorName?: string;
+  referringDoctorId?: string | null;
+  wardId: string;
+  wardName?: string;
+  bedId: string;
+  bedNumber?: string;
+  admissionType: AdmissionType;
+  status: AdmissionStatus;
+  provisionalDiagnosis: string;
+  payerType: PayerType;
+  admittedByUserId?: string | null;
+  admittedByRole?: string | null;
+  admittedAt: string;
+  dischargedAt?: string | null;
+  createdAt: string;
+}
+
+export interface ProgressNote {
+  id: string;
+  hospitalId?: string;
+  admissionId: string;
+  doctorId: string;
+  doctorName?: string;
+  note: string;
+  createdAt: string;
+}
+
+export type DischargeType = 'routine' | 'dama' | 'referred' | 'deceased';
+
+export interface DischargeSummary {
+  id: string;
+  hospitalId?: string;
+  admissionId: string;
+  doctorId: string;
+  doctorName?: string;
+  diagnosisFinal: string;
+  hospitalCourse: string;
+  conditionAtDischarge: string;
+  dischargeMedications: string;
+  followUpAdvice: string;
+  dischargeType: DischargeType;
+  dischargedAt: string;
+  createdAt: string;
+}
+
+export type AdmissionChargeType = 'room' | 'nursing' | 'doctor_visit' | 'procedure' | 'misc';
+
+export interface AdmissionChargeItem {
+  id: string;
+  hospitalId?: string;
+  admissionId: string;
+  chargeType: AdmissionChargeType;
+  description: string;
+  amount: number;
+  quantity: number;
+  createdBy?: string | null;
+  chargedAt: string;
+}
+
+export interface AdmissionBill {
+  admissionId: string;
+  roomNights: number;
+  roomRate: number;
+  roomTotal: number;
+  items: AdmissionChargeItem[];
+  itemsTotal: number;
+  paidTotal: number;
+  grandTotal: number;
+  balanceDue: number;
+}
+
 export interface MedicalRecord {
   id: string;
   hospitalId?: string;
@@ -828,6 +942,7 @@ export interface HospitalModules {
   medicalRecords: boolean; // clinical records + history
   telemedicine: boolean;   // video consults (future)
   anc: boolean;            // antenatal / pregnancy tracker (maternity-only, future)
+  ipd: boolean;            // wards, beds, admissions — in-patient care
 }
 
 // == Hospital categories (vertical templates) =================================

@@ -1,14 +1,20 @@
 import { createApi } from '@reduxjs/toolkit/query/react';
 import { baseQueryWithReauth } from './baseQuery';
 import type {
+  Admission,
+  AdmissionBill,
+  AdmissionChargeItem,
   ANCVisit,
   Appointment,
   Baby,
+  Bed,
   Consent,
   ConsentPurpose,
   Department,
+  DischargeSummary,
   Doctor,
   GrowthMeasurement,
+  HospitalModules,
   Immunization,
   Injectable,
   InjectionOrder,
@@ -29,12 +35,14 @@ import type {
   ConsultationFee,
   PregnancyRecord,
   Prescription,
+  ProgressNote,
   ScheduleBlock,
   TestOrder,
   TestResult,
   User,
   Vitals,
   VideoSlot,
+  Ward,
 } from '@/lib/types';
 import { AUTH_SESSION_KEY } from '@/lib/constants';
 import { getCurrentHospitalId } from '@/lib/tenant';
@@ -486,6 +494,10 @@ export interface HospitalUpdateBody {
   category?: string;
   theme?: { primary: string; primaryDark: string };
   status?: string;
+  /** Replaces the hospital's modules wholesale — PATCH /hospitals/{id} does
+   *  not merge this field, so a caller must send the complete object (every
+   *  key, not just the one being changed). See components/setup/HospitalSetup.tsx. */
+  modules?: HospitalModules;
 
   legalName?: string;
   entityType?: string;
@@ -852,6 +864,70 @@ export interface DoctorUpdateBody {
 export interface DepartmentCreateBody { name: string; description?: string }
 export interface DepartmentUpdateBody { name?: string; description?: string }
 
+// ── IPD body types ──────────────────────────────────────────────────────────
+export interface WardCreateBody {
+  name: string;
+  wardType?: string;
+  departmentId?: string | null;
+  floor?: string;
+  description?: string;
+}
+export interface WardUpdateBody {
+  name?: string;
+  wardType?: string;
+  departmentId?: string | null;
+  floor?: string;
+  description?: string;
+}
+export interface BedCreateBody {
+  wardId: string;
+  bedNumber: string;
+  bedType?: string;
+  dailyRate?: number;
+}
+/** status here is deliberately only ever 'vacant' | 'maintenance' — the API
+ *  refuses 'occupied'/'reserved' on this endpoint, see apps/api/app/routers/beds.py. */
+export interface BedUpdateBody {
+  bedNumber?: string;
+  bedType?: string;
+  dailyRate?: number;
+  status?: 'vacant' | 'maintenance';
+}
+export interface AdmissionCreateBody {
+  patientId: string;
+  doctorId: string;
+  referringDoctorId?: string;
+  bedId: string;
+  admissionType?: string;
+  provisionalDiagnosis?: string;
+  payerType?: string;
+}
+/** No `status` — see AdmissionUpdate's docstring in schemas.py: every closure
+ *  goes through createDischargeSummary instead. */
+export interface AdmissionUpdateBody {
+  doctorId?: string;
+  referringDoctorId?: string;
+  admissionType?: string;
+  provisionalDiagnosis?: string;
+  payerType?: string;
+}
+export interface ProgressNoteCreateBody { admissionId: string; note?: string }
+export interface DischargeSummaryCreateBody {
+  admissionId: string;
+  diagnosisFinal?: string;
+  hospitalCourse?: string;
+  conditionAtDischarge?: string;
+  dischargeMedications?: string;
+  followUpAdvice?: string;
+  dischargeType: 'routine' | 'dama' | 'referred' | 'deceased';
+}
+export interface AdmissionChargeItemCreateBody {
+  chargeType: 'nursing' | 'doctor_visit' | 'procedure' | 'misc';
+  description?: string;
+  amount: number;
+  quantity?: number;
+}
+
 // ---------------------------------------------------------------------------
 // Paged lists
 // ---------------------------------------------------------------------------
@@ -932,6 +1008,12 @@ export const api = createApi({
     'Consent',
     'ConsultationFee',
     'Me',
+    'Ward',
+    'Bed',
+    'Admission',
+    'ProgressNote',
+    'DischargeSummary',
+    'AdmissionChargeItem',
   ],
 
   endpoints: (build) => ({
@@ -1340,6 +1422,52 @@ export const api = createApi({
       transformResponse: pageOf<Department>,
       providesTags: [{ type: 'Department', id: 'LIST' }],
     }),
+    listWardsPaged: build.query<Paged<Ward>, PageArgs>({
+      query: (params) => ({ url: '/wards', params: cleanParams(params) }),
+      transformResponse: pageOf<Ward>,
+      providesTags: [{ type: 'Ward', id: 'LIST' }],
+    }),
+    listBedsPaged: build.query<
+      Paged<Bed>,
+      PageArgs & { wardId?: string; status?: string }
+    >({
+      query: (params) => ({ url: '/beds', params: cleanParams(params) }),
+      transformResponse: pageOf<Bed>,
+      providesTags: [{ type: 'Bed', id: 'LIST' }],
+    }),
+    listAdmissionsPaged: build.query<
+      Paged<Admission>,
+      PageArgs & {
+        patientId?: string;
+        doctorId?: string;
+        wardId?: string;
+        bedId?: string;
+        status?: string;
+      }
+    >({
+      query: (params) => ({ url: '/admissions', params: cleanParams(params) }),
+      transformResponse: pageOf<Admission>,
+      providesTags: (result) =>
+        result
+          ? [
+              ...result.items.map(({ id }) => ({ type: 'Admission' as const, id })),
+              { type: 'Admission', id: 'LIST' },
+            ]
+          : [{ type: 'Admission', id: 'LIST' }],
+    }),
+    listProgressNotesPaged: build.query<Paged<ProgressNote>, PageArgs & { admissionId?: string }>({
+      query: (params) => ({ url: '/progress-notes', params: cleanParams(params) }),
+      transformResponse: pageOf<ProgressNote>,
+      providesTags: [{ type: 'ProgressNote', id: 'LIST' }],
+    }),
+    listDischargeSummariesPaged: build.query<
+      Paged<DischargeSummary>,
+      PageArgs & { admissionId?: string }
+    >({
+      query: (params) => ({ url: '/discharge-summaries', params: cleanParams(params) }),
+      transformResponse: pageOf<DischargeSummary>,
+      providesTags: [{ type: 'DischargeSummary', id: 'LIST' }],
+    }),
     listMedicinesPaged: build.query<Paged<Medicine>, PageArgs & { category?: string }>({
       query: (params) => ({ url: '/medicines', params: cleanParams(params) }),
       transformResponse: pageOf<Medicine>,
@@ -1560,6 +1688,108 @@ export const api = createApi({
         headers: hospitalId ? { 'X-Hospital-Id': hospitalId } : undefined,
       }),
       invalidatesTags: [{ type: 'Department', id: 'LIST' }],
+    }),
+
+    // ── IPD: wards ───────────────────────────────────────────────────────────
+    createWard: build.mutation<Ward, WardCreateBody>({
+      query: (body) => ({ url: '/wards', method: 'POST', body }),
+      invalidatesTags: [{ type: 'Ward', id: 'LIST' }],
+    }),
+    updateWard: build.mutation<Ward, { id: string; body: WardUpdateBody }>({
+      query: ({ id, body }) => ({ url: `/wards/${id}`, method: 'PUT', body }),
+      invalidatesTags: [{ type: 'Ward', id: 'LIST' }],
+    }),
+    deleteWard: build.mutation<void, { id: string }>({
+      query: ({ id }) => ({ url: `/wards/${id}`, method: 'DELETE' }),
+      invalidatesTags: [{ type: 'Ward', id: 'LIST' }],
+    }),
+
+    // ── IPD: beds ────────────────────────────────────────────────────────────
+    createBed: build.mutation<Bed, BedCreateBody>({
+      query: (body) => ({ url: '/beds', method: 'POST', body }),
+      invalidatesTags: [{ type: 'Bed', id: 'LIST' }],
+    }),
+    updateBed: build.mutation<Bed, { id: string; body: BedUpdateBody }>({
+      query: ({ id, body }) => ({ url: `/beds/${id}`, method: 'PUT', body }),
+      invalidatesTags: [{ type: 'Bed', id: 'LIST' }],
+    }),
+    deleteBed: build.mutation<void, { id: string }>({
+      query: ({ id }) => ({ url: `/beds/${id}`, method: 'DELETE' }),
+      invalidatesTags: [{ type: 'Bed', id: 'LIST' }],
+    }),
+
+    // ── IPD: admissions ──────────────────────────────────────────────────────
+    getAdmission: build.query<Admission, string>({
+      query: (id) => `/admissions/${id}`,
+      providesTags: (_r, _e, id) => [{ type: 'Admission', id }],
+    }),
+    createAdmission: build.mutation<Admission, AdmissionCreateBody>({
+      query: (body) => ({ url: '/admissions', method: 'POST', body }),
+      // A successful admission also occupies a bed.
+      invalidatesTags: [{ type: 'Admission', id: 'LIST' }, { type: 'Bed', id: 'LIST' }],
+    }),
+    updateAdmission: build.mutation<Admission, { id: string; body: AdmissionUpdateBody }>({
+      query: ({ id, body }) => ({ url: `/admissions/${id}`, method: 'PUT', body }),
+      invalidatesTags: (_r, _e, { id }) => [{ type: 'Admission', id }, { type: 'Admission', id: 'LIST' }],
+    }),
+    transferAdmissionBed: build.mutation<Admission, { id: string; bedId: string }>({
+      query: ({ id, bedId }) => ({
+        url: `/admissions/${id}/transfer`,
+        method: 'POST',
+        body: { bedId },
+      }),
+      invalidatesTags: (_r, _e, { id }) => [
+        { type: 'Admission', id },
+        { type: 'Admission', id: 'LIST' },
+        { type: 'Bed', id: 'LIST' },
+      ],
+    }),
+    deleteAdmission: build.mutation<void, { id: string }>({
+      query: ({ id }) => ({ url: `/admissions/${id}`, method: 'DELETE' }),
+      invalidatesTags: [{ type: 'Admission', id: 'LIST' }, { type: 'Bed', id: 'LIST' }],
+    }),
+
+    // ── IPD: progress notes ──────────────────────────────────────────────────
+    createProgressNote: build.mutation<ProgressNote, ProgressNoteCreateBody>({
+      query: (body) => ({ url: '/progress-notes', method: 'POST', body }),
+      invalidatesTags: [{ type: 'ProgressNote', id: 'LIST' }],
+    }),
+
+    // ── IPD: discharge ───────────────────────────────────────────────────────
+    // Discharging a patient *is* creating this row — see
+    // apps/api/app/routers/discharge_summaries.py. There is no update
+    // endpoint: a discharge summary is immutable once written.
+    createDischargeSummary: build.mutation<DischargeSummary, DischargeSummaryCreateBody>({
+      query: (body) => ({ url: '/discharge-summaries', method: 'POST', body }),
+      invalidatesTags: (_r, _e, { admissionId }) => [
+        { type: 'DischargeSummary', id: 'LIST' },
+        { type: 'Admission', id: admissionId },
+        { type: 'Admission', id: 'LIST' },
+        { type: 'Bed', id: 'LIST' },
+      ],
+    }),
+
+    // ── IPD: billing ─────────────────────────────────────────────────────────
+    getAdmissionBill: build.query<AdmissionBill, string>({
+      query: (admissionId) => `/admissions/${admissionId}/bill`,
+      providesTags: (_r, _e, admissionId) => [{ type: 'AdmissionChargeItem', id: admissionId }],
+    }),
+    listAdmissionChargeItems: build.query<AdmissionChargeItem[], string>({
+      query: (admissionId) => `/admissions/${admissionId}/charge-items`,
+      providesTags: (_r, _e, admissionId) => [{ type: 'AdmissionChargeItem', id: admissionId }],
+    }),
+    createAdmissionChargeItem: build.mutation<
+      AdmissionChargeItem,
+      { admissionId: string; body: AdmissionChargeItemCreateBody }
+    >({
+      query: ({ admissionId, body }) => ({
+        url: `/admissions/${admissionId}/charge-items`,
+        method: 'POST',
+        body,
+      }),
+      invalidatesTags: (_r, _e, { admissionId }) => [
+        { type: 'AdmissionChargeItem', id: admissionId },
+      ],
     }),
 
     // ── Medical Records ───────────────────────────────────────────────────────
@@ -2292,6 +2522,32 @@ export const {
   useCreateDepartmentMutation,
   useUpdateDepartmentMutation,
   useDeleteDepartmentMutation,
+  useListWardsPagedQuery,
+  useLazyListWardsPagedQuery,
+  useCreateWardMutation,
+  useUpdateWardMutation,
+  useDeleteWardMutation,
+  useListBedsPagedQuery,
+  useLazyListBedsPagedQuery,
+  useCreateBedMutation,
+  useUpdateBedMutation,
+  useDeleteBedMutation,
+  useListAdmissionsPagedQuery,
+  useLazyListAdmissionsPagedQuery,
+  useGetAdmissionQuery,
+  useCreateAdmissionMutation,
+  useUpdateAdmissionMutation,
+  useTransferAdmissionBedMutation,
+  useDeleteAdmissionMutation,
+  useListProgressNotesPagedQuery,
+  useLazyListProgressNotesPagedQuery,
+  useCreateProgressNoteMutation,
+  useListDischargeSummariesPagedQuery,
+  useLazyListDischargeSummariesPagedQuery,
+  useCreateDischargeSummaryMutation,
+  useGetAdmissionBillQuery,
+  useListAdmissionChargeItemsQuery,
+  useCreateAdmissionChargeItemMutation,
   useListMedicalRecordsQuery,
   useCreateMedicalRecordMutation,
   useUpdateMedicalRecordMutation,

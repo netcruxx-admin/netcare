@@ -9,6 +9,7 @@ import {
   useDeleteDepartmentMutation,
   useListDepartmentsQuery,
   useListHospitalsQuery,
+  useUpdateHospitalMutation,
 } from '@/store/api';
 import { hasPermission } from '@/lib/auth';
 import { DashboardShell } from '@/components/DashboardShell';
@@ -28,10 +29,27 @@ const MODULE_LABELS: { key: keyof HospitalModules; label: string }[] = [
   { key: 'lab', label: 'Lab & Diagnostics' },
   { key: 'pharmacy', label: 'Pharmacy' },
   { key: 'nursing', label: 'Nursing Station' },
+  { key: 'ipd', label: 'IPD / Bed Management' },
   { key: 'payments', label: 'Billing & Payments' },
   { key: 'telemedicine', label: 'Telemedicine' },
   { key: 'anc', label: 'Pregnancy (ANC) Tracker' },
 ];
+
+// A complete, all-off shape to merge a hospital's (possibly key-missing)
+// modules record onto, so every checkbox below has a defined value and a save
+// always sends the full object — PATCH /hospitals/{id} replaces `modules`
+// wholesale rather than merging it, so a partial object would silently turn
+// off every module this screen doesn't list.
+const EMPTY_MODULES: HospitalModules = {
+  lab: false,
+  pharmacy: false,
+  nursing: false,
+  payments: false,
+  medicalRecords: false,
+  telemedicine: false,
+  anc: false,
+  ipd: false,
+};
 
 export function HospitalSetup({ session }: RoleViewProps) {
   // Which hospital this screen operates on.
@@ -63,6 +81,7 @@ export function HospitalSetup({ session }: RoleViewProps) {
   });
   const [createDepartment] = useCreateDepartmentMutation();
   const [deleteDepartment] = useDeleteDepartmentMutation();
+  const [updateHospital, { isLoading: savingModules }] = useUpdateHospitalMutation();
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -70,6 +89,37 @@ export function HospitalSetup({ session }: RoleViewProps) {
   // Modules shown for the hospital's own category are the ones it actually has;
   // for any other category this is a preview of that template.
   const isActiveCategory = selectedId === activeId;
+
+  // Draft of this hospital's *actual* modules — independent of the category
+  // template above. A hospital's real plan is edited here directly; the
+  // category picker only ever offers to replace its departments, never its
+  // modules, on Apply.
+  const [moduleDraft, setModuleDraft] = useState<HospitalModules | null>(null);
+  const [moduleError, setModuleError] = useState('');
+  const [moduleSaved, setModuleSaved] = useState(false);
+
+  useEffect(() => {
+    if (hospital) setModuleDraft({ ...EMPTY_MODULES, ...(hospital.modules as Partial<HospitalModules>) });
+  }, [hospital]);
+
+  const liveModules: HospitalModules = hospital
+    ? { ...EMPTY_MODULES, ...(hospital.modules as Partial<HospitalModules>) }
+    : EMPTY_MODULES;
+  const modulesDirty =
+    moduleDraft !== null &&
+    MODULE_LABELS.some(({ key }) => moduleDraft[key] !== liveModules[key]);
+
+  const handleSaveModules = async () => {
+    if (!hospital || !moduleDraft) return;
+    setModuleError('');
+    setModuleSaved(false);
+    try {
+      await updateHospital({ id: hospital.id, body: { modules: moduleDraft } }).unwrap();
+      setModuleSaved(true);
+    } catch (err) {
+      setModuleError(apiError(err, 'Could not save modules'));
+    }
+  };
 
   const handleApply = async () => {
     // This deletes departments that a live hospital already has appointments
@@ -190,11 +240,28 @@ export function HospitalSetup({ session }: RoleViewProps) {
             )}
             <ul className="space-y-2">
               {MODULE_LABELS.map(({ key, label }) => {
-                // Real flags for the hospital's own category; template preview
-                // for any other.
-                const on = isActiveCategory
-                  ? Boolean(hospital.modules[key])
-                  : selected.modules[key];
+                // This hospital's own plan is directly editable, via
+                // moduleDraft; previewing another category is read-only —
+                // Apply below only ever replaces departments, never modules.
+                if (isActiveCategory && moduleDraft) {
+                  const on = moduleDraft[key];
+                  return (
+                    <li key={key}>
+                      <label className="flex items-center gap-2 text-sm cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={on}
+                          onChange={(e) =>
+                            setModuleDraft((prev) => (prev ? { ...prev, [key]: e.target.checked } : prev))
+                          }
+                          className="rounded border-slate-300 text-cyan-600 focus:ring-cyan-500"
+                        />
+                        <span className={on ? 'text-slate-900' : 'text-slate-400'}>{label}</span>
+                      </label>
+                    </li>
+                  );
+                }
+                const on = selected.modules[key];
                 return (
                   <li key={key} className="flex items-center gap-2 text-sm">
                     <span
@@ -209,6 +276,28 @@ export function HospitalSetup({ session }: RoleViewProps) {
                 );
               })}
             </ul>
+            {isActiveCategory && (
+              <div className="mt-4 pt-3 border-t border-slate-100">
+                {moduleError && (
+                  <p className="mb-2 text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-2.5 py-1.5">
+                    {moduleError}
+                  </p>
+                )}
+                {moduleSaved && !modulesDirty && (
+                  <p className="mb-2 text-xs text-green-700 bg-green-50 border border-green-200 rounded-lg px-2.5 py-1.5">
+                    Saved.
+                  </p>
+                )}
+                <Button
+                  onClick={handleSaveModules}
+                  disabled={!modulesDirty || savingModules}
+                  variant="brand"
+                  className="w-full sm:w-auto"
+                >
+                  {savingModules ? <Spinner size="sm" label="Saving…" /> : 'Save modules'}
+                </Button>
+              </div>
+            )}
           </div>
 
           {/* Signature features */}

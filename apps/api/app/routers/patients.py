@@ -125,9 +125,10 @@ def list_patients(
 ):
     query = scoped(db, models.Patient, tenant_id)
     # A user who can create patients (patients.manage) must be able to see the
-    # patients they just registered, even if no appointment exists yet.
-    # own_patients_filter only includes patients with existing appointments,
-    # so we only apply it when the caller lacks patients.manage.
+    # patients they just registered, even before an appointment or admission
+    # exists. own_patients_filter only ever includes patients the caller is
+    # already tied to by one of those, so it is applied only when the caller
+    # lacks patients.manage.
     can_manage = "patients.manage" in effective_permissions(db, user)
     if scope == SCOPE_OWN and not can_manage:
         query = query.filter(own_patients_filter(db, user))

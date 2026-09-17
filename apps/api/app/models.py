@@ -1,5 +1,6 @@
 from sqlalchemy import (
     Boolean,
+    CheckConstraint,
     Column,
     Float,
     ForeignKey,
@@ -702,6 +703,12 @@ class Payment(Base):
     hospital_id = Column(String, ForeignKey("hospitals.id", ondelete="CASCADE"), index=True, nullable=False)
     # appointment_id is nullable: pharmacy and lab payments are not tied to an appointment.
     appointment_id = Column(String, index=True, nullable=True)
+    # Set for a payment raised against an IPD stay (room charges, deposits,
+    # discharge settlement) instead of a single OPD visit. A payment carries at
+    # most one of appointment_id/admission_id in practice, but this is not a DB
+    # constraint — unlike vitals/prescriptions, a payment legitimately has
+    # neither (e.g. an OTC pharmacy sale with no visit and no stay).
+    admission_id = Column(String, index=True, nullable=True)
     # medication_order_id is set for pharmacy billing.
     medication_order_id = Column(String, index=True, nullable=True)
     # injection_order_id is set for injectable billing, test_order_id for lab billing.
@@ -734,7 +741,13 @@ class Prescription(Base):
 
     id = Column(String, primary_key=True)
     hospital_id = Column(String, ForeignKey("hospitals.id", ondelete="CASCADE"), index=True, nullable=False)
-    appointment_id = Column(String, index=True, nullable=False)
+    # Exactly one of appointment_id/admission_id is set — enforced by the
+    # ck_prescriptions_exactly_one_context constraint below. Unlike
+    # MedicationOrder/InjectionOrder/TestOrder, a prescription has never had a
+    # "belongs to neither" case, so this stays strict rather than optional.
+    appointment_id = Column(String, index=True, nullable=True)
+    # Set for a prescription written during an IPD stay instead of an OPD visit.
+    admission_id = Column(String, index=True, nullable=True)
     patient_id = Column(String, index=True, nullable=False)
     doctor_id = Column(String, nullable=False)
     medicine_name = Column(String, default="")
@@ -744,13 +757,25 @@ class Prescription(Base):
     instructions = Column(Text, default="")
     created_at = Column(String, nullable=False)
 
+    __table_args__ = (
+        CheckConstraint(
+            "num_nonnulls(appointment_id, admission_id) = 1",
+            name="ck_prescriptions_exactly_one_context",
+        ),
+    )
+
 
 class Vitals(Base):
     __tablename__ = "vitals"
 
     id = Column(String, primary_key=True)
     hospital_id = Column(String, ForeignKey("hospitals.id", ondelete="CASCADE"), index=True, nullable=False)
-    appointment_id = Column(String, index=True, nullable=False)
+    # Exactly one of appointment_id/admission_id is set — see Prescription
+    # above for why this pair stays strict where the order tables don't.
+    appointment_id = Column(String, index=True, nullable=True)
+    # Set for vitals recorded during an IPD stay — repeatable per admission,
+    # unlike an OPD visit's one-vitals-per-appointment shape.
+    admission_id = Column(String, index=True, nullable=True)
     patient_id = Column(String, index=True, nullable=False)
     doctor_id = Column(String, nullable=False)
     temperature = Column(Float, default=0)
@@ -774,8 +799,18 @@ class Vitals(Base):
     # pregnancy, and a blank LMP does not imply menopause — both used to be
     # silently inferred from the LMP field, which is wrong on both counts.
     pregnancy_status = Column(String, default="")
+    # Nursing intake/output charting — IPD only, left null for an OPD vitals row.
+    intake_ml = Column(Integer, nullable=True)
+    output_ml = Column(Integer, nullable=True)
     notes = Column(Text, default="")
     created_at = Column(String, nullable=False)
+
+    __table_args__ = (
+        CheckConstraint(
+            "num_nonnulls(appointment_id, admission_id) = 1",
+            name="ck_vitals_exactly_one_context",
+        ),
+    )
 
 
 # -----------------------------------------------------------------------------
@@ -808,6 +843,10 @@ class MedicationOrder(Base):
     hospital_id = Column(String, ForeignKey("hospitals.id", ondelete="CASCADE"), index=True, nullable=False)
     # Nullable: orders may be raised directly (ward round, OTC) without an appointment.
     appointment_id = Column(String, index=True, nullable=True)
+    # Set when this order was raised during an IPD stay. Like appointment_id,
+    # zero-or-one — an order may have neither (OTC) — so this is not made
+    # exclusive with appointment_id at the DB level.
+    admission_id = Column(String, index=True, nullable=True)
     patient_id = Column(String, index=True, nullable=False)
     doctor_id = Column(String, nullable=False)
     # The prescription this order was raised from, when it came from one. Null
@@ -886,6 +925,9 @@ class InjectionOrder(Base):
     hospital_id = Column(String, ForeignKey("hospitals.id", ondelete="CASCADE"), index=True, nullable=False)
     # Nullable: a shot may be ordered on a ward round with no appointment.
     appointment_id = Column(String, index=True, nullable=True)
+    # Set when ordered during an IPD stay. See MedicationOrder.admission_id for
+    # why this stays independent of appointment_id rather than exclusive.
+    admission_id = Column(String, index=True, nullable=True)
     patient_id = Column(String, index=True, nullable=False)
     doctor_id = Column(String, nullable=False)  # the prescriber
     # The prescription this shot was ordered alongside, when it came from one.
@@ -959,6 +1001,9 @@ class TestOrder(Base):
     patient_id = Column(String, index=True, nullable=False)
     doctor_id = Column(String, index=True, nullable=False)
     appointment_id = Column(String, nullable=True)
+    # Set when ordered during an IPD stay. See MedicationOrder.admission_id for
+    # why this stays independent of appointment_id rather than exclusive.
+    admission_id = Column(String, index=True, nullable=True)
     # [{"testId","name","price"}]
     items = Column(JSON, default=list)
     # ordered | sample_collected | in_progress | completed | reviewed
@@ -1019,6 +1064,188 @@ class VideoSlot(Base):
     status = Column(String, default="open")  # open | booked
     appointment_id = Column(String, nullable=True)
     created_at = Column(String, nullable=False)
+
+
+# -----------------------------------------------------------------------------
+# IPD — wards, beds and admissions.
+#
+# Appointment is OPD's encounter root; Admission is IPD's. Where OPD hangs
+# vitals/orders/prescriptions off appointment_id, an inpatient stay hangs the
+# same things off admission_id instead (see the nullable admission_id columns
+# on Vitals, Prescription, MedicationOrder, InjectionOrder, TestOrder and
+# Payment). Gated behind the "ipd" hospital module, same mechanism as
+# "lab"/"pharmacy" — see app/authz.py.
+# -----------------------------------------------------------------------------
+
+
+class Ward(Base):
+    __tablename__ = "wards"
+
+    id = Column(String, primary_key=True)
+    hospital_id = Column(String, ForeignKey("hospitals.id", ondelete="CASCADE"), index=True, nullable=False)
+    name = Column(String, nullable=False)
+    # general | icu | nicu | maternity | private | semi_private
+    ward_type = Column(String, default="general")
+    # Mirrors Doctor.department_id: a catalog link within the same tenant,
+    # SET NULL rather than blocking a department delete.
+    department_id = Column(String, ForeignKey("departments.id", ondelete="SET NULL"), nullable=True)
+    floor = Column(String, default="")
+    description = Column(Text, default="")
+
+
+class Bed(Base):
+    __tablename__ = "beds"
+
+    id = Column(String, primary_key=True)
+    hospital_id = Column(String, ForeignKey("hospitals.id", ondelete="CASCADE"), index=True, nullable=False)
+    # A bed cannot exist without its ward — unlike Doctor.department_id, this is
+    # CASCADE rather than SET NULL.
+    ward_id = Column(String, ForeignKey("wards.id", ondelete="CASCADE"), index=True, nullable=False)
+    bed_number = Column(String, nullable=False)
+    bed_type = Column(String, default="general")
+    daily_rate = Column(Float, default=0)
+    # vacant | occupied | maintenance | reserved
+    status = Column(String, default="vacant")
+
+    __table_args__ = (
+        # A hospital may reuse "1" as a bed number in different wards, but not
+        # twice in the same one.
+        UniqueConstraint("ward_id", "bed_number", name="uq_beds_ward_bed_number"),
+    )
+
+
+class Admission(Base):
+    """IPD's encounter root — the counterpart of Appointment for a stay rather
+    than a single visit.
+
+    ward_id/bed_id are the *current* location, kept in sync with whichever
+    BedAssignment row below is still open (released_at IS NULL); BedAssignment
+    is the ledger that gives transfer history and occupancy reporting, the same
+    relationship InjectionStockMovement has to Injectable.stock.
+    """
+
+    __tablename__ = "admissions"
+
+    id = Column(String, primary_key=True)
+    hospital_id = Column(String, ForeignKey("hospitals.id", ondelete="CASCADE"), index=True, nullable=False)
+    # Hospital-facing stay number, formatted the way hospital_profiles formats
+    # an MRN — a display concern, out of scope for this table.
+    admission_number = Column(String, nullable=False)
+    patient_id = Column(String, index=True, nullable=False)
+    # Named doctor_id, not attending_doctor_id, so authz.own_record_filter's
+    # generic hasattr(model, "doctor_id") check picks this up with no changes.
+    doctor_id = Column(String, index=True, nullable=False)
+    # Who sent the patient in, when known — not the clinician responsible for
+    # the stay, which is doctor_id above.
+    referring_doctor_id = Column(String, nullable=True)
+    ward_id = Column(String, index=True, nullable=False)
+    bed_id = Column(String, index=True, nullable=False)
+    admission_type = Column(String, default="planned")  # planned | emergency
+    # admitted | discharged | dama | deceased | transferred_out
+    status = Column(String, default="admitted")
+    provisional_diagnosis = Column(Text, default="")
+    payer_type = Column(String, default="cash")  # cash | insurance | corporate
+    # Who placed the admission and their role at the time — the same snapshot
+    # Appointment.booked_by_user_id/booked_by_role takes.
+    admitted_by_user_id = Column(String, nullable=True)
+    admitted_by_role = Column(String, nullable=True)
+    admitted_at = Column(String, nullable=False)
+    # Written by the discharge endpoint alongside the DischargeSummary row — a
+    # fact about what happened, never taken from a request body.
+    discharged_at = Column(String, nullable=True)
+    created_at = Column(String, nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint("hospital_id", "admission_number", name="uq_admissions_tenant_number"),
+    )
+
+
+class BedAssignment(Base):
+    """Append-only ledger of which bed an admission has occupied and when —
+    the bed counterpart of InjectionStockMovement. Admission.ward_id/bed_id
+    always mirror whichever row here has no released_at; every closed row is
+    transfer history."""
+
+    __tablename__ = "bed_assignments"
+
+    id = Column(String, primary_key=True)
+    hospital_id = Column(String, ForeignKey("hospitals.id", ondelete="CASCADE"), index=True, nullable=False)
+    admission_id = Column(String, index=True, nullable=False)
+    ward_id = Column(String, index=True, nullable=False)
+    bed_id = Column(String, index=True, nullable=False)
+    assigned_at = Column(String, nullable=False)
+    released_at = Column(String, nullable=True)
+
+
+class ProgressNote(Base):
+    """A ward-round note against a stay. The IPD counterpart of MedicalRecord,
+    kept as its own table rather than reusing MedicalRecord because that table
+    is shaped around a single OPD consult (appointment_id nullable=False, plus
+    new-visit-only history fields that don't apply to day 4 of a stay)."""
+
+    __tablename__ = "progress_notes"
+
+    id = Column(String, primary_key=True)
+    hospital_id = Column(String, ForeignKey("hospitals.id", ondelete="CASCADE"), index=True, nullable=False)
+    admission_id = Column(String, index=True, nullable=False)
+    doctor_id = Column(String, index=True, nullable=False)
+    note = Column(Text, default="")
+    created_at = Column(String, nullable=False)
+
+
+class DischargeSummary(Base):
+    """The one-per-admission closing record. Creating this row is what locks
+    the admission — see routers/admissions.py — so discharged_at here and on
+    Admission are written together, server-side, in the same transaction."""
+
+    __tablename__ = "discharge_summaries"
+
+    id = Column(String, primary_key=True)
+    hospital_id = Column(String, ForeignKey("hospitals.id", ondelete="CASCADE"), index=True, nullable=False)
+    admission_id = Column(String, index=True, nullable=False)
+    doctor_id = Column(String, index=True, nullable=False)
+    diagnosis_final = Column(Text, default="")
+    hospital_course = Column(Text, default="")
+    condition_at_discharge = Column(Text, default="")
+    # Free text rather than a structured line-per-medicine list, matching the
+    # printed-document nature of a discharge summary rather than the
+    # queryable, one-row-per-drug shape of Prescription/MedicationOrder.
+    discharge_medications = Column(Text, default="")
+    follow_up_advice = Column(Text, default="")
+    # routine | dama | referred | deceased
+    discharge_type = Column(String, default="routine")
+    discharged_at = Column(String, nullable=False)
+    created_at = Column(String, nullable=False)
+
+    __table_args__ = (
+        # One discharge summary per stay — a second discharge is a new
+        # admission, not a second closing of the same one.
+        UniqueConstraint("admission_id", name="uq_discharge_summaries_admission"),
+    )
+
+
+class AdmissionChargeItem(Base):
+    """One line on a stay's itemized bill. Room-night charges are meant to be
+    computed (nights stayed x beds.daily_rate) rather than punched in here one
+    day at a time — see app/ipd_billing.py — while doctor-visit/procedure/misc
+    charges are added as discrete rows the way this table is shaped for.
+    Payment rows (payments.admission_id) record what has actually been
+    collected against the sum of these, the same relationship Payment already
+    has to appointments."""
+
+    __tablename__ = "admission_charge_items"
+
+    id = Column(String, primary_key=True)
+    hospital_id = Column(String, ForeignKey("hospitals.id", ondelete="CASCADE"), index=True, nullable=False)
+    admission_id = Column(String, index=True, nullable=False)
+    # room | nursing | doctor_visit | procedure | misc
+    charge_type = Column(String, nullable=False)
+    description = Column(String, default="")
+    amount = Column(Float, nullable=False, default=0)
+    quantity = Column(Integer, nullable=False, default=1)
+    # Null for a system-computed room charge; a user id for anything staff add.
+    created_by = Column(String, nullable=True)
+    charged_at = Column(String, nullable=False)
 
 
 # -----------------------------------------------------------------------------

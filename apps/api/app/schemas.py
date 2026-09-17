@@ -1396,6 +1396,205 @@ class DepartmentUpdate(CamelModel):
     description: Optional[str] = None
 
 
+# ---------- IPD: Ward / Bed ----------
+class WardOut(OutModel):
+    id: str
+    hospital_id: Optional[str] = None
+    name: str
+    ward_type: str = "general"
+    department_id: Optional[str] = None
+    floor: str = ""
+    description: str = ""
+
+
+class WardCreate(CamelModel):
+    name: str
+    ward_type: str = "general"
+    department_id: Optional[str] = None
+    floor: str = ""
+    description: str = ""
+
+
+class WardUpdate(CamelModel):
+    name: Optional[str] = None
+    ward_type: Optional[str] = None
+    department_id: Optional[str] = None
+    floor: Optional[str] = None
+    description: Optional[str] = None
+
+
+class BedOut(OutModel):
+    id: str
+    hospital_id: Optional[str] = None
+    ward_id: str
+    bed_number: str
+    bed_type: str = "general"
+    daily_rate: float = 0
+    status: str = "vacant"
+
+
+class BedCreate(CamelModel):
+    ward_id: str
+    bed_number: str
+    bed_type: str = "general"
+    daily_rate: float = 0
+
+
+class BedUpdate(CamelModel):
+    bed_number: Optional[str] = None
+    bed_type: Optional[str] = None
+    daily_rate: Optional[float] = None
+    # "vacant" <-> "maintenance" only — taking a bed out of service and putting
+    # it back. "occupied"/"reserved" are facts about an admission, written by
+    # routers/admissions.py; the router refuses them here (see beds.py).
+    status: Optional[str] = None
+
+
+# ---------- IPD: Admission ----------
+class AdmissionOut(OutModel):
+    id: str
+    hospital_id: Optional[str] = None
+    admission_number: str
+    patient_id: str
+    patient_name: str = ""
+    patient_phone: str = ""
+    doctor_id: str
+    doctor_name: str = ""
+    referring_doctor_id: Optional[str] = None
+    ward_id: str
+    ward_name: str = ""
+    bed_id: str
+    bed_number: str = ""
+    admission_type: str = "planned"
+    status: str = "admitted"
+    provisional_diagnosis: str = ""
+    payer_type: str = "cash"
+    admitted_by_user_id: Optional[str] = None
+    admitted_by_role: Optional[str] = None
+    admitted_at: str
+    discharged_at: Optional[str] = None
+    created_at: str
+
+
+class AdmissionCreate(CamelModel):
+    patient_id: str
+    doctor_id: str
+    referring_doctor_id: Optional[str] = None
+    # Not ward_id: the ward is derived server-side from the chosen bed, so the
+    # two can never be sent disagreeing with each other.
+    bed_id: str
+    admission_type: str = "planned"
+    provisional_diagnosis: str = ""
+    payer_type: str = "cash"
+
+
+class AdmissionUpdate(CamelModel):
+    """Clinical/administrative edits only. There is deliberately no `status`
+    field: every non-"admitted" status is a discharge-shaped closure (routine,
+    DAMA, referred, deceased) and is written only by POST
+    /discharge-summaries, which creates the DischargeSummary and the status
+    transition together. Moving ward/bed is its own endpoint
+    (POST /admissions/{id}/transfer), not a field here, so it can carry the
+    "own scope may not reassign" rule appointments.doctor_id already has."""
+
+    doctor_id: Optional[str] = None
+    referring_doctor_id: Optional[str] = None
+    admission_type: Optional[str] = None
+    provisional_diagnosis: Optional[str] = None
+    payer_type: Optional[str] = None
+
+
+class AdmissionTransferBed(CamelModel):
+    bed_id: str
+
+
+# ---------- IPD: Progress notes ----------
+class ProgressNoteOut(OutModel):
+    id: str
+    hospital_id: Optional[str] = None
+    admission_id: str
+    doctor_id: str
+    doctor_name: str = ""
+    note: str = ""
+    created_at: str
+
+
+class ProgressNoteCreate(CamelModel):
+    admission_id: str
+    note: str = ""
+    # No doctorId: the author is always the caller's own doctor record — see
+    # routers/progress_notes.py. A note authored by anyone else would be a
+    # fact about who wrote it, and that is not the client's to assert.
+
+
+# ---------- IPD: Discharge summary ----------
+class DischargeSummaryOut(OutModel):
+    id: str
+    hospital_id: Optional[str] = None
+    admission_id: str
+    doctor_id: str
+    doctor_name: str = ""
+    diagnosis_final: str = ""
+    hospital_course: str = ""
+    condition_at_discharge: str = ""
+    discharge_medications: str = ""
+    follow_up_advice: str = ""
+    discharge_type: str = "routine"
+    discharged_at: str
+    created_at: str
+
+
+class DischargeSummaryCreate(CamelModel):
+    admission_id: str
+    diagnosis_final: str = ""
+    hospital_course: str = ""
+    condition_at_discharge: str = ""
+    discharge_medications: str = ""
+    follow_up_advice: str = ""
+    # routine | dama | referred | deceased
+    discharge_type: str = "routine"
+    # No doctorId, no discharged_at: the doctor is the caller's own record
+    # (same rule as ProgressNoteCreate) and discharged_at is a fact the server
+    # writes at the moment this row is created — see routers/discharge_summaries.py.
+
+
+# ---------- IPD: Billing ----------
+class AdmissionChargeItemOut(OutModel):
+    id: str
+    hospital_id: Optional[str] = None
+    admission_id: str
+    charge_type: str
+    description: str = ""
+    amount: float = 0
+    quantity: int = 1
+    created_by: Optional[str] = None
+    charged_at: str
+
+
+class AdmissionChargeItemCreate(CamelModel):
+    # room is deliberately not creatable here — it is computed, not entered.
+    # See routers/ipd_billing.py.
+    charge_type: str
+    description: str = ""
+    amount: float
+    quantity: int = 1
+
+
+class AdmissionBillOut(CamelModel):
+    """A stay's running bill: system-computed room charges, every manually
+    added charge item, and what has already been paid against it."""
+
+    admission_id: str
+    room_nights: int = 0
+    room_rate: float = 0
+    room_total: float = 0
+    items: List[AdmissionChargeItemOut] = []
+    items_total: float = 0
+    paid_total: float = 0
+    grand_total: float = 0
+    balance_due: float = 0
+
+
 # ---------- Appointment ----------
 def _require_reason(value: str) -> str:
     """Why the patient is coming, and it is not optional.

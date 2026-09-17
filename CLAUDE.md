@@ -49,6 +49,30 @@ Every request answers these separately — do not collapse them:
 - Backend uses `get_tenant_id()` FastAPI dependency + `scoped(db, Model, tenant_id)` helper to filter all queries
 - Frontend resolves tenant via `apps/web/lib/tenant.ts`
 
+### Multi-tenancy checklist — check this before writing code, not after
+Every table is tenant-owned unless it's one of the handful of platform tables (`hospitals`,
+`hospital_subscriptions`, `roles`, `permissions`, `audit_logs`). Before writing anything that
+touches data, walk through this list for what you're about to add:
+- **New table?** It has `hospital_id = Column(String, ForeignKey("hospitals.id", ondelete="CASCADE"), index=True, nullable=False)`.
+- **New query?** It goes through `scoped(db, Model, tenant_id)` — never a bare `db.query(Model)`.
+- **New request body with an id field** (`patient_id`, `doctor_id`, a new FK you just added)? It's
+  checked with `assert_in_tenant` / `assert_body_in_tenant`, or added to `_body_foreign_keys()` in
+  `apps/api/app/tenancy.py` so the sweep covers it automatically — see the comment there on why a
+  new field silently rides along otherwise.
+- **New endpoint?** It depends on both `get_tenant_id` and `require_permission("<code>")` — never a
+  role-name check (`if role == "doctor"` does not belong in this codebase, see Authorization below).
+- **New frontend screen or API call?** Tenant resolution goes through `apps/web/lib/tenant.ts`; data
+  access goes through `store/api.ts` — never a hardcoded hospital id, never a component reading a
+  store directly.
+- **Any lookup by id?** A record that doesn't exist *or* belongs to another tenant returns **404**,
+  never 403 (a 403 confirms the id exists).
+
+If you can't tick every line that applies before writing the code, work out the scoping first. A
+tenant-isolation bug here is Hospital A reading Hospital B's patients — not a cosmetic bug, a
+breach. This applies to every change, not just new features: an edit to an existing router or
+query still has to be re-checked against this list, since it's easy to add a join or a field that
+quietly bypasses `scoped()`.
+
 ## Authorization (roles are data, not code)
 - `permissions` — the catalog of capabilities. Code owns it; new rows arrive by migration.
 - `role_permissions` — which role holds which permission, **and at what scope**. Superadmin owns this.
