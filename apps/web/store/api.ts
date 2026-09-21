@@ -24,6 +24,7 @@ import type {
   MedicalRecord,
   MedicationOrder,
   Medicine,
+  NursingNote,
   Patient,
   Payment,
   PaymentInitiateOut,
@@ -694,7 +695,9 @@ export interface MedicalRecordUpdateBody {
   perVaginum?: string;
 }
 export interface PrescriptionCreateBody {
-  appointmentId: string;
+  // Exactly one of appointmentId/admissionId.
+  appointmentId?: string;
+  admissionId?: string;
   patientId: string;
   doctorId: string;
   medicineName?: string;
@@ -742,7 +745,9 @@ export interface PaymentVerifyBody {
   followUpOf?: string;
 }
 export interface VitalsCreateBody {
-  appointmentId: string;
+  // Exactly one of appointmentId/admissionId.
+  appointmentId?: string;
+  admissionId?: string;
   patientId: string;
   doctorId: string;
   temperature?: number;
@@ -756,6 +761,8 @@ export interface VitalsCreateBody {
   edd?: string;
   pog?: string;
   pregnancyStatus?: string;
+  intakeMl?: number;
+  outputMl?: number;
   notes?: string;
 }
 export interface RazorpaySettingsUpdate {
@@ -912,6 +919,13 @@ export interface AdmissionUpdateBody {
   payerType?: string;
 }
 export interface ProgressNoteCreateBody { admissionId: string; note?: string }
+export interface NursingNoteCreateBody { admissionId: string; shift?: string; note?: string }
+export interface AdmissionPaymentCreateBody {
+  amount: number;
+  paymentMethod?: string;
+  purpose?: 'deposit' | 'interim' | 'settlement';
+  notes?: string;
+}
 export interface DischargeSummaryCreateBody {
   admissionId: string;
   diagnosisFinal?: string;
@@ -1012,6 +1026,7 @@ export const api = createApi({
     'Bed',
     'Admission',
     'ProgressNote',
+    'NursingNote',
     'DischargeSummary',
     'AdmissionChargeItem',
   ],
@@ -1755,6 +1770,16 @@ export const api = createApi({
       invalidatesTags: [{ type: 'ProgressNote', id: 'LIST' }],
     }),
 
+    // ── IPD: nursing notes (nurse round) ─────────────────────────────────────
+    listNursingNotes: build.query<NursingNote[], { admissionId?: string } | void>({
+      query: (params) => ({ url: '/nursing-notes', params: params ?? undefined }),
+      providesTags: [{ type: 'NursingNote', id: 'LIST' }],
+    }),
+    createNursingNote: build.mutation<NursingNote, NursingNoteCreateBody>({
+      query: (body) => ({ url: '/nursing-notes', method: 'POST', body }),
+      invalidatesTags: [{ type: 'NursingNote', id: 'LIST' }],
+    }),
+
     // ── IPD: discharge ───────────────────────────────────────────────────────
     // Discharging a patient *is* creating this row — see
     // apps/api/app/routers/discharge_summaries.py. There is no update
@@ -1791,6 +1816,19 @@ export const api = createApi({
         { type: 'AdmissionChargeItem', id: admissionId },
       ],
     }),
+    recordAdmissionPayment: build.mutation<
+      Payment,
+      { admissionId: string; body: AdmissionPaymentCreateBody }
+    >({
+      query: ({ admissionId, body }) => ({
+        url: `/admissions/${admissionId}/payments`,
+        method: 'POST',
+        body,
+      }),
+      invalidatesTags: (_r, _e, { admissionId }) => [
+        { type: 'AdmissionChargeItem', id: admissionId },
+      ],
+    }),
 
     // ── Medical Records ───────────────────────────────────────────────────────
     listMedicalRecords: build.query<
@@ -1812,7 +1850,7 @@ export const api = createApi({
     // ── Prescriptions ─────────────────────────────────────────────────────────
     listPrescriptions: build.query<
       Prescription[],
-      { patientId?: string; appointmentId?: string } | void
+      { patientId?: string; appointmentId?: string; admissionId?: string } | void
     >({
       query: (params) => ({ url: '/prescriptions', params: params ?? undefined }),
       providesTags: [{ type: 'Prescription', id: 'LIST' }],
@@ -2046,13 +2084,15 @@ export const api = createApi({
     // ── Medication Orders ─────────────────────────────────────────────────────
     listMedicationOrders: build.query<
       MedicationOrder[],
-      { patientId?: string; doctorId?: string; appointmentId?: string; status?: string; q?: string } | void
+      { patientId?: string; doctorId?: string; appointmentId?: string; admissionId?: string; status?: string; q?: string } | void
     >({
       query: (params) => ({ url: '/medication-orders', params: params ?? undefined }),
       providesTags: [{ type: 'MedicationOrder', id: 'LIST' }],
     }),
     createMedicationOrder: build.mutation<MedicationOrder, {
       appointmentId?: string;
+      /** Set when this order is raised during an IPD stay. */
+      admissionId?: string;
       patientId: string;
       /** Omit when the caller is the prescribing doctor — the server writes
        *  their own id. A pharmacist recording someone else's prescription
@@ -2189,13 +2229,15 @@ export const api = createApi({
     // ── Injection Orders ─────────────────────────────────────────────────────
     listInjectionOrders: build.query<
       InjectionOrder[],
-      { patientId?: string; doctorId?: string; appointmentId?: string; status?: string; q?: string } | void
+      { patientId?: string; doctorId?: string; appointmentId?: string; admissionId?: string; status?: string; q?: string } | void
     >({
       query: (params) => ({ url: '/injection-orders', params: params ?? undefined }),
       providesTags: [{ type: 'InjectionOrder', id: 'LIST' }],
     }),
     createInjectionOrder: build.mutation<InjectionOrder, {
       appointmentId?: string;
+      /** Set when this order is raised during an IPD stay. */
+      admissionId?: string;
       patientId: string;
       /** Omit when the caller is the ordering doctor — the server writes their
        *  own id. A non-doctor must name the prescriber. */
@@ -2258,7 +2300,7 @@ export const api = createApi({
     }),
 
     // ── Lab orders and results ───────────────────────────────────────────────
-    listTestOrders: build.query<TestOrder[], { patientId?: string; doctorId?: string; appointmentId?: string } | void>({
+    listTestOrders: build.query<TestOrder[], { patientId?: string; doctorId?: string; appointmentId?: string; admissionId?: string } | void>({
       query: (params) => ({ url: '/test-orders', params: params ?? undefined }),
       providesTags: [{ type: 'TestOrder', id: 'LIST' }],
     }),
@@ -2389,7 +2431,7 @@ export const api = createApi({
     // ── Vitals ────────────────────────────────────────────────────────────────
     listVitals: build.query<
       Vitals[],
-      { patientId?: string; appointmentId?: string } | void
+      { patientId?: string; appointmentId?: string; admissionId?: string } | void
     >({
       query: (params) => ({ url: '/vitals', params: params ?? undefined }),
       providesTags: [{ type: 'Vitals', id: 'LIST' }],
@@ -2542,12 +2584,15 @@ export const {
   useListProgressNotesPagedQuery,
   useLazyListProgressNotesPagedQuery,
   useCreateProgressNoteMutation,
+  useListNursingNotesQuery,
+  useCreateNursingNoteMutation,
   useListDischargeSummariesPagedQuery,
   useLazyListDischargeSummariesPagedQuery,
   useCreateDischargeSummaryMutation,
   useGetAdmissionBillQuery,
   useListAdmissionChargeItemsQuery,
   useCreateAdmissionChargeItemMutation,
+  useRecordAdmissionPaymentMutation,
   useListMedicalRecordsQuery,
   useCreateMedicalRecordMutation,
   useUpdateMedicalRecordMutation,

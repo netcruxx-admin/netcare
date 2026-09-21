@@ -47,6 +47,26 @@ def own_discharge_summaries_filter(db: Session, user: models.User):
     return or_(*conditions)
 
 
+def own_nursing_notes_filter(db: Session, user: models.User):
+    """A filter over NursingNote rows a doctor may see under an "own" grant:
+    notes on admissions where they are the attending doctor.
+
+    NursingNote carries nurse_id, not doctor_id, so authz.own_record_filter's
+    generic hasattr(model, "doctor_id") check would silently match nothing —
+    the same class of gap own_discharge_summaries_filter exists to fix, here
+    reached through admission_id instead of a direct patient_id column.
+    """
+    from sqlalchemy import false, select
+
+    from .authz import caller_doctor_id
+
+    doctor_id = caller_doctor_id(db, user)
+    if not doctor_id:
+        return false()
+    own_admissions = select(models.Admission.id).where(models.Admission.doctor_id == doctor_id)
+    return models.NursingNote.admission_id.in_(own_admissions)
+
+
 def caller_may_view_admission(db: Session, user: models.User, admission: models.Admission) -> bool:
     """Whether the caller is a party to this admission — its attending doctor,
     or the patient it belongs to. Used by ipd_billing's per-admission bill
@@ -73,8 +93,18 @@ def _nights_between(start_iso: str, end_iso: str) -> int:
     return max(nights, 1)
 
 
+_PAYMENT_TYPE_LABELS = {
+    "pharmacy": "Pharmacy",
+    "injectable": "Injection",
+    "lab": "Lab",
+    "ipd_payment": "Payment received",
+    "consultation": "Consultation",
+}
+
+
 def compute_bill(db: Session, tenant_id: str, admission: models.Admission) -> dict:
-    """A stay's running bill: room-night total + itemized charges + payments.
+    """A stay's running bill: room-night total + itemized charges + every
+    payment raised against this admission_id.
 
     Room charge is nights-stayed x the bed's *current* daily_rate, computed
     here rather than stored on the admission — the night count is always
@@ -84,6 +114,20 @@ def compute_bill(db: Session, tenant_id: str, admission: models.Admission) -> di
     bill at the moment it was charged so a reprint matches what was actually
     charged), an *open* stay's running total is meant to reflect the current
     rate card, not the rate on day one.
+
+    Every admission-linked *service* Payment (pharmacy/injectable/lab —
+    anything but `ipd_payment`) is folded into `grand_total` regardless of
+    status: a charge raised during the stay is money owed the moment it's
+    ordered, not only once collected. Before this fold-in, a completed one
+    counted toward `paid_total` but never toward `grand_total`, understating
+    the bill and producing a wrong (too-low, sometimes negative) balance.
+
+    `ipd_payment` rows (POST .../payments — a deposit/interim/settlement
+    reception collected directly) are different in kind: they are money
+    *received*, not a new charge, so they count only toward `paid_total`.
+    Folding them into `grand_total` too would make recording a payment net to
+    zero effect on `balance_due` — it would both add and settle the same
+    amount in the same call, defeating the endpoint's purpose.
     """
     end = admission.discharged_at or datetime.now(timezone.utc).isoformat()
     nights = _nights_between(admission.admitted_at, end)
@@ -99,15 +143,40 @@ def compute_bill(db: Session, tenant_id: str, admission: models.Admission) -> di
     )
     items_total = sum(item.amount * item.quantity for item in items)
 
-    paid_total = sum(
-        payment.amount
-        for payment in scoped(db, models.Payment, tenant_id).filter(
-            models.Payment.admission_id == admission.id,
-            models.Payment.status == "completed",
-        )
+    payments = (
+        scoped(db, models.Payment, tenant_id)
+        .filter(models.Payment.admission_id == admission.id)
+        .order_by(models.Payment.created_at)
+        .all()
     )
+    charge_payments_total = sum(p.amount for p in payments if p.payment_type != "ipd_payment")
+    paid_total = sum(p.amount for p in payments if p.status == "completed")
 
-    grand_total = room_total + items_total
+    lines = [
+        {
+            "source": "charge_item",
+            "id": item.id,
+            "label": item.description or item.charge_type.replace("_", " ").title(),
+            "amount": item.amount,
+            "quantity": item.quantity,
+            "paid": False,
+            "at": item.charged_at,
+        }
+        for item in items
+    ] + [
+        {
+            "source": "payment",
+            "id": p.id,
+            "label": _PAYMENT_TYPE_LABELS.get(p.payment_type, p.payment_type),
+            "amount": p.amount,
+            "quantity": 1,
+            "paid": p.status == "completed",
+            "at": p.created_at,
+        }
+        for p in payments
+    ]
+
+    grand_total = room_total + items_total + charge_payments_total
     return {
         "admission_id": admission.id,
         "room_nights": nights,
@@ -115,6 +184,7 @@ def compute_bill(db: Session, tenant_id: str, admission: models.Admission) -> di
         "room_total": room_total,
         "items": items,
         "items_total": items_total,
+        "lines": lines,
         "paid_total": paid_total,
         "grand_total": grand_total,
         "balance_due": grand_total - paid_total,

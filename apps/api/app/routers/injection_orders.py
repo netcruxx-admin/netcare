@@ -22,6 +22,7 @@ from .. import billing_config, models, notify, schemas
 from ..auth import get_current_user
 from ..authz import SCOPE_OWN, require_permission
 from ..database import get_db
+from ..ipd import TERMINAL_STATUSES
 from ..tenancy import assert_body_in_tenant, get_tenant_id, scoped
 from ..utils import ListQuery, list_params, new_id, now_iso, paginate
 
@@ -34,6 +35,7 @@ def list_injection_orders(
     patient_id: Optional[str] = Query(default=None, alias="patientId"),
     doctor_id: Optional[str] = Query(default=None, alias="doctorId"),
     appointment_id: Optional[str] = Query(default=None, alias="appointmentId"),
+    admission_id: Optional[str] = Query(default=None, alias="admissionId"),
     status_filter: Optional[str] = Query(default=None, alias="status"),
     params: ListQuery = Depends(list_params),
     db: Session = Depends(get_db),
@@ -50,6 +52,8 @@ def list_injection_orders(
         query = query.filter(models.InjectionOrder.doctor_id == doctor_id)
     if appointment_id:
         query = query.filter(models.InjectionOrder.appointment_id == appointment_id)
+    if admission_id:
+        query = query.filter(models.InjectionOrder.admission_id == admission_id)
     if status_filter:
         wanted = [s.strip() for s in status_filter.split(",") if s.strip()]
         query = query.filter(models.InjectionOrder.status.in_(wanted))
@@ -81,6 +85,17 @@ def create_injection_order(
     tenant_id: str = Depends(get_tenant_id),
 ):
     assert_body_in_tenant(db, body, tenant_id)
+
+    if body.admission_id:
+        admission = (
+            scoped(db, models.Admission, tenant_id)
+            .filter(models.Admission.id == body.admission_id)
+            .first()
+        )
+        if admission.patient_id != body.patient_id:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Admission not found")
+        if admission.status in TERMINAL_STATUSES:
+            raise HTTPException(status.HTTP_409_CONFLICT, "This admission is closed")
 
     # Whose name goes on the order. The permission is the authorization; this is
     # only about the prescriber. A doctor's own id always wins over the body — a
@@ -215,6 +230,7 @@ def administer_injection_order(
         id=new_id("pay"),
         hospital_id=tenant_id,
         appointment_id=None,
+        admission_id=order.admission_id,
         injection_order_id=order_id,
         patient_id=order.patient_id,
         amount=subtotal,

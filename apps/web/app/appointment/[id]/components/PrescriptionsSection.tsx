@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Formik, Form, useFormik } from 'formik';
 import { Pencil, Pill, Plus, Trash2 } from 'lucide-react';
 import { apiError } from '@/lib/apiError';
+import { fmtDateTime } from '@/lib/date';
 import { Spinner } from '@/components/ui/spinner';
 import { Button } from '@/components/ui/button';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
@@ -14,6 +15,7 @@ import {
   useUpdatePrescriptionMutation,
 } from '@/store/api';
 import type { Prescription } from '@/lib/types';
+import type { EncounterContext } from '@/lib/encounterContext';
 import { rxSchema } from '../appointmentSchemas';
 import { InlineConfirmBar } from './InlineConfirm';
 
@@ -36,7 +38,7 @@ const rxFields = (
 
 interface Props {
   prescriptions: Prescription[];
-  appointmentId: string;
+  context: EncounterContext;
   patientId: string;
   doctorId: string;
   medicineOptions: { value: string; label: string }[];
@@ -46,7 +48,7 @@ interface Props {
 
 export function PrescriptionsSection({
   prescriptions,
-  appointmentId,
+  context,
   patientId,
   doctorId,
   medicineOptions,
@@ -61,7 +63,7 @@ export function PrescriptionsSection({
   const [deleting, setDeleting] = useState(false);
   const [addError, setAddError] = useState('');
 
-  const head = ['Medicine', 'Dosage', 'Frequency', 'Duration', 'Instructions'];
+  const head = ['Prescribed', 'Medicine', 'Dosage', 'Frequency', 'Duration', 'Instructions'];
   const colSpan = head.length + (canManage ? 1 : 0);
 
   const confirmDelete = async () => {
@@ -134,6 +136,7 @@ export function PrescriptionsSection({
                 }
                 return (
                   <TableRow key={rx.id} className="border-b border-slate-50 hover:bg-slate-50">
+                    <TableCell className="py-3 px-4 text-slate-500 whitespace-nowrap">{fmtDateTime(rx.createdAt)}</TableCell>
                     <TableCell className="py-3 px-4 font-medium text-slate-900 whitespace-normal">{rx.medicineName}</TableCell>
                     <TableCell className="py-3 px-4 text-slate-600 whitespace-normal">{rx.dosage || '—'}</TableCell>
                     <TableCell className="py-3 px-4 text-slate-600 whitespace-normal">{rx.frequency || '—'}</TableCell>
@@ -163,7 +166,7 @@ export function PrescriptionsSection({
                   onAdd={async (body) => {
                     setAddError('');
                     try {
-                      await createPrescription({ appointmentId, patientId, doctorId, ...body }).unwrap();
+                      await createPrescription({ ...context, patientId, doctorId, ...body }).unwrap();
                     } catch (err) {
                       setAddError(apiError(err, 'Could not add prescription'));
                       throw err;
@@ -221,6 +224,7 @@ function NewRxRow({
   return (
     <>
       <TableRow className="bg-cyan-50/20">
+        <TableCell className="py-3 px-4 text-xs text-slate-400 whitespace-nowrap">Now</TableCell>
         <TableCell className="p-1.5">
           <select name="medicineName" value={formik.values.medicineName} onChange={formik.handleChange} className={cell}>
             <option value="">Select medicine…</option>

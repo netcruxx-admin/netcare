@@ -223,6 +223,17 @@ export interface ProgressNote {
   createdAt: string;
 }
 
+export interface NursingNote {
+  id: string;
+  hospitalId?: string;
+  admissionId: string;
+  nurseId: string;
+  nurseName?: string;
+  shift: string;
+  note: string;
+  createdAt: string;
+}
+
 export type DischargeType = 'routine' | 'dama' | 'referred' | 'deceased';
 
 export interface DischargeSummary {
@@ -255,6 +266,20 @@ export interface AdmissionChargeItem {
   chargedAt: string;
 }
 
+/** One line of the unified bill: a manual charge item, or a Payment raised
+ *  elsewhere (pharmacy/injectable/lab during the stay, or a front-desk
+ *  deposit/settlement) tagged with this admission. `paid` is always false for
+ *  a charge_item line — settling one is what "Record Payment" is for. */
+export interface AdmissionBillLine {
+  source: 'charge_item' | 'payment';
+  id: string;
+  label: string;
+  amount: number;
+  quantity: number;
+  paid: boolean;
+  at: string;
+}
+
 export interface AdmissionBill {
   admissionId: string;
   roomNights: number;
@@ -262,6 +287,7 @@ export interface AdmissionBill {
   roomTotal: number;
   items: AdmissionChargeItem[];
   itemsTotal: number;
+  lines: AdmissionBillLine[];
   paidTotal: number;
   grandTotal: number;
   balanceDue: number;
@@ -301,12 +327,13 @@ export interface Payment {
   id: string;
   hospitalId?: string;
   appointmentId?: string | null;
+  admissionId?: string | null;
   medicationOrderId?: string | null;
   injectionOrderId?: string | null;
   testOrderId?: string | null;
   patientId: string;
   amount: number;
-  paymentType: 'consultation' | 'pharmacy' | 'lab' | 'injectable';
+  paymentType: 'consultation' | 'pharmacy' | 'lab' | 'injectable' | 'ipd_payment';
   status: 'pending' | 'completed' | 'failed';
   paymentMethod: string;
   gatewayOrderId?: string | null;
@@ -436,7 +463,9 @@ export interface PaymentVerifyOut {
 export interface Prescription {
   id: string;
   hospitalId?: string;
-  appointmentId: string;
+  /** Exactly one of appointmentId/admissionId is set. */
+  appointmentId?: string | null;
+  admissionId?: string | null;
   patientId: string;
   doctorId: string;
   medicineName: string;
@@ -452,7 +481,9 @@ export interface Prescription {
 export interface Vitals {
   id: string;
   hospitalId?: string;
-  appointmentId: string;
+  /** Exactly one of appointmentId/admissionId is set. */
+  appointmentId?: string | null;
+  admissionId?: string | null;
   patientId: string;
   doctorId: string;
   temperature: number;
@@ -473,6 +504,9 @@ export interface Vitals {
   pog: string;
   /** "" (not recorded) | "pregnant" | "not_pregnant" | "menopause". */
   pregnancyStatus: string;
+  /** Nursing intake/output charting during a stay — unset for an OPD row. */
+  intakeMl?: number | null;
+  outputMl?: number | null;
   notes: string;
   createdAt: string;
   /** Resolved by the API, so a table need not fetch every patient to name one. */
@@ -501,6 +535,8 @@ export interface MedicationOrder {
   id: string;
   hospitalId?: string;
   appointmentId?: string | null;
+  /** Set when this order was raised during an IPD stay. */
+  admissionId?: string | null;
   patientId: string;
   doctorId: string;
   /** The prescription this order was raised from, when it came from one. */
@@ -517,10 +553,14 @@ export interface MedicationOrder {
   instructions: string;
   status: MedicationOrderStatus;
   notes: string;
+  /** Filled by the nurse at administration — who and when. */
+  administeredBy?: string | null;
+  administeredAt?: string | null;
   orderedAt: string;
   patientName?: string;
   patientPhone?: string;
   doctorName?: string;
+  administeredByName?: string;
   /** Unit price from medicine catalogue; 0 for free-text orders. */
   unitPrice: number;
   /** True when a pharmacy payment record already exists for this order. */
@@ -578,6 +618,8 @@ export interface InjectionOrder {
   id: string;
   hospitalId?: string;
   appointmentId?: string | null;
+  /** Set when this order was raised during an IPD stay. */
+  admissionId?: string | null;
   patientId: string;
   doctorId: string;
   prescriptionId?: string | null;
@@ -680,6 +722,8 @@ export interface TestOrder {
   patientId: string;
   doctorId: string;
   appointmentId?: string;
+  /** Set when this order was raised during an IPD stay. */
+  admissionId?: string | null;
   items: TestOrderItem[];
   status: TestOrderStatus;
   priority: 'routine' | 'urgent';

@@ -12,6 +12,7 @@ from .. import models, notify, schemas
 from ..auth import get_current_user
 from ..authz import SCOPE_OWN, require_permission
 from ..database import get_db
+from ..ipd import TERMINAL_STATUSES
 from ..tenancy import assert_body_in_tenant, assert_in_tenant, get_tenant_id, scoped
 from ..utils import ListQuery, list_params, new_id, now_iso, paginate, text_search
 
@@ -24,6 +25,7 @@ def list_medication_orders(
     patient_id: Optional[str] = Query(default=None, alias="patientId"),
     doctor_id: Optional[str] = Query(default=None, alias="doctorId"),
     appointment_id: Optional[str] = Query(default=None, alias="appointmentId"),
+    admission_id: Optional[str] = Query(default=None, alias="admissionId"),
     status_filter: Optional[str] = Query(default=None, alias="status"),
     params: ListQuery = Depends(list_params),
     db: Session = Depends(get_db),
@@ -40,6 +42,8 @@ def list_medication_orders(
         query = query.filter(models.MedicationOrder.doctor_id == doctor_id)
     if appointment_id:
         query = query.filter(models.MedicationOrder.appointment_id == appointment_id)
+    if admission_id:
+        query = query.filter(models.MedicationOrder.admission_id == admission_id)
     if status_filter:
         wanted = [s.strip() for s in status_filter.split(",") if s.strip()]
         query = query.filter(models.MedicationOrder.status.in_(wanted))
@@ -74,6 +78,17 @@ def create_medication_order(
     # Without this a row filed here can point at another hospital's records,
     # and the display helpers then resolve that id to a real name.
     assert_body_in_tenant(db, body, tenant_id)
+
+    if body.admission_id:
+        admission = (
+            scoped(db, models.Admission, tenant_id)
+            .filter(models.Admission.id == body.admission_id)
+            .first()
+        )
+        if admission.patient_id != body.patient_id:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Admission not found")
+        if admission.status in TERMINAL_STATUSES:
+            raise HTTPException(status.HTTP_409_CONFLICT, "This admission is closed")
 
     # Who prescribed this. Previously a hard `if not a doctor: 403`, which made
     # the grant to pharmacist a lie — they held medication_orders.manage and
@@ -242,6 +257,7 @@ def administer_order(
     order_id: str,
     body: schemas.MedicationOrderUpdate,
     db: Session = Depends(get_db),
+    user: models.User = Depends(get_current_user),
     _: str = Depends(require_permission("medication_orders.administer")),
     tenant_id: str = Depends(get_tenant_id),
 ):
@@ -264,6 +280,10 @@ def administer_order(
         parts.append(body.notes)
     if parts:
         order.notes = " | ".join(parts)
+    # Who gave it and when — a fact about what happened, written by the
+    # server, not asserted by the request body. Mirrors InjectionOrder's pair.
+    order.administered_by = user.id
+    order.administered_at = now_iso()
     db.commit()
     db.refresh(order)
 
@@ -356,6 +376,7 @@ def bill_dispensed_order(
         id=new_id("pay"),
         hospital_id=tenant_id,
         appointment_id=None,
+        admission_id=order.admission_id,
         medication_order_id=order_id,
         patient_id=order.patient_id,
         amount=amount,
@@ -398,6 +419,10 @@ def _enrich(db: Session, tenant_id: str, order: models.MedicationOrder) -> schem
         u = db.query(models.User).filter(models.User.id == doc.user_id).first()
         if u:
             result.doctor_name = u.name
+    if order.administered_by:
+        u = db.query(models.User).filter(models.User.id == order.administered_by).first()
+        if u:
+            result.administered_by_name = u.name
     # Unit price from the medicine catalogue (0 for free-text orders)
     if order.medicine_id:
         med = (

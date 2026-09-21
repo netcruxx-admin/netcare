@@ -168,7 +168,7 @@ export default function AppointmentDetailPage() {
           <div className="py-6">
             <VitalsSection
               vitals={details.vitals}
-              appointmentId={appointmentId}
+              context={{ appointmentId }}
               patientId={appointment.patientId}
               doctorId={appointment.doctorId}
               canManage={canManage}
@@ -180,7 +180,7 @@ export default function AppointmentDetailPage() {
             <div className="py-6">
               <InjectionOrdersSection
                 orders={details.injectionOrders}
-                appointmentId={appointmentId}
+                context={{ appointmentId }}
                 patientId={appointment.patientId}
                 doctorId={appointment.doctorId}
                 canManage={canOrderInjection}
@@ -191,7 +191,7 @@ export default function AppointmentDetailPage() {
           <div className="py-6">
             <PrescriptionsSection
               prescriptions={details.prescriptions}
-              appointmentId={appointmentId}
+              context={{ appointmentId }}
               patientId={appointment.patientId}
               doctorId={appointment.doctorId}
               medicineOptions={medicineOptions}
@@ -203,7 +203,7 @@ export default function AppointmentDetailPage() {
           <div className="py-6">
             <LabOrdersSection
               testOrders={details.testOrders}
-              appointmentId={appointmentId}
+              context={{ appointmentId }}
               patientId={appointment.patientId}
               doctorId={appointment.doctorId}
               canOrder={canManage && modules.lab}

@@ -5,10 +5,12 @@ import { useFormik } from 'formik';
 import * as Yup from 'yup';
 import { Plus, Syringe } from 'lucide-react';
 import { apiError } from '@/lib/apiError';
+import { fmtDateTime } from '@/lib/date';
 import { Spinner } from '@/components/ui/spinner';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
 import { useCancelInjectionOrderMutation, useCreateInjectionOrderMutation, useListInjectablesQuery } from '@/store/api';
 import { INJECTION_ROUTES, type InjectionOrder } from '@/lib/types';
+import type { EncounterContext } from '@/lib/encounterContext';
 import { InlineConfirmBar } from './InlineConfirm';
 
 const schema = Yup.object({
@@ -33,17 +35,17 @@ const STATUS_CLS: Record<string, string> = {
 
 const cell = 'w-full px-2 py-1.5 border border-slate-300 rounded text-sm focus:outline-none focus:border-cyan-500 bg-white';
 
-const HEAD = ['Injectable', 'Dose', 'Route', 'Qty', 'Scheduled', 'Instructions'];
+const HEAD = ['Ordered', 'Injectable', 'Dose', 'Route', 'Qty', 'Scheduled', 'Instructions'];
 
 interface Props {
   orders: InjectionOrder[];
-  appointmentId: string;
+  context: EncounterContext;
   patientId: string;
   doctorId: string;
   canManage: boolean;
 }
 
-export function InjectionOrdersSection({ orders, appointmentId, patientId, doctorId, canManage }: Props) {
+export function InjectionOrdersSection({ orders, context, patientId, doctorId, canManage }: Props) {
   const [createInjectionOrder] = useCreateInjectionOrderMutation();
   const [cancelInjectionOrder] = useCancelInjectionOrderMutation();
   const { data: injectables = [] } = useListInjectablesQuery(undefined, { skip: !canManage });
@@ -100,6 +102,7 @@ export function InjectionOrdersSection({ orders, appointmentId, patientId, docto
                 </TableRow>
               ) : (
                 <TableRow key={order.id} className="border-b border-slate-50 hover:bg-slate-50">
+                  <TableCell className="py-3 px-4 text-slate-500 whitespace-nowrap">{fmtDateTime(order.orderedAt)}</TableCell>
                   <TableCell className="py-3 px-4 font-medium text-slate-900 whitespace-normal">{order.injectableName}</TableCell>
                   <TableCell className="py-3 px-4 text-slate-600 whitespace-normal">{order.dose || '—'}</TableCell>
                   <TableCell className="py-3 px-4 text-slate-600 whitespace-normal">{order.route}</TableCell>
@@ -110,6 +113,11 @@ export function InjectionOrdersSection({ orders, appointmentId, patientId, docto
                     <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${STATUS_CLS[order.status] ?? 'bg-slate-100 text-slate-700'}`}>
                       {order.status.charAt(0).toUpperCase() + order.status.slice(1)}
                     </span>
+                    {order.status === 'administered' && order.administeredAt && (
+                      <p className="text-xs text-slate-400 mt-0.5 whitespace-nowrap">
+                        {order.administeredByName || 'staff'} · {fmtDateTime(order.administeredAt)}
+                      </p>
+                    )}
                     {canManage && order.status === 'ordered' && (
                       <button onClick={() => setCancelId(order.id)} className="ml-2 text-xs font-semibold text-amber-700 hover:text-amber-800">
                         Cancel
@@ -126,7 +134,7 @@ export function InjectionOrdersSection({ orders, appointmentId, patientId, docto
                 onAdd={async (body) => {
                   setAddError('');
                   try {
-                    await createInjectionOrder({ appointmentId, patientId, doctorId, ...body }).unwrap();
+                    await createInjectionOrder({ ...context, patientId, doctorId, ...body }).unwrap();
                   } catch (err) {
                     setAddError(apiError(err, 'Could not order injection'));
                     throw err;
@@ -203,6 +211,7 @@ function NewInjectionRow({
   return (
     <>
       <TableRow className="bg-cyan-50/20">
+        <TableCell className="py-3 px-4 text-xs text-slate-400 whitespace-nowrap">Now</TableCell>
         <TableCell className="p-1.5">
           <input
             list="injectables-catalogue"

@@ -195,7 +195,8 @@ export function PharmacistPrescriptions({ session }: RoleViewProps) {
                 setFormError('');
                 try {
                   await createOrder({
-                    appointmentId: queueing.appointmentId,
+                    appointmentId: queueing.appointmentId ?? undefined,
+                    admissionId: queueing.admissionId ?? undefined,
                     patientId: queueing.patientId,
                     // The prescriber is on the prescription; the pharmacist is not it.
                     doctorId: queueing.doctorId,

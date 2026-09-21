@@ -5,9 +5,11 @@ import { useFormik } from 'formik';
 import * as Yup from 'yup';
 import { FlaskConical, Plus, Trash2 } from 'lucide-react';
 import { apiError } from '@/lib/apiError';
+import { fmtDateTime } from '@/lib/date';
 import { Spinner } from '@/components/ui/spinner';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
 import { useCancelTestOrderMutation, useCreateTestOrderMutation, useListLabTestsQuery } from '@/store/api';
+import type { EncounterContext } from '@/lib/encounterContext';
 import { InlineConfirmBar } from './InlineConfirm';
 
 const ORDER_STATUS: Record<string, { label: string; cls: string }> = {
@@ -25,7 +27,7 @@ const RESULT_FLAG: Record<string, string> = {
   critical: 'text-red-600 font-semibold',
 };
 
-const HEAD = ['Test', 'Priority', 'Note', 'Status'];
+const HEAD = ['Ordered', 'Test', 'Priority', 'Note', 'Status'];
 
 const cell = 'w-full px-2 py-1.5 border border-slate-300 rounded text-sm focus:outline-none focus:border-cyan-500 bg-white';
 
@@ -37,14 +39,14 @@ const schema = Yup.object({
 
 interface Props {
   testOrders: any[];
-  appointmentId: string;
+  context: EncounterContext;
   patientId: string;
   doctorId: string;
   canOrder: boolean;
   canDelete: boolean;
 }
 
-export function LabOrdersSection({ testOrders, appointmentId, patientId, doctorId, canOrder, canDelete }: Props) {
+export function LabOrdersSection({ testOrders, context, patientId, doctorId, canOrder, canDelete }: Props) {
   const [cancelId, setCancelId] = useState<string | null>(null);
   const [cancelling, setCancelling] = useState(false);
   const [cancelTestOrder] = useCancelTestOrderMutation();
@@ -91,6 +93,7 @@ export function LabOrdersSection({ testOrders, appointmentId, patientId, doctorI
               return (
                 <Fragment key={order.id}>
                   <TableRow className="border-b border-slate-50 hover:bg-slate-50">
+                    <TableCell className="py-3 px-4 text-slate-500 whitespace-nowrap">{fmtDateTime(order.orderedAt)}</TableCell>
                     <TableCell className="py-3 px-4 whitespace-normal">
                       <div className="flex flex-wrap gap-1.5">
                         {order.items?.map((item: any) => (
@@ -142,7 +145,12 @@ export function LabOrdersSection({ testOrders, appointmentId, patientId, doctorI
                       <TableCell colSpan={colSpan} className="px-4 py-3 space-y-3 whitespace-normal">
                         {order.results.map((result: any) => (
                           <div key={result.id}>
-                            <p className="text-sm font-semibold text-slate-900 mb-1">{result.testName}</p>
+                            <div className="flex items-center justify-between gap-2 mb-1">
+                              <p className="text-sm font-semibold text-slate-900">{result.testName}</p>
+                              <p className="text-xs text-slate-400 whitespace-nowrap">
+                                {result.reportedBy ? `${result.reportedBy} · ` : ''}{fmtDateTime(result.reportedAt)}
+                              </p>
+                            </div>
                             <ul className="space-y-1">
                               {result.parameters?.map((p: any, idx: number) => (
                                 <li key={idx} className="text-sm flex flex-wrap gap-x-2">
@@ -168,7 +176,7 @@ export function LabOrdersSection({ testOrders, appointmentId, patientId, doctorI
                 onAdd={async (body) => {
                   setAddError('');
                   try {
-                    await createTestOrder({ appointmentId, patientId, doctorId, status: 'ordered', ...body }).unwrap();
+                    await createTestOrder({ ...context, patientId, doctorId, status: 'ordered', ...body }).unwrap();
                   } catch (err) {
                     setAddError(apiError(err, 'Could not place the order'));
                     throw err;
@@ -227,6 +235,7 @@ function NewTestOrderRow({
   return (
     <>
       <TableRow className="bg-cyan-50/20">
+        <TableCell className="py-3 px-4 text-xs text-slate-400 whitespace-nowrap">Now</TableCell>
         <TableCell className="p-1.5">
           <select name="testId" value={formik.values.testId} onChange={formik.handleChange} className={cell}>
             <option value="">Select test…</option>

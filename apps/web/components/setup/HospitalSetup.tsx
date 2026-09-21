@@ -252,7 +252,16 @@ export function HospitalSetup({ session }: RoleViewProps) {
                           type="checkbox"
                           checked={on}
                           onChange={(e) =>
-                            setModuleDraft((prev) => (prev ? { ...prev, [key]: e.target.checked } : prev))
+                            setModuleDraft((prev) => {
+                              if (!prev) return prev;
+                              const next = { ...prev, [key]: e.target.checked };
+                              // Nurse ward-round charting (vitals.record) is
+                              // gated on the nursing module, not ipd — turning
+                              // IPD on without it would silently leave nurses
+                              // unable to chart during a stay.
+                              if (key === 'ipd' && e.target.checked) next.nursing = true;
+                              return next;
+                            })
                           }
                           className="rounded border-slate-300 text-cyan-600 focus:ring-cyan-500"
                         />

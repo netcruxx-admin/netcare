@@ -1527,6 +1527,26 @@ class ProgressNoteCreate(CamelModel):
     # fact about who wrote it, and that is not the client's to assert.
 
 
+# ---------- IPD: Nursing notes (nurse round) ----------
+class NursingNoteOut(OutModel):
+    id: str
+    hospital_id: Optional[str] = None
+    admission_id: str
+    nurse_id: str
+    nurse_name: str = ""
+    shift: str = ""
+    note: str = ""
+    created_at: str
+
+
+class NursingNoteCreate(CamelModel):
+    admission_id: str
+    shift: str = ""
+    note: str = ""
+    # No nurseId: the author is always the caller's own identity — see
+    # routers/nursing_notes.py, same rule ProgressNoteCreate follows.
+
+
 # ---------- IPD: Discharge summary ----------
 class DischargeSummaryOut(OutModel):
     id: str
@@ -1580,9 +1600,51 @@ class AdmissionChargeItemCreate(CamelModel):
     quantity: int = 1
 
 
+class AdmissionBillLineOut(CamelModel):
+    """One line of the unified bill: either a manually-entered charge item or
+    a Payment raised elsewhere (pharmacy dispense, injection administration,
+    lab completion, a front-desk deposit/settlement) that got tagged with this
+    admission_id. `paid` distinguishes a completed Payment from a pending one
+    — a manual charge item has no Payment counterpart, so it is always
+    `paid: false` here (settling it is what the "Record Payment" action is
+    for)."""
+
+    source: Literal["charge_item", "payment"]
+    id: str
+    label: str
+    amount: float
+    quantity: int = 1
+    paid: bool = False
+    at: str
+
+
+class AdmissionPaymentCreate(CamelModel):
+    """Money actually collected against a stay — the action that did not
+    exist before this: a deposit at admission, an interim payment during the
+    stay, or the final settlement at discharge. Creates a Payment
+    (payment_type="ipd_payment") the same way pharmacy/injectable/lab billing
+    already does automatically; this is reception/admin doing it by hand."""
+
+    amount: float
+    payment_method: str = ""
+    purpose: Literal["deposit", "interim", "settlement"] = "interim"
+    notes: str = ""
+
+    @field_validator("amount")
+    @classmethod
+    def _positive(cls, value: float) -> float:
+        if value is None or value <= 0:
+            raise ValueError("Amount must be greater than zero")
+        return value
+
+
 class AdmissionBillOut(CamelModel):
     """A stay's running bill: system-computed room charges, every manually
-    added charge item, and what has already been paid against it."""
+    added charge item, and every payment (pending or completed) raised
+    against this admission — pharmacy/injectable/lab charges incurred during
+    the stay plus anything reception collected directly. `grand_total`
+    reflects everything billed regardless of payment status; `paid_total`
+    only what is actually completed."""
 
     admission_id: str
     room_nights: int = 0
@@ -1590,6 +1652,7 @@ class AdmissionBillOut(CamelModel):
     room_total: float = 0
     items: List[AdmissionChargeItemOut] = []
     items_total: float = 0
+    lines: List[AdmissionBillLineOut] = []
     paid_total: float = 0
     grand_total: float = 0
     balance_due: float = 0
@@ -1796,6 +1859,7 @@ class PaymentCreate(CamelModel):
 class PaymentOut(OutModel):
     id: str
     appointment_id: Optional[str] = None
+    admission_id: Optional[str] = None
     medication_order_id: Optional[str] = None
     # Added alongside the columns (migration c2d3e4f5a6b7) but never surfaced
     # here — the only way to find an injectable/lab payment for a given order
@@ -2167,7 +2231,10 @@ class RazorpaySettingsOut(OutModel):
 
 # ---------- Prescription ----------
 class PrescriptionCreate(CamelModel):
-    appointment_id: str
+    # Exactly one of appointment_id/admission_id — mirrors the DB's
+    # ck_prescriptions_exactly_one_context constraint.
+    appointment_id: Optional[str] = None
+    admission_id: Optional[str] = None
     patient_id: str
     doctor_id: str
     medicine_name: str = ""
@@ -2175,6 +2242,12 @@ class PrescriptionCreate(CamelModel):
     frequency: str = ""
     duration: str = ""
     instructions: str = ""
+
+    @model_validator(mode="after")
+    def _exactly_one_context(self) -> "PrescriptionCreate":
+        if bool(self.appointment_id) == bool(self.admission_id):
+            raise ValueError("Provide exactly one of appointmentId or admissionId")
+        return self
 
 
 class PrescriptionUpdate(CamelModel):
@@ -2187,7 +2260,8 @@ class PrescriptionUpdate(CamelModel):
 
 class PrescriptionOut(OutModel):
     id: str
-    appointment_id: str
+    appointment_id: Optional[str] = None
+    admission_id: Optional[str] = None
     patient_id: str
     doctor_id: str
     medicine_name: str = ""
@@ -2213,11 +2287,17 @@ class VitalsUpdate(CamelModel):
     edd: Optional[str] = None
     pog: Optional[str] = None
     pregnancy_status: Optional[str] = None
+    intake_ml: Optional[int] = None
+    output_ml: Optional[int] = None
     notes: Optional[str] = None
 
 
 class VitalsCreate(CamelModel):
-    appointment_id: str
+    # Exactly one of appointment_id/admission_id — mirrors the DB's
+    # ck_vitals_exactly_one_context constraint, so a bad request 422s cleanly
+    # here instead of hitting a raw IntegrityError.
+    appointment_id: Optional[str] = None
+    admission_id: Optional[str] = None
     patient_id: str
     doctor_id: str
     temperature: float = 0
@@ -2231,12 +2311,23 @@ class VitalsCreate(CamelModel):
     edd: str = ""
     pog: str = ""
     pregnancy_status: str = ""
+    #: Nursing intake/output charting during a stay — left unset for an OPD
+    #: (appointment-linked) row.
+    intake_ml: Optional[int] = None
+    output_ml: Optional[int] = None
     notes: str = ""
+
+    @model_validator(mode="after")
+    def _exactly_one_context(self) -> "VitalsCreate":
+        if bool(self.appointment_id) == bool(self.admission_id):
+            raise ValueError("Provide exactly one of appointmentId or admissionId")
+        return self
 
 
 class VitalsOut(OutModel):
     id: str
-    appointment_id: str
+    appointment_id: Optional[str] = None
+    admission_id: Optional[str] = None
     patient_id: str
     doctor_id: str
     temperature: float = 0
@@ -2250,6 +2341,8 @@ class VitalsOut(OutModel):
     edd: str = ""
     pog: str = ""
     pregnancy_status: str = ""
+    intake_ml: Optional[int] = None
+    output_ml: Optional[int] = None
     notes: str = ""
     created_at: str
     # Resolved server-side, for the same reason as AppointmentOut.
@@ -2323,6 +2416,7 @@ class MedicationOrderOut(OutModel):
     id: str
     hospital_id: Optional[str] = None
     appointment_id: Optional[str] = None
+    admission_id: Optional[str] = None
     patient_id: str
     doctor_id: str
     prescription_id: Optional[str] = None
@@ -2336,10 +2430,13 @@ class MedicationOrderOut(OutModel):
     instructions: str = ""
     status: MedicationOrderStatus = "pending"
     notes: str = ""
+    administered_by: Optional[str] = None
+    administered_at: Optional[str] = None
     ordered_at: str
     patient_name: Optional[str] = None
     patient_phone: Optional[str] = None
     doctor_name: Optional[str] = None
+    administered_by_name: Optional[str] = None
     # Populated server-side from medicine.price so the pharmacist can preview
     # the bill amount without a separate medicine fetch.
     unit_price: float = 0.0
@@ -2348,6 +2445,10 @@ class MedicationOrderOut(OutModel):
 
 class MedicationOrderCreate(CamelModel):
     appointment_id: Optional[str] = None
+    #: Set when this order is raised during an IPD stay. Zero-or-one with
+    #: appointment_id, not exclusive at the DB level — an order may have
+    #: neither (OTC hand-out).
+    admission_id: Optional[str] = None
     patient_id: str
     #: Who prescribed it. Omitted when the caller is the doctor — the server
     #: fills in their own id, because the prescriber is a fact about what
@@ -2557,6 +2658,9 @@ class InjectionStockMovementOut(OutModel):
 
 class InjectionOrderCreate(CamelModel):
     appointment_id: Optional[str] = None
+    #: Set when this order is raised during an IPD stay. Zero-or-one with
+    #: appointment_id, not exclusive at the DB level.
+    admission_id: Optional[str] = None
     patient_id: str
     #: Who ordered it. Omitted when the caller is the doctor — the server fills
     #: in their own id, because the prescriber is a fact about what happened.
@@ -2584,6 +2688,7 @@ class InjectionOrderOut(OutModel):
     id: str
     hospital_id: Optional[str] = None
     appointment_id: Optional[str] = None
+    admission_id: Optional[str] = None
     patient_id: str
     doctor_id: str
     prescription_id: Optional[str] = None
@@ -2677,6 +2782,9 @@ class TestOrderCreate(CamelModel):
     patient_id: str
     doctor_id: str
     appointment_id: Optional[str] = None
+    #: Set when this order is raised during an IPD stay. Zero-or-one with
+    #: appointment_id, not exclusive at the DB level.
+    admission_id: Optional[str] = None
     items: List[TestOrderItem] = []
     priority: TestPriority = "routine"
     clinical_note: str = ""
@@ -2694,6 +2802,7 @@ class TestOrderOut(OutModel):
     patient_id: str
     doctor_id: str
     appointment_id: Optional[str] = None
+    admission_id: Optional[str] = None
     items: List[TestOrderItem] = []
     status: TestOrderStatus = "ordered"
     priority: TestPriority = "routine"

@@ -109,3 +109,47 @@ def create_charge_item(
     db.commit()
     db.refresh(item)
     return item
+
+
+@router.post(
+    "/{admission_id}/payments",
+    response_model=schemas.PaymentOut,
+    status_code=status.HTTP_201_CREATED,
+)
+def record_admission_payment(
+    admission_id: str,
+    body: schemas.AdmissionPaymentCreate,
+    db: Session = Depends(get_db),
+    user: models.User = Depends(get_current_user),
+    scope: str = Depends(require_permission("ipd_billing.manage")),
+    tenant_id: str = Depends(get_tenant_id),
+):
+    """Money actually collected against a stay — a deposit, an interim
+    payment, or the final settlement. There was no way to record this before:
+    pharmacy/injectable/lab charges get a Payment automatically, but room and
+    manual charge-item lines never did, so a stay's balance could never
+    actually be brought to zero through the API. Deliberately allowed after
+    discharge — settling the final bill is itself a post-discharge activity,
+    same as POST .../charge-items.
+    """
+    admission = _get_admission_or_404(db, tenant_id, admission_id)
+    # No current grant hands ipd_billing.manage out at "own" scope (only
+    # admin/receptionist, both "all") — same fail-safe as create_charge_item.
+    _check_own_scope(db, user, scope, admission)
+    payment = models.Payment(
+        id=new_id("pay"),
+        hospital_id=tenant_id,
+        appointment_id=None,
+        admission_id=admission.id,
+        patient_id=admission.patient_id,
+        amount=body.amount,
+        payment_type="ipd_payment",
+        status="completed",
+        payment_method=body.payment_method,
+        bill_breakdown={"purpose": body.purpose, "notes": body.notes},
+        created_at=now_iso(),
+    )
+    db.add(payment)
+    db.commit()
+    db.refresh(payment)
+    return payment

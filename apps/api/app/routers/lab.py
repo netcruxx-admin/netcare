@@ -12,6 +12,7 @@ from .. import billing_config, models, notify, schemas
 from ..auth import get_current_user
 from ..authz import SCOPE_OWN, caller_doctor_id, caller_patient_id, own_record_filter, require_permission
 from ..database import get_db
+from ..ipd import TERMINAL_STATUSES
 from ..tenancy import assert_body_in_tenant, get_tenant_id, scoped
 from ..utils import (
     ListQuery,
@@ -34,6 +35,7 @@ def list_test_orders(
     patient_id: Optional[str] = Query(default=None, alias="patientId"),
     doctor_id: Optional[str] = Query(default=None, alias="doctorId"),
     appointment_id: Optional[str] = Query(default=None, alias="appointmentId"),
+    admission_id: Optional[str] = Query(default=None, alias="admissionId"),
     q: Optional[str] = Query(default=None),
     status_filter: Optional[str] = Query(default=None, alias="status"),
     limit: Optional[int] = Query(default=None, ge=1),
@@ -53,6 +55,8 @@ def list_test_orders(
         query = query.filter(models.TestOrder.doctor_id == doctor_id)
     if appointment_id:
         query = query.filter(models.TestOrder.appointment_id == appointment_id)
+    if admission_id:
+        query = query.filter(models.TestOrder.admission_id == admission_id)
     if status_filter:
         # Comma-separated, so the reports screen can ask for the one set it
         # means ("completed,reviewed") instead of fetching everything and
@@ -113,6 +117,18 @@ def create_test_order(
     # Without this a row filed here can point at another hospital's records,
     # and the display helpers then resolve that id to a real name.
     assert_body_in_tenant(db, body, tenant_id)
+
+    if body.admission_id:
+        admission = (
+            scoped(db, models.Admission, tenant_id)
+            .filter(models.Admission.id == body.admission_id)
+            .first()
+        )
+        if admission.patient_id != body.patient_id:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Admission not found")
+        if admission.status in TERMINAL_STATUSES:
+            raise HTTPException(status.HTTP_409_CONFLICT, "This admission is closed")
+
     now = now_iso()
     payload = body.model_dump()
     payload["items"] = [i for i in payload.get("items", [])]  # plain dicts for JSON
@@ -215,6 +231,7 @@ def update_test_order(
                 id=new_id("pay"),
                 hospital_id=tenant_id,
                 appointment_id=None,
+                admission_id=order.admission_id,
                 test_order_id=order.id,
                 patient_id=order.patient_id,
                 amount=round(subtotal + gst_amount, 2),

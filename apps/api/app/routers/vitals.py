@@ -7,6 +7,7 @@ from .. import models, schemas
 from ..auth import get_current_user
 from ..authz import SCOPE_OWN, own_record_filter, require_permission
 from ..database import get_db
+from ..ipd import TERMINAL_STATUSES
 from ..tenancy import assert_in_tenant, get_tenant_id, scoped
 from ..utils import (
     ListQuery,
@@ -26,6 +27,7 @@ def list_vitals(
     response: Response,
     patient_id: Optional[str] = Query(default=None, alias="patientId"),
     appointment_id: Optional[str] = Query(default=None, alias="appointmentId"),
+    admission_id: Optional[str] = Query(default=None, alias="admissionId"),
     params: ListQuery = Depends(list_params),
     db: Session = Depends(get_db),
     user: models.User = Depends(get_current_user),
@@ -37,6 +39,8 @@ def list_vitals(
         query = query.filter(models.Vitals.patient_id == patient_id)
     if appointment_id:
         query = query.filter(models.Vitals.appointment_id == appointment_id)
+    if admission_id:
+        query = query.filter(models.Vitals.admission_id == admission_id)
     # The filters above are caller-supplied conveniences, not access control:
     # with scope "own" the caller must be a party to the row, so passing someone
     # else's id narrows the result to nothing rather than exposing their records.
@@ -65,7 +69,19 @@ def create_vitals(
     # resolves that id to a name. See tenancy.assert_in_tenant.
     assert_in_tenant(db, models.Patient, body.patient_id, tenant_id)
     assert_in_tenant(db, models.Doctor, body.doctor_id, tenant_id)
-    assert_in_tenant(db, models.Appointment, body.appointment_id, tenant_id)
+    if body.appointment_id:
+        assert_in_tenant(db, models.Appointment, body.appointment_id, tenant_id)
+    else:
+        assert_in_tenant(db, models.Admission, body.admission_id, tenant_id)
+        admission = (
+            scoped(db, models.Admission, tenant_id)
+            .filter(models.Admission.id == body.admission_id)
+            .first()
+        )
+        if admission.patient_id != body.patient_id:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Admission not found")
+        if admission.status in TERMINAL_STATUSES:
+            raise HTTPException(status.HTTP_409_CONFLICT, "This admission is closed")
 
     vitals = models.Vitals(
         id=new_id("vit"),

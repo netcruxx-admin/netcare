@@ -330,3 +330,110 @@ Order of work, each step verified before starting the next:
 4. Any target hospital/timeline for actually flipping `modules.ipd` on
    somewhere real, once this is built and verified? (Not the maternity one,
    per D4 — either a new demo/staging tenant or a future customer.)
+
+---
+
+## 8. Phase 2 — closing the charting/MAR/billing gap (done, verified)
+
+Phase 1 (§§1–7) shipped admit → bed transfer → doctor's free-text progress
+notes → manual misc billing lines → discharge. §0's own scope note and §4.5's
+last row both flagged the cut directly: the `admission_id` columns migrations
+3–4 added to `vitals`/`prescriptions`/`medication_orders`/`injection_orders`/
+`test_orders`/`payments` had no API surface writing to them. In practice that
+meant nurse ward-round charting, doctor round-time ordering (medicine/
+injection/lab), a medication administration record, and inpatient billing
+that reflected what was actually ordered did not exist — only the admit/
+discharge bookends and doctor notes did. This phase closes all of it.
+
+**Unlike Phase 1, every piece below actually ran** — real Postgres
+(`apps/api` venv + local dev DB via the running `uvicorn --reload`, which
+applied all four new migrations on its own reload), the full existing pytest
+suite, four new test files, and `npx tsc --noEmit` clean across `apps/web`.
+
+### What shipped
+
+- **Nurse round**: `vitals`/`prescriptions` gained an XOR `admissionId` (mirrors
+  the DB's existing `CHECK` constraint via a Pydantic `model_validator`), and
+  `Vitals.intakeMl`/`outputMl` are wired end to end — the two dead columns
+  `_build_tenant`'s original design comment already named as "a nurse's own
+  charting" are no longer dead. New table **`nursing_notes`** (migration
+  `4d499093cf18`) is the actual answer to "no option for … nurse round":
+  `ProgressNote` stayed doctor-shaped by its own original design decision, so
+  a parallel table, not a repurposed one — `nurse_id`-authored, optional
+  `shift`, own router (`app/routers/nursing_notes.py`), new permissions
+  `nursing_notes.read`/`.write` (migration `ea030916d0d3` — nurse read+write
+  `all`, doctor read `own` via a new `own_nursing_notes_filter` in `app/ipd.py`,
+  admin read `all`, superadmin both).
+- **Doctor round-time ordering**: `medication_orders`/`injection_orders`/
+  `test_orders` gained an optional `admissionId` (already zero-or-one with
+  `appointmentId` at the DB level, so no constraint change needed) plus an
+  `admissionId` list filter on each. No new permissions — doctor already held
+  `prescriptions.manage`/`medication_orders.manage`/`injection_orders.manage`/
+  `lab_orders.create` unscoped from OPD, so this is purely additive schema +
+  router work. Each of the five affected routers now 404s a body whose
+  `admissionId` names another patient's admission and 409s on a closed one,
+  the same guard `progress_notes.py` already had.
+- **Medication administration record**: `MedicationOrder` never had
+  `InjectionOrder`'s `administered_by`/`administered_at` pair — administration
+  was structurally only a status flip. Migration `7daa3c0bdc9b` adds both
+  columns; `medication_orders.py`'s administer endpoint now writes them as
+  server facts, same as injections already did.
+- **Billing, completeness**: `compute_bill()` (`app/ipd.py`) previously summed
+  a completed admission-linked `Payment` into `paidTotal` while never folding
+  any payment into `grandTotal` — understating the bill and occasionally
+  producing a negative balance once pharmacy/injectable/lab charges started
+  carrying `admissionId` (propagated at all three billing-trigger points:
+  `medication_orders.py /bill`, `injection_orders.py administer`, `lab.py`'s
+  completion billing). Fixed to fold every *service* payment (pharmacy/
+  injectable/lab) into `grandTotal` regardless of status. New
+  `POST /admissions/{id}/payments` (`ipd_billing.manage`) is the literal
+  answer to §7 open question #2 — one `payment_type="ipd_payment"` with a
+  `purpose` (deposit/interim/settlement) folded into the existing
+  `bill_breakdown` JSON, not `ipd_room`/`ipd_deposit`/`ipd_package`/`ipd_misc`
+  as originally floated, because room/manual-item lines were never `Payment`
+  rows to begin with — the only real gap was that there was no way to record
+  money actually *collected* at all. **Caught by the test suite, not by
+  review**: an `ipd_payment` row folded into `grandTotal` the same way a
+  service charge is would double-count itself (add the charge and settle it
+  in the same call, netting to zero effect on `balanceDue`) — it counts only
+  toward `paidTotal`.
+- **Billing visibility**: confirmed already correct on the backend (doctor/
+  nurse hold neither `ipd_billing.read` nor `.manage` — only admin/
+  receptionist/superadmin/patient-own ever did). The real hole was the
+  frontend: `AdmissionWorkspace.tsx`'s `BillingSection` rendered
+  unconditionally, so a doctor/nurse got a panel that silently 403'd instead
+  of one that wasn't there. Now gated on `hasPermission(..., 'ipd_billing.read')`.
+  `test_ipd_billing_completeness.py` proves the 403 at the API layer too, not
+  just the frontend hide.
+- **Patient visibility fix**: `patient` never held `admissions.read` — despite
+  already holding `discharge_summaries.read`/`ipd_billing.read` at `own`, they
+  could not reach `GET /admissions/{id}` at all, so the workspace page 403'd
+  outright for their own stay. Migration `d532c753c81f` grants
+  `admissions.read` (`own`).
+- **Frontend, reused rather than rebuilt**: `VitalsSection`/`PrescriptionsSection`/
+  `InjectionOrdersSection`/`LabOrdersSection` (`apps/web/app/appointment/[id]/
+  components/`) generalized from an `appointmentId` prop to a shared
+  `EncounterContext` (`apps/web/lib/encounterContext.ts`,
+  `{appointmentId} | {admissionId}`) and now render on both the OPD
+  appointment page and the IPD `AdmissionWorkspace` — no parallel charting UI
+  was written. `MedicationsSection` (a MAR view) is the one genuinely new
+  section, since medication ordering was never part of the appointment-page
+  family to begin with (it lives on its own multi-role screen,
+  `MedicationOrders.tsx`). `HospitalSetup.tsx`'s module checklist now checks
+  "Nursing" automatically when "IPD" is checked — `vitals.record`'s module is
+  `"nursing"`, not `"ipd"`, so a hospital could otherwise enable IPD and
+  silently lose nurse charting.
+
+### Verified
+
+`alembic upgrade head` (4 new revisions, single head, ran for real against a
+local Postgres via the dev server's own reload), the full existing pytest
+suite (no new regressions — three flaky, pre-existing, order-dependent
+failures unrelated to this work, in `test_injections.py`/`test_invoice.py`/
+`test_medication_dispense.py`, confirmed to pass in isolation and predating
+this change), four new test files (`test_ipd_admission_linked_charting.py`,
+`test_ipd_medication_injection_lab_orders.py`, `test_nursing_notes.py`,
+`test_ipd_billing_completeness.py`), and `npx tsc --noEmit` clean across
+`apps/web`. Not done: a manual click-through in a browser — per §6's own
+rule, do that before this goes anywhere near the maternity hospital's
+environment, same as Phase 1.

@@ -865,6 +865,10 @@ class MedicationOrder(Base):
     instructions = Column(Text, default="")
     status = Column(String, default="pending")
     notes = Column(Text, default="")
+    # Written on the administer transition, same as InjectionOrder's pair —
+    # who gave it and when, not just that the status flipped.
+    administered_by = Column(String, nullable=True)
+    administered_at = Column(String, nullable=True)
     ordered_at = Column(String, nullable=False)
 
 
@@ -1189,6 +1193,28 @@ class ProgressNote(Base):
     hospital_id = Column(String, ForeignKey("hospitals.id", ondelete="CASCADE"), index=True, nullable=False)
     admission_id = Column(String, index=True, nullable=False)
     doctor_id = Column(String, index=True, nullable=False)
+    note = Column(Text, default="")
+    created_at = Column(String, nullable=False)
+
+
+class NursingNote(Base):
+    """A nurse's ward-round entry against a stay — the nursing counterpart of
+    ProgressNote, kept as its own table rather than a shared one because
+    ProgressNote is doctor_id-shaped by deliberate design (see its own
+    docstring): a nurse authoring one never fit that model. Same shape,
+    different author and an optional shift marker (a real nursing-chart
+    convention: morning/evening/night)."""
+
+    __tablename__ = "nursing_notes"
+
+    id = Column(String, primary_key=True)
+    hospital_id = Column(String, ForeignKey("hospitals.id", ondelete="CASCADE"), index=True, nullable=False)
+    admission_id = Column(String, index=True, nullable=False)
+    # There is no Nurse table the way there is a Doctor one — nursing staff are
+    # plain User rows with role="nurse" — so this is the caller's user.id
+    # directly, same as InjectionOrder.administered_by.
+    nurse_id = Column(String, index=True, nullable=False)
+    shift = Column(String, default="")  # "" | morning | evening | night
     note = Column(Text, default="")
     created_at = Column(String, nullable=False)
 

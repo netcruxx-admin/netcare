@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { Formik, Form, FormikProvider, useFormik } from 'formik';
 import { FileText, Pencil, Plus, Trash2 } from 'lucide-react';
 import { apiError } from '@/lib/apiError';
-import { fmtDate } from '@/lib/date';
+import { fmtDate, fmtDateTime } from '@/lib/date';
 import { Spinner } from '@/components/ui/spinner';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
@@ -19,9 +19,10 @@ import {
   vitalsToPayload,
 } from '@/components/vitals/vitalsForm';
 import type { Vitals } from '@/lib/types';
+import type { EncounterContext } from '@/lib/encounterContext';
 import { InlineConfirmBar } from './InlineConfirm';
 
-const HEAD = ['BP', 'Height', 'Pulse', 'Weight', 'Temp', 'BMI', 'Status', 'LMP', 'EDD', 'POG'];
+const HEAD = ['Recorded', 'BP', 'Height', 'Pulse', 'Weight', 'Temp', 'BMI', 'Status', 'LMP', 'EDD', 'POG'];
 
 const PREGNANCY_LABEL: Record<string, string> = {
   pregnant: 'Pregnant',
@@ -33,14 +34,14 @@ const cell = 'w-full px-2 py-1.5 border border-slate-300 rounded text-sm focus:o
 
 interface Props {
   vitals: Vitals[];
-  appointmentId: string;
+  context: EncounterContext;
   patientId: string;
   doctorId: string;
   canManage: boolean;
   canDelete: boolean;
 }
 
-export function VitalsSection({ vitals, appointmentId, patientId, doctorId, canManage, canDelete }: Props) {
+export function VitalsSection({ vitals, context, patientId, doctorId, canManage, canDelete }: Props) {
   const [createVitals] = useCreateVitalsMutation();
   const [updateVitals] = useUpdateVitalsMutation();
   const [deleteVitals] = useDeleteVitalsMutation();
@@ -118,6 +119,7 @@ export function VitalsSection({ vitals, appointmentId, patientId, doctorId, canM
               }
               return (
                 <TableRow key={v.id} className="border-b border-slate-50 hover:bg-slate-50">
+                  <TableCell className="py-3 px-4 text-slate-500 whitespace-nowrap">{fmtDateTime(v.createdAt)}</TableCell>
                   <TableCell className="py-3 px-4 text-slate-600 whitespace-normal">{v.bloodPressure || '—'}</TableCell>
                   <TableCell className="py-3 px-4 text-slate-600 whitespace-normal">{v.height ? `${v.height} cm` : '—'}</TableCell>
                   <TableCell className="py-3 px-4 text-slate-600 whitespace-normal">{v.heartRate ? `${v.heartRate} bpm` : '—'}</TableCell>
@@ -151,7 +153,7 @@ export function VitalsSection({ vitals, appointmentId, patientId, doctorId, canM
                 onAdd={async (payload) => {
                   setAddError('');
                   try {
-                    await createVitals({ appointmentId, patientId, doctorId, ...payload }).unwrap();
+                    await createVitals({ ...context, patientId, doctorId, ...payload }).unwrap();
                   } catch (err) {
                     setAddError(apiError(err, 'Could not record vitals'));
                     throw err;
@@ -204,6 +206,7 @@ function NewVitalsRow({
     <FormikProvider value={formik}>
       <Autofill />
       <TableRow className="bg-cyan-50/20">
+        <TableCell className="py-3 px-4 text-xs text-slate-400 whitespace-nowrap">Now</TableCell>
         <TableCell className="p-1.5">
           <input name="bloodPressure" value={formik.values.bloodPressure} onChange={formik.handleChange} placeholder="120/80" className={cell} />
         </TableCell>
