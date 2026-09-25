@@ -1762,8 +1762,13 @@ export const api = createApi({
     }),
     createAdmission: build.mutation<Admission, AdmissionCreateBody>({
       query: (body) => ({ url: '/admissions', method: 'POST', body }),
-      // A successful admission also occupies a bed.
-      invalidatesTags: [{ type: 'Admission', id: 'LIST' }, { type: 'Bed', id: 'LIST' }],
+      // A successful admission also occupies a bed, and an advance one records
+      // a deposit Payment against the stay.
+      invalidatesTags: [
+        { type: 'Admission', id: 'LIST' },
+        { type: 'Bed', id: 'LIST' },
+        { type: 'Payment', id: 'LIST' },
+      ],
     }),
     updateAdmission: build.mutation<Admission, { id: string; body: AdmissionUpdateBody }>({
       query: ({ id, body }) => ({ url: `/admissions/${id}`, method: 'PUT', body }),
@@ -1779,6 +1784,9 @@ export const api = createApi({
         { type: 'Admission', id },
         { type: 'Admission', id: 'LIST' },
         { type: 'Bed', id: 'LIST' },
+        // Room charge is nights x the *current* bed's daily_rate, so moving
+        // to a bed on a different rate changes the bill the moment it lands.
+        { type: 'AdmissionChargeItem', id },
       ],
     }),
     deleteAdmission: build.mutation<void, { id: string }>({
@@ -1813,13 +1821,26 @@ export const api = createApi({
         { type: 'Admission', id: admissionId },
         { type: 'Admission', id: 'LIST' },
         { type: 'Bed', id: 'LIST' },
+        // The bill too: compute_bill counts nights up to discharged_at, which
+        // this is the endpoint that writes. Without it the Billing tab keeps
+        // showing the running total from before the stay closed.
+        { type: 'AdmissionChargeItem', id: admissionId },
       ],
     }),
 
     // ── IPD: billing ─────────────────────────────────────────────────────────
     getAdmissionBill: build.query<AdmissionBill, string>({
       query: (admissionId) => `/admissions/${admissionId}/bill`,
-      providesTags: (_r, _e, admissionId) => [{ type: 'AdmissionChargeItem', id: admissionId }],
+      // Payment too, not just charge items: compute_bill folds every
+      // admission-linked payment into the total, and several of those are
+      // raised from *other* screens (billing a pharmacy order, administering
+      // an injectable, pricing a lab order). Tagging the bill with Payment
+      // means any of them refreshes it, rather than each one having to know
+      // how to name this admission's bill.
+      providesTags: (_r, _e, admissionId) => [
+        { type: 'AdmissionChargeItem', id: admissionId },
+        { type: 'Payment', id: 'LIST' },
+      ],
     }),
     listAdmissionChargeItems: build.query<AdmissionChargeItem[], string>({
       query: (admissionId) => `/admissions/${admissionId}/charge-items`,
@@ -1849,6 +1870,8 @@ export const api = createApi({
       }),
       invalidatesTags: (_r, _e, { admissionId }) => [
         { type: 'AdmissionChargeItem', id: admissionId },
+        // It is a Payment row too, so payment lists elsewhere see it.
+        { type: 'Payment', id: 'LIST' },
       ],
     }),
 
@@ -1877,17 +1900,32 @@ export const api = createApi({
       query: (params) => ({ url: '/prescriptions', params: params ?? undefined }),
       providesTags: [{ type: 'Prescription', id: 'LIST' }],
     }),
+    // All three touch MedicationOrder as well as Prescription — see
+    // apps/api/app/routers/prescriptions.py: prescribing raises the pending
+    // pharmacy order, editing mirrors the corrected fields onto it, and
+    // deleting removes it. Screens that render the orders (the IPD
+    // workspace's Medications tab, the pharmacy queue) read MedicationOrder,
+    // not Prescription, so leaving it out left them stale until a reload.
     createPrescription: build.mutation<Prescription, PrescriptionCreateBody>({
       query: (body) => ({ url: '/prescriptions', method: 'POST', body }),
-      invalidatesTags: [{ type: 'Prescription', id: 'LIST' }],
+      invalidatesTags: [
+        { type: 'Prescription', id: 'LIST' },
+        { type: 'MedicationOrder', id: 'LIST' },
+      ],
     }),
     updatePrescription: build.mutation<Prescription, { id: string; body: Partial<PrescriptionCreateBody> }>({
       query: ({ id, body }) => ({ url: `/prescriptions/${id}`, method: 'PUT', body }),
-      invalidatesTags: [{ type: 'Prescription', id: 'LIST' }],
+      invalidatesTags: [
+        { type: 'Prescription', id: 'LIST' },
+        { type: 'MedicationOrder', id: 'LIST' },
+      ],
     }),
     deletePrescription: build.mutation<void, string>({
       query: (id) => ({ url: `/prescriptions/${id}`, method: 'DELETE' }),
-      invalidatesTags: [{ type: 'Prescription', id: 'LIST' }],
+      invalidatesTags: [
+        { type: 'Prescription', id: 'LIST' },
+        { type: 'MedicationOrder', id: 'LIST' },
+      ],
     }),
 
     // ── Payments ──────────────────────────────────────────────────────────────
@@ -2149,7 +2187,14 @@ export const api = createApi({
           body: Object.keys(body).length ? body : undefined,
         };
       },
-      invalidatesTags: [{ type: 'MedicationOrder', id: 'LIST' }, { type: 'Medicine', id: 'LIST' }],
+      // Dispensing moves stock and writes the InventoryMovement row that
+      // explains the move — see routers/medication_orders.py. (It raises no
+      // Payment; billing the order is a separate call.)
+      invalidatesTags: [
+        { type: 'MedicationOrder', id: 'LIST' },
+        { type: 'Medicine', id: 'LIST' },
+        { type: 'InventoryMovement', id: 'LIST' },
+      ],
     }),
     administerMedicationOrder: build.mutation<MedicationOrder, { id: string; notes?: string; site?: string }>({
       query: ({ id, notes, site }) => ({ url: `/medication-orders/${id}/administer`, method: 'PATCH', body: { notes, site } }),
@@ -2165,7 +2210,12 @@ export const api = createApi({
         method: 'POST',
         body: { paymentMethod },
       }),
-      invalidatesTags: [{ type: 'MedicationOrder', id: 'LIST' }],
+      // Raises a Payment that carries the order's admission_id, so it lands in
+      // that stay's running bill as well as in payment lists.
+      invalidatesTags: [
+        { type: 'MedicationOrder', id: 'LIST' },
+        { type: 'Payment', id: 'LIST' },
+      ],
     }),
 
     // ── Inventory ─────────────────────────────────────────────────────────────
@@ -2292,6 +2342,9 @@ export const api = createApi({
         { type: 'InjectionOrder', id: 'LIST' },
         { type: 'Injectable', id: 'LIST' },
         { type: 'InjectionStockMovement', id: 'LIST' },
+        // Administering bills it: a Payment carrying the order's admission_id,
+        // which the stay's running bill counts.
+        { type: 'Payment', id: 'LIST' },
       ],
     }),
     cancelInjectionOrder: build.mutation<InjectionOrder, string>({
@@ -2336,7 +2389,12 @@ export const api = createApi({
     }),
     updateTestOrder: build.mutation<TestOrder, { id: string; body: Partial<TestOrder> }>({
       query: ({ id, body }) => ({ url: `/test-orders/${id}`, method: 'PUT', body }),
-      invalidatesTags: [{ type: 'TestOrder', id: 'LIST' }],
+      // Pricing the order raises a lab Payment carrying its admission_id — see
+      // update_test_order in routers/lab.py — so the stay's bill moves with it.
+      invalidatesTags: [
+        { type: 'TestOrder', id: 'LIST' },
+        { type: 'Payment', id: 'LIST' },
+      ],
     }),
     // The ordering clinician's sign-off — a narrower act than the lab's own
     // processing, and a different permission.
