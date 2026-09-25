@@ -916,7 +916,12 @@ export interface AdmissionCreateBody {
   bedId: string;
   admissionType?: string;
   provisionalDiagnosis?: string;
-  payerType?: string;
+  billingMode?: 'advance' | 'credit';
+  /** Only on an advance admission, where it is required and must be > 0. The
+   *  API turns it into a deposit Payment against the stay rather than storing
+   *  it on the admission, so it lands in the running bill. Sending it on a
+   *  credit admission is refused, not ignored. */
+  advanceAmount?: number;
 }
 /** No `status` — see AdmissionUpdate's docstring in schemas.py: every closure
  *  goes through createDischargeSummary instead. */
@@ -925,7 +930,9 @@ export interface AdmissionUpdateBody {
   referringDoctorId?: string;
   admissionType?: string;
   provisionalDiagnosis?: string;
-  payerType?: string;
+  /** No `advanceAmount` counterpart: money already collected is not revised by
+   *  editing the stay. A further deposit goes through recordAdmissionPayment. */
+  billingMode?: 'advance' | 'credit';
 }
 export interface ProgressNoteCreateBody { admissionId: string; note?: string }
 export interface NursingNoteCreateBody { admissionId: string; shift?: string; note?: string }

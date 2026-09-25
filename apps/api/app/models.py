@@ -1148,7 +1148,12 @@ class Admission(Base):
     # admitted | discharged | dama | deceased | transferred_out
     status = Column(String, default="admitted")
     provisional_diagnosis = Column(Text, default="")
-    payer_type = Column(String, default="cash")  # cash | insurance | corporate
+    # advance | credit — how this stay is being paid for. "advance" means the
+    # patient paid up front; the money itself is a Payment row against this
+    # admission (payment_type="ipd_payment", purpose "deposit"), never a
+    # column here — a stored copy would drift from the payments the bill
+    # actually adds up. "credit" means the bill is settled later.
+    billing_mode = Column(String, default="credit")
     # Who placed the admission and their role at the time — the same snapshot
     # Appointment.booked_by_user_id/booked_by_role takes.
     admitted_by_user_id = Column(String, nullable=True)

@@ -4,11 +4,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from .. import models, schemas
+from .. import audit, models, schemas
 from ..auth import get_current_user
 from ..authz import (
     SCOPE_OWN,
     caller_doctor_id,
+    effective_permissions,
     own_record_filter,
     require_permission,
 )
@@ -139,6 +140,22 @@ def create_admission(
                 "You can only admit a patient under your own name",
             )
 
+    # Collecting money is ipd_billing.manage work, not admissions.create work.
+    # Checked only when an advance was actually sent, so a doctor (who holds
+    # admissions.create but not ipd_billing.manage) keeps admitting on credit
+    # exactly as before rather than losing the endpoint — the same split
+    # POST /wards draws between wards.manage and beds.manage. Reception takes
+    # the deposit, here or through POST /admissions/{id}/payments.
+    if body.advance_amount:
+        held = effective_permissions(db, user)
+        audit.record_permission("ipd_billing.manage", held.get("ipd_billing.manage"))
+        if "ipd_billing.manage" not in held:
+            audit.record_action("permission_denied")
+            raise HTTPException(
+                status.HTTP_403_FORBIDDEN,
+                "You do not have permission to record an advance payment",
+            )
+
     assert_body_in_tenant(db, body, tenant_id)
 
     bed = scoped(db, models.Bed, tenant_id).filter(models.Bed.id == body.bed_id).first()
@@ -147,7 +164,7 @@ def create_admission(
     if bed.status != "vacant":
         raise HTTPException(status.HTTP_409_CONFLICT, "This bed is not available")
 
-    fields = body.model_dump(exclude={"bed_id"})
+    fields = body.model_dump(exclude={"bed_id", "advance_amount"})
     timestamp = now_iso()
 
     # A concurrent admission could race the same sequential number; retried a
@@ -197,6 +214,29 @@ def create_admission(
         released_at=None,
     ))
     bed.status = "occupied"
+
+    if body.advance_amount:
+        # The same row POST /admissions/{id}/payments writes, created here so
+        # the stay's balance is right from the moment it opens. In the
+        # admission's own transaction: an advance recorded against a stay that
+        # failed to open would be money attached to nothing.
+        db.add(models.Payment(
+            id=new_id("pay"),
+            hospital_id=tenant_id,
+            appointment_id=None,
+            admission_id=admission.id,
+            patient_id=admission.patient_id,
+            amount=body.advance_amount,
+            payment_type="ipd_payment",
+            status="completed",
+            payment_method="",
+            bill_breakdown={
+                "purpose": "deposit",
+                "notes": "Advance collected at admission",
+            },
+            created_at=timestamp,
+        ))
+
     db.commit()
     db.refresh(admission)
     patients, doctors, wards, beds = _resolve_display(db, tenant_id, [admission])

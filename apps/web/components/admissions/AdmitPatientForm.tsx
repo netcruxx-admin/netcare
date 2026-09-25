@@ -35,7 +35,21 @@ const admitSchema = Yup.object({
   bedId: Yup.string().required('Select a bed'),
   admissionType: Yup.string().required(),
   provisionalDiagnosis: Yup.string(),
-  payerType: Yup.string().required(),
+  billingMode: Yup.string().oneOf(['advance', 'credit']).required(),
+  // Required and positive on an advance, and refused outright on a credit
+  // admission — the API rejects a stray amount rather than dropping it, so the
+  // form must not be able to send one.
+  advanceAmount: Yup.number()
+    .transform((v, original) => (original === '' ? undefined : v))
+    .when('billingMode', {
+      is: 'advance',
+      then: (schema) =>
+        schema
+          .typeError('Enter the advance amount')
+          .required('Enter the advance amount')
+          .moreThan(0, 'The advance must be greater than zero'),
+      otherwise: (schema) => schema.strip(),
+    }),
 });
 
 export function AdmitPatientForm({ session }: RoleViewProps) {
@@ -101,14 +115,27 @@ export function AdmitPatientForm({ session }: RoleViewProps) {
               bedId: '',
               admissionType: 'planned',
               provisionalDiagnosis: '',
-              payerType: 'cash',
+              billingMode: 'credit' as 'advance' | 'credit',
+              advanceAmount: '',
             }}
             enableReinitialize
             validationSchema={admitSchema}
             onSubmit={async (values, { setSubmitting, setStatus }) => {
+              const { advanceAmount, ...rest } = values;
               try {
-                const admission = await createAdmission(values).unwrap();
-                toast.success('Patient admitted');
+                const admission = await createAdmission({
+                  ...rest,
+                  // Only ever sent on an advance stay: the API refuses a stray
+                  // amount on a credit one rather than ignoring it.
+                  ...(values.billingMode === 'advance'
+                    ? { advanceAmount: Number(advanceAmount) }
+                    : {}),
+                }).unwrap();
+                toast.success(
+                  values.billingMode === 'advance'
+                    ? `Patient admitted — ₹${Number(advanceAmount).toLocaleString('en-IN')} advance recorded`
+                    : 'Patient admitted',
+                );
                 router.push(`/dashboard/ipd/${admission.id}`);
               } catch (err) {
                 setStatus(apiError(err, 'Could not admit the patient'));
@@ -117,7 +144,7 @@ export function AdmitPatientForm({ session }: RoleViewProps) {
               }
             }}
           >
-            {({ isSubmitting, status, errors, touched }) => (
+            {({ isSubmitting, status, errors, touched, values, setFieldValue }) => (
               <Form className="bg-white rounded-xl shadow p-6 space-y-5">
                 {status && (
                   <p className="flex items-center gap-2 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
@@ -180,17 +207,39 @@ export function AdmitPatientForm({ session }: RoleViewProps) {
                     required
                   />
                   <FormField
-                    name="payerType"
-                    label="Payer"
+                    name="billingMode"
+                    label="Billing"
                     as="select"
                     options={[
-                      { value: 'cash', label: 'Cash' },
-                      { value: 'insurance', label: 'Insurance' },
-                      { value: 'corporate', label: 'Corporate' },
+                      { value: 'credit', label: 'Credit (settled later)' },
+                      { value: 'advance', label: 'Advance (paid now)' },
                     ]}
+                    onValueChange={(mode) => {
+                      // A stale amount left behind by switching to credit
+                      // would be refused by the API, which rejects a stray
+                      // advance rather than ignoring it.
+                      if (mode !== 'advance') setFieldValue('advanceAmount', '');
+                    }}
                     required
                   />
                 </div>
+
+                {values.billingMode === 'advance' && (
+                  <div>
+                    <FormField
+                      name="advanceAmount"
+                      label="Advance Amount (₹)"
+                      type="number"
+                      min="0"
+                      placeholder="e.g. 10000"
+                      required
+                    />
+                    <p className="mt-1 text-xs text-slate-500">
+                      Recorded as a deposit against the stay, so it counts toward the bill
+                      straight away.
+                    </p>
+                  </div>
+                )}
 
                 <FormField
                   name="provisionalDiagnosis"

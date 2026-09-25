@@ -189,7 +189,10 @@ export interface Bed {
 
 export type AdmissionType = 'planned' | 'emergency';
 export type AdmissionStatus = 'admitted' | 'discharged' | 'dama' | 'deceased' | 'transferred_out';
-export type PayerType = 'cash' | 'insurance' | 'corporate';
+/** How a stay is paid for. 'advance' means the patient paid up front, and the
+ *  money is a deposit Payment against the stay; 'credit' means it is settled
+ *  later. */
+export type BillingMode = 'advance' | 'credit';
 
 export interface Admission {
   id: string;
@@ -209,7 +212,7 @@ export interface Admission {
   admissionType: AdmissionType;
   status: AdmissionStatus;
   provisionalDiagnosis: string;
-  payerType: PayerType;
+  billingMode: BillingMode;
   admittedByUserId?: string | null;
   admittedByRole?: string | null;
   admittedAt: string;

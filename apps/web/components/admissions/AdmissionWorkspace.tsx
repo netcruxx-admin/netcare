@@ -973,9 +973,9 @@ export function AdmissionWorkspace({ session, admissionId }: { session: AuthSess
               <p className="text-sm font-medium text-slate-900">{fmtDateTime(admission.admittedAt)}</p>
             </div>
             <div>
-              <p className="text-xs text-slate-400 uppercase tracking-wide mb-0.5">Type / Payer</p>
+              <p className="text-xs text-slate-400 uppercase tracking-wide mb-0.5">Type / Billing</p>
               <p className="text-sm font-medium text-slate-900 capitalize">
-                {admission.admissionType} · {admission.payerType}
+                {admission.admissionType} · {admission.billingMode}
               </p>
             </div>
           </div>

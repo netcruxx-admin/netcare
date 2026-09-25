@@ -19,6 +19,12 @@ RegisterRole = Literal["patient"]
 # Most beds POST /wards will open in one call. A ward is a room, not a
 # hospital: this is a guard against a mistyped count, not a capacity limit.
 MAX_WARD_BED_SEED = 200
+# How an IPD stay is paid for. "advance": the patient pays on admission.
+# "credit": settled later — by an insurer or company, or by a self-paying
+# patient at discharge.
+BillingMode = Literal["advance", "credit"]
+
+
 AppointmentStatus = Literal["scheduled", "completed", "cancelled"]
 AppointmentMode = Literal["in-person", "video"]
 PaymentStatus = Literal["pending", "completed", "failed"]
@@ -1520,7 +1526,7 @@ class AdmissionOut(OutModel):
     admission_type: str = "planned"
     status: str = "admitted"
     provisional_diagnosis: str = ""
-    payer_type: str = "cash"
+    billing_mode: str = "credit"
     admitted_by_user_id: Optional[str] = None
     admitted_by_role: Optional[str] = None
     admitted_at: str
@@ -1537,7 +1543,29 @@ class AdmissionCreate(CamelModel):
     bed_id: str
     admission_type: str = "planned"
     provisional_diagnosis: str = ""
-    payer_type: str = "cash"
+    #: Defaults to "credit", which is exactly what an admission that says
+    #: nothing about payment has always been — no deposit taken at admission.
+    billing_mode: BillingMode = "credit"
+    #: Money collected at admission, on an advance stay. Not a column on
+    #: Admission: the router turns it into a Payment against the stay, so the
+    #: running bill counts it and there is only ever one copy of the number.
+    advance_amount: float = 0
+
+    @model_validator(mode="after")
+    def _check_payment_shape(self):
+        if self.billing_mode == "advance":
+            if self.advance_amount <= 0:
+                raise ValueError(
+                    "An advance admission needs an advance amount greater than zero"
+                )
+        elif self.advance_amount:
+            # Refused rather than dropped: silently discarding money somebody
+            # typed in is the worst of the three options.
+            raise ValueError(
+                "advance_amount belongs to an advance admission — record a "
+                "deposit against the stay instead"
+            )
+        return self
 
 
 class AdmissionUpdate(CamelModel):
@@ -1553,7 +1581,10 @@ class AdmissionUpdate(CamelModel):
     referring_doctor_id: Optional[str] = None
     admission_type: Optional[str] = None
     provisional_diagnosis: Optional[str] = None
-    payer_type: Optional[str] = None
+    #: Editable, but there is deliberately no `advance_amount` here — money
+    #: already collected is not revised by editing the stay's shape. A further
+    #: deposit or a settlement goes through POST /admissions/{id}/payments.
+    billing_mode: Optional[BillingMode] = None
 
 
 class AdmissionTransferBed(CamelModel):
