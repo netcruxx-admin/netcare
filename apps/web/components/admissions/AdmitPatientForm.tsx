@@ -32,6 +32,9 @@ import {
 const admitSchema = Yup.object({
   patientId: Yup.string().required('Select a patient'),
   doctorId: Yup.string().required('Select the admitting doctor'),
+  // Ward is a picker-level filter only — the API takes bed_id alone and
+  // derives the ward from it, so the two can never be sent disagreeing.
+  wardId: Yup.string().required('Select a ward'),
   bedId: Yup.string().required('Select a bed'),
   admissionType: Yup.string().required(),
   provisionalDiagnosis: Yup.string(),
@@ -81,11 +84,18 @@ export function AdmitPatientForm({ session }: RoleViewProps) {
     value: d.id,
     label: `Dr. ${d.user?.name ?? 'Doctor'}`,
   }));
-  const wardName = (id: string) => wards.find((w) => w.id === id)?.name ?? '';
-  const bedOptions = vacantBeds.map((b) => ({
-    value: b.id,
-    label: `${wardName(b.wardId) || 'Ward'} — Bed ${b.bedNumber} (₹${b.dailyRate.toLocaleString('en-IN')}/night)`,
-  }));
+  // Only wards that actually have a free bed: offering one with none would
+  // lead straight to an empty bed picker with nothing to explain it.
+  const wardOptions = wards
+    .filter((w) => vacantBeds.some((b) => b.wardId === w.id))
+    .map((w) => ({ value: w.id, label: w.name }));
+  const bedOptionsFor = (wardId: string) =>
+    vacantBeds
+      .filter((b) => b.wardId === wardId)
+      .map((b) => ({
+        value: b.id,
+        label: `Bed ${b.bedNumber} (₹${b.dailyRate.toLocaleString('en-IN')}/night)`,
+      }));
 
   const loading = loadingPatients || loadingDoctors || loadingBeds;
 
@@ -112,6 +122,7 @@ export function AdmitPatientForm({ session }: RoleViewProps) {
             initialValues={{
               patientId: preselectedPatientId,
               doctorId: isOwnScope ? ownDoctor?.id ?? '' : '',
+              wardId: '',
               bedId: '',
               admissionType: 'planned',
               provisionalDiagnosis: '',
@@ -121,7 +132,9 @@ export function AdmitPatientForm({ session }: RoleViewProps) {
             enableReinitialize
             validationSchema={admitSchema}
             onSubmit={async (values, { setSubmitting, setStatus }) => {
-              const { advanceAmount, ...rest } = values;
+              // wardId is deliberately not sent: AdmissionCreate takes bed_id
+              // and reads the ward off the bed.
+              const { advanceAmount, wardId: _wardId, ...rest } = values;
               try {
                 const admission = await createAdmission({
                   ...rest,
@@ -186,14 +199,29 @@ export function AdmitPatientForm({ session }: RoleViewProps) {
                   />
                 )}
 
-                <FormField
-                  name="bedId"
-                  label="Bed"
-                  as="select"
-                  placeholder="Select a vacant bed"
-                  options={bedOptions}
-                  required
-                />
+                <div className="grid sm:grid-cols-2 gap-4">
+                  <FormField
+                    name="wardId"
+                    label="Ward"
+                    as="select"
+                    placeholder="Select a ward"
+                    options={wardOptions}
+                    onValueChange={() => {
+                      // A bed from the previous ward would no longer be in the
+                      // list the picker is showing.
+                      if (values.bedId) setFieldValue('bedId', '');
+                    }}
+                    required
+                  />
+                  <FormField
+                    name="bedId"
+                    label="Bed"
+                    as="select"
+                    placeholder={values.wardId ? 'Select a vacant bed' : 'Pick a ward first'}
+                    options={bedOptionsFor(values.wardId)}
+                    required
+                  />
+                </div>
 
                 <div className="grid sm:grid-cols-2 gap-4">
                   <FormField
