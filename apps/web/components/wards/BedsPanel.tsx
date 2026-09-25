@@ -31,6 +31,25 @@ const STATUS_LABELS: Record<BedStatus, string> = {
   reserved: 'Reserved',
 };
 
+/** The bed types a hospital normally has, mirroring WardsPanel's WARD_TYPES —
+ *  a bed in the ICU is an ICU bed. `bed_type` is a free-text column, not an
+ *  enum, so this is a label map for the codes we write plus a vocabulary for
+ *  the picker; anything else an admin typed is shown back as they typed it. */
+const BED_TYPES: { value: string; label: string }[] = [
+  { value: 'general', label: 'General' },
+  { value: 'icu', label: 'ICU' },
+  { value: 'nicu', label: 'NICU' },
+  { value: 'maternity', label: 'Maternity' },
+  { value: 'private', label: 'Private' },
+  { value: 'semi_private', label: 'Semi-Private' },
+];
+
+/** "semi_private" -> "Semi-Private". An unrecognised value is returned
+ *  untouched rather than prettified — "ICU" typed by hand must not come back
+ *  as "Icu". */
+const bedTypeLabel = (t: string) =>
+  BED_TYPES.find((b) => b.value === t.trim().toLowerCase())?.label ?? t;
+
 function StatusBadge({ status }: { status: BedStatus }) {
   return (
     <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_STYLES[status]}`}>
@@ -125,7 +144,7 @@ function BedRow({
             className="border border-slate-300 rounded-lg px-2 py-1 text-sm w-28 focus:outline-none focus:border-cyan-500"
           />
         ) : (
-          <span className="text-sm text-slate-600">{bed.bedType}</span>
+          <span className="text-sm text-slate-600">{bedTypeLabel(bed.bedType)}</span>
         )}
       </TableCell>
       <TableCell className="py-3 px-4 text-right whitespace-normal">
