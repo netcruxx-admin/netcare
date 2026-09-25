@@ -249,7 +249,7 @@ def login(
         # origin).
         #
         # Unlike email, phone is not unique per tenant — a patient identified
-        # by a relative (see `relation_type`: W/O, D/O, B/O) often shares a
+        # by a relative (see `relation_type`: W/O, D/O, S/O, B/O) often shares a
         # household or parent's number with another account on purpose, and
         # registration must never refuse that. So more than one tenant match
         # here is a real possibility, not a bug, and phone simply cannot be

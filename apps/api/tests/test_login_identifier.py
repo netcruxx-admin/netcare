@@ -1,7 +1,7 @@
 """Signing in with a phone number, not just an email.
 
 Phone is not unique per tenant the way email is — a patient identified by a
-relative (`relation_type`: W/O, D/O, B/O) commonly shares a household or
+relative (`relation_type`: W/O, D/O, S/O, B/O) commonly shares a household or
 parent's number with another account on purpose, and registration must never
 refuse that. So the interesting cases here are less "does phone login work"
 and more "what happens when a phone number is not enough to pick one account."

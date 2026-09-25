@@ -36,10 +36,11 @@ export const BLOOD_GROUP_OPTIONS = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 
 }));
 
 /** The "identified by a relative" line, the common convention on Indian
- *  records: W/O (wife of), D/O (daughter of), B/O (baby of). */
+ *  records: W/O (wife of), D/O (daughter of), S/O (son of), B/O (baby of). */
 export const RELATION_OPTIONS = [
   { value: 'wife_of', label: 'Wife of' },
   { value: 'daughter_of', label: 'Daughter of' },
+  { value: 'son_of', label: 'Son of' },
   { value: 'baby_of', label: 'Baby of' },
 ];
 
@@ -47,6 +48,7 @@ export const RELATION_OPTIONS = [
 export const RELATION_SHORT: Record<string, string> = {
   wife_of: 'W/O',
   daughter_of: 'D/O',
+  son_of: 'S/O',
   baby_of: 'B/O',
 };
 
@@ -135,7 +137,10 @@ export function patientProfileValues(patient: Patient): PatientProfileValues {
 export const patientProfileSchemaFields = {
   gender: Yup.string(),
   bloodGroup: Yup.string().max(10, 'Too long'),
-  relationType: Yup.string().oneOf(['', 'wife_of', 'daughter_of', 'baby_of'], 'Pick one'),
+  relationType: Yup.string().oneOf(
+    ['', ...RELATION_OPTIONS.map((o) => o.value)],
+    'Pick one',
+  ),
   relationName: Yup.string().max(100, 'Too long'),
   // Checked with the same Verhoeff digit the server checks, so a mistyped
   // number is caught at the field rather than after a round trip.
@@ -228,7 +233,7 @@ export function PatientIdentityFields({ requireDateOfBirth = false }: { requireD
           name="relationType"
           label="Relation"
           as="select"
-          placeholder="Wife of / Daughter of / Baby of…"
+          placeholder="Wife of / Daughter of / Son of…"
           options={RELATION_OPTIONS}
         />
         <FormField

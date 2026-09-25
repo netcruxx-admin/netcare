@@ -1017,9 +1017,9 @@ class PatientProfileFields(CamelModel):
     gender: Optional[str] = None
     blood_group: Optional[str] = None
     date_of_birth: Optional[str] = None
-    #: The "W/O / D/O / B/O" identity line. relation_type is one of
-    #: "wife_of" | "daughter_of" | "baby_of" (or "" / None); relation_name is
-    #: the relative's name.
+    #: The "W/O / D/O / S/O / B/O" identity line. relation_type is one of
+    #: "wife_of" | "daughter_of" | "son_of" | "baby_of" (or "" / None);
+    #: relation_name is the relative's name.
     relation_type: Optional[str] = None
     relation_name: Optional[str] = None
     allergies: Optional[str] = None
@@ -1053,9 +1053,11 @@ class PatientProfileFields(CamelModel):
         if not isinstance(v, str):
             return v
         cleaned = v.strip().lower()
-        allowed = {"wife_of", "daughter_of", "baby_of"}
+        allowed = {"wife_of", "daughter_of", "son_of", "baby_of"}
         if cleaned and cleaned not in allowed:
-            raise ValueError("relation_type must be wife_of, daughter_of or baby_of")
+            raise ValueError(
+                "relation_type must be wife_of, daughter_of, son_of or baby_of"
+            )
         return cleaned
 
     @field_validator("aadhaar_number", mode="before")

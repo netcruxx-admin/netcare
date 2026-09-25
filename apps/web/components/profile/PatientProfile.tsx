@@ -160,7 +160,7 @@ function WizardContent({ isSaving }: { isSaving: boolean }) {
               name="relationType"
               label="Relation"
               as="select"
-              placeholder="Wife of / Daughter of / Baby of…"
+              placeholder="Wife of / Daughter of / Son of…"
               options={RELATION_OPTIONS}
             />
             <FormField name="relationName" label="Relative's Name" placeholder="e.g. Ramesh Kumar" />

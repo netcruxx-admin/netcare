@@ -515,9 +515,9 @@ class Patient(Base):
     date_of_birth = Column(String, default="")
     gender = Column(String, default="")
     blood_group = Column(String, default="")
-    # The "W/O … / D/O … / B/O …" line that identifies a patient by a relative,
-    # the common convention on Indian records. relation_type is one of
-    # "wife_of" | "daughter_of" | "baby_of" (or "" when not given);
+    # The "W/O … / D/O … / S/O … / B/O …" line that identifies a patient by a
+    # relative, the common convention on Indian records. relation_type is one of
+    # "wife_of" | "daughter_of" | "son_of" | "baby_of" (or "" when not given);
     # relation_name is that relative's name.
     relation_type = Column(String, default="")
     relation_name = Column(String, default="")

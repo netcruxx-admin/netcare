@@ -213,7 +213,7 @@ accordingly. `resolveHomePath()` then sends the resolved role wherever it lands 
 added a real filter, so there isn't one.
 
 Email stays unique per hospital across every role (`uq_users_tenant_email`), but **phone
-deliberately is not**: a patient identified by a relative (`relation_type`: W/O, D/O, B/O) commonly
+deliberately is not**: a patient identified by a relative (`relation_type`: W/O, D/O, S/O, B/O) commonly
 shares a household or parent's number with another account on purpose, and registration must never
 refuse that. So a phone number that matches more than one account in a hospital simply stops being
 usable to sign in to either of them (a clear "more than one account" error, never a silent pick) —
