@@ -112,6 +112,10 @@ quietly bypasses `scoped()`.
   (this is where `lab_orders.review`, `PUT /users/me`, and `GET /doctors/{id}/availability` came from).
 - Facts about what happened are the server's to write, not the client's: invoices, `rescheduled`,
   result timestamps.
+- An endpoint that does two jobs checks two capabilities. `POST /wards` opens a ward with its beds
+  when `body.beds` is sent, so it also requires `beds.manage` — but *only* when beds were actually
+  asked for, so a role holding `wards.manage` alone keeps the endpoint instead of losing it. Don't
+  let one permission quietly grow another's power because the work got merged into one request.
 - When a client needs a *fact* derived from records it may not read, answer the question rather than
   hand over the records — `GET /doctors/{id}/availability` returns taken times with no patient on them.
 - Stock moves by `medication_orders.quantity`, never by a number parsed out of "twice daily for 5

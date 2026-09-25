@@ -16,6 +16,9 @@ Role = str
 # Staff accounts carry access to other people's records, so they are provisioned
 # through POST /users by someone holding `users.manage` — never self-served.
 RegisterRole = Literal["patient"]
+# Most beds POST /wards will open in one call. A ward is a room, not a
+# hospital: this is a guard against a mistyped count, not a capacity limit.
+MAX_WARD_BED_SEED = 200
 AppointmentStatus = Literal["scheduled", "completed", "cancelled"]
 AppointmentMode = Literal["in-person", "video"]
 PaymentStatus = Literal["pending", "completed", "failed"]
@@ -1407,6 +1410,51 @@ class WardOut(OutModel):
     department_id: Optional[str] = None
     floor: str = ""
     description: str = ""
+    #: How many beds this ward holds. Computed per request with one GROUP BY
+    #: rather than stored, so it cannot drift from the beds table; on the
+    #: POST that creates a ward it is simply the number just seeded.
+    bed_count: int = 0
+
+
+class WardBedSeed(CamelModel):
+    """The beds to open a ward with, sent as part of WardCreate.
+
+    A ward with no beds is an empty room — in practice the admin who creates
+    one always turns straight round and adds its beds, so the two halves of
+    that job are one request rather than a ward followed by N bed posts.
+
+    `number_prefix` is a convenience, not an identity: bed numbers are unique
+    per ward (uq_beds_ward_bed_number), so plain "1".."N" never collides. The
+    generated numbers are ordinary editable values afterwards — PUT /beds/{id}
+    renames any of them.
+    """
+
+    #: How many beds to create. At least one, since a request for zero beds is
+    #: a ward with no bed seed rather than a seed of nothing. Capped so a
+    #: mistyped count cannot insert an unbounded number of rows in one call.
+    count: int
+    #: "" -> "1", "2", … ; "ICU" -> "ICU-1", "ICU-2", … . Kept this simple so
+    #: the wizard's preview and the server agree without a shared format.
+    number_prefix: str = ""
+    bed_type: str = "general"
+    #: Applied to every bed created here; per-bed rates are set afterwards.
+    daily_rate: float = 0
+
+    @field_validator("count")
+    @classmethod
+    def _check_count(cls, v: int) -> int:
+        if v < 1:
+            raise ValueError("count must be at least 1")
+        if v > MAX_WARD_BED_SEED:
+            raise ValueError(f"count cannot exceed {MAX_WARD_BED_SEED} beds at once")
+        return v
+
+    @field_validator("daily_rate")
+    @classmethod
+    def _check_daily_rate(cls, v: float) -> float:
+        if v < 0:
+            raise ValueError("daily_rate cannot be negative")
+        return v
 
 
 class WardCreate(CamelModel):
@@ -1415,6 +1463,8 @@ class WardCreate(CamelModel):
     department_id: Optional[str] = None
     floor: str = ""
     description: str = ""
+    #: Optional: omit it and the ward is created empty, exactly as before.
+    beds: Optional[WardBedSeed] = None
 
 
 class WardUpdate(CamelModel):

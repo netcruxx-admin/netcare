@@ -170,6 +170,9 @@ export interface Ward {
   departmentId?: string | null;
   floor: string;
   description: string;
+  /** How many beds the ward holds. Derived per request by the API, not stored,
+   *  so it always matches the beds table. */
+  bedCount: number;
 }
 
 export type BedStatus = 'vacant' | 'occupied' | 'maintenance' | 'reserved';

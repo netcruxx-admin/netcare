@@ -872,12 +872,21 @@ export interface DepartmentCreateBody { name: string; description?: string }
 export interface DepartmentUpdateBody { name?: string; description?: string }
 
 // ── IPD body types ──────────────────────────────────────────────────────────
+/** The beds to open a new ward with. Omit it and the ward is created empty.
+ *  Bed numbers come out as `1..count`, or `prefix-1..prefix-count`. */
+export interface WardBedSeedBody {
+  count: number;
+  numberPrefix?: string;
+  bedType?: string;
+  dailyRate?: number;
+}
 export interface WardCreateBody {
   name: string;
   wardType?: string;
   departmentId?: string | null;
   floor?: string;
   description?: string;
+  beds?: WardBedSeedBody;
 }
 export interface WardUpdateBody {
   name?: string;
@@ -1708,7 +1717,13 @@ export const api = createApi({
     // ── IPD: wards ───────────────────────────────────────────────────────────
     createWard: build.mutation<Ward, WardCreateBody>({
       query: (body) => ({ url: '/wards', method: 'POST', body }),
-      invalidatesTags: [{ type: 'Ward', id: 'LIST' }],
+      // Bed LIST too: this endpoint can now create beds alongside the ward, so
+      // the Beds tab would otherwise show a stale list until something else
+      // invalidated it.
+      invalidatesTags: [
+        { type: 'Ward', id: 'LIST' },
+        { type: 'Bed', id: 'LIST' },
+      ],
     }),
     updateWard: build.mutation<Ward, { id: string; body: WardUpdateBody }>({
       query: ({ id, body }) => ({ url: `/wards/${id}`, method: 'PUT', body }),

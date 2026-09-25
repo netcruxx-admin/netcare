@@ -10,6 +10,7 @@ import {
   useListWardsPagedQuery,
   useUpdateWardMutation,
 } from '@/store/api';
+import type { WardCreateBody } from '@/store/api';
 import { apiError } from '@/lib/apiError';
 import { hasPermission } from '@/lib/auth';
 import type { AuthSession } from '@/lib/types';
@@ -27,6 +28,29 @@ const WARD_TYPES: { value: WardType; label: string }[] = [
 ];
 
 const wardTypeLabel = (t: string) => WARD_TYPES.find((w) => w.value === t)?.label ?? t;
+
+/** Mirrors `seeded_bed_numbers` in apps/api/app/ipd.py. Both sides are kept
+ *  deliberately trivial so the numbers previewed here and the numbers the
+ *  server actually writes cannot drift apart. */
+function seededBedNumbers(prefix: string, count: number): string[] {
+  const clean = prefix.trim();
+  return Array.from({ length: count }, (_, i) => (clean ? `${clean}-${i + 1}` : String(i + 1)));
+}
+
+/** A starting point for the bed-number prefix, not a rule — "ICU Male" gives
+ *  "ICU", "Male General Ward" gives "MALE", and the admin overwrites either. */
+function prefixFromWardName(name: string): string {
+  const [first = ''] = name.trim().split(/\s+/);
+  return first.replace(/[^a-zA-Z0-9]/g, '').toUpperCase().slice(0, 6);
+}
+
+/** What the preview line under the bed fields reads. */
+function bedPreview(prefix: string, count: number): string {
+  if (!Number.isInteger(count) || count < 1) return '';
+  const numbers = seededBedNumbers(prefix, count);
+  const shown = numbers.length <= 4 ? numbers : [...numbers.slice(0, 3), '…', numbers[numbers.length - 1]];
+  return shown.join(', ');
+}
 
 /** One ward row, editable in place — same shape as ConsultationFeesContent's
  *  FeeRow, since a hospital has few enough wards that a modal per edit would
@@ -111,6 +135,9 @@ function WardRow({ ward, canManage }: { ward: Ward; canManage: boolean }) {
           <span className="text-sm text-slate-600">{ward.floor || '—'}</span>
         )}
       </TableCell>
+      <TableCell className="py-3 px-4 text-right whitespace-normal">
+        <span className="text-sm tabular-nums text-slate-900">{ward.bedCount}</span>
+      </TableCell>
       {canManage && (
         <TableCell className="py-3 px-4 text-right whitespace-normal">
           <div className="flex items-center justify-end gap-1">
@@ -160,24 +187,62 @@ function WardRow({ ward, canManage }: { ward: Ward; canManage: boolean }) {
 
 export function WardsPanel({ session }: { session: AuthSession }) {
   const canManage = hasPermission(session, 'wards.manage');
+  // Opening a ward with its beds needs both capabilities. A role holding only
+  // wards.manage still creates wards — it just gets the ward fields, and adds
+  // beds from the Beds tab as before, rather than a form that 403s on submit.
+  const canManageBeds = hasPermission(session, 'beds.manage');
   const { data: wardPage, isLoading } = useListWardsPagedQuery({ limit: 100 });
   const wards = wardPage?.items ?? [];
   const [createWard] = useCreateWardMutation();
   const [adding, setAdding] = useState(false);
+  // Once the admin types their own prefix, stop overwriting it from the name.
+  const [prefixEdited, setPrefixEdited] = useState(false);
 
   const addFormik = useFormik({
-    initialValues: { name: '', wardType: 'general' as WardType, floor: '', description: '' },
+    initialValues: {
+      name: '',
+      wardType: 'general' as WardType,
+      floor: '',
+      description: '',
+      bedCount: '1',
+      bedNumberPrefix: '',
+      dailyRate: '',
+    },
     onSubmit: async (values, { setSubmitting, resetForm }) => {
+      const finish = () => setSubmitting(false);
       const name = values.name.trim();
       if (!name) {
         toast.error('Give the ward a name');
-        setSubmitting(false);
-        return;
+        return finish();
+      }
+      const body: WardCreateBody = {
+        name,
+        wardType: values.wardType,
+        floor: values.floor,
+        description: values.description,
+      };
+      if (canManageBeds) {
+        const count = Number(values.bedCount);
+        if (!Number.isInteger(count) || count < 1) {
+          toast.error('A ward needs at least one bed');
+          return finish();
+        }
+        const rate = Number(values.dailyRate || 0);
+        if (Number.isNaN(rate) || rate < 0) {
+          toast.error('Enter a valid price per night');
+          return finish();
+        }
+        body.beds = { count, numberPrefix: values.bedNumberPrefix.trim(), dailyRate: rate };
       }
       try {
-        await createWard({ ...values, name }).unwrap();
-        toast.success('Ward added');
+        const ward = await createWard(body).unwrap();
+        toast.success(
+          ward.bedCount
+            ? `Ward added with ${ward.bedCount} bed${ward.bedCount === 1 ? '' : 's'}`
+            : 'Ward added',
+        );
         setAdding(false);
+        setPrefixEdited(false);
         resetForm();
       } catch (err) {
         toast.error(apiError(err, 'Could not add the ward'));
@@ -186,6 +251,14 @@ export function WardsPanel({ session }: { session: AuthSession }) {
       }
     },
   });
+
+  const previewedBeds = bedPreview(addFormik.values.bedNumberPrefix, Number(addFormik.values.bedCount));
+
+  function cancelAdd() {
+    setAdding(false);
+    setPrefixEdited(false);
+    addFormik.resetForm();
+  }
 
   if (isLoading) {
     return (
@@ -207,58 +280,122 @@ export function WardsPanel({ session }: { session: AuthSession }) {
       </div>
 
       {adding && (
-        <div className="px-6 py-4 border-b bg-slate-50 flex flex-wrap items-end gap-3">
-          <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">
-              Name<span className="text-red-500 ml-0.5">*</span>
-            </label>
-            <input
-              name="name"
-              value={addFormik.values.name}
-              onChange={addFormik.handleChange}
-              placeholder="e.g. Male General Ward"
-              autoFocus
-              className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm w-56 focus:outline-none focus:border-cyan-500"
-            />
+        <div className="px-6 py-4 border-b bg-slate-50 space-y-4">
+          <div className="flex flex-wrap items-end gap-3">
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">
+                Name<span className="text-red-500 ml-0.5">*</span>
+              </label>
+              <input
+                name="name"
+                value={addFormik.values.name}
+                onChange={(e) => {
+                  addFormik.handleChange(e);
+                  // The prefix follows the name until the admin takes it over.
+                  if (!prefixEdited) {
+                    addFormik.setFieldValue('bedNumberPrefix', prefixFromWardName(e.target.value));
+                  }
+                }}
+                placeholder="e.g. Male General Ward"
+                autoFocus
+                className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm w-56 focus:outline-none focus:border-cyan-500"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">Type</label>
+              <select
+                name="wardType"
+                value={addFormik.values.wardType}
+                onChange={addFormik.handleChange}
+                className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-cyan-500"
+              >
+                {WARD_TYPES.map((t) => (
+                  <option key={t.value} value={t.value}>{t.label}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">Floor</label>
+              <input
+                name="floor"
+                value={addFormik.values.floor}
+                onChange={addFormik.handleChange}
+                placeholder="e.g. 2nd Floor"
+                className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm w-32 focus:outline-none focus:border-cyan-500"
+              />
+            </div>
           </div>
-          <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">Type</label>
-            <select
-              name="wardType"
-              value={addFormik.values.wardType}
-              onChange={addFormik.handleChange}
-              className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-cyan-500"
+
+          {canManageBeds && (
+            <div className="pt-3 border-t border-slate-200">
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Beds</p>
+              <div className="flex flex-wrap items-end gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">
+                    Number of beds<span className="text-red-500 ml-0.5">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="200"
+                    name="bedCount"
+                    value={addFormik.values.bedCount}
+                    onChange={addFormik.handleChange}
+                    className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm w-28 focus:outline-none focus:border-cyan-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">Bed number prefix</label>
+                  <input
+                    name="bedNumberPrefix"
+                    value={addFormik.values.bedNumberPrefix}
+                    onChange={(e) => {
+                      setPrefixEdited(true);
+                      addFormik.handleChange(e);
+                    }}
+                    placeholder="none"
+                    className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm w-28 focus:outline-none focus:border-cyan-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">Price per night (₹)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    name="dailyRate"
+                    value={addFormik.values.dailyRate}
+                    onChange={addFormik.handleChange}
+                    placeholder="0"
+                    className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm w-32 focus:outline-none focus:border-cyan-500"
+                  />
+                </div>
+              </div>
+              {previewedBeds && (
+                <p className="mt-2 text-xs text-slate-500">
+                  Creates <span className="font-medium text-slate-700">{previewedBeds}</span> — rename or
+                  re-price any of them from the Beds tab.
+                </p>
+              )}
+            </div>
+          )}
+
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => addFormik.submitForm()}
+              disabled={addFormik.isSubmitting || !addFormik.dirty}
+              className="bg-cyan-600 text-white text-sm font-medium px-4 py-1.5 rounded-lg hover:bg-cyan-700 transition disabled:opacity-60"
             >
-              {WARD_TYPES.map((t) => (
-                <option key={t.value} value={t.value}>{t.label}</option>
-              ))}
-            </select>
+              {addFormik.isSubmitting ? 'Adding…' : 'Add'}
+            </button>
+            <button
+              type="button"
+              onClick={cancelAdd}
+              className="text-sm text-slate-500 px-3 py-1.5 hover:text-slate-700"
+            >
+              Cancel
+            </button>
           </div>
-          <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">Floor</label>
-            <input
-              name="floor"
-              value={addFormik.values.floor}
-              onChange={addFormik.handleChange}
-              placeholder="e.g. 2nd Floor"
-              className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm w-32 focus:outline-none focus:border-cyan-500"
-            />
-          </div>
-          <button
-            type="button"
-            onClick={() => addFormik.submitForm()}
-            disabled={addFormik.isSubmitting || !addFormik.dirty}
-            className="bg-cyan-600 text-white text-sm font-medium px-4 py-1.5 rounded-lg hover:bg-cyan-700 transition disabled:opacity-60"
-          >
-            {addFormik.isSubmitting ? 'Adding…' : 'Add'}
-          </button>
-          <button
-            type="button"
-            onClick={() => { setAdding(false); addFormik.resetForm(); }}
-            className="text-sm text-slate-500 px-3 py-1.5 hover:text-slate-700"
-          >
-            Cancel
-          </button>
         </div>
       )}
 
@@ -272,6 +409,7 @@ export function WardsPanel({ session }: { session: AuthSession }) {
                 <TableHead className="py-3 px-4">Name</TableHead>
                 <TableHead className="py-3 px-4">Type</TableHead>
                 <TableHead className="py-3 px-4">Floor</TableHead>
+                <TableHead className="py-3 px-4 text-right">Beds</TableHead>
                 {canManage && <TableHead className="py-3 px-4 text-right">Actions</TableHead>}
               </TableRow>
             </TableHeader>

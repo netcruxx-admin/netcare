@@ -189,3 +189,15 @@ def compute_bill(db: Session, tenant_id: str, admission: models.Admission) -> di
         "grand_total": grand_total,
         "balance_due": grand_total - paid_total,
     }
+
+
+def seeded_bed_numbers(prefix: str, count: int) -> list[str]:
+    """The bed numbers POST /wards generates when a ward is created with beds.
+
+    Deliberately trivial — "1".."N", or "ICU-1".."ICU-N" with a prefix — so the
+    number the wizard previews and the number the server writes agree without
+    the two sides sharing a format string. Bed numbers are unique per ward, not
+    per hospital, so a fresh ward can always take 1..N.
+    """
+    clean = prefix.strip()
+    return [f"{clean}-{n}" if clean else str(n) for n in range(1, count + 1)]
