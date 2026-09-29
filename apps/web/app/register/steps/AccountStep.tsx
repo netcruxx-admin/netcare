@@ -11,13 +11,15 @@ import { Button } from '@/components/ui/button';
 interface AccountStepProps {
   formik: FormikProps<FormValues>;
   needsDetails: boolean;
-  hasVerify: boolean;
-  onBack: () => void;
+  /** Omitted when this is the flow's first step (a hospital subdomain) —
+   *  there's nothing to go back to. Provided on the root domain, where it
+   *  reopens the hospital picker. */
+  onBack?: () => void;
 }
 
 // Account credentials step (all roles). "Continue" submits — the wizard hook
 // decides whether that advances to details or creates the account outright.
-export function AccountStep({ formik, needsDetails, hasVerify, onBack }: AccountStepProps) {
+export function AccountStep({ formik, needsDetails, onBack }: AccountStepProps) {
   return (
     <form onSubmit={formik.handleSubmit} className="space-y-4" noValidate>
       <FormField name="name" label="Full Name" placeholder="John Doe" icon={User} required />
@@ -37,13 +39,15 @@ export function AccountStep({ formik, needsDetails, hasVerify, onBack }: Account
         {formik.isSubmitting ? <Spinner size="sm" label="Please wait…" /> : needsDetails ? 'Continue' : 'Create Account'}
       </Button>
 
-      <button
-        type="button"
-        onClick={onBack}
-        className="w-full text-center text-cyan-600 font-semibold hover:text-cyan-700"
-      >
-        {hasVerify ? 'Back' : 'Back to Role Selection'}
-      </button>
+      {onBack && (
+        <button
+          type="button"
+          onClick={onBack}
+          className="w-full text-center text-cyan-600 font-semibold hover:text-cyan-700"
+        >
+          Change hospital
+        </button>
+      )}
     </form>
   );
 }

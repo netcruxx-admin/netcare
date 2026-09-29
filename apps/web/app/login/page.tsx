@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useFormik, FormikProvider } from 'formik';
 import * as Yup from 'yup';
-import { Mail, Lock, AlertCircle, CheckCircle, KeyRound } from 'lucide-react';
+import { Mail, Lock, AlertCircle, CheckCircle, KeyRound, CalendarClock, ShieldCheck, HeartPulse } from 'lucide-react';
 import Image from 'next/image';
 import { authStorage } from '@/lib/auth';
 import { looksLikePhone } from '@/lib/contactMethod';
@@ -68,6 +68,19 @@ function LoginForm() {
   const [loginMutation, { isLoading }] = useLoginMutation();
   const [error, setError] = useState('');
 
+  // Same mechanism DashboardShell uses to paint a tenant's brand colors on
+  // the dashboard: set the CSS vars .hospital-branded reads, which remaps
+  // every cyan-*/teal-* utility already used on this page to that hospital's
+  // own colors instead of the platform default. Falls back to the platform
+  // default while the real theme is still in flight, so there's no flash.
+  const theme = hospital?.theme as Record<string, string> | undefined;
+  const brandVars = isHospitalSubdomain
+    ? ({
+        '--brand-primary': theme?.primary ?? '#00509f',
+        '--brand-primary-dark': theme?.primaryDark ?? '#019695',
+      } as React.CSSProperties)
+    : undefined;
+
   const hospitalName = hospital?.name ?? 'NetCare';
 
   const formik = useFormik({
@@ -122,7 +135,10 @@ function LoginForm() {
   });
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-cyan-50 via-white to-teal-50 flex flex-col">
+    <div
+      className={`min-h-screen bg-gradient-to-br from-cyan-50 via-white to-teal-50 flex flex-col ${isHospitalSubdomain ? 'hospital-branded' : ''}`}
+      style={brandVars}
+    >
       {/* Header */}
       <div className="bg-white shadow-md border-b-2 border-cyan-100">
         <div className="max-w-6xl mx-auto px-6 py-2 flex items-center gap-3">
@@ -145,13 +161,49 @@ function LoginForm() {
 
       {/* Login Form */}
       <div className="flex-1 flex items-center justify-center px-6 py-12">
-        <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl p-8 space-y-8 border border-cyan-100">
-          <div className="text-center">
-            <h2 className="text-3xl font-bold bg-gradient-to-r from-cyan-600 to-brand-teal bg-clip-text text-transparent">Sign In</h2>
-            <p className="text-slate-600 mt-2">
-              {isHospitalSubdomain ? `Access your ${hospitalName} account` : 'Platform administrator access'}
-            </p>
-          </div>
+        <div className={isHospitalSubdomain ? 'w-full max-w-4xl grid lg:grid-cols-2 gap-12 items-center' : 'w-full max-w-md'}>
+          {/* Brand panel — only once there's a real hospital to introduce;
+              the platform root has no tenant story to tell here, so the
+              superadmin login stays the plain single card it always was. */}
+          {isHospitalSubdomain && (
+            <div className="hidden lg:block space-y-6">
+              <h1 className="text-4xl font-bold text-slate-900 leading-tight">
+                Welcome back to{' '}
+                <span className="bg-gradient-to-r from-cyan-600 to-brand-teal bg-clip-text text-transparent">
+                  {hospitalName}
+                </span>
+              </h1>
+              {hospital?.tagline && <p className="text-lg text-slate-600">{hospital.tagline}</p>}
+              <div className="space-y-4 pt-2">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-lg bg-cyan-100 flex items-center justify-center shrink-0">
+                    <CalendarClock className="w-5 h-5 text-cyan-600" />
+                  </div>
+                  <p className="text-slate-600 text-sm">Appointments, prescriptions and lab results in one place</p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-lg bg-teal-100 flex items-center justify-center shrink-0">
+                    <ShieldCheck className="w-5 h-5 text-teal-600" />
+                  </div>
+                  <p className="text-slate-600 text-sm">Your records are private to {hospitalName} alone</p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-lg bg-cyan-100 flex items-center justify-center shrink-0">
+                    <HeartPulse className="w-5 h-5 text-cyan-600" />
+                  </div>
+                  <p className="text-slate-600 text-sm">Built for the whole care team, front desk to doctor</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div className="w-full bg-white rounded-2xl shadow-2xl p-8 space-y-8 border border-cyan-100">
+            <div className="text-center">
+              <h2 className="text-3xl font-bold bg-gradient-to-r from-cyan-600 to-brand-teal bg-clip-text text-transparent">Sign In</h2>
+              <p className="text-slate-600 mt-2">
+                {isHospitalSubdomain ? `Access your ${hospitalName} account` : 'Platform administrator access'}
+              </p>
+            </div>
 
           {/* Registration success banner */}
           {justRegistered && (
@@ -221,6 +273,7 @@ function LoginForm() {
               </p>
             </div>
           )}
+          </div>
         </div>
       </div>
     </div>

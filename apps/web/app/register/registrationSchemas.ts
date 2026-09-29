@@ -15,7 +15,7 @@ import {
 } from '@/components/patients/patientProfile';
 
 export type Role = 'patient';
-export type Step = 'hospital' | 'role' | 'account' | 'details' | 'consent';
+export type Step = 'hospital' | 'account' | 'details' | 'consent';
 
 const PHONE_REGEX = /^\d{10}$/;
 

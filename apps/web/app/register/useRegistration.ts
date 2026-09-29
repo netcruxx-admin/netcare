@@ -4,7 +4,7 @@
 // Formik instance (with per-step validation), and final account creation. The
 // page and step components stay purely presentational and read from what this
 // returns.
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useFormik } from 'formik';
 import { authStorage } from '@/lib/auth';
@@ -29,11 +29,29 @@ export function useRegistration() {
   const [registerMutation] = useRegisterMutation();
   // On the root domain (no subdomain) we don't know which hospital the patient
   // belongs to — show a picker first. On a hospital subdomain, skip straight to
-  // the role step (tenant is already resolved from the URL).
-  const isRootDomain = typeof window !== 'undefined' && currentSubdomain() === null;
-  const [step, setStep] = useState<Step>(isRootDomain ? 'hospital' : 'role');
+  // account details (tenant is already resolved from the URL).
+  //
+  // currentSubdomain() reads window.location and is null during SSR by design
+  // (see tenant.ts) — computing this straight in render would make the
+  // server's "root domain" answer disagree with a real hospital subdomain's
+  // client-side one, and React would discard the server-rendered tree on
+  // hydration (the same failure login/page.tsx works around the same way).
+  // Starting as if there's no subdomain and correcting after mount keeps the
+  // hydrated output matching the server, at the cost of one frame on the
+  // (rarer) root-domain path.
+  const [isRootDomain, setIsRootDomain] = useState(false);
+  const [step, setStep] = useState<Step>('account');
+  useEffect(() => {
+    if (currentSubdomain() === null) {
+      setIsRootDomain(true);
+      setStep('hospital');
+    }
+  }, []);
   const [selectedHospital, setSelectedHospital] = useState<HospitalPublicInfo | null>(null);
-  const [userType, setUserType] = useState<Role | null>(null);
+  // Self-serve sign-up only ever creates a patient (see registrationSchemas.ts) —
+  // there is no role to choose, so this is set once up front rather than
+  // waited on from a selection step.
+  const [userType] = useState<Role | null>('patient');
   const [serverError, setServerError] = useState('');
   const [success, setSuccess] = useState(false);
 
@@ -145,27 +163,13 @@ export function useRegistration() {
 
   const handleHospitalSelect = (hospital: HospitalPublicInfo) => {
     setSelectedHospital(hospital);
-    setStep('role');
-    setServerError('');
-  };
-
-  const handleRoleSelect = (role: Role) => {
-    setUserType(role);
     setStep('account');
     setServerError('');
-  };
-
-  const backToRole = () => {
-    setStep('role');
-    setUserType(null);
-    setServerError('');
-    formik.resetForm();
   };
 
   const backToHospital = () => {
     setStep('hospital');
     setSelectedHospital(null);
-    setUserType(null);
     setServerError('');
     formik.resetForm();
   };
@@ -201,8 +205,6 @@ export function useRegistration() {
     // actions
     doRegister,
     handleHospitalSelect,
-    handleRoleSelect,
-    backToRole,
     backToHospital,
     goToStep,
   };

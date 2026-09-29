@@ -7,7 +7,6 @@ import Image from 'next/image';
 import { useActiveHospital } from '@/hooks/useActiveHospital';
 import { useRegistration } from './useRegistration';
 import { HospitalStep } from './steps/HospitalStep';
-import { RoleStep } from './steps/RoleStep';
 import { AccountStep } from './steps/AccountStep';
 import { ConsentStep } from './steps/ConsentStep';
 import { DetailsStep } from './steps/DetailsStep';
@@ -16,7 +15,6 @@ export default function RegisterPage() {
   const hospital = useActiveHospital();
   const {
     step,
-    userType,
     selectedHospital,
     isRootDomain,
     serverError,
@@ -26,14 +24,31 @@ export default function RegisterPage() {
     currentIndex,
     isMinor,
     handleHospitalSelect,
-    handleRoleSelect,
-    backToRole,
     backToHospital,
     goToStep,
   } = useRegistration();
 
+  // Same mechanism DashboardShell/login/landing use to paint a tenant's brand
+  // colors: set the CSS vars .hospital-branded reads, which remaps every
+  // cyan-*/teal-* utility already used below to that hospital's own colors.
+  const isTenant = Boolean(hospital.name);
+  const theme = hospital.theme as Record<string, string> | undefined;
+  const brandVars = isTenant
+    ? ({
+        '--brand-primary': theme?.primary ?? '#00509f',
+        '--brand-primary-dark': theme?.primaryDark ?? '#019695',
+      } as React.CSSProperties)
+    : undefined;
+
+  // The hospital to greet the patient with: the subdomain's own tenant once
+  // resolved, or the one just picked from the root-domain hospital list.
+  const activeHospitalName = selectedHospital?.name ?? hospital.name;
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-cyan-50 via-white to-teal-50 flex flex-col">
+    <div
+      className={`min-h-screen bg-gradient-to-br from-cyan-50 via-white to-teal-50 flex flex-col ${isTenant ? 'hospital-branded' : ''}`}
+      style={brandVars}
+    >
       {/* Header */}
       <div className="bg-white shadow-md border-b-2 border-cyan-100">
         <div className="max-w-6xl mx-auto px-6 py-2 flex items-center gap-3">
@@ -56,16 +71,6 @@ export default function RegisterPage() {
           <FormikProvider value={formik}>
             {step === 'hospital' ? (
               <HospitalStep onSelect={handleHospitalSelect} />
-            ) : step === 'role' ? (
-              <>
-                {isRootDomain && selectedHospital && (
-                  <div className="flex items-center gap-2 px-3 py-2 bg-cyan-50 border border-cyan-200 rounded-lg text-sm">
-                    <span className="text-cyan-700 font-medium truncate">{selectedHospital.name}</span>
-                    <button onClick={backToHospital} className="ml-auto text-xs text-cyan-500 hover:text-cyan-700 whitespace-nowrap">Change</button>
-                  </div>
-                )}
-                <RoleStep onSelect={handleRoleSelect} />
-              </>
             ) : (
               <>
                 {isRootDomain && selectedHospital && (
@@ -75,8 +80,12 @@ export default function RegisterPage() {
                   </div>
                 )}
                 <div className="text-center">
-                  <h2 className="text-3xl font-bold text-slate-900">Welcome!</h2>
-                  <p className="text-slate-600 mt-2">Register as a {userType}</p>
+                  <h2 className="text-3xl font-bold text-slate-900">Create your account</h2>
+                  <p className="text-slate-600 mt-2">
+                    {activeHospitalName
+                      ? `Join ${activeHospitalName} to book appointments and manage your care`
+                      : 'Book appointments and manage your care'}
+                  </p>
                 </div>
 
                 {/* Progress indicator */}
@@ -118,8 +127,10 @@ export default function RegisterPage() {
                   <AccountStep
                     formik={formik}
                     needsDetails
-                    hasVerify={false}
-                    onBack={backToRole}
+                    // Account is the first step on a hospital subdomain — there is
+                    // nothing to go "back" to. On the root domain it re-opens the
+                    // hospital picker.
+                    onBack={isRootDomain ? backToHospital : undefined}
                   />
                 )}
                 {step === 'details' && (

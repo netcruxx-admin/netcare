@@ -34,7 +34,7 @@ export function DetailsStep({ formik, onBack }: DetailsStepProps) {
           variant="brand"
           className="w-full"
         >
-          {formik.isSubmitting ? <Spinner size="sm" label="Creating account…" /> : 'Create Account'}
+          {formik.isSubmitting ? <Spinner size="sm" label="Please wait…" /> : 'Continue'}
         </Button>
 
         <button

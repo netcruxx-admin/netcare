@@ -1,15 +1,29 @@
 'use client';
 
 import Link from 'next/link';
-import { Calendar, Shield, Users, Heart } from 'lucide-react';
+import { Calendar, Shield, Users, Heart, CalendarClock, ClipboardList, CreditCard, Stethoscope, Settings, Clock } from 'lucide-react';
 import Image from 'next/image';
 import { useActiveHospital } from '@/hooks/useActiveHospital';
 import { Button } from '@/components/ui/button';
 
 export default function LandingPage() {
   const hospital = useActiveHospital();
+  // A hospital's own subdomain resolves a real name here; the bare platform
+  // host (netcare.co.in itself) never does — see tenant.ts. That's the signal
+  // for whether this is a hospital's storefront or the platform's own.
+  const isTenant = Boolean(hospital.name);
+  const theme = hospital.theme as Record<string, string> | undefined;
+  // Same mechanism DashboardShell uses to paint a tenant's brand colors: set
+  // the CSS vars .hospital-branded reads, which remaps every cyan-*/teal-*
+  // utility already used below to that hospital's own colors.
+  const brandVars = isTenant
+    ? ({
+        '--brand-primary': theme?.primary ?? '#00509f',
+        '--brand-primary-dark': theme?.primaryDark ?? '#019695',
+      } as React.CSSProperties)
+    : undefined;
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className={`min-h-screen flex flex-col ${isTenant ? 'hospital-branded' : ''}`} style={brandVars}>
       {/* Navigation */}
       <nav className="bg-white shadow-lg border-b-2 border-cyan-100">
         <div className="max-w-6xl mx-auto px-6 py-2 flex justify-between items-center">
@@ -42,10 +56,14 @@ export default function LandingPage() {
             <div className="space-y-6">
               <h2 className="text-5xl md:text-6xl font-bold text-slate-900 leading-tight">
                 Your Health,
-                <span className="block bg-gradient-to-r from-cyan-600 to-brand-teal bg-clip-text text-transparent">Our Priority</span>
+                <span className="block bg-gradient-to-r from-cyan-600 to-brand-teal bg-clip-text text-transparent">
+                  {hospital.tagline || 'Our Priority'}
+                </span>
               </h2>
               <p className="text-lg text-slate-600 leading-relaxed">
-                Book appointments with healthcare professionals, manage your medical records, and stay on top of your health—all in one place.
+                {isTenant
+                  ? `Book appointments with ${hospital.name}'s doctors, manage your medical records, and stay on top of your health—all in one place.`
+                  : 'Book appointments with healthcare professionals, manage your medical records, and stay on top of your health—all in one place.'}
               </p>
               <div className="flex gap-4 pt-4">
                 <Button asChild variant="brand" className="h-auto px-8 py-3">
@@ -98,7 +116,7 @@ export default function LandingPage() {
         <div className="max-w-6xl mx-auto px-6">
           <div className="text-center mb-16">
             <h2 className="text-4xl font-bold text-slate-900 mb-4">
-              Why Choose NetCare?
+              Why Choose {hospital.name || 'NetCare'}?
             </h2>
             <div className="h-1 w-16 bg-gradient-to-r from-cyan-500 to-brand-teal mx-auto rounded-full"></div>
           </div>
@@ -107,42 +125,44 @@ export default function LandingPage() {
               {
                 title: 'Smart Appointment System',
                 description: 'View real-time availability, choose your preferred time slot, and get instant confirmation.',
-                icon: '📅',
+                icon: CalendarClock,
                 color: 'cyan',
               },
               {
                 title: 'Medical Records Management',
                 description: 'Access your prescriptions, lab reports, and medical history anytime, anywhere.',
-                icon: '📋',
+                icon: ClipboardList,
                 color: 'teal',
               },
               {
                 title: 'Secure Payments',
                 description: 'Multiple payment options with secure encryption for peace of mind.',
-                icon: '💳',
+                icon: CreditCard,
                 color: 'cyan',
               },
               {
                 title: 'For Doctors',
                 description: 'Manage your schedule, view patient history, and provide better care efficiently.',
-                icon: '👨‍⚕️',
+                icon: Stethoscope,
                 color: 'teal',
               },
               {
                 title: 'Admin Control',
                 description: 'Full oversight of departments, doctors, and system settings.',
-                icon: '⚙️',
+                icon: Settings,
                 color: 'cyan',
               },
               {
                 title: '24/7 Access',
                 description: 'Book appointments and manage your health information anytime.',
-                icon: '🕐',
+                icon: Clock,
                 color: 'teal',
               },
             ].map((feature, idx) => (
               <div key={idx} className={`bg-white p-8 rounded-xl shadow-md hover:shadow-xl transition border-l-4 ${feature.color === 'cyan' ? 'border-cyan-500' : 'border-teal-500'}`}>
-                <div className="text-4xl mb-4">{feature.icon}</div>
+                <div className={`w-12 h-12 rounded-lg flex items-center justify-center mb-4 ${feature.color === 'cyan' ? 'bg-cyan-100' : 'bg-teal-100'}`}>
+                  <feature.icon className={`w-6 h-6 ${feature.color === 'cyan' ? 'text-cyan-600' : 'text-teal-600'}`} />
+                </div>
                 <h3 className="font-semibold text-lg text-slate-900 mb-3">{feature.title}</h3>
                 <p className="text-slate-600 leading-relaxed">{feature.description}</p>
               </div>
@@ -158,7 +178,7 @@ export default function LandingPage() {
             Ready to Take Control of Your Health?
           </h2>
           <p className="text-xl text-cyan-100 mb-8">
-            Join thousands of patients managing their appointments with NetCare
+            Join thousands of patients managing their appointments with {hospital.name || 'NetCare'}
           </p>
           <Link
             href="/register"
@@ -205,7 +225,7 @@ export default function LandingPage() {
             </div>
           </div>
           <div className="border-t border-gray-800 pt-8 text-center text-sm">
-            <p>&copy; {new Date().getFullYear()} NetCare. All rights reserved.</p>
+            <p>&copy; {new Date().getFullYear()} {hospital.name || 'NetCare'}. All rights reserved.</p>
           </div>
         </div>
       </footer>
