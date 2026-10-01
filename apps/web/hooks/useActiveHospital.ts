@@ -28,6 +28,7 @@ const PLACEHOLDER: HospitalPublicConfig = {
   modules: {},
   theme: {},
   logoUrl: '',
+  landingPageHtml: '',
   status: '',
 };
 

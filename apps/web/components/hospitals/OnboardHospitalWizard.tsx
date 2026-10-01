@@ -52,6 +52,7 @@ import {
   DepartmentsStep,
   DocumentsStep,
   IdentityStep,
+  LandingPageStep,
   LicencesStep,
   OperationsStep,
   RegistrationStep,
@@ -367,6 +368,8 @@ function StepBody({
           onChange={onChange}
         />
       );
+    case 'landing':
+      return <LandingPageStep />;
     case 'operations':
       return <OperationsStep meta={meta} />;
     default:

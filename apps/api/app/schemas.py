@@ -127,6 +127,10 @@ _PAN_RE = re.compile(r"^[A-Z]{5}[0-9]{4}[A-Z]$")
 _GSTIN_RE = re.compile(r"^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][0-9A-Z][Z][0-9A-Z]$")
 _PINCODE_RE = re.compile(r"^[1-9][0-9]{5}$")
 _SUBDOMAIN_RE = re.compile(r"^[a-z0-9]([a-z0-9-]*[a-z0-9])?$")
+# A generous ceiling for a hand-authored landing page (~300KB of HTML/inline
+# CSS) — bounded so one tenant's page cannot grow the row without limit,
+# not tuned against any real page anyone has actually written yet.
+_LANDING_PAGE_HTML_MAX_CHARS = 300_000
 # Reserved because each already resolves to something on the platform; a tenant
 # taking one would shadow it for every user.
 RESERVED_SUBDOMAINS = {
@@ -179,6 +183,11 @@ class HospitalPublicConfigOut(OutModel):
     modules: dict = {}
     theme: dict = {}
     logo_url: str = ""
+    #: A complete, hospital-authored HTML page for their subdomain's `/`.
+    #: Empty means the subdomain has none yet and `/` sends visitors to
+    #: `/login`. Rendered by the frontend inside a sandboxed iframe — see
+    #: models.HospitalProfile.landing_page_html for why.
+    landing_page_html: str = ""
     #: Whether the tenant is live. A suspended hospital's login page has to be
     #: able to say so rather than silently failing every sign-in.
     status: HospitalStatus = "active"
@@ -340,7 +349,22 @@ class HospitalProfileBase(CamelModel):
 
     notes: str = ""
 
+    # A complete, hospital-authored HTML page for their own subdomain's `/`.
+    # See models.HospitalProfile.landing_page_html for the security note on
+    # why this is only ever rendered inside a sandboxed iframe.
+    landing_page_html: str = ""
+
     bill_field_config: BillFieldConfig = BillFieldConfig()
+
+    @field_validator("landing_page_html")
+    @classmethod
+    def _check_landing_page_html(cls, value: str) -> str:
+        value = value or ""
+        if len(value) > _LANDING_PAGE_HTML_MAX_CHARS:
+            raise ValueError(
+                f"Landing page HTML must be under {_LANDING_PAGE_HTML_MAX_CHARS // 1000}KB"
+            )
+        return value
 
     @field_validator("pincode")
     @classmethod
@@ -491,7 +515,20 @@ class HospitalSelfUpdate(CamelModel):
 
     notes: Optional[str] = None
 
+    # A complete, hospital-authored HTML page for their own subdomain's `/` —
+    # see models.HospitalProfile.landing_page_html.
+    landing_page_html: Optional[str] = None
+
     bill_field_config: Optional[BillFieldConfig] = None
+
+    @field_validator("landing_page_html")
+    @classmethod
+    def _check_landing_page_html(cls, value: Optional[str]) -> Optional[str]:
+        if value is not None and len(value) > _LANDING_PAGE_HTML_MAX_CHARS:
+            raise ValueError(
+                f"Landing page HTML must be under {_LANDING_PAGE_HTML_MAX_CHARS // 1000}KB"
+            )
+        return value
 
     @field_validator("pincode")
     @classmethod
@@ -545,6 +582,11 @@ class HospitalSelfUpdate(CamelModel):
 #: rather than by trying both models and hoping, so a field that belongs to
 #: neither cannot be written by accident.
 HOSPITAL_SELF_FIELDS_ON_HOSPITAL = {"name", "tagline", "theme"}
+
+#: The mirror image, for HospitalUpdate (superadmin's `PUT /hospitals/{id}`):
+#: that payload is otherwise entirely Hospital-row fields, so the router splits
+#: it by this small explicit set instead, rather than a set of everything else.
+HOSPITAL_UPDATE_FIELDS_ON_PROFILE = {"landing_page_html"}
 
 
 class HospitalOperationalOut(CamelModel):
@@ -848,6 +890,20 @@ class HospitalUpdate(CamelModel):
     nabh_valid_till: Optional[str] = None
     onboarding_status: Optional[OnboardingStatus] = None
     go_live_date: Optional[str] = None
+
+    # The one field here that lives on HospitalProfile, not Hospital — see
+    # HOSPITAL_UPDATE_FIELDS_ON_PROFILE, which the router uses to split this
+    # payload the same way HospitalSelfUpdate already splits its own.
+    landing_page_html: Optional[str] = None
+
+    @field_validator("landing_page_html")
+    @classmethod
+    def _check_landing_page_html(cls, value: Optional[str]) -> Optional[str]:
+        if value is not None and len(value) > _LANDING_PAGE_HTML_MAX_CHARS:
+            raise ValueError(
+                f"Landing page HTML must be under {_LANDING_PAGE_HTML_MAX_CHARS // 1000}KB"
+            )
+        return value
 
     @field_validator("pan", "gstin", "hfr_id")
     @classmethod

@@ -1,12 +1,25 @@
 'use client';
 
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Calendar, Shield, Users, Heart, CalendarClock, ClipboardList, CreditCard, Stethoscope, Settings, Clock } from 'lucide-react';
 import Image from 'next/image';
 import { useActiveHospital } from '@/hooks/useActiveHospital';
+import { currentSubdomain } from '@/lib/tenant';
+import { SandboxedHtmlFrame } from '@/components/SandboxedHtmlFrame';
 import { Button } from '@/components/ui/button';
 
-export default function LandingPage() {
+/**
+ * The platform's own marketing page — netcare.co.in itself, never a hospital
+ * subdomain (see the default export below, which is what actually decides
+ * that). Left exactly as it was before subdomains got their own
+ * admin-authored landing pages: the tenant-aware branches here (isTenant,
+ * hospital.tagline, "Why Choose {hospital.name}") are dead on a subdomain
+ * now that subdomains never reach this component, but they're harmless and
+ * kept as-is rather than stripped out as part of an unrelated change.
+ */
+function PlatformLandingPage() {
   const hospital = useActiveHospital();
   // A hospital's own subdomain resolves a real name here; the bare platform
   // host (netcare.co.in itself) never does — see tenant.ts. That's the signal
@@ -231,4 +244,59 @@ export default function LandingPage() {
       </footer>
     </div>
   );
+}
+
+/**
+ * The real page. Decides between the platform's own marketing page and a
+ * hospital subdomain's admin-authored one — the root domain (netcare.co.in)
+ * always gets the former, untouched.
+ *
+ * `isHospitalSubdomain` is deferred through a mount effect rather than
+ * computed straight from `currentSubdomain()` in render, for the same reason
+ * `login/page.tsx` already does this: `currentSubdomain()` reads
+ * `window.location` and is null during SSR by design (see lib/tenant.ts), so
+ * branching on it directly would make the server's "no subdomain" answer
+ * disagree with a real hospital subdomain's client-side one and React would
+ * discard the server-rendered tree on hydration.
+ */
+export default function Page() {
+  const router = useRouter();
+  const [isHospitalSubdomain, setIsHospitalSubdomain] = useState(false);
+  useEffect(() => {
+    setIsHospitalSubdomain(!!currentSubdomain());
+  }, []);
+
+  const hospital = useActiveHospital();
+
+  // No custom landing page for this hospital yet: send visitors straight to
+  // sign-in rather than showing them nothing.
+  useEffect(() => {
+    if (isHospitalSubdomain && !hospital.isLoading && hospital.name && !hospital.landingPageHtml) {
+      router.replace('/login');
+    }
+  }, [isHospitalSubdomain, hospital.isLoading, hospital.name, hospital.landingPageHtml, router]);
+
+  if (!isHospitalSubdomain) {
+    return <PlatformLandingPage />;
+  }
+
+  if (hospital.isLoading || !hospital.name) {
+    // Matches the server's blank-until-resolved output — no flash of the
+    // platform page, the iframe, or anything else before we know which one
+    // this subdomain actually gets.
+    return <div className="min-h-screen bg-white" />;
+  }
+
+  if (hospital.landingPageHtml) {
+    return (
+      <SandboxedHtmlFrame
+        html={hospital.landingPageHtml}
+        title={hospital.name}
+        className="block w-full h-screen border-0"
+      />
+    );
+  }
+
+  // Redirecting (see the effect above) — nothing to render in the meantime.
+  return <div className="min-h-screen bg-white" />;
 }

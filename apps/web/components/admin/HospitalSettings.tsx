@@ -5,7 +5,7 @@ import { Formik, Form } from 'formik';
 import * as Yup from 'yup';
 import {
   Building2, MapPin, Phone, UserCog, BedDouble, Clock, Image as ImageIcon,
-   Upload, Trash2, Palette, Receipt,
+   Upload, Trash2, Palette, Receipt, Globe,
   ShieldCheck, FileText, CreditCard, Lock, Smartphone, CheckCircle2, Eye, EyeOff,
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -15,6 +15,7 @@ import { AddressSearch } from '@/components/form/AddressSearch';
 import { LetterheadCropModal } from '@/components/admin/LetterheadCropModal';
 import { LetterheadMarginPicker } from '@/components/admin/LetterheadMarginPicker';
 import { FormattedDate } from '@/components/ui/FormattedDate';
+import { SandboxedHtmlFrame } from '@/components/SandboxedHtmlFrame';
 import { apiError } from '@/lib/apiError';
 import { hasPermission } from '@/lib/auth';
 import type { RoleViewProps } from '@/components/RoleView';
@@ -351,6 +352,7 @@ export function HospitalSettings({ session }: RoleViewProps) {
   const logoInput = useRef<HTMLInputElement>(null);
   const letterheadInput = useRef<HTMLInputElement>(null);
   const [error, setError] = useState('');
+  const [showLandingPreview, setShowLandingPreview] = useState(false);
   const canEdit = hasPermission(session, 'hospital.profile.manage');
 
   const hospital = data?.hospital;
@@ -417,6 +419,7 @@ export function HospitalSettings({ session }: RoleViewProps) {
     patientBookingWindowEnd: profile?.patientBookingWindowEnd ?? '',
     signatureUrl: profile?.signatureUrl ?? '',
     notes: profile?.notes ?? '',
+    landingPageHtml: profile?.landingPageHtml ?? '',
     billFieldConfig: {
       injectable: {
         showSerialNumber: profile?.billFieldConfig?.injectable?.showSerialNumber ?? true,
@@ -895,6 +898,41 @@ export function HospitalSettings({ session }: RoleViewProps) {
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <FormField name="signatureUrl" label="Signature URL" />
                       <FormField name="notes" label="Internal notes" />
+                    </div>
+                  </Section>
+
+                  <Section
+                    icon={Globe}
+                    title="Landing page"
+                    blurb={`Write the complete page shown at ${hospital?.subdomain ? `${hospital.subdomain}.` : 'your subdomain.'}netcare.co.in — this replaces the sign-in redirect visitors get today. Include your own link to /login (or /register) so people can still reach it.`}
+                  >
+                    <div className="space-y-3">
+                      <FormField name="landingPageHtml" label="Page HTML" as="textarea" rows={14} placeholder='<a href="/login" target="_top">Sign In</a>' />
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs text-slate-400">
+                          Renders in an isolated frame, so any link meant to leave this page (like
+                          Sign In) needs <code>target=&quot;_top&quot;</code> or it will try to open
+                          inside the frame instead. In exchange, nothing here can read anyone&apos;s
+                          sign-in session — only the page itself.
+                        </p>
+                        {values.landingPageHtml && (
+                          <button
+                            type="button"
+                            onClick={() => setShowLandingPreview((v) => !v)}
+                            className="inline-flex items-center gap-1.5 text-sm font-medium text-cyan-600 hover:text-cyan-700 shrink-0 ml-4"
+                          >
+                            {showLandingPreview ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                            {showLandingPreview ? 'Hide preview' : 'Preview'}
+                          </button>
+                        )}
+                      </div>
+                      {showLandingPreview && values.landingPageHtml && (
+                        <SandboxedHtmlFrame
+                          html={values.landingPageHtml}
+                          title="Landing page preview"
+                          className="w-full h-[32rem] rounded-lg border border-slate-200"
+                        />
+                      )}
                     </div>
                   </Section>
 

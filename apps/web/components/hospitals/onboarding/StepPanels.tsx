@@ -3,12 +3,13 @@
 // The eight step bodies. Each is a plain component reading Formik state; the
 // wizard shell owns navigation, validation and submission.
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useFormikContext } from 'formik';
-import { Plus, Trash2, Upload, FileText, X, AlertTriangle } from 'lucide-react';
+import { Plus, Trash2, Upload, FileText, X, AlertTriangle, Eye, EyeOff } from 'lucide-react';
 import { FormField } from '@/components/form/FormField';
 import { AddressSearch } from '@/components/form/AddressSearch';
 import { PhoneField } from '@/components/form/PhoneField';
+import { SandboxedHtmlFrame } from '@/components/SandboxedHtmlFrame';
 import { HOSPITAL_CATEGORIES } from '@/lib/hospitalCategories';
 import type { CatalogOption, HospitalDocument, OnboardingMeta } from '@/store/api';
 import {
@@ -857,6 +858,55 @@ export function DocumentsStep({
             );
           })}
         </div>
+      )}
+    </div>
+  );
+}
+
+// --- Landing Page -------------------------------------------------------------
+//
+// Shared by both the onboarding wizard and EditHospitalWizard (see config.ts's
+// STEPS and EditHospitalWizard's own EDIT_STEPS) — one component, one step id
+// ('landing'), so the two never drift apart.
+
+export function LandingPageStep() {
+  const { values } = useFormikContext<WizardValues>();
+  const [showPreview, setShowPreview] = useState(false);
+  const html = values.landingPageHtml;
+
+  return (
+    <div className="space-y-3">
+      <FormField
+        name="landingPageHtml"
+        label="Page HTML"
+        as="textarea"
+        rows={14}
+        placeholder='<a href="/login" target="_top">Sign In</a>'
+      />
+      <div className="flex items-center justify-between">
+        <p className="text-xs text-slate-400">
+          Renders in an isolated frame on the hospital&apos;s subdomain, so any link meant to leave
+          this page — Sign In, Register — needs <code>target=&quot;_top&quot;</code> or it will try
+          to open inside the frame instead. In exchange, nothing here can read anyone&apos;s sign-in
+          session, only the page itself.
+        </p>
+        {html && (
+          <button
+            type="button"
+            onClick={() => setShowPreview((v) => !v)}
+            className="inline-flex items-center gap-1.5 text-sm font-medium text-cyan-600 hover:text-cyan-700 shrink-0 ml-4"
+          >
+            {showPreview ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+            {showPreview ? 'Hide preview' : 'Preview'}
+          </button>
+        )}
+      </div>
+      {showPreview && html && (
+        <SandboxedHtmlFrame
+          html={html}
+          title="Landing page preview"
+          className="w-full h-[32rem] rounded-lg border border-slate-200"
+        />
       )}
     </div>
   );

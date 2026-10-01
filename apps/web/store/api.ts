@@ -189,6 +189,9 @@ export interface HospitalProfileBody {
   letterheadMarginLeftMm?: number;
   letterheadMarginRightMm?: number;
   notes?: string;
+  /** A complete, hospital-authored HTML page for their own subdomain's `/`.
+   *  Rendered inside a sandboxed iframe — see `SandboxedHtmlFrame`. */
+  landingPageHtml?: string;
   billFieldConfig?: BillFieldConfig;
 }
 
@@ -246,6 +249,7 @@ export type HospitalSelfUpdateBody = Pick<
   | 'logoUrl' | 'letterheadUrl' | 'signatureUrl' | 'notes'
   | 'letterheadMarginTopMm' | 'letterheadMarginBottomMm'
   | 'letterheadMarginLeftMm' | 'letterheadMarginRightMm'
+  | 'landingPageHtml'
 > & {
   name?: string;
   tagline?: string;
@@ -272,6 +276,11 @@ export interface HospitalPublicConfig {
   /** Empty when the hospital has not uploaded one — screens fall back to the
    *  platform mark. */
   logoUrl: string;
+  /** A complete, hospital-authored HTML page for their subdomain's `/`.
+   *  Empty means the subdomain has none yet — `/` sends visitors to `/login`.
+   *  Render with `SandboxedHtmlFrame`, never `dangerouslySetInnerHTML`
+   *  directly — see that component for why. */
+  landingPageHtml: string;
   status: string;
 }
 
@@ -513,6 +522,11 @@ export interface HospitalUpdateBody {
   nabhValidTill?: string;
   onboardingStatus?: OnboardingStatus;
   goLiveDate?: string;
+
+  /** The one field here that actually lives on the hospital's profile row,
+   *  not the hospital row itself — mirrors `HOSPITAL_UPDATE_FIELDS_ON_PROFILE`
+   *  on the server, which routes it there. */
+  landingPageHtml?: string;
 }
 
 /** One entry of a served catalog. `code`/`label` is the shape every select in

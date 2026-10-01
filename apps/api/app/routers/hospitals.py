@@ -108,6 +108,7 @@ def current_hospital(
         modules=hospital.modules or {},
         theme=hospital.theme or {},
         logo_url=storage.public_url(profile.logo_url if profile else ""),
+        landing_page_html=(profile.landing_page_html if profile else "") or "",
         status=hospital.status,
     )
 
@@ -435,8 +436,32 @@ def update_hospital(
 ):
     hospital = _get_hospital(db, hospital_id)
     fields = body.model_dump(exclude_unset=True)
-    for field, value in fields.items():
+
+    # Almost everything on HospitalUpdate is a Hospital-row field; the small
+    # set in HOSPITAL_UPDATE_FIELDS_ON_PROFILE (just landing_page_html today)
+    # belongs on HospitalProfile instead — same split update_my_hospital_settings
+    # already does for the self-service side, just inverted (there, the small
+    # explicit set is what stays on Hospital).
+    profile_fields = {
+        k: v for k, v in fields.items()
+        if k in schemas.HOSPITAL_UPDATE_FIELDS_ON_PROFILE
+    }
+    hospital_fields = {
+        k: v for k, v in fields.items()
+        if k not in schemas.HOSPITAL_UPDATE_FIELDS_ON_PROFILE
+    }
+
+    for field, value in hospital_fields.items():
         setattr(hospital, field, value)
+
+    if profile_fields:
+        profile = _profile_of(db, hospital_id)
+        if profile is None:
+            profile = models.HospitalProfile(id=new_id("hprof"), hospital_id=hospital_id)
+            db.add(profile)
+        for field, value in profile_fields.items():
+            setattr(profile, field, value)
+        profile.updated_at = now_iso()
 
     # When and by whom a hospital was verified is a fact about what happened,
     # so the server writes it rather than trusting a client to send it — the

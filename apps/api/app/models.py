@@ -219,6 +219,14 @@ class HospitalProfile(Base):
     letterhead_margin_left_mm = Column(Integer, default=18, server_default="18")
     letterhead_margin_right_mm = Column(Integer, default=18, server_default="18")
 
+    # A complete, hospital-authored HTML page for their own subdomain's `/`.
+    # Rendered client-side inside a sandboxed iframe (no allow-same-origin) —
+    # never trust this string enough to inject it into the app's own origin,
+    # since that would hand any script in it the session token out of
+    # localStorage for whoever is signed in on this subdomain. Empty means the
+    # subdomain has no landing page yet and `/` sends visitors to `/login`.
+    landing_page_html = Column(Text, default="")
+
     notes = Column(Text, default="")
     updated_at = Column(String, default="")
 

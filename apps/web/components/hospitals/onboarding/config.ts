@@ -114,6 +114,7 @@ export interface WizardValues {
   medicalDirectorRegNo: string;
   medicalDirectorCouncil: string;
   medicalDirectorQualification: string;
+  landingPageHtml: string;
 
   // Step 4 — clinical profile
   bedCount: number | '';
@@ -219,6 +220,7 @@ export const INITIAL_VALUES: WizardValues = {
   medicalDirectorRegNo: '',
   medicalDirectorCouncil: '',
   medicalDirectorQualification: '',
+  landingPageHtml: '',
 
   bedCount: '',
   icuBeds: '',
@@ -479,6 +481,14 @@ export const STEPS: StepDefinition[] = [
     schema: Yup.object({}),
   },
   {
+    id: 'landing',
+    title: 'Landing Page',
+    blurb: 'Optional: a complete HTML page for this hospital’s own subdomain. Leave blank and visitors go straight to sign-in.',
+    schema: Yup.object({
+      landingPageHtml: Yup.string().max(300_000, 'Keep it under 300KB'),
+    }),
+  },
+  {
     id: 'operations',
     title: 'Operations & Plan',
     blurb: 'Numbering, scheduling defaults, and the commercial terms.',
@@ -589,6 +599,7 @@ export function buildPayload(values: WizardValues): HospitalCreateBody {
       medicalDirectorRegNo: trimmed(values.medicalDirectorRegNo),
       medicalDirectorCouncil: values.medicalDirectorCouncil,
       medicalDirectorQualification: trimmed(values.medicalDirectorQualification),
+      landingPageHtml: values.landingPageHtml,
       facilityType: values.facilityType,
       bedCount: num(values.bedCount),
       icuBeds: num(values.icuBeds),

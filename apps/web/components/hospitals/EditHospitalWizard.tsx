@@ -51,6 +51,7 @@ import {
   ClinicalStep,
   ContactStep,
   DocumentsStep,
+  LandingPageStep,
   LicencesStep,
   OperationsStep,
   RegistrationStep,
@@ -184,6 +185,14 @@ const EDIT_STEPS: EditStepDefinition[] = [
     }),
   },
   {
+    id: 'landing',
+    title: 'Landing Page',
+    blurb: 'Optional: a complete HTML page for this hospital’s own subdomain. Leave blank and visitors go straight to sign-in.',
+    schema: Yup.object({
+      landingPageHtml: Yup.string().max(300_000, 'Keep it under 300KB'),
+    }),
+  },
+  {
     id: 'review',
     title: 'Review',
     blurb: 'Set the onboarding state and review everything before saving.',
@@ -246,6 +255,7 @@ function detailToValues(detail: HospitalDetail): WizardValues {
     medicalDirectorRegNo: p?.medicalDirectorRegNo ?? '',
     medicalDirectorCouncil: p?.medicalDirectorCouncil ?? '',
     medicalDirectorQualification: p?.medicalDirectorQualification ?? '',
+    landingPageHtml: p?.landingPageHtml ?? '',
 
     // Clinical Profile
     bedCount: p?.bedCount ?? '',
@@ -567,6 +577,10 @@ export function EditHospitalWizard({ open, hospital, onClose, onUpdated }: Props
             invoicePrefix: tr(values.invoicePrefix) || 'INV',
             invoiceSeriesStart: num(values.invoiceSeriesStart),
             mrnPrefix: tr(values.mrnPrefix) || 'MRN',
+            // This is a full replace (PUT) — omitting the field would silently
+            // wipe any landing page HTML already saved, not merely leave it
+            // alone.
+            landingPageHtml: values.landingPageHtml,
           },
         }).unwrap();
       } catch {
@@ -936,6 +950,8 @@ function StepBody({
           onDeleteExisting={onDeleteExisting}
         />
       );
+    case 'landing':
+      return <LandingPageStep />;
     case 'operations':
       return <OperationsStep meta={meta} />;
     default:
