@@ -13,6 +13,8 @@ import { PrescriptionsSection } from './components/PrescriptionsSection';
 import { ClinicalNotesSection } from './components/ClinicalNotesSection';
 import { InjectionOrdersSection } from './components/InjectionOrdersSection';
 import { LabOrdersSection } from './components/LabOrdersSection';
+import { SpecialtyVisitSection } from './components/SpecialtyVisitSection';
+import { useDepartmentFields } from '@/hooks/useDepartmentFields';
 import { RescheduleModal } from '@/components/RescheduleModal';
 import { FollowUpModal } from '@/components/FollowUpModal';
 import { useActiveHospital } from '@/hooks/useActiveHospital';
@@ -70,6 +72,9 @@ export default function AppointmentDetailPage() {
   } = useAppointmentDetail();
   const [showReschedule, setShowReschedule] = useState(false);
   const [showFollowUp, setShowFollowUp] = useState(false);
+  // What a visit in this appointment's department records; the sections below
+  // show only those fields.
+  const fields = useDepartmentFields(details.appointment?.departmentId);
 
   if (loading) {
     return (
@@ -162,8 +167,11 @@ export default function AppointmentDetailPage() {
               record={details.medicalRecords[0] ?? null}
               canManage={canManageClinicalNotes}
               isNewVisit={appointment.visitType === 'new'}
+              fields={fields.notes}
             />
           </div>
+
+          {modules.specialties && <SpecialtyVisitSection appointment={appointment} canManage={canManage} />}
 
           <div className="py-6">
             <VitalsSection
@@ -173,6 +181,7 @@ export default function AppointmentDetailPage() {
               doctorId={appointment.doctorId}
               canManage={canManage}
               canDelete={canDeleteVitals}
+              fields={fields.vitals}
             />
           </div>
 

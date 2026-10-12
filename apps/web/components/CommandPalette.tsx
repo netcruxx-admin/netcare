@@ -59,7 +59,7 @@ export function CommandPalette({
       doctorRecords.map((d) => ({
         id: d.id,
         name: d.user?.name ?? d.id,
-        sub: d.specialization,
+        sub: d.specialization || d.specialtyLabel,
       })),
     [doctorRecords],
   );

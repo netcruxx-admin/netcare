@@ -41,6 +41,9 @@ const ALL_ON: HospitalModules = {
   // see docs/IPD_MODULE_CHANGELOG.md §7 — not a side effect of the module
   // existing. A superadmin enables it per hospital from the hospital edit UI.
   ipd: false,
+  // On only where the category says so (multi-specialty). Mirrors
+  // apps/api/app/categories.py.
+  specialties: false,
 };
 
 export const HOSPITAL_CATEGORIES: Record<HospitalCategoryId, HospitalCategory> = {
@@ -79,7 +82,7 @@ export const HOSPITAL_CATEGORIES: Record<HospitalCategoryId, HospitalCategory> =
     icon: Building2,
     description:
       'A general hospital spanning many departments, with inpatient (IPD) care, OPD queues and telemedicine.',
-    modules: { ...ALL_ON, telemedicine: true },
+    modules: { ...ALL_ON, telemedicine: true, specialties: true },
     specializations: [
       'General Medicine',
       'Cardiology',

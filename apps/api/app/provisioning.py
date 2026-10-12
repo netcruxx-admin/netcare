@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session
 from . import models, pricing
 from .auth import hash_password
 from .categories import get_template
+from .specialties import infer_specialty
 from .utils import new_id, now_iso
 
 # Columns the caller may set on the hospital row beyond the template's own.
@@ -116,6 +117,7 @@ def provision_hospital(
                 hospital_id=hid,
                 name=dept_name,
                 description=(dept.get("description") or "").strip(),
+                specialty=(dept.get("specialty") or "").strip() or infer_specialty(dept_name),
             )
         )
 

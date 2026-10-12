@@ -37,7 +37,30 @@ export interface VitalsFormValues {
   lmp: string;
   edd: string;
   pog: string;
+  spo2: string;
+  respiratoryRate: string;
 }
+
+/** The form field -> the department catalog key (app/clinical_fields.py). */
+export const VITAL_KEY: Record<keyof VitalsFormValues, string> = {
+  bloodPressure: 'blood_pressure',
+  height: 'height',
+  heartRate: 'heart_rate',
+  weight: 'weight',
+  temperature: 'temperature',
+  bmi: 'bmi',
+  pregnancyStatus: 'pregnancy_status',
+  lmp: 'lmp',
+  edd: 'edd',
+  pog: 'pog',
+  spo2: 'spo2',
+  respiratoryRate: 'respiratory_rate',
+};
+
+/** Whether a department records this field. `fields` is the department's
+ *  `vitalsFields`; undefined (department unknown) means all of them. */
+export const vitalEnabled = (fields: string[] | undefined, key: keyof VitalsFormValues) =>
+  !fields || fields.includes(VITAL_KEY[key]);
 
 export const emptyVitals: VitalsFormValues = {
   bloodPressure: '',
@@ -52,6 +75,8 @@ export const emptyVitals: VitalsFormValues = {
   lmp: '',
   edd: '',
   pog: '',
+  spo2: '',
+  respiratoryRate: '',
 };
 
 const asStr = (n: number | null | undefined) => (n ? String(n) : '');
@@ -67,24 +92,37 @@ export const vitalsToForm = (v: Vitals): VitalsFormValues => ({
   lmp: v.lmp ?? '',
   edd: v.edd ?? '',
   pog: v.pog ?? '',
+  spo2: asStr(v.spo2),
+  respiratoryRate: asStr(v.respiratoryRate),
 });
 
 const asNum = (s: string) => Number(s) || 0;
 
-/** The slice of the API body these fields own. Respiratory rate and notes are
- *  deliberately absent. */
-export const vitalsToPayload = (v: VitalsFormValues) => ({
-  bloodPressure: v.bloodPressure,
-  height: asNum(v.height),
-  heartRate: asNum(v.heartRate),
-  weight: asNum(v.weight),
-  temperature: asNum(v.temperature),
-  bmi: asNum(v.bmi),
-  pregnancyStatus: v.pregnancyStatus,
-  lmp: v.lmp,
-  edd: v.edd,
-  pog: v.pog,
-});
+/** The slice of the API body these fields own. Notes are deliberately absent.
+ *
+ *  Pass the department's `vitalsFields` and anything it does not record is left
+ *  out of the body entirely -- not sent as 0 or "" -- so a create gets the
+ *  column default and an edit leaves what is already stored alone. The API
+ *  refuses an unrecorded field that arrives with a value. */
+export const vitalsToPayload = (v: VitalsFormValues, fields?: string[]) => {
+  const all = {
+    bloodPressure: v.bloodPressure,
+    height: asNum(v.height),
+    heartRate: asNum(v.heartRate),
+    weight: asNum(v.weight),
+    temperature: asNum(v.temperature),
+    bmi: asNum(v.bmi),
+    pregnancyStatus: v.pregnancyStatus,
+    lmp: v.lmp,
+    edd: v.edd,
+    pog: v.pog,
+    spo2: asNum(v.spo2),
+    respiratoryRate: asNum(v.respiratoryRate),
+  };
+  return Object.fromEntries(
+    Object.entries(all).filter(([k]) => vitalEnabled(fields, k as keyof VitalsFormValues)),
+  ) as Partial<typeof all>;
+};
 
 export const pregnancyStatusOptions = [
   { value: 'pregnant', label: 'Pregnant' },
@@ -109,6 +147,8 @@ export const vitalsSchema = Yup.object({
   lmp: Yup.string(),
   edd: Yup.string(),
   pog: Yup.string().max(20, 'Too long'),
+  spo2: numOpt,
+  respiratoryRate: numOpt,
 });
 
 // --- derivations -----------------------------------------------------------
@@ -186,22 +226,26 @@ export function Autofill() {
   return null;
 }
 
-/** The ten fields, in the agreed order. Drop straight into a two-column grid
- *  `<Form>`. */
-export function VitalsFormFields() {
+/** The fields a department records, in the agreed order. Drop straight into a
+ *  two-column grid `<Form>`. `fields` is the department's `vitalsFields`;
+ *  omitted, every field shows. */
+export function VitalsFormFields({ fields }: { fields?: string[] }) {
+  const on = (key: keyof VitalsFormValues) => vitalEnabled(fields, key);
   return (
     <>
       <Autofill />
-      <FormField name="bloodPressure" label="BP" placeholder="120/80" />
-      <FormField name="height" label="Height (cm)" type="number" placeholder="165" />
-      <FormField name="heartRate" label="Pulse (bpm)" type="number" placeholder="78" />
-      <FormField name="weight" label="Weight (kg)" type="number" placeholder="68" />
-      <FormField name="temperature" label="Temperature (°F)" type="number" placeholder="98.4" />
-      <FormField name="bmi" label="BMI (kg/m²)" type="number" placeholder="from height & weight" />
-      <FormField name="pregnancyStatus" label="Pregnancy Status" as="select" placeholder="Not recorded" options={pregnancyStatusOptions} />
-      <FormField name="lmp" label="LMP" type="date" />
-      <FormField name="edd" label="EDD" type="date" />
-      <FormField name="pog" label="POG" placeholder="e.g. 28w 3d" />
+      {on('bloodPressure') && <FormField name="bloodPressure" label="BP" placeholder="120/80" />}
+      {on('height') && <FormField name="height" label="Height (cm)" type="number" placeholder="165" />}
+      {on('heartRate') && <FormField name="heartRate" label="Pulse (bpm)" type="number" placeholder="78" />}
+      {on('weight') && <FormField name="weight" label="Weight (kg)" type="number" placeholder="68" />}
+      {on('temperature') && <FormField name="temperature" label="Temperature (°F)" type="number" placeholder="98.4" />}
+      {on('bmi') && <FormField name="bmi" label="BMI (kg/m²)" type="number" placeholder="from height & weight" />}
+      {on('spo2') && <FormField name="spo2" label="SpO₂ (%)" type="number" placeholder="98" />}
+      {on('respiratoryRate') && <FormField name="respiratoryRate" label="Resp. rate (/min)" type="number" placeholder="16" />}
+      {on('pregnancyStatus') && <FormField name="pregnancyStatus" label="Pregnancy Status" as="select" placeholder="Not recorded" options={pregnancyStatusOptions} />}
+      {on('lmp') && <FormField name="lmp" label="LMP" type="date" />}
+      {on('edd') && <FormField name="edd" label="EDD" type="date" />}
+      {on('pog') && <FormField name="pog" label="POG" placeholder="e.g. 28w 3d" />}
     </>
   );
 }

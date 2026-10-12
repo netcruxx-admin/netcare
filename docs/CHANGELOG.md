@@ -4,6 +4,90 @@ Notable changes to CarbonHealth. Format follows [Keep a Changelog](https://keepa
 
 ## [Unreleased]
 
+### Added — specialty encounters (Cardiology, Orthopedics, Dermatology)
+
+One template-driven table instead of a table set per specialty, so adding a
+specialty is a data change. `app/specialties.py` is the catalog (sections of
+typed fields, versioned) and the validator: unknown sections/fields, out-of-range
+numbers and bad options are refused, not stored. `specialty_encounters` carries
+the answers as JSON plus the template version they were written against.
+
+- Gated by the new `specialties` hospital module, which the multi-specialty
+  category switches on at onboarding. Existing hospitals are untouched until a
+  superadmin ticks it in Hospital Setup.
+- `specialty_encounters.read/write/delete`. Doctors read and write their own,
+  nurses read all, patients read their own, superadmin everything; delete is
+  superadmin's alone. Admin and receptionist hold nothing for now.
+- **Recorded on the visit, not from a menu.** `POST /specialty-encounters` takes
+  only `appointmentId` and the answers. The appointment decides the patient, its
+  department decides the specialty (and so the form), and the author is the
+  caller's own doctor record; a department with no specialty or no form is a
+  409, one record per visit, and only the visit's own doctor may record it.
+- The appointment page shows the department's form inline (nothing for a
+  department without one) and the patient chart lists a patient's specialty
+  records. There is no sidebar entry.
+- A doctor reads every encounter of their department's specialty -- the
+  cardiology team reads each other's visits -- but only the author edits.
+- **My Patients is department-wide for doctors.** `own_patients_filter` gains an
+  arm: anyone with an appointment filed under the doctor's department. It widens
+  the patient list and the patient record only; appointments, notes and
+  prescriptions keep their own scope.
+- Not done: choosing individual specialties per hospital (the module is
+  all-or-nothing), a patient-facing view of their own records (the API allows
+  it), and the maternity tables stay as they are.
+
+### Changed — vitals and clinical notes follow the department
+
+Every visit showed every field: a cardiology doctor was asked for menstrual
+history, per-vaginum examination and LMP. `app/clinical_fields.py` is now the
+catalog of what a visit can record, with a default set per specialty
+(obstetrics adds the pregnancy vitals, menstrual/obstetric history and the P/A,
+P/S, P/V exam; cardiology, pulmonology and emergency add SpO₂ and respiratory
+rate; everything else gets the core set and the general history).
+
+- A department with no specialty set records **every** field, as before, so
+  nothing disappears from a hospital until someone says what the department is.
+- `departments.vitals_override` / `notes_override` (NULL = the specialty's
+  default) let a superadmin pick fields per department from checklists on the
+  department form. The diagnosis/treatment/follow-up fields can never be unticked.
+  `GET /departments` returns the effective `vitalsFields` / `noteFields`;
+  `GET /departments/field-catalog` lists what can be ticked.
+- **The API enforces it.** Vitals and medical records refuse a field the
+  appointment's department does not record (422, naming the department) on both
+  create and edit. IPD vitals, tied to an admission, are unrestricted.
+- The forms send only the fields the department records, so an edit never
+  touches what is already stored, and the vitals grid keeps a column visible if
+  an older row has a value in it.
+- New `vitals.spo2` column (migration `d2e3f4a5b6c7`).
+
+### Changed — a doctor's specialty comes from their department
+
+Specialty was a typed-in word on the doctor, and the menu keyword-matched it, so
+"Heart specialist" or a typo silently hid a screen. Now `departments.specialty`
+holds an id from a server catalog (`GET /departments/specialties`, 22 entries,
+of which Cardiology/Orthopedics/Dermatology have visit forms). A doctor's
+`specialty` is read through their department and is never accepted from the
+client; `specialtyLabel` is its display name.
+
+- `doctors.specialization` stays as an **optional sub-specialty** (free text,
+  display and search only). The three forms that edited it relabel it, and the
+  profile form no longer requires it.
+- The department form has a Specialty dropdown (superadmin, as before). Left
+  blank on create -- including at onboarding -- the server guesses from the name
+  (`infer_specialty`); invalid ids are a 422.
+- Migration `c1d2e3f4a5b6` backfills existing departments by name. A department
+  that matches nothing stays blank and its doctors are not offered
+  specialty-only screens until it is set.
+- Every specialty-gated screen is now decided by the department specialty id
+  alone -- no keyword match on typed text anywhere. Pregnancies is offered to
+  doctors in Obstetrics & Gynecology only (it used to be shown to every doctor
+  holding `pregnancies.read`, so a cardiologist saw it); Newborns to Neonatology
+  and Pediatrics; Specialty Visits to the three specialties with a form. A
+  patient's Pregnancy/My Baby screens key off the specialty of the departments
+  they are booked into. Nurses are unrestricted (they have no department).
+- Menu only: the API still lets any doctor with `pregnancies.read` call the
+  maternity endpoints, and the pregnancies list ignores its `own` scope.
+
 ### Changed — the dispense queue is a list of patients, not of line items
 
 The queue is worked one patient at a time: everything they were prescribed is

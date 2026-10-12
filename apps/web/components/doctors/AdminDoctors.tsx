@@ -143,7 +143,7 @@ export function AdminDoctors({ session }: RoleViewProps) {
                       <p className="text-xs text-slate-500 mt-0.5">{doctor.user?.email ?? ''}</p>
                     </TableCell>
                     <TableCell className="py-3 px-6 text-slate-600 whitespace-normal">{deptById.get(doctor.departmentId ?? '') ?? '—'}</TableCell>
-                    <TableCell className="py-3 px-6 text-slate-600 whitespace-normal">{doctor.specialization || '—'}</TableCell>
+                    <TableCell className="py-3 px-6 text-slate-600 whitespace-normal">{doctor.specialization || doctor.specialtyLabel || '—'}</TableCell>
                     <TableCell className="py-3 px-6 text-slate-600 whitespace-normal">{doctor.qualification || '—'}</TableCell>
                     <TableCell className="py-3 px-6 text-slate-600 whitespace-normal">{doctor.experienceYears} yrs</TableCell>
                     <TableCell className="py-3 px-6 whitespace-normal">
@@ -202,7 +202,7 @@ export function AdminDoctors({ session }: RoleViewProps) {
           { label: 'Email', value: viewing?.user?.email },
           { label: 'Phone', value: viewing?.user?.phone },
           { label: 'Department', value: departments.find((d) => d.id === viewing?.departmentId)?.name },
-          { label: 'Specialization', value: viewing?.specialization },
+          { label: 'Specialty', value: viewing?.specialization || viewing?.specialtyLabel },
           { label: 'Qualification', value: viewing?.qualification },
           { label: 'Experience', value: viewing?.experienceYears != null ? `${viewing.experienceYears} yrs` : '' },
           { label: 'Licence number', value: viewing?.licenseNumber },

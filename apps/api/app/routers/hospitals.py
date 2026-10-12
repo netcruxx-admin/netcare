@@ -35,6 +35,7 @@ from .. import audit, licences as licence_catalog, models, printing, schemas, se
 from ..auth import get_current_user
 from ..authz import require_permission
 from ..categories import CATEGORY_TEMPLATES
+from ..specialties import infer_specialty
 from ..database import get_db
 from ..utils import ListQuery, list_params, new_id, now_iso, paginate, text_search
 from ..provisioning import provision_hospital
@@ -229,7 +230,9 @@ def onboarding_meta(
     template = CATEGORY_TEMPLATES.get(category or "")
     if template is not None:
         applicable = licence_catalog.licences_for(category, template["modules"])
-        suggested = list(template["departments"])
+        suggested = [
+            {**d, "specialty": infer_specialty(d["name"])} for d in template["departments"]
+        ]
     else:
         applicable = licence_catalog.LICENCE_TYPES
         suggested = []

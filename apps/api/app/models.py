@@ -11,7 +11,9 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     and_,
+    select,
 )
+from sqlalchemy.orm import column_property
 
 from .database import Base
 
@@ -630,6 +632,28 @@ class Department(Base):
     hospital_id = Column(String, ForeignKey("hospitals.id", ondelete="CASCADE"), index=True, nullable=False)
     name = Column(String, nullable=False)
     description = Column(Text, default="")
+    # What kind of care this department delivers: an id from
+    # specialties.SPECIALTY_CATALOG, or "" when not set. This -- not the doctor's
+    # free-text sub-specialty -- is what decides which specialty screens a
+    # doctor is offered.
+    specialty = Column(String, nullable=False, default="", server_default="")
+    # Which vitals / clinical-note fields a visit here records. NULL means "the
+    # specialty's default" (app/clinical_fields.py); a list is a superadmin's
+    # explicit choice and replaces it.
+    vitals_override = Column(JSON, nullable=True)
+    notes_override = Column(JSON, nullable=True)
+
+
+# A doctor's specialty is their department's, read through the FK so there is no
+# second copy to drift. Doctor.specialization stays as the optional free-text
+# sub-specialty ("Interventional Cardiology"). Declared here because Department
+# has to exist first; every DoctorOut built from the ORM row picks it up.
+Doctor.specialty = column_property(
+    select(Department.specialty)
+    .where(Department.id == Doctor.department_id)
+    .correlate_except(Department)
+    .scalar_subquery()
+)
 
 
 class Appointment(Base):
@@ -807,6 +831,7 @@ class Vitals(Base):
     # pregnancy, and a blank LMP does not imply menopause — both used to be
     # silently inferred from the LMP field, which is wrong on both counts.
     pregnancy_status = Column(String, default="")
+    spo2 = Column(Integer, default=0)
     # Nursing intake/output charting — IPD only, left null for an OPD vitals row.
     intake_ml = Column(Integer, nullable=True)
     output_ml = Column(Integer, nullable=True)
@@ -1385,6 +1410,28 @@ class Immunization(Base):
 # -----------------------------------------------------------------------------
 # Audit trail — see app/audit.py for why this exists and what fills it in.
 # -----------------------------------------------------------------------------
+
+
+class SpecialtyEncounter(Base):
+    """One specialty visit, written against a template in app/specialties.py.
+
+    `data` is `{section: {field: value}}`, validated on every write. The
+    template version is stored so a row stays readable after the template moves
+    on. The author is always the caller's own doctor record.
+    """
+
+    __tablename__ = "specialty_encounters"
+
+    id = Column(String, primary_key=True)
+    hospital_id = Column(String, ForeignKey("hospitals.id", ondelete="CASCADE"), index=True, nullable=False)
+    patient_id = Column(String, index=True, nullable=False)
+    doctor_id = Column(String, index=True, nullable=False)
+    appointment_id = Column(String, nullable=True)
+    specialty = Column(String, index=True, nullable=False)
+    template_version = Column(Integer, nullable=False)
+    data = Column(JSON, default=dict)
+    created_at = Column(String, nullable=False)
+    updated_at = Column(String, nullable=False)
 
 
 class AuditLog(Base):

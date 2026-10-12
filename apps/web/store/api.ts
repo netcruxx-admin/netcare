@@ -37,6 +37,10 @@ import type {
   PregnancyRecord,
   Prescription,
   ProgressNote,
+  SpecialtyEncounter,
+  FieldCatalog,
+  SpecialtyOption,
+  SpecialtyTemplate,
   ScheduleBlock,
   TestOrder,
   TestResult,
@@ -882,8 +886,21 @@ export interface DoctorUpdateBody {
   verificationStatus?: string;
 }
 
-export interface DepartmentCreateBody { name: string; description?: string }
-export interface DepartmentUpdateBody { name?: string; description?: string }
+export interface DepartmentCreateBody {
+  name: string;
+  description?: string;
+  specialty?: string;
+  vitalsOverride?: string[] | null;
+  notesOverride?: string[] | null;
+}
+export interface DepartmentUpdateBody {
+  name?: string;
+  description?: string;
+  specialty?: string;
+  /** null = go back to the specialty's default. */
+  vitalsOverride?: string[] | null;
+  notesOverride?: string[] | null;
+}
 
 // ── IPD body types ──────────────────────────────────────────────────────────
 /** The beds to open a new ward with. Omit it and the ward is created empty.
@@ -949,6 +966,13 @@ export interface AdmissionUpdateBody {
   billingMode?: 'advance' | 'credit';
 }
 export interface ProgressNoteCreateBody { admissionId: string; note?: string }
+
+/** Only the visit and the answers: the patient, the specialty and the author
+ *  are decided by the server from the appointment. */
+export interface SpecialtyEncounterCreateBody {
+  appointmentId: string;
+  data: SpecialtyEncounter['data'];
+}
 export interface NursingNoteCreateBody { admissionId: string; shift?: string; note?: string }
 export interface AdmissionPaymentCreateBody {
   amount: number;
@@ -1056,6 +1080,7 @@ export const api = createApi({
     'Bed',
     'Admission',
     'ProgressNote',
+    'SpecialtyEncounter',
     'NursingNote',
     'DischargeSummary',
     'AdmissionChargeItem',
@@ -1500,6 +1525,23 @@ export const api = createApi({
             ]
           : [{ type: 'Admission', id: 'LIST' }],
     }),
+    listSpecialtyEncountersPaged: build.query<
+      Paged<SpecialtyEncounter>,
+      PageArgs & { patientId?: string; appointmentId?: string; specialty?: string }
+    >({
+      query: (params) => ({ url: '/specialty-encounters', params: cleanParams(params) }),
+      transformResponse: pageOf<SpecialtyEncounter>,
+      providesTags: [{ type: 'SpecialtyEncounter', id: 'LIST' }],
+    }),
+    listFieldCatalog: build.query<FieldCatalog, void>({
+      query: () => '/departments/field-catalog',
+    }),
+    listSpecialtyOptions: build.query<SpecialtyOption[], void>({
+      query: () => '/departments/specialties',
+    }),
+    listSpecialtyTemplates: build.query<SpecialtyTemplate[], void>({
+      query: () => '/specialty-encounters/templates',
+    }),
     listProgressNotesPaged: build.query<Paged<ProgressNote>, PageArgs & { admissionId?: string }>({
       query: (params) => ({ url: '/progress-notes', params: cleanParams(params) }),
       transformResponse: pageOf<ProgressNote>,
@@ -1809,6 +1851,17 @@ export const api = createApi({
     }),
 
     // ── IPD: progress notes ──────────────────────────────────────────────────
+    createSpecialtyEncounter: build.mutation<SpecialtyEncounter, SpecialtyEncounterCreateBody>({
+      query: (body) => ({ url: '/specialty-encounters', method: 'POST', body }),
+      invalidatesTags: [{ type: 'SpecialtyEncounter', id: 'LIST' }],
+    }),
+    updateSpecialtyEncounter: build.mutation<
+      SpecialtyEncounter,
+      { id: string; data: SpecialtyEncounter['data'] }
+    >({
+      query: ({ id, data }) => ({ url: `/specialty-encounters/${id}`, method: 'PUT', body: { data } }),
+      invalidatesTags: [{ type: 'SpecialtyEncounter', id: 'LIST' }],
+    }),
     createProgressNote: build.mutation<ProgressNote, ProgressNoteCreateBody>({
       query: (body) => ({ url: '/progress-notes', method: 'POST', body }),
       invalidatesTags: [{ type: 'ProgressNote', id: 'LIST' }],
@@ -2675,6 +2728,12 @@ export const {
   useUpdateAdmissionMutation,
   useTransferAdmissionBedMutation,
   useDeleteAdmissionMutation,
+  useListSpecialtyEncountersPagedQuery,
+  useListSpecialtyTemplatesQuery,
+  useListSpecialtyOptionsQuery,
+  useListFieldCatalogQuery,
+  useCreateSpecialtyEncounterMutation,
+  useUpdateSpecialtyEncounterMutation,
   useListProgressNotesPagedQuery,
   useLazyListProgressNotesPagedQuery,
   useCreateProgressNoteMutation,

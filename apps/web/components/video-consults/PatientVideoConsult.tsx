@@ -60,7 +60,7 @@ export function PatientVideoConsult({ session }: RoleViewProps) {
     .map((d) => ({
       id: d.id,
       name: d.user?.name ?? 'Doctor',
-      specialization: d.specialization,
+      specialization: d.specialization || d.specialtyLabel || '',
       departmentId: d.departmentId ?? '',
     }));
 

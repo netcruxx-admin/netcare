@@ -89,7 +89,14 @@ export interface Doctor {
   userId: string;
   departmentId?: string;
   qualification: string;
+  /** Optional free-text sub-specialty ("Interventional Cardiology"). Display
+   *  only -- nothing is decided from it. */
   specialization: string;
+  /** The department's specialty id; written by the server, never sent. */
+  specialty?: string;
+  /** Display name of `specialty`, so a doctor with no sub-specialty typed
+   *  still shows what they practise. */
+  specialtyLabel?: string;
   experienceYears: number;
   availableSlots: TimeSlot[];
   user?: User;
@@ -152,6 +159,35 @@ export interface Department {
   hospitalId?: string;
   name: string;
   description: string;
+  /** A specialty id from the backend catalog (GET /departments/specialties), or ''. */
+  specialty?: string;
+  /** The superadmin's explicit field choice, or null for "the specialty's default". */
+  vitalsOverride?: string[] | null;
+  notesOverride?: string[] | null;
+  /** What a visit in this department records -- what forms should show. Always
+   *  present from the API; absent only on objects built locally. */
+  vitalsFields?: string[];
+  noteFields?: string[];
+}
+
+/** A field a department can record, for the checklist on the department form. */
+export interface FieldOption {
+  key: string;
+  label: string;
+  group: string;
+}
+
+export interface FieldCatalog {
+  vitals: FieldOption[];
+  notes: FieldOption[];
+}
+
+/** One entry of the specialty catalog a department can be filed under. */
+export interface SpecialtyOption {
+  id: string;
+  label: string;
+  /** A structured visit form exists for it (Specialty Visits). */
+  hasTemplate: boolean;
 }
 
 // -----------------------------------------------------------------------------
@@ -218,6 +254,56 @@ export interface Admission {
   admittedAt: string;
   dischargedAt?: string | null;
   createdAt: string;
+}
+
+// == Specialty encounters ======================================================
+// Mirrors apps/api/app/specialties.py. The template is served by
+// GET /specialty-encounters/templates -- the form renders from it, so a new
+// specialty or field needs no frontend change.
+
+export type SpecialtyFieldType =
+  | 'text' | 'textarea' | 'number' | 'select' | 'multiselect' | 'boolean' | 'date';
+
+export interface SpecialtyField {
+  key: string;
+  label: string;
+  type: SpecialtyFieldType;
+  required?: boolean;
+  options?: string[];
+  unit?: string;
+  min?: number;
+  max?: number;
+}
+
+export interface SpecialtySection {
+  key: string;
+  label: string;
+  fields: SpecialtyField[];
+}
+
+export interface SpecialtyTemplate {
+  id: string;
+  label: string;
+  version: number;
+  keywords: string[];
+  sections: SpecialtySection[];
+}
+
+export type SpecialtyAnswer = string | number | boolean | string[];
+
+export interface SpecialtyEncounter {
+  id: string;
+  hospitalId?: string;
+  patientId: string;
+  patientName?: string;
+  doctorId: string;
+  doctorName?: string;
+  appointmentId?: string | null;
+  specialty: string;
+  templateVersion: number;
+  data: Record<string, Record<string, SpecialtyAnswer>>;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface ProgressNote {
@@ -496,8 +582,9 @@ export interface Vitals {
   temperature: number;
   bloodPressure: string;
   heartRate: number;
-  /** Still returned for historical rows; no longer captured by the vitals form. */
+  /** Captured only where the department records it (see Department.vitalsFields). */
   respiratoryRate: number;
+  spo2?: number;
   weight: number;
   height: number;
   /** Auto-filled from height/weight, editable. */
@@ -994,6 +1081,7 @@ export interface HospitalModules {
   telemedicine: boolean;   // video consults (future)
   anc: boolean;            // antenatal / pregnancy tracker (maternity-only, future)
   ipd: boolean;            // wards, beds, admissions — in-patient care
+  specialties: boolean;    // template-driven specialty encounters (cardiology, orthopedics, …)
 }
 
 // == Hospital categories (vertical templates) =================================

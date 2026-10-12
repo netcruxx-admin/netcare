@@ -121,7 +121,7 @@ function SuperadminBookForm({ session }: RoleViewProps) {
   }));
   const doctorOptions = doctors.map((d) => ({
     value: d.id,
-    label: `Dr. ${d.user?.name ?? 'Doctor'}${d.specialization ? ` — ${d.specialization}` : ''}`,
+    label: `Dr. ${d.user?.name ?? 'Doctor'}${d.specialization || d.specialtyLabel ? ` — ${d.specialization || d.specialtyLabel}` : ''}`,
   }));
   const visitTypeOptions = fees.map((f) => ({
     value: f.visitType,

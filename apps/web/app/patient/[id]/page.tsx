@@ -43,6 +43,7 @@ import { formatPatientAddress, formatRelationLine } from '@/components/patients/
 import { maskAadhaar } from '@/lib/aadhaar';
 import { fmtAge, fmtDate } from '@/lib/date';
 import { daysRemaining, formatGA, gestationalAge, trimester } from '@/lib/anc';
+import { PatientSpecialtyVisits } from '@/components/specialty/PatientSpecialtyVisits';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
 
 const todayStr = new Date().toISOString().split('T')[0];
@@ -219,6 +220,10 @@ export default function PatientDetailPage() {
         {patientRecord.activePregnancy && (
           <PregnancyCard pregnancy={patientRecord.activePregnancy} />
         )}
+
+        {/* Specialty records written on this patient's visits; hidden when the
+            caller cannot read them or there are none. */}
+        <PatientSpecialtyVisits patientId={patientRecord.id} />
 
         {/* Stats */}
         <div className="grid grid-cols-2 lg:grid-cols-6 gap-4">

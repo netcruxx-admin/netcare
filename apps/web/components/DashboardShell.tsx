@@ -178,9 +178,9 @@ export function DashboardShell({
 
   // What this user is clinically for. Specialty screens — Pregnancies,
   // Newborns — are hidden from clinicians and patients the care doesn't apply
-  // to, and that judgement needs the doctor's department and specialization, or
-  // the patient's. Neither travels on the session, so it is fetched here.
-  const { specialization, department, patientContext } = useCareContext({
+  // to, and that judgement needs the doctor's department specialty, or the
+  // patient's. Neither travels on the session, so it is fetched here.
+  const { specialty, specialtyText, patientContext } = useCareContext({
     role,
     userId: meData?.user.id ?? storedSession?.user.id,
     patientId: meData?.patient?.id ?? storedSession?.patient?.id,
@@ -194,8 +194,7 @@ export function DashboardShell({
   // out of the sidebar without a re-login.
   const navItems = navRoutesForRole(role, {
     modules,
-    specialization,
-    department,
+    specialty,
     patientContext,
     permissions: meData?.permissions ?? storedGrants,
   }).map((route) => ({
@@ -246,7 +245,7 @@ export function DashboardShell({
           <Link href="/dashboard" style={brandText} className="font-bold leading-tight">
             {hospital.name}
           </Link>
-          <p className="text-xs text-slate-500 truncate">{role === doctorRole && specialization ? specialization : portalTitleForRole(role)}</p>
+          <p className="text-xs text-slate-500 truncate">{role === doctorRole && specialtyText ? specialtyText : portalTitleForRole(role)}</p>
         </div>
       </div>
 

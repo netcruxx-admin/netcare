@@ -95,7 +95,7 @@ export function AdminSchedule({ session }: RoleViewProps) {
     const doctors = allDoctors.map((d) => ({
       id: d.id,
       name: d.user?.name ? `Dr. ${d.user.name}` : 'Doctor',
-      specialization: d.specialization,
+      specialization: d.specialization || d.specialtyLabel || '',
     }));
 
     const dayAppts = allAppointments.filter(

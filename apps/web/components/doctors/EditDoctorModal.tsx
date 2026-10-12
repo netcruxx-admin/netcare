@@ -119,7 +119,7 @@ export function EditDoctorModal({ doctor, onClose, onSuccess, hospitalId }: Prop
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
-                  <FormField name="specialization" label="Specialization" placeholder="e.g. Interventional Cardiology" />
+                  <FormField name="specialization" label="Sub-specialty (optional)" placeholder="e.g. Interventional Cardiology" />
                   <FormField name="qualification" label="Qualification" placeholder="e.g. MBBS, MD" />
                 </div>
                 <FormField name="experienceYears" label="Experience (years)" type="number" placeholder="5" />

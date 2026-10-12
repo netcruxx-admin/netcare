@@ -101,16 +101,16 @@ export function portalTitleForRole(role: string): string {
 /** A patient's care context, used to hide screens for care they aren't receiving. */
 export interface PatientContext {
   /**
-   * What the patient is being seen *for*: the specialization and the department
-   * name of every doctor they have an appointment with. Both go in the same
-   * list because the keywords tested against it ("gynec", "neonat") describe a
-   * field of care, and a hospital may record that as either one.
+   * What the patient is being seen *for*: the specialty ids (from the backend
+   * catalog) of the departments they have appointments in and of the doctors
+   * they see. Departments decide this -- never a typed-in word -- so the
+   * answer is the same on every screen.
    *
-   * It is what lets a screen appear before the first record exists — a woman
-   * booked with an obstetrician sees Pregnancy before anyone has filed an
-   * antenatal record for her.
+   * It is what lets a screen appear before the first record exists -- a woman
+   * booked into Obstetrics & Gynecology sees Pregnancy before anyone has filed
+   * an antenatal record for her.
    */
-  specializations: string[];
+  specialties: string[];
   hasPregnancy: boolean;
   hasBaby: boolean;
 }
@@ -151,15 +151,15 @@ export interface DashboardRoute {
   /** Hidden unless the hospital has this module enabled. */
   module?: keyof HospitalModules;
   /**
-   * Doctors only: shown when a keyword matches the doctor's specialization *or*
-   * their department name. Both are checked because the two fields answer
-   * different questions and neither is reliably filled: `department_id` is the
-   * FK appointments are filed into, while `specialization` is free text and
-   * often finer-grained ("Fetal Medicine" inside "Obstetrics & Gynecology") or
-   * simply blank. Matching only one of them hides the screen from half the
-   * clinicians who should have it.
+   * Doctors only: shown when the doctor's department specialty -- an id from
+   * the backend catalog (`departments.specialty`) -- is one of these. Exact and
+   * driven by the department alone: a doctor's typed sub-specialty and the
+   * wording of their department's name decide nothing. A doctor whose
+   * department has no specialty set is not offered a specialty-gated screen;
+   * a superadmin sets it on the Departments screen. Routes with no
+   * `specialtyIds` are shown to every doctor who holds the permission.
    */
-  specialties?: string[];
+  specialtyIds?: string[];
   /** Patients only: shown when the patient's care context matches. */
   patientVisible?: (ctx: PatientContext) => boolean;
   /** Keep out of the sidebar (still routable, e.g. detail pages). */
@@ -177,7 +177,7 @@ const allRoles = [superadminRole, adminRole, doctorRole, nurseRole, labRole, pat
  *
  * There is no role in any path: `/dashboard/appointments` serves five roles, and
  * the page picks the view for whoever is signed in. `permission` is the gate;
- * `module` gates a route on a hospital feature for everyone; `specialties` only
+ * `module` gates a route on a hospital feature for everyone; `specialtyIds` only
  * ever narrows doctors and `patientVisible` only ever narrows patients, so one
  * entry can carry all of them without them interfering.
  *
@@ -287,12 +287,12 @@ export const dashboardRoutes: DashboardRoute[] = [
     permission: 'pregnancies.read',
     labelByRole: { [patientRole]: 'Pregnancy' },
     module: 'anc',
-    // Every doctor and nurse holding pregnancies.read sees this in the nav,
-    // not just ones labeled obstetric/gynec — a small hospital may not split
-    // that out as its own specialty. patientVisible below is unrelated to
-    // this and still narrows what a patient sees.
-    patientVisible: (c) =>
-      c.hasPregnancy || c.specializations.some((s) => /obstetric|gynec|gynaec|maternal/.test(s)),
+    // Doctors: only those whose department is Obstetrics & Gynecology -- a
+    // cardiologist holding pregnancies.read does not get an antenatal menu.
+    // Nurses are unrestricted (they have no department; a maternity nurse
+    // works across both). patientVisible narrows what a patient sees.
+    specialtyIds: ['obstetrics-gynecology'],
+    patientVisible: (c) => c.hasPregnancy || c.specialties.includes('obstetrics-gynecology'),
   },
   {
     path: '/dashboard/babies',
@@ -302,14 +302,12 @@ export const dashboardRoutes: DashboardRoute[] = [
     permission: 'babies.read',
     labelByRole: { [patientRole]: 'My Baby' },
     module: 'anc',
-    // Unlike Pregnancies (deliberately shown to every doctor, since a small
-    // hospital may not split obstetrics out as its own specialty), Newborns
-    // is doctor-of-babies only: a general OB doctor holding babies.read still
+    // Doctor-of-babies only: a general OB doctor holding babies.read still
     // shouldn't see a screen for a patient population they don't treat. Nurse
     // is unrestricted — a maternity nurse works across both.
-    specialties: ['neonat', 'pediatric', 'paediatric', 'child'],
+    specialtyIds: ['neonatology', 'pediatrics'],
     patientVisible: (c) =>
-      c.hasBaby || c.specializations.some((s) => /neonat|pediatric|paediatric|child/.test(s)),
+      c.hasBaby || c.specialties.some((s) => s === 'neonatology' || s === 'pediatrics'),
   },
   {
     path: '/dashboard/video-consults',
@@ -561,7 +559,7 @@ export function routeLabel(route: DashboardRoute, role: string): string {
 
 /**
  * Sidebar entries: the routes this user's permissions unlock, minus ones whose
- * module is disabled, whose specialty doesn't match the doctor, or that don't
+ * module is disabled, whose specialty doesn't match the doctor's department, or that don't
  * apply to this patient.
  *
  * Permissions decide *whether* a screen is reachable. `viewRoles` only decides
@@ -577,19 +575,16 @@ export function navRoutesForRole(
     /** A module the hospital hasn't enabled is simply absent, which reads as
      *  off — the safe direction for a feature flag. */
     modules: Partial<HospitalModules>;
-    /** The doctor's free-text specialization, e.g. "Fetal Medicine". */
-    specialization?: string;
-    /** The name of the department the doctor belongs to, e.g. "Obstetrics &
-     *  Gynecology". Matched alongside `specialization` — see `specialties`. */
-    department?: string;
+    /** The doctor's department specialty id, e.g. "cardiology". This -- and
+     *  nothing typed -- decides which specialty screens a doctor is offered. */
+    specialty?: string;
     patientContext?: PatientContext;
     /** Resolved grants from the session. Without them nothing is shown beyond
      *  the always-open routes — an empty menu is the safe direction to fail. */
     permissions?: PermissionGrant[];
   },
 ): DashboardRoute[] {
-  const { modules, specialization = '', department = '', patientContext, permissions } = options;
-  const spec = `${specialization} ${department}`.toLowerCase();
+  const { modules, specialty = '', patientContext, permissions } = options;
   const isShippedRole = builtInRoleCodes.includes(role);
 
   return dashboardRoutes.filter((route) => {
@@ -599,8 +594,8 @@ export function navRoutesForRole(
     // Curated menu for the shipped roles; everything earned for the rest,
     // except screens that exist in no generic form.
     if ((isShippedRole || route.viewRolesOnly) && !route.viewRoles.includes(role)) return false;
-    if (route.specialties && role === doctorRole) {
-      return route.specialties.some((keyword) => spec.includes(keyword));
+    if (route.specialtyIds && role === doctorRole) {
+      return route.specialtyIds.includes(specialty);
     }
     if (route.patientVisible && role === patientRole && patientContext) {
       return route.patientVisible(patientContext);

@@ -1,9 +1,14 @@
 import re
 from typing import List, Literal, Optional, get_args
 
-from pydantic import BaseModel, ConfigDict, ValidationInfo, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, ValidationInfo, computed_field, field_validator, model_validator
 from pydantic.alias_generators import to_camel
 from pydantic_core import PydanticUndefined
+
+from . import clinical_fields
+from .specialties import SPECIALTY_CATALOG
+
+_SPECIALTY_LABELS = {s['id']: s['label'] for s in SPECIALTY_CATALOG}
 
 from . import identity, pricing
 
@@ -728,6 +733,9 @@ class DepartmentSeed(CamelModel):
 
     name: str
     description: str = ""
+    # Optional: a specialty id from the catalog. Left blank, the server guesses
+    # one from the name (specialties.infer_specialty).
+    specialty: str = ""
 
 
 class HospitalCreate(CamelModel):
@@ -1401,7 +1409,11 @@ class DoctorOut(OutModel):
     user_id: str
     department_id: Optional[str] = None
     qualification: str = ""
+    # Optional free-text sub-specialty ("Interventional Cardiology"). Display
+    # only: nothing is decided from it.
     specialization: str = ""
+    # The department's specialty id -- server-derived, never sent by a client.
+    specialty: str = ""
     experience_years: int = 0
     available_slots: List[TimeSlot] = []
     license_number: str = ""
@@ -1409,6 +1421,14 @@ class DoctorOut(OutModel):
     registration_year: str = ""
     verification_status: str = "verified"
     user: Optional["UserOut"] = None
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def specialty_label(self) -> str:
+        """The department specialty's display name, for screens that show a
+        doctor's specialty and would otherwise show nothing for a doctor with no
+        sub-specialty typed."""
+        return _SPECIALTY_LABELS.get(self.specialty, "")
 
 
 class DoctorUpdate(CamelModel):
@@ -1451,16 +1471,57 @@ class DepartmentOut(OutModel):
     hospital_id: Optional[str] = None
     name: str
     description: str = ""
+    specialty: str = ""
+    # The superadmin's explicit choice, or null for "the specialty's default".
+    vitals_override: Optional[List[str]] = None
+    notes_override: Optional[List[str]] = None
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def vitals_fields(self) -> List[str]:
+        """The vitals this department records -- what a form should show."""
+        return clinical_fields.effective_vitals(self.specialty, self.vitals_override)
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def note_fields(self) -> List[str]:
+        """The clinical-note fields this department records."""
+        return clinical_fields.effective_notes(self.specialty, self.notes_override)
 
 
 class DepartmentCreate(CamelModel):
     name: str
     description: str = ""
+    specialty: str = ""
+    vitals_override: Optional[List[str]] = None
+    notes_override: Optional[List[str]] = None
 
 
 class DepartmentUpdate(CamelModel):
     name: Optional[str] = None
     description: Optional[str] = None
+    specialty: Optional[str] = None
+    # Sent as null to go back to the specialty's default.
+    vitals_override: Optional[List[str]] = None
+    notes_override: Optional[List[str]] = None
+
+
+class FieldOption(OutModel):
+    key: str
+    label: str
+    group: str
+
+
+class FieldCatalogOut(OutModel):
+    vitals: List[FieldOption]
+    notes: List[FieldOption]
+
+
+class SpecialtyOption(OutModel):
+    id: str
+    label: str
+    # Whether a structured visit form exists for it (specialty encounters).
+    has_template: bool = False
 
 
 # ---------- IPD: Ward / Bed ----------
@@ -1645,6 +1706,37 @@ class AdmissionUpdate(CamelModel):
 
 class AdmissionTransferBed(CamelModel):
     bed_id: str
+
+
+# ---------- Specialty encounters ----------
+class SpecialtyEncounterOut(OutModel):
+    id: str
+    hospital_id: Optional[str] = None
+    patient_id: str
+    patient_name: str = ""
+    doctor_id: str
+    doctor_name: str = ""
+    appointment_id: Optional[str] = None
+    specialty: str
+    template_version: int
+    data: dict = {}
+    created_at: str
+    updated_at: str
+
+
+class SpecialtyEncounterCreate(CamelModel):
+    appointment_id: str
+    data: dict = {}
+    # No patientId, specialty, doctorId or templateVersion: the visit decides
+    # the patient and the department decides the specialty, the author is the
+    # caller's own doctor record, and the server stamps the template version it
+    # validated against. Nothing the server can know is the client's to say.
+
+
+class SpecialtyEncounterUpdate(CamelModel):
+    data: dict
+    # The specialty is fixed at creation -- changing it would re-validate the
+    # answers against a different template and orphan the old version stamp.
 
 
 # ---------- IPD: Progress notes ----------
@@ -2426,6 +2518,7 @@ class VitalsUpdate(CamelModel):
     edd: Optional[str] = None
     pog: Optional[str] = None
     pregnancy_status: Optional[str] = None
+    spo2: Optional[int] = None
     intake_ml: Optional[int] = None
     output_ml: Optional[int] = None
     notes: Optional[str] = None
@@ -2450,6 +2543,7 @@ class VitalsCreate(CamelModel):
     edd: str = ""
     pog: str = ""
     pregnancy_status: str = ""
+    spo2: int = 0
     #: Nursing intake/output charting during a stay — left unset for an OPD
     #: (appointment-linked) row.
     intake_ml: Optional[int] = None
@@ -2480,6 +2574,7 @@ class VitalsOut(OutModel):
     edd: str = ""
     pog: str = ""
     pregnancy_status: str = ""
+    spo2: int = 0
     intake_ml: Optional[int] = None
     output_ml: Optional[int] = None
     notes: str = ""

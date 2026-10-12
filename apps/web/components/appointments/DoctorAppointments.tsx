@@ -22,6 +22,7 @@ import {
   useListMedicinesQuery,
   useUpdateAppointmentMutation,
 } from '@/store/api';
+import { useDepartmentFields } from '@/hooks/useDepartmentFields';
 import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
 import { FormField } from '@/components/form/FormField';
@@ -83,6 +84,8 @@ export function DoctorAppointments({ session }: RoleViewProps) {
   const table = useServerTable({ pageSize: PAGE_SIZE, filterKey: `${status}|${dateRange.from}|${dateRange.to}|${sortToken}` });
 
   const [addingVitals, setAddingVitals] = useState<Appointment | null>(null);
+  // Only the vitals this appointment's department records.
+  const fields = useDepartmentFields(addingVitals?.departmentId);
   const [prescribing, setPrescribing] = useState<Appointment | null>(null);
   const [completing, setCompleting] = useState<Appointment | null>(null);
   const [followUp, setFollowUp] = useState<Appointment | null>(null);
@@ -360,7 +363,7 @@ export function DoctorAppointments({ session }: RoleViewProps) {
                     appointmentId: addingVitals.id,
                     patientId: addingVitals.patientId,
                     doctorId: addingVitals.doctorId,
-                    ...vitalsToPayload(values),
+                    ...vitalsToPayload(values, fields.vitals),
                   }).unwrap();
                   setAddingVitals(null);
                   flash('Vitals recorded');
@@ -373,7 +376,7 @@ export function DoctorAppointments({ session }: RoleViewProps) {
             >
               {({ isSubmitting, dirty }) => (
                 <Form className="grid grid-cols-2 gap-4">
-                  <VitalsFormFields />
+                  <VitalsFormFields fields={fields.vitals} />
                   {vitalsError && (
                     <p className="col-span-2 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{vitalsError}</p>
                   )}

@@ -45,7 +45,7 @@ const baseFields = () =>
 
 // Extra fields only a doctor has.
 const doctorFields = Yup.object({
-  specialization: Yup.string().required('Select a specialization'),
+  specialization: Yup.string().trim().max(100, 'Too long'),
   qualification: Yup.string().trim().required('Qualification is required'),
   experienceYears: Yup.number()
     .transform((value, original) => (original === '' ? undefined : value))
@@ -101,7 +101,7 @@ export function StaffProfile({ session }: RoleViewProps) {
             <p className="text-cyan-100 flex items-center gap-2">
               {isDoctor ? (
                 <>
-                  <Stethoscope className="w-4 h-4" /> {doctor?.specialization}
+                  <Stethoscope className="w-4 h-4" /> {doctor?.specialization || doctor?.specialtyLabel}
                 </>
               ) : (
                 <>
@@ -164,7 +164,7 @@ export function StaffProfile({ session }: RoleViewProps) {
                   </div>
                   <div>
                     <dt className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-0.5">Specialization</dt>
-                    <dd className="text-slate-800 font-medium">{doctor?.specialization || '—'}</dd>
+                    <dd className="text-slate-800 font-medium">{doctor?.specialization || doctor?.specialtyLabel || '—'}</dd>
                   </div>
                   <div className="sm:col-span-2">
                     <dt className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-0.5">Qualification</dt>
@@ -263,9 +263,8 @@ export function StaffProfile({ session }: RoleViewProps) {
                     <div>
                       <FormField
                         name="specialization"
-                        label="Specialization"
+                        label="Sub-specialty (optional)"
                         placeholder="e.g. Interventional Cardiology"
-                        required
                       />
                     </div>
                     <div className="sm:col-span-2">

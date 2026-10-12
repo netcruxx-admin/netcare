@@ -158,7 +158,7 @@ export function AddDoctorModal({ open, onClose, onSuccess, preselectedHospitalId
                     ))}
                   </select>
                 </div>
-                <FormField name="specialization" label="Specialization" placeholder="e.g. Interventional Cardiology" />
+                <FormField name="specialization" label="Sub-specialty (optional)" placeholder="e.g. Interventional Cardiology" />
                 <FormField name="qualification" label="Qualification" placeholder="e.g. MBBS, MD" />
                 <FormField name="experienceYears" label="Experience (years)" type="number" min="0" placeholder="e.g. 10" />
               </div>

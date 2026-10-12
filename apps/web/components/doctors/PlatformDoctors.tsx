@@ -113,7 +113,7 @@ export function PlatformDoctors({ session }: RoleViewProps) {
                     )}
                     <TableCell className="py-3 px-6 font-medium text-slate-900 whitespace-normal">{d.user?.name ?? '—'}</TableCell>
                     <TableCell className="py-3 px-6 text-slate-600 text-sm whitespace-normal">{d.user?.email ?? '—'}</TableCell>
-                    <TableCell className="py-3 px-6 text-slate-600 whitespace-normal">{d.specialization || '—'}</TableCell>
+                    <TableCell className="py-3 px-6 text-slate-600 whitespace-normal">{d.specialization || d.specialtyLabel || '—'}</TableCell>
                     <TableCell className="py-3 px-6 text-slate-600 whitespace-normal">{d.qualification || '—'}</TableCell>
                     <TableCell className="py-3 px-6 text-slate-600 whitespace-normal">{d.experienceYears != null ? `${d.experienceYears} yrs` : '—'}</TableCell>
                     <TableCell className="py-3 px-6 text-right whitespace-normal">
@@ -168,7 +168,7 @@ export function PlatformDoctors({ session }: RoleViewProps) {
           },
           { label: 'Email', value: viewing?.user?.email },
           { label: 'Phone', value: viewing?.user?.phone },
-          { label: 'Specialization', value: viewing?.specialization },
+          { label: 'Specialty', value: viewing?.specialization || viewing?.specialtyLabel },
           { label: 'Qualification', value: viewing?.qualification },
           { label: 'Experience', value: viewing?.experienceYears != null ? `${viewing.experienceYears} yrs` : '' },
           { label: 'Licence number', value: viewing?.licenseNumber },

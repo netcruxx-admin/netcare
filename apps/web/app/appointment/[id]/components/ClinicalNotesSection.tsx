@@ -38,17 +38,86 @@ interface Props {
   canManage: boolean;
   /** The first encounter collects history a follow-up doesn't re-ask. */
   isNewVisit: boolean;
+  /** The department's `noteFields`; omitted, every field shows. */
+  fields?: string[];
 }
+
+type NoteKey = keyof typeof NOTE_KEY;
+
+/** The form field -> the department catalog key (app/clinical_fields.py). */
+const NOTE_KEY = {
+  chiefComplaint: 'chief_complaint',
+  medicalHistory: 'medical_history',
+  surgicalHistory: 'surgical_history',
+  familyHistory: 'family_history',
+  menstrualHistory: 'menstrual_history',
+  maritalStatus: 'marital_status',
+  obstetricHistory: 'obstetric_history',
+  pogByScan: 'pog_by_scan',
+  perAbdomen: 'per_abdomen',
+  perSpeculum: 'per_speculum',
+  perVaginum: 'per_vaginum',
+  diagnosis: 'diagnosis',
+  treatmentAdvice: 'treatment_advice',
+  followUpAdvice: 'follow_up_advice',
+} as const;
+
+const LABEL: Record<NoteKey, string> = {
+  chiefComplaint: 'Chief Complaint',
+  medicalHistory: 'Medical History',
+  surgicalHistory: 'Surgical History',
+  familyHistory: 'Family History',
+  menstrualHistory: 'Menstrual History',
+  maritalStatus: 'Marital Status',
+  obstetricHistory: 'Obstetric History',
+  pogByScan: 'POG by Scan/USG',
+  perAbdomen: 'P/A (Per Abdomen)',
+  perSpeculum: 'P/S (Per Speculum)',
+  perVaginum: 'P/V (Per Vaginum)',
+  diagnosis: 'Diagnosis',
+  treatmentAdvice: 'Treatment Advice',
+  followUpAdvice: 'Follow-up Advice',
+};
+
+// History-taking at a first visit, split the way the form lays it out.
+const HISTORY_LEFT: NoteKey[] = ['menstrualHistory', 'maritalStatus', 'obstetricHistory', 'pogByScan'];
+const HISTORY_RIGHT: NoteKey[] = ['chiefComplaint', 'medicalHistory', 'surgicalHistory', 'familyHistory'];
+const EXAM: NoteKey[] = ['perAbdomen', 'perSpeculum', 'perVaginum'];
 
 // No view/edit toggle: whoever can write notes sees the form, pre-filled with
 // whatever is already on file, ready to add to or correct in place.
 //
-// LMP itself is not a field here — it lives only on Vitals, which already
-// derives EDD/POG from it. A second copy here would let the two disagree.
-export function ClinicalNotesSection({ appointmentId, patientId, doctorId, record, canManage, isNewVisit }: Props) {
+// Which fields appear is the visit's department's call (`fields`): a cardiology
+// visit has no menstrual history or per-vaginum examination. LMP itself is not
+// a field here -- it lives only on Vitals, which already derives EDD/POG from
+// it. A second copy here would let the two disagree.
+export function ClinicalNotesSection({ appointmentId, patientId, doctorId, record, canManage, isNewVisit, fields }: Props) {
   const [createMedicalRecord] = useCreateMedicalRecordMutation();
   const [updateMedicalRecord] = useUpdateMedicalRecordMutation();
   const [error, setError] = useState('');
+
+  const on = (key: NoteKey) => !fields || fields.includes(NOTE_KEY[key]);
+  // Read-only view also shows a field the department no longer records if the
+  // visit already has something in it -- history stays readable.
+  const seen = (key: NoteKey) => on(key) || !!record?.[key];
+  const input = (key: NoteKey) => {
+    switch (key) {
+      case 'maritalStatus':
+        return <FormField key={key} name={key} label={LABEL[key]} placeholder="e.g. Married" />;
+      case 'pogByScan':
+        return <FormField key={key} name={key} label={LABEL[key]} placeholder="e.g. 12w 4d (dating scan)" />;
+      case 'obstetricHistory':
+        return <FormField key={key} name={key} label={LABEL[key]} as="textarea" rows={2} placeholder="e.g. G2P1L1, previous LSCS" dictation />;
+      case 'chiefComplaint':
+        return <FormField key={key} name={key} label={LABEL[key]} as="textarea" rows={2} placeholder="What brought the patient in" dictation />;
+      default:
+        return <FormField key={key} name={key} label={LABEL[key]} as="textarea" rows={2} dictation />;
+    }
+  };
+  const value = (key: NoteKey) => {
+    const v = record?.[key];
+    return typeof v === 'string' && v.trim() ? v : '—';
+  };
 
   return (
     <div>
@@ -79,22 +148,13 @@ export function ClinicalNotesSection({ appointmentId, patientId, doctorId, recor
           validationSchema={schema}
           onSubmit={async (values, { setSubmitting }) => {
             setError('');
-            const body = {
-              diagnosis: values.diagnosis.trim(),
-              treatmentAdvice: values.treatmentAdvice.trim(),
-              followUpAdvice: values.followUpAdvice.trim(),
-              chiefComplaint: values.chiefComplaint.trim(),
-              medicalHistory: values.medicalHistory.trim(),
-              surgicalHistory: values.surgicalHistory.trim(),
-              familyHistory: values.familyHistory.trim(),
-              menstrualHistory: values.menstrualHistory.trim(),
-              maritalStatus: values.maritalStatus.trim(),
-              obstetricHistory: values.obstetricHistory.trim(),
-              pogByScan: values.pogByScan.trim(),
-              perAbdomen: values.perAbdomen.trim(),
-              perSpeculum: values.perSpeculum.trim(),
-              perVaginum: values.perVaginum.trim(),
-            };
+            // Only what this department records is sent: the API refuses the
+            // rest, and an edit must not touch what it has stored there.
+            const body = Object.fromEntries(
+              (Object.keys(NOTE_KEY) as NoteKey[])
+                .filter(on)
+                .map((key) => [key, values[key].trim()]),
+            );
             try {
               if (record) {
                 await updateMedicalRecord({ id: record.id, ...body }).unwrap();
@@ -110,28 +170,18 @@ export function ClinicalNotesSection({ appointmentId, patientId, doctorId, recor
         >
           {({ isSubmitting, dirty }) => (
             <Form className="space-y-4">
-              {isNewVisit && (
+              {isNewVisit && [...HISTORY_LEFT, ...HISTORY_RIGHT].some(on) && (
                 <div className="grid sm:grid-cols-2 gap-4 pb-4 border-b border-slate-100">
-                  <div className="space-y-4">
-                    <FormField name="menstrualHistory" label="Menstrual History" as="textarea" rows={2} dictation />
-                    <FormField name="maritalStatus" label="Marital Status" placeholder="e.g. Married" />
-                    <FormField name="obstetricHistory" label="Obstetric History" as="textarea" rows={2} placeholder="e.g. G2P1L1, previous LSCS" dictation />
-                    <FormField name="pogByScan" label="POG by Scan/USG" placeholder="e.g. 12w 4d (dating scan)" />
-                  </div>
-                  <div className="space-y-4">
-                    <FormField name="chiefComplaint" label="Chief Complaint" as="textarea" rows={2} placeholder="What brought the patient in" dictation />
-                    <FormField name="medicalHistory" label="Medical History" as="textarea" rows={2} dictation />
-                    <FormField name="surgicalHistory" label="Surgical History" as="textarea" rows={2} dictation />
-                    <FormField name="familyHistory" label="Family History" as="textarea" rows={2} dictation />
-                  </div>
+                  <div className="space-y-4">{HISTORY_LEFT.filter(on).map(input)}</div>
+                  <div className="space-y-4">{HISTORY_RIGHT.filter(on).map(input)}</div>
                 </div>
               )}
-              {/* Examination findings — every antenatal visit, not just the first. */}
-              <div className="grid sm:grid-cols-3 gap-4 pb-4 border-b border-slate-100">
-                <FormField name="perAbdomen" label="P/A (Per Abdomen)" as="textarea" rows={2} dictation />
-                <FormField name="perSpeculum" label="P/S (Per Speculum)" as="textarea" rows={2} dictation />
-                <FormField name="perVaginum" label="P/V (Per Vaginum)" as="textarea" rows={2} dictation />
-              </div>
+              {/* Examination findings -- every visit, not just the first. */}
+              {EXAM.some(on) && (
+                <div className="grid sm:grid-cols-3 gap-4 pb-4 border-b border-slate-100">
+                  {EXAM.filter(on).map(input)}
+                </div>
+              )}
               <div className="grid sm:grid-cols-2 gap-4">
                 <FormField name="diagnosis" label="Diagnosis" as="textarea" rows={4} placeholder="e.g. Acute pharyngitis, viral etiology" dictation />
                 <FormField name="treatmentAdvice" label="Treatment Advice" as="textarea" rows={4} placeholder="e.g. Warm saline gargles, paracetamol for fever, rest and fluids" dictation />
@@ -158,72 +208,36 @@ export function ClinicalNotesSection({ appointmentId, patientId, doctorId, recor
         </Formik>
       ) : record ? (
         <div className="space-y-3">
-          {isNewVisit && (
+          {isNewVisit && [...HISTORY_LEFT, ...HISTORY_RIGHT].some(seen) && (
             <div className="grid sm:grid-cols-2 gap-4 pb-3 border-b border-slate-100">
-              <div className="space-y-3">
-                <div>
-                  <p className="text-sm text-slate-600">Menstrual History</p>
-                  <p className="text-slate-900 whitespace-pre-line">{record.menstrualHistory || '—'}</p>
+              {[HISTORY_LEFT, HISTORY_RIGHT].map((column, i) => (
+                <div key={i} className="space-y-3">
+                  {column.filter(seen).map((key) => (
+                    <div key={key}>
+                      <p className="text-sm text-slate-600">{LABEL[key]}</p>
+                      <p className="text-slate-900 whitespace-pre-line">{value(key)}</p>
+                    </div>
+                  ))}
                 </div>
-                <div>
-                  <p className="text-sm text-slate-600">Marital Status</p>
-                  <p className="text-slate-900">{record.maritalStatus || '—'}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-slate-600">Obstetric History</p>
-                  <p className="text-slate-900 whitespace-pre-line">{record.obstetricHistory || '—'}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-slate-600">POG by Scan/USG</p>
-                  <p className="text-slate-900">{record.pogByScan || '—'}</p>
-                </div>
-              </div>
-              <div className="space-y-3">
-                <div>
-                  <p className="text-sm text-slate-600">Chief Complaint</p>
-                  <p className="text-slate-900 whitespace-pre-line">{record.chiefComplaint || '—'}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-slate-600">Medical History</p>
-                  <p className="text-slate-900 whitespace-pre-line">{record.medicalHistory || '—'}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-slate-600">Surgical History</p>
-                  <p className="text-slate-900 whitespace-pre-line">{record.surgicalHistory || '—'}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-slate-600">Family History</p>
-                  <p className="text-slate-900 whitespace-pre-line">{record.familyHistory || '—'}</p>
-                </div>
-              </div>
+              ))}
             </div>
           )}
-          <div className="grid sm:grid-cols-3 gap-4 pb-3 border-b border-slate-100">
-            <div>
-              <p className="text-sm text-slate-600">P/A (Per Abdomen)</p>
-              <p className="text-slate-900 whitespace-pre-line">{record.perAbdomen || '—'}</p>
+          {EXAM.some(seen) && (
+            <div className="grid sm:grid-cols-3 gap-4 pb-3 border-b border-slate-100">
+              {EXAM.filter(seen).map((key) => (
+                <div key={key}>
+                  <p className="text-sm text-slate-600">{LABEL[key]}</p>
+                  <p className="text-slate-900 whitespace-pre-line">{value(key)}</p>
+                </div>
+              ))}
             </div>
-            <div>
-              <p className="text-sm text-slate-600">P/S (Per Speculum)</p>
-              <p className="text-slate-900 whitespace-pre-line">{record.perSpeculum || '—'}</p>
+          )}
+          {(['diagnosis', 'treatmentAdvice', 'followUpAdvice'] as NoteKey[]).map((key) => (
+            <div key={key}>
+              <p className="text-sm text-slate-600">{LABEL[key]}</p>
+              <p className="text-slate-900 whitespace-pre-line">{value(key)}</p>
             </div>
-            <div>
-              <p className="text-sm text-slate-600">P/V (Per Vaginum)</p>
-              <p className="text-slate-900 whitespace-pre-line">{record.perVaginum || '—'}</p>
-            </div>
-          </div>
-          <div>
-            <p className="text-sm text-slate-600">Diagnosis</p>
-            <p className="text-slate-900 whitespace-pre-line">{record.diagnosis || '—'}</p>
-          </div>
-          <div>
-            <p className="text-sm text-slate-600">Treatment Advice</p>
-            <p className="text-slate-900 whitespace-pre-line">{record.treatmentAdvice || '—'}</p>
-          </div>
-          <div>
-            <p className="text-sm text-slate-600">Follow-up Advice</p>
-            <p className="text-slate-900 whitespace-pre-line">{record.followUpAdvice || '—'}</p>
-          </div>
+          ))}
           {record.labReports && record.labReports.length > 0 && (
             <div>
               <p className="text-sm text-slate-600">Lab Reports</p>

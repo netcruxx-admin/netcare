@@ -85,7 +85,13 @@ def own_patients_filter(db: Session, user: models.User):
       * patients the caller treats — anyone they have an appointment with, or
         an IPD admission with (a doctor who only ever meets a patient through
         an emergency admission, with no prior OPD appointment, must still see
-        that patient under an "own" grant).
+        that patient under an "own" grant), and
+      * patients seen in the caller's department — anyone with an appointment
+        filed under the department the doctor belongs to. A patient who comes
+        to Cardiology is the Cardiology team's patient, not only the one
+        doctor's they happened to be booked with. This widens the patient list
+        and the patient record itself, nothing else: appointments, notes and
+        prescriptions keep their own scope.
 
     Without the doctor arms a doctor holding `patients.read: own` would see an
     empty patient list, which is what happens if you reuse own_record_filter here.
@@ -107,6 +113,17 @@ def own_patients_filter(db: Session, user: models.User):
             models.Admission.doctor_id == doctor_id
         )
         conditions.append(models.Patient.id.in_(treated_via_admission))
+        department_id = (
+            db.query(models.Doctor.department_id).filter(models.Doctor.id == doctor_id).scalar()
+        )
+        if department_id:
+            seen_in_department = select(models.Appointment.patient_id).where(
+                models.Appointment.department_id == department_id,
+                # Appointments carry their own hospital_id; a department id is
+                # tenant-unique already, but say so rather than rely on it.
+                models.Appointment.hospital_id == models.Patient.hospital_id,
+            )
+            conditions.append(models.Patient.id.in_(seen_in_department))
 
     if not conditions:
         return false()

@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from .. import models, schemas
 from ..auth import get_current_user
 from ..authz import SCOPE_OWN, own_record_filter, require_permission
+from .. import clinical_fields
 from ..database import get_db
 from ..tenancy import assert_in_tenant, get_tenant_id, scoped
 from ..utils import ListQuery, list_params, new_id, now_iso, paginate, text_search
@@ -61,6 +62,9 @@ def create_record(
     assert_in_tenant(db, models.Patient, body.patient_id, tenant_id)
     assert_in_tenant(db, models.Doctor, body.doctor_id, tenant_id)
     assert_in_tenant(db, models.Appointment, body.appointment_id, tenant_id)
+    clinical_fields.refuse_unrecorded_fields(
+        db, tenant_id, body.appointment_id, body.model_dump(), kind="notes"
+    )
 
     record = models.MedicalRecord(
         id=new_id("med"),
@@ -97,7 +101,9 @@ def update_record(
         # confirm an id exists in another doctor's records.
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Medical record not found")
 
-    for field, value in body.model_dump(exclude_unset=True).items():
+    changes = body.model_dump(exclude_unset=True)
+    clinical_fields.refuse_unrecorded_fields(db, tenant_id, record.appointment_id, changes, kind="notes")
+    for field, value in changes.items():
         setattr(record, field, value)
     db.commit()
     db.refresh(record)

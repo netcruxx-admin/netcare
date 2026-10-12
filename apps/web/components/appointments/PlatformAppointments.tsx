@@ -40,6 +40,7 @@ import {
   useDeleteAppointmentMutation,
   useCreateVitalsMutation,
 } from '@/store/api';
+import { useDepartmentFields } from '@/hooks/useDepartmentFields';
 import { Spinner } from '@/components/ui/spinner';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
@@ -116,6 +117,8 @@ export function PlatformAppointments({ session }: RoleViewProps) {
   const [rescheduling, setRescheduling] = useState<Appointment | null>(null);
   const [followUp, setFollowUp] = useState<Appointment | null>(null);
   const [addingVitals, setAddingVitals] = useState<Appointment | null>(null);
+  // Only the vitals this appointment's department records.
+  const fields = useDepartmentFields(addingVitals?.departmentId);
   const [deleting, setDeleting] = useState<Appointment | null>(null);
   const [error, setError] = useState('');
   const [vitalsError, setVitalsError] = useState('');
@@ -483,7 +486,7 @@ export function PlatformAppointments({ session }: RoleViewProps) {
                     appointmentId: addingVitals.id,
                     patientId: addingVitals.patientId,
                     doctorId: addingVitals.doctorId,
-                    ...vitalsToPayload(values),
+                    ...vitalsToPayload(values, fields.vitals),
                   }).unwrap();
                   setAddingVitals(null);
                   toast.success('Vitals recorded');
@@ -496,7 +499,7 @@ export function PlatformAppointments({ session }: RoleViewProps) {
             >
               {({ isSubmitting, dirty }) => (
                 <Form className="grid grid-cols-2 gap-4">
-                  <VitalsFormFields />
+                  <VitalsFormFields fields={fields.vitals} />
                   {vitalsError && (
                     <p className="col-span-2 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{vitalsError}</p>
                   )}

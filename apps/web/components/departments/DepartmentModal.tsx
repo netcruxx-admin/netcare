@@ -10,6 +10,8 @@ import { apiError } from '@/lib/apiError';
 import { superadminPost } from '@/lib/superadminFetch';
 import {
   useCreateDepartmentMutation,
+  useListFieldCatalogQuery,
+  useListSpecialtyOptionsQuery,
   useUpdateDepartmentMutation,
 } from '@/store/api';
 import type { HospitalInfo } from '@/store/api';
@@ -21,6 +23,10 @@ import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 const departmentSchema = Yup.object({
   name: Yup.string().trim().required('Name is required').max(100, 'Keep it under 100 characters'),
   description: Yup.string().trim().max(200, 'Keep it under 200 characters'),
+  specialty: Yup.string(),
+  // null = the specialty's default; a list = this department's own choice.
+  vitalsOverride: Yup.array().of(Yup.string()).nullable(),
+  notesOverride: Yup.array().of(Yup.string()).nullable(),
 });
 
 interface Props {
@@ -48,6 +54,10 @@ export function DepartmentModal({
 
   const [createDepartment] = useCreateDepartmentMutation();
   const [updateDepartment] = useUpdateDepartmentMutation();
+  // The catalog comes from the server, so the form never offers a value the
+  // API would refuse.
+  const { data: specialties = [] } = useListSpecialtyOptionsQuery(undefined, { skip: !open });
+  const { data: catalog } = useListFieldCatalogQuery(undefined, { skip: !open });
 
   const handleClose = () => {
     setHospitalId(preselectedHospitalId);
@@ -98,6 +108,9 @@ export function DepartmentModal({
           initialValues={{
             name: editing?.name ?? '',
             description: editing?.description ?? '',
+            specialty: editing?.specialty ?? '',
+            vitalsOverride: (editing?.vitalsOverride ?? null) as string[] | null,
+            notesOverride: (editing?.notesOverride ?? null) as string[] | null,
           }}
           validationSchema={departmentSchema}
           onSubmit={async (values, { setSubmitting }) => {
@@ -105,6 +118,10 @@ export function DepartmentModal({
               const body = {
                 name: values.name.trim(),
                 description: values.description.trim(),
+                // Blank on create means "guess from the name" server-side.
+                specialty: values.specialty,
+                vitalsOverride: values.vitalsOverride,
+                notesOverride: values.notesOverride,
               };
 
               if (isEditing) {
@@ -143,9 +160,46 @@ export function DepartmentModal({
             }
           }}
         >
-          {({ isSubmitting, dirty }) => (
+          {({ isSubmitting, dirty, values, handleChange, setFieldValue }) => (
             <Form className="space-y-4">
               <FormField name="name" label="Name" placeholder="e.g. Cardiology" autoFocus required />
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Specialty</label>
+                <select
+                  name="specialty"
+                  value={values.specialty}
+                  onChange={handleChange}
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-cyan-500"
+                >
+                  <option value="">{isEditing ? 'Not set' : 'Detect from the name'}</option>
+                  {specialties.map((s) => (
+                    <option key={s.id} value={s.id}>{s.label}</option>
+                  ))}
+                </select>
+                <p className="mt-1 text-xs text-slate-500">
+                  Decides which specialty screens this department&apos;s doctors are offered.
+                </p>
+              </div>
+              {/* Edit only: the starting point is what the department records today,
+                  which does not exist until it has been created. */}
+              {isEditing && catalog && (
+                <>
+                  <FieldChecklist
+                    title="Vitals recorded"
+                    options={catalog.vitals}
+                    value={values.vitalsOverride}
+                    defaults={editing?.vitalsFields}
+                    onChange={(next) => setFieldValue('vitalsOverride', next)}
+                  />
+                  <FieldChecklist
+                    title="Clinical notes recorded"
+                    options={catalog.notes}
+                    value={values.notesOverride}
+                    defaults={editing?.noteFields}
+                    onChange={(next) => setFieldValue('notesOverride', next)}
+                  />
+                </>
+              )}
               <FormField
                 name="description"
                 label="Description"
@@ -174,5 +228,60 @@ export function DepartmentModal({
         </Formik>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/**
+ * Which fields a visit in this department records. Unticked-and-untouched means
+ * "the specialty's default" (value null); the first change makes it this
+ * department's own list, and "Use default" goes back.
+ */
+function FieldChecklist({
+  title,
+  options,
+  value,
+  defaults,
+  onChange,
+}: {
+  title: string;
+  options: { key: string; label: string }[];
+  value: string[] | null;
+  /** What the department records today, to start a custom list from. */
+  defaults?: string[];
+  onChange: (next: string[] | null) => void;
+}) {
+  const custom = value !== null;
+  const ticked = new Set(value ?? defaults ?? options.map((o) => o.key));
+  return (
+    <fieldset className="rounded-lg border border-slate-200 p-3">
+      <legend className="px-1 text-sm font-medium text-slate-700">{title}</legend>
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-xs text-slate-500">
+          {custom ? 'Chosen for this department' : "Following the specialty's default"}
+        </span>
+        {custom && (
+          <button type="button" onClick={() => onChange(null)} className="text-xs font-medium text-cyan-700 hover:text-cyan-800">
+            Use default
+          </button>
+        )}
+      </div>
+      <div className="grid grid-cols-2 gap-x-3 gap-y-1">
+        {options.map((o) => (
+          <label key={o.key} className="flex items-center gap-1.5 text-sm text-slate-700">
+            <input
+              type="checkbox"
+              checked={ticked.has(o.key)}
+              onChange={(e) => {
+                const next = new Set(ticked);
+                if (e.target.checked) next.add(o.key);
+                else next.delete(o.key);
+                onChange(options.map((x) => x.key).filter((k) => next.has(k)));
+              }}
+            />
+            {o.label}
+          </label>
+        ))}
+      </div>
+    </fieldset>
   );
 }

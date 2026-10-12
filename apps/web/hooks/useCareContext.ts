@@ -13,16 +13,17 @@ import {
 
 /** No care context — a nurse, an admin, or a session that isn't loaded yet. */
 const NO_PATIENT_CONTEXT: PatientContext = {
-  specializations: [],
+  specialties: [],
   hasPregnancy: false,
   hasBaby: false,
 };
 
 export interface CareContext {
-  /** The signed-in doctor's free-text specialization ('' for other roles). */
-  specialization: string;
-  /** The name of the signed-in doctor's department ('' for other roles). */
-  department: string;
+  /** The signed-in doctor's department specialty id ('' for other roles). */
+  specialty: string;
+  /** What to show for the doctor's field: their sub-specialty, else the
+   *  department specialty's name ('' for other roles). */
+  specialtyText: string;
   /** The signed-in patient's care context (all-empty for other roles). */
   patientContext: PatientContext;
 }
@@ -92,29 +93,30 @@ export function useCareContext(options: {
   const patientContext = useMemo<PatientContext>(() => {
     if (!isPatient) return NO_PATIENT_CONTEXT;
 
-    const departmentName = new Map(patientDepartments.map((d) => [d.id, d.name]));
+    const departmentSpecialty = new Map(patientDepartments.map((d) => [d.id, d.specialty ?? '']));
     const doctorById = new Map(allDoctors.map((d) => [d.id, d]));
 
-    // Both the specialization and the department the appointment was filed
-    // into, because either may be the one that names the field of care.
-    const specializations = new Set<string>();
+    // The specialty of the department each appointment was filed into, and of
+    // the treating doctor's own department. Both come from the department, so
+    // a typed-in word on a profile cannot change what a patient is shown.
+    const specialties = new Set<string>();
     for (const appointment of appointments) {
-      const treating = doctorById.get(appointment.doctorId);
-      if (treating?.specialization) specializations.add(treating.specialization.toLowerCase());
-      const name = departmentName.get(appointment.departmentId);
-      if (name) specializations.add(name.toLowerCase());
+      const treating = doctorById.get(appointment.doctorId)?.specialty;
+      if (treating) specialties.add(treating);
+      const filed = departmentSpecialty.get(appointment.departmentId);
+      if (filed) specialties.add(filed);
     }
 
     return {
-      specializations: [...specializations],
+      specialties: [...specialties],
       hasPregnancy: pregnancies.length > 0,
       hasBaby: babies.length > 0,
     };
   }, [isPatient, appointments, allDoctors, patientDepartments, pregnancies, babies]);
 
   return {
-    specialization: isDoctor ? doctor?.specialization ?? '' : '',
-    department,
+    specialty: isDoctor ? doctor?.specialty ?? '' : '',
+    specialtyText: isDoctor ? doctor?.specialization || doctor?.specialtyLabel || '' : '',
     patientContext,
   };
 }

@@ -85,7 +85,7 @@ export function DoctorDashboard({ session }: RoleViewProps) {
       patients: new Set(appts.map((a) => a.patientId)).size,
     };
 
-    return { today, upcoming, recent, kpis, specialization: doctor?.specialization ?? '' };
+    return { today, upcoming, recent, kpis, specialization: doctor?.specialization || doctor?.specialtyLabel || '' };
   }, [appts, patients, doctor]);
 
 

@@ -11,6 +11,7 @@ import {
   useGetAppointmentQuery,
   useListAppointmentsPagedQuery,
 } from '@/store/api';
+import { useDepartmentFields } from '@/hooks/useDepartmentFields';
 import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
 import {
@@ -59,6 +60,8 @@ function NurseVitalsInner({ session }: RoleViewProps) {
 
   const [dateRange, setDateRange] = useState<DateRange>({ from: todayStr, to: todayStr });
   const [recording, setRecording] = useState<ApptRow | null>(null);
+  // Only the vitals this appointment's department records.
+  const fields = useDepartmentFields(recording?.departmentId);
   const [toast, setToast] = useState('');
   const table = useServerTable({ filterKey: `${dateRange.from}|${dateRange.to}` });
 
@@ -205,7 +208,7 @@ function NurseVitalsInner({ session }: RoleViewProps) {
                     appointmentId: recording.id,
                     patientId: recording.patientId,
                     doctorId: recording.doctorId,
-                    ...vitalsToPayload(values),
+                    ...vitalsToPayload(values, fields.vitals),
                   }).unwrap();
                 } catch (err) {
                   setError(apiError(err, 'Could not record vitals'));
@@ -219,7 +222,7 @@ function NurseVitalsInner({ session }: RoleViewProps) {
             >
               {({ isSubmitting, dirty }) => (
                 <Form className="p-6 grid grid-cols-2 gap-4">
-                  <VitalsFormFields />
+                  <VitalsFormFields fields={fields.vitals} />
                   {error && (
                     <div className="col-span-2 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
                       {error}

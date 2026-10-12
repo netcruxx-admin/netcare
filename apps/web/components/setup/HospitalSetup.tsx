@@ -30,6 +30,7 @@ const MODULE_LABELS: { key: keyof HospitalModules; label: string }[] = [
   { key: 'pharmacy', label: 'Pharmacy' },
   { key: 'nursing', label: 'Nursing Station' },
   { key: 'ipd', label: 'IPD / Bed Management' },
+  { key: 'specialties', label: 'Specialty Visits (Cardiology, Orthopedics, Dermatology)' },
   { key: 'payments', label: 'Billing & Payments' },
   { key: 'telemedicine', label: 'Telemedicine' },
   { key: 'anc', label: 'Pregnancy (ANC) Tracker' },
@@ -49,6 +50,7 @@ const EMPTY_MODULES: HospitalModules = {
   telemedicine: false,
   anc: false,
   ipd: false,
+  specialties: false,
 };
 
 export function HospitalSetup({ session }: RoleViewProps) {

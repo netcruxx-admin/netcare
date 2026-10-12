@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from .. import models, schemas
 from ..auth import get_current_user
 from ..authz import SCOPE_OWN, own_record_filter, require_permission
+from .. import clinical_fields
 from ..database import get_db
 from ..ipd import TERMINAL_STATUSES
 from ..tenancy import assert_in_tenant, get_tenant_id, scoped
@@ -71,6 +72,9 @@ def create_vitals(
     assert_in_tenant(db, models.Doctor, body.doctor_id, tenant_id)
     if body.appointment_id:
         assert_in_tenant(db, models.Appointment, body.appointment_id, tenant_id)
+        clinical_fields.refuse_unrecorded_fields(
+            db, tenant_id, body.appointment_id, body.model_dump(), kind="vitals"
+        )
     else:
         assert_in_tenant(db, models.Admission, body.admission_id, tenant_id)
         admission = (
@@ -122,9 +126,10 @@ def update_vitals(
         if not doctor or v.doctor_id != doctor.id:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Vitals record not found")
 
-    for k, val in body.model_dump().items():
-        if val is not None:
-            setattr(v, k, val)
+    changes = {k: val for k, val in body.model_dump().items() if val is not None}
+    clinical_fields.refuse_unrecorded_fields(db, tenant_id, v.appointment_id, changes, kind="vitals")
+    for k, val in changes.items():
+        setattr(v, k, val)
 
     db.commit()
     db.refresh(v)

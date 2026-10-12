@@ -28,6 +28,7 @@ _ALL_ON = {
     "medicalRecords": True,
     "telemedicine": True,
     "anc": False,
+    "specialties": False,
 }
 
 
@@ -61,7 +62,7 @@ CATEGORY_TEMPLATES: dict[str, CategoryTemplate] = {
         "tagline": "Comprehensive Healthcare",
         "currency": "INR",
         "theme": {"primary": "#4f46e5", "primaryDark": "#4338ca"},
-        "modules": _modules(telemedicine=True),
+        "modules": _modules(telemedicine=True, specialties=True),
         "specializations": [
             "General Medicine",
             "Cardiology",
