@@ -176,11 +176,11 @@ export function DashboardShell({
     ['anc', 'lab', 'pharmacy', 'nursing', 'telemedicine', 'payments', 'medicalRecords'].map((k) => [k, true])
   ) as Partial<HospitalModules> : hospital.modules;
 
-  // What this user is clinically for. Specialty screens — Pregnancies,
-  // Newborns — are hidden from clinicians and patients the care doesn't apply
-  // to, and that judgement needs the doctor's department specialty, or the
-  // patient's. Neither travels on the session, so it is fetched here.
-  const { specialty, specialtyText, patientContext } = useCareContext({
+  // What this user is clinically for. Pregnancies and Newborns are hidden from
+  // patients the care doesn't apply to, which needs their appointments' care
+  // context (fetched here). Doctors need nothing: the server does not grant
+  // those permissions to a doctor whose department doesn't do that care.
+  const { specialtyText, patientContext } = useCareContext({
     role,
     userId: meData?.user.id ?? storedSession?.user.id,
     patientId: meData?.patient?.id ?? storedSession?.patient?.id,
@@ -194,7 +194,6 @@ export function DashboardShell({
   // out of the sidebar without a re-login.
   const navItems = navRoutesForRole(role, {
     modules,
-    specialty,
     patientContext,
     permissions: meData?.permissions ?? storedGrants,
   }).map((route) => ({

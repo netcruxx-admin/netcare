@@ -74,7 +74,7 @@ def world(client, hospital_c):
     t = hospital_c
     cardio = _department(client, t, "Cardiology Unit", "cardiology")
     derm = _department(client, t, "Skin Clinic", "dermatology")
-    ent = _department(client, t, "Ear Nose Throat", "ent")
+    ent = _department(client, t, "Kidney Stones", "urology")
     cardio_a, token_a = _doctor(client, t, "cardio-a@gamma.test", cardio)
     cardio_b, token_b = _doctor(client, t, "cardio-b@gamma.test", cardio)
     derm_doc, token_d = _doctor(client, t, "derm-a@gamma.test", derm)
@@ -140,7 +140,7 @@ def test_one_record_per_visit(world):
 def test_a_department_without_a_usable_specialty_is_refused(client, world):
     t = world["t"]
     doctor, token = world["a"]
-    # No form for ENT yet; and a department with no specialty set at all.
+    # No form for urology yet; and a department with no specialty set at all.
     ent_visit = _visit(t, world["ent"], doctor)
     assert t.post("/specialty-encounters", {"appointmentId": ent_visit, "data": {}}, token=token).status_code == 409
     blank = client.post("/departments", json={"name": "Records Room"}, headers=_su(client, t)).json()["id"]

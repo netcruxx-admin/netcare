@@ -967,6 +967,9 @@ class OnboardingMetaOut(CamelModel):
     # them without restating the template in TypeScript. Only populated when
     # `category` is passed — without one there is nothing to suggest.
     suggested_departments: List[dict] = []
+    # Every specialty a department can be filed under, so the wizard's rows can
+    # offer the same dropdown as the Departments screen before any tenant exists.
+    specialties: List["SpecialtyOption"] = []
 
 
 # ---------- Permissions ----------
@@ -2519,6 +2522,9 @@ class VitalsUpdate(CamelModel):
     pog: Optional[str] = None
     pregnancy_status: Optional[str] = None
     spo2: Optional[int] = None
+    pain_score: Optional[int] = None
+    blood_glucose: Optional[float] = None
+    head_circumference: Optional[float] = None
     intake_ml: Optional[int] = None
     output_ml: Optional[int] = None
     notes: Optional[str] = None
@@ -2544,6 +2550,9 @@ class VitalsCreate(CamelModel):
     pog: str = ""
     pregnancy_status: str = ""
     spo2: int = 0
+    pain_score: int = 0
+    blood_glucose: float = 0
+    head_circumference: float = 0
     #: Nursing intake/output charting during a stay — left unset for an OPD
     #: (appointment-linked) row.
     intake_ml: Optional[int] = None
@@ -2575,6 +2584,9 @@ class VitalsOut(OutModel):
     pog: str = ""
     pregnancy_status: str = ""
     spo2: int = 0
+    pain_score: int = 0
+    blood_glucose: float = 0
+    head_circumference: float = 0
     intake_ml: Optional[int] = None
     output_ml: Optional[int] = None
     notes: str = ""

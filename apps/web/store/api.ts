@@ -564,7 +564,9 @@ export interface OnboardingMeta {
   /** The chosen category's suggested departments, which the wizard pre-ticks.
    *  Served rather than restated in TS so the two sides cannot disagree about
    *  what a maternity hospital starts with. Empty when no category was passed. */
-  suggestedDepartments: { name: string; description: string }[];
+  suggestedDepartments: { name: string; description: string; specialty?: string }[];
+  /** The specialty catalog, for each department row's dropdown. */
+  specialties: { id: string; label: string; hasTemplate: boolean }[];
 }
 
 // ---------------------------------------------------------------------------

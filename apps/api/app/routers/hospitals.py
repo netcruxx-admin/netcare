@@ -35,7 +35,7 @@ from .. import audit, licences as licence_catalog, models, printing, schemas, se
 from ..auth import get_current_user
 from ..authz import require_permission
 from ..categories import CATEGORY_TEMPLATES
-from ..specialties import infer_specialty
+from ..specialties import SPECIALTY_CATALOG, SPECIALTY_TEMPLATES, infer_specialty
 from ..database import get_db
 from ..utils import ListQuery, list_params, new_id, now_iso, paginate, text_search
 from ..provisioning import provision_hospital
@@ -252,6 +252,10 @@ def onboarding_meta(
             for code, tpl in CATEGORY_TEMPLATES.items()
         ],
         suggested_departments=suggested,
+        specialties=[
+            schemas.SpecialtyOption(id=s["id"], label=s["label"], has_template=s["id"] in SPECIALTY_TEMPLATES)
+            for s in SPECIALTY_CATALOG
+        ],
     )
 
 

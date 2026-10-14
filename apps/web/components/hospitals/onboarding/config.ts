@@ -68,6 +68,8 @@ export interface DepartmentRow {
   description: string;
   selected: boolean;
   fromTemplate: boolean;
+  /** A specialty id from the catalog; '' lets the server guess from the name. */
+  specialty: string;
 }
 
 export interface WizardValues {
@@ -552,7 +554,11 @@ export function buildPayload(values: WizardValues): HospitalCreateBody {
   // empty array would mean "no departments", which it refuses.
   const departments = values.departments
     .filter((d) => d.selected && d.name.trim())
-    .map((d) => ({ name: trimmed(d.name), description: trimmed(d.description) }));
+    .map((d) => ({
+      name: trimmed(d.name),
+      description: trimmed(d.description),
+      specialty: d.specialty || undefined,
+    }));
 
   return {
     name: trimmed(values.name),

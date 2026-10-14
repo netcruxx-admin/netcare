@@ -150,16 +150,6 @@ export interface DashboardRoute {
   labelByRole?: Record<string, string>;
   /** Hidden unless the hospital has this module enabled. */
   module?: keyof HospitalModules;
-  /**
-   * Doctors only: shown when the doctor's department specialty -- an id from
-   * the backend catalog (`departments.specialty`) -- is one of these. Exact and
-   * driven by the department alone: a doctor's typed sub-specialty and the
-   * wording of their department's name decide nothing. A doctor whose
-   * department has no specialty set is not offered a specialty-gated screen;
-   * a superadmin sets it on the Departments screen. Routes with no
-   * `specialtyIds` are shown to every doctor who holds the permission.
-   */
-  specialtyIds?: string[];
   /** Patients only: shown when the patient's care context matches. */
   patientVisible?: (ctx: PatientContext) => boolean;
   /** Keep out of the sidebar (still routable, e.g. detail pages). */
@@ -177,7 +167,7 @@ const allRoles = [superadminRole, adminRole, doctorRole, nurseRole, labRole, pat
  *
  * There is no role in any path: `/dashboard/appointments` serves five roles, and
  * the page picks the view for whoever is signed in. `permission` is the gate;
- * `module` gates a route on a hospital feature for everyone; `specialtyIds` only
+ * `module` gates a route on a hospital feature for everyone; `patientVisible` only
  * ever narrows doctors and `patientVisible` only ever narrows patients, so one
  * entry can carry all of them without them interfering.
  *
@@ -287,11 +277,10 @@ export const dashboardRoutes: DashboardRoute[] = [
     permission: 'pregnancies.read',
     labelByRole: { [patientRole]: 'Pregnancy' },
     module: 'anc',
-    // Doctors: only those whose department is Obstetrics & Gynecology -- a
-    // cardiologist holding pregnancies.read does not get an antenatal menu.
-    // Nurses are unrestricted (they have no department; a maternity nurse
-    // works across both). patientVisible narrows what a patient sees.
-    specialtyIds: ['obstetrics-gynecology'],
+    // Which doctors hold pregnancies.read is the permission's own rule
+    // (permissions.requires_specialties), resolved server-side, so a
+    // cardiologist's session simply does not contain it and this entry never
+    // reaches their menu. patientVisible narrows what a patient sees.
     patientVisible: (c) => c.hasPregnancy || c.specialties.includes('obstetrics-gynecology'),
   },
   {
@@ -302,10 +291,9 @@ export const dashboardRoutes: DashboardRoute[] = [
     permission: 'babies.read',
     labelByRole: { [patientRole]: 'My Baby' },
     module: 'anc',
-    // Doctor-of-babies only: a general OB doctor holding babies.read still
-    // shouldn't see a screen for a patient population they don't treat. Nurse
-    // is unrestricted — a maternity nurse works across both.
-    specialtyIds: ['neonatology', 'pediatrics'],
+    // Doctors of babies only -- neonatology and pediatrics -- by the
+    // permission's own rule (permissions.requires_specialties), not by anything
+    // here. A nurse is unrestricted: a maternity nurse works across both.
     patientVisible: (c) =>
       c.hasBaby || c.specialties.some((s) => s === 'neonatology' || s === 'pediatrics'),
   },
@@ -559,7 +547,7 @@ export function routeLabel(route: DashboardRoute, role: string): string {
 
 /**
  * Sidebar entries: the routes this user's permissions unlock, minus ones whose
- * module is disabled, whose specialty doesn't match the doctor's department, or that don't
+ * module is disabled, or that don't
  * apply to this patient.
  *
  * Permissions decide *whether* a screen is reachable. `viewRoles` only decides
@@ -575,16 +563,13 @@ export function navRoutesForRole(
     /** A module the hospital hasn't enabled is simply absent, which reads as
      *  off — the safe direction for a feature flag. */
     modules: Partial<HospitalModules>;
-    /** The doctor's department specialty id, e.g. "cardiology". This -- and
-     *  nothing typed -- decides which specialty screens a doctor is offered. */
-    specialty?: string;
     patientContext?: PatientContext;
     /** Resolved grants from the session. Without them nothing is shown beyond
      *  the always-open routes — an empty menu is the safe direction to fail. */
     permissions?: PermissionGrant[];
   },
 ): DashboardRoute[] {
-  const { modules, specialty = '', patientContext, permissions } = options;
+  const { modules, patientContext, permissions } = options;
   const isShippedRole = builtInRoleCodes.includes(role);
 
   return dashboardRoutes.filter((route) => {
@@ -594,9 +579,6 @@ export function navRoutesForRole(
     // Curated menu for the shipped roles; everything earned for the rest,
     // except screens that exist in no generic form.
     if ((isShippedRole || route.viewRolesOnly) && !route.viewRoles.includes(role)) return false;
-    if (route.specialtyIds && role === doctorRole) {
-      return route.specialtyIds.includes(specialty);
-    }
     if (route.patientVisible && role === patientRole && patientContext) {
       return route.patientVisible(patientContext);
     }

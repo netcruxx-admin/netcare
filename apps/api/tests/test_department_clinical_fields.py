@@ -166,3 +166,43 @@ def test_an_unknown_field_is_refused(client, hospital_d, depts):
 def test_admin_cannot_change_them(hospital_d, depts):
     response = hospital_d.put(f"/departments/{depts['cardio']['id']}", {"vitalsOverride": ["weight"]})
     assert response.status_code == 403
+
+
+@pytest.mark.parametrize(
+    "specialty,present,absent",
+    [
+        ("neonatology", {"head_circumference", "spo2", "respiratory_rate"}, {"blood_pressure", "bmi"}),
+        ("pediatrics", {"head_circumference", "weight", "height"}, {"blood_pressure", "lmp"}),
+        ("orthopedics", {"pain_score", "weight"}, {"head_circumference", "lmp"}),
+        ("endocrinology", {"blood_glucose", "bmi"}, {"pain_score", "lmp"}),
+        ("ophthalmology", {"blood_pressure", "blood_glucose"}, {"bmi", "height", "lmp"}),
+        ("dentistry", {"blood_pressure", "blood_glucose"}, {"weight", "bmi"}),
+        ("obstetrics-gynecology", {"lmp", "pregnancy_status", "weight"}, {"spo2", "head_circumference"}),
+        ("emergency", {"spo2", "blood_glucose", "pain_score"}, {"lmp", "head_circumference"}),
+    ],
+)
+def test_each_specialty_records_what_it_examines(specialty, present, absent):
+    from app import clinical_fields
+
+    vitals = set(clinical_fields.default_vitals(specialty))
+    assert present <= vitals, present - vitals
+    assert not absent & vitals, absent & vitals
+
+
+def test_dentistry_asks_a_shorter_history_and_only_obstetrics_asks_more():
+    from app import clinical_fields
+
+    assert "family_history" not in clinical_fields.default_notes("dentistry")
+    assert "menstrual_history" not in clinical_fields.default_notes("pediatrics")
+    assert "menstrual_history" in clinical_fields.default_notes("obstetrics-gynecology")
+    for specialty in ("cardiology", "dentistry", "pediatrics", "emergency", "radiology"):
+        assert {"diagnosis", "treatment_advice", "follow_up_advice"} <= set(clinical_fields.default_notes(specialty))
+
+
+def test_every_default_names_a_real_field():
+    from app import clinical_fields
+    from app.specialties import SPECIALTY_CATALOG_IDS
+
+    for specialty in SPECIALTY_CATALOG_IDS:
+        assert not clinical_fields.unknown_keys(clinical_fields.default_vitals(specialty), clinical_fields.VITAL_KEYS)
+        assert not clinical_fields.unknown_keys(clinical_fields.default_notes(specialty), clinical_fields.NOTE_KEYS)

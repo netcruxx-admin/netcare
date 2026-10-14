@@ -36,6 +36,47 @@ the answers as JSON plus the template version they were written against.
   all-or-nothing), a patient-facing view of their own records (the API allows
   it), and the maternity tables stay as they are.
 
+### Changed — audit: departments decide more, and the server decides it
+
+An audit of every place a department should shape behaviour found the rule held
+in three inconsistent places (the sidebar, the forms, the API). Consolidated:
+
+- **Antenatal and newborn access is a property of the permission.**
+  `permissions.requires_specialties` (migration `e3f4a5b6c7d8`) names the
+  specialties whose doctors may hold `pregnancies.*` (obstetrics-gynecology) and
+  `babies.*` (neonatology, pediatrics). `effective_permissions` drops it for
+  anyone with a doctor record whose department practises something else, so the
+  API returns 403 *and* the sidebar entry disappears from the same resolved
+  permissions -- the frontend no longer restates the rule (`specialtyIds` is gone
+  from the route table). It also stops `activePregnancy` riding on a
+  cardiologist's patient chart. Not a role check: it applies to whoever has a
+  doctor record. Nurses, admins and a doctor whose department has **no specialty
+  set** are unrestricted, so no live hospital loses access until its departments
+  are classified.
+- **Vitals by specialty, not by two buckets.** `clinical_fields.py` now carries a
+  profile per specialty: a newborn has head circumference and no BP or BMI, an
+  eye or dental visit does not weigh anyone, orthopedics/emergency/oncology add
+  a pain score, general medicine/endocrinology/neurology/emergency add blood
+  glucose, pediatrics adds head circumference. Dentistry, radiology and pathology
+  take a shorter history. New vitals columns: `pain_score`, `blood_glucose`,
+  `head_circumference` (`f4a5b6c7d8e9`). The profiles are a starting point for a
+  clinician to review; a superadmin overrides them per department.
+- **Six more visit forms:** general medicine, pediatrics, ENT, ophthalmology
+  (acuity, IOP, fundus), dentistry (tooth/site, procedure, anaesthesia) and
+  neurology (GCS, cranial nerves, reflexes). Nine in all. A structural test
+  checks every form (assessment last with a required diagnosis, unique keys,
+  selects have options, sane ranges).
+- **Onboarding wizard:** each department row has a specialty dropdown, prefilled
+  from the category's suggestion; the catalog arrives with the wizard's
+  metadata because the hospital does not exist yet.
+- **Name hints widened** after a test showed "Cardiac Rehab" went unrecognised:
+  cardiac, bone/joint, kidney, ear-nose-throat, newborn, antenatal, thyroid and
+  similar. (Migration `c1d2e3f4a5b6` keeps the narrower snapshot it shipped
+  with, so a department named only "Cardiac …" is blank after the backfill and
+  needs its specialty set once.)
+- Template `keywords` are removed -- a visit's form comes from its department's
+  specialty id, not from matching words.
+
 ### Changed — vitals and clinical notes follow the department
 
 Every visit showed every field: a cardiology doctor was asked for menstrual
@@ -85,8 +126,8 @@ client; `specialtyLabel` is its display name.
   and Pediatrics; Specialty Visits to the three specialties with a form. A
   patient's Pregnancy/My Baby screens key off the specialty of the departments
   they are booked into. Nurses are unrestricted (they have no department).
-- Menu only: the API still lets any doctor with `pregnancies.read` call the
-  maternity endpoints, and the pregnancies list ignores its `own` scope.
+- Superseded by the next entry: the restriction now lives on the permission, so
+  the API enforces it as well as the menu.
 
 ### Changed — the dispense queue is a list of patients, not of line items
 

@@ -19,8 +19,6 @@ const NO_PATIENT_CONTEXT: PatientContext = {
 };
 
 export interface CareContext {
-  /** The signed-in doctor's department specialty id ('' for other roles). */
-  specialty: string;
   /** What to show for the doctor's field: their sub-specialty, else the
    *  department specialty's name ('' for other roles). */
   specialtyText: string;
@@ -115,7 +113,6 @@ export function useCareContext(options: {
   }, [isPatient, appointments, allDoctors, patientDepartments, pregnancies, babies]);
 
   return {
-    specialty: isDoctor ? doctor?.specialty ?? '' : '',
     specialtyText: isDoctor ? doctor?.specialization || doctor?.specialtyLabel || '' : '',
     patientContext,
   };

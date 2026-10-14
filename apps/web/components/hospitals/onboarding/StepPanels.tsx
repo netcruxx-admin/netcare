@@ -560,6 +560,8 @@ export function DepartmentsStep({ meta }: StepProps) {
       return {
         name: s.name,
         description: s.description,
+        // The category's suggestion, unless the operator already chose.
+        specialty: prior ? prior.specialty : s.specialty ?? '',
         // Pre-ticked: the common case is "yes, these are right", and it should
         // cost one click rather than five.
         selected: prior ? prior.selected : true,
@@ -588,7 +590,7 @@ export function DepartmentsStep({ meta }: StepProps) {
   const addCustom = () =>
     setFieldValue('departments', [
       ...values.departments,
-      { name: '', description: '', selected: true, fromTemplate: false },
+      { name: '', description: '', selected: true, fromTemplate: false, specialty: '' },
     ]);
 
   const removeRow = (index: number) =>
@@ -622,7 +624,7 @@ export function DepartmentsStep({ meta }: StepProps) {
         {values.departments.map((row, index) => (
           <div
             key={`${row.fromTemplate ? 'tpl' : 'custom'}-${index}`}
-            className="grid grid-cols-[auto_1fr_1fr_auto] items-center gap-3 rounded-lg border border-slate-200 px-3 py-2.5"
+            className="grid grid-cols-[auto_1fr_1fr_1fr_auto] items-center gap-3 rounded-lg border border-slate-200 px-3 py-2.5"
           >
             <input
               type="checkbox"
@@ -642,6 +644,17 @@ export function DepartmentsStep({ meta }: StepProps) {
                   : 'border-slate-300 focus:border-cyan-500'
               }`}
             />
+            <select
+              value={row.specialty}
+              onChange={(e) => update(index, 'specialty', e.target.value)}
+              aria-label="Specialty"
+              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:border-cyan-500 bg-white"
+            >
+              <option value="">Detect from the name</option>
+              {(meta?.specialties ?? []).map((s) => (
+                <option key={s.id} value={s.id}>{s.label}</option>
+              ))}
+            </select>
             <input
               value={row.description}
               onChange={(e) => update(index, 'description', e.target.value)}

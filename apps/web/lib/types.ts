@@ -285,7 +285,6 @@ export interface SpecialtyTemplate {
   id: string;
   label: string;
   version: number;
-  keywords: string[];
   sections: SpecialtySection[];
 }
 
@@ -585,6 +584,9 @@ export interface Vitals {
   /** Captured only where the department records it (see Department.vitalsFields). */
   respiratoryRate: number;
   spo2?: number;
+  bloodGlucose?: number;
+  painScore?: number;
+  headCircumference?: number;
   weight: number;
   height: number;
   /** Auto-filled from height/weight, editable. */

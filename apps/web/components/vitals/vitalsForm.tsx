@@ -39,6 +39,9 @@ export interface VitalsFormValues {
   pog: string;
   spo2: string;
   respiratoryRate: string;
+  bloodGlucose: string;
+  painScore: string;
+  headCircumference: string;
 }
 
 /** The form field -> the department catalog key (app/clinical_fields.py). */
@@ -55,6 +58,9 @@ export const VITAL_KEY: Record<keyof VitalsFormValues, string> = {
   pog: 'pog',
   spo2: 'spo2',
   respiratoryRate: 'respiratory_rate',
+  bloodGlucose: 'blood_glucose',
+  painScore: 'pain_score',
+  headCircumference: 'head_circumference',
 };
 
 /** Whether a department records this field. `fields` is the department's
@@ -77,6 +83,9 @@ export const emptyVitals: VitalsFormValues = {
   pog: '',
   spo2: '',
   respiratoryRate: '',
+  bloodGlucose: '',
+  painScore: '',
+  headCircumference: '',
 };
 
 const asStr = (n: number | null | undefined) => (n ? String(n) : '');
@@ -94,6 +103,9 @@ export const vitalsToForm = (v: Vitals): VitalsFormValues => ({
   pog: v.pog ?? '',
   spo2: asStr(v.spo2),
   respiratoryRate: asStr(v.respiratoryRate),
+  bloodGlucose: asStr(v.bloodGlucose),
+  painScore: asStr(v.painScore),
+  headCircumference: asStr(v.headCircumference),
 });
 
 const asNum = (s: string) => Number(s) || 0;
@@ -118,6 +130,9 @@ export const vitalsToPayload = (v: VitalsFormValues, fields?: string[]) => {
     pog: v.pog,
     spo2: asNum(v.spo2),
     respiratoryRate: asNum(v.respiratoryRate),
+    bloodGlucose: asNum(v.bloodGlucose),
+    painScore: asNum(v.painScore),
+    headCircumference: asNum(v.headCircumference),
   };
   return Object.fromEntries(
     Object.entries(all).filter(([k]) => vitalEnabled(fields, k as keyof VitalsFormValues)),
@@ -149,6 +164,9 @@ export const vitalsSchema = Yup.object({
   pog: Yup.string().max(20, 'Too long'),
   spo2: numOpt,
   respiratoryRate: numOpt,
+  bloodGlucose: numOpt,
+  painScore: numOpt.max(10, 'Score is 0 to 10'),
+  headCircumference: numOpt,
 });
 
 // --- derivations -----------------------------------------------------------
@@ -242,6 +260,9 @@ export function VitalsFormFields({ fields }: { fields?: string[] }) {
       {on('bmi') && <FormField name="bmi" label="BMI (kg/m²)" type="number" placeholder="from height & weight" />}
       {on('spo2') && <FormField name="spo2" label="SpO₂ (%)" type="number" placeholder="98" />}
       {on('respiratoryRate') && <FormField name="respiratoryRate" label="Resp. rate (/min)" type="number" placeholder="16" />}
+      {on('bloodGlucose') && <FormField name="bloodGlucose" label="Blood glucose (mg/dL)" type="number" placeholder="110" />}
+      {on('painScore') && <FormField name="painScore" label="Pain score (0-10)" type="number" min="0" max="10" placeholder="0" />}
+      {on('headCircumference') && <FormField name="headCircumference" label="Head circumference (cm)" type="number" placeholder="34" />}
       {on('pregnancyStatus') && <FormField name="pregnancyStatus" label="Pregnancy Status" as="select" placeholder="Not recorded" options={pregnancyStatusOptions} />}
       {on('lmp') && <FormField name="lmp" label="LMP" type="date" />}
       {on('edd') && <FormField name="edd" label="EDD" type="date" />}

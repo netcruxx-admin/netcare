@@ -419,6 +419,14 @@ class Permission(Base):
     # Whether "own vs all" is meaningful for this permission.
     supports_scope = Column(Boolean, nullable=False, default=False)
     sort_order = Column(Integer, nullable=False, default=0)
+    # Specialty ids (specialties.SPECIALTY_CATALOG) a *doctor* must belong to,
+    # through their department, to hold this permission. NULL = no restriction.
+    # Applies to whoever has a doctor record, whatever their role is called, and
+    # not at all to someone with none (a nurse, an admin). A doctor whose
+    # department has no specialty set yet is unrestricted -- the permission was
+    # theirs before departments said what they were, and it stays theirs until
+    # someone says.
+    requires_specialties = Column(JSON, nullable=True)
 
 
 class RolePermission(Base):
@@ -832,6 +840,9 @@ class Vitals(Base):
     # silently inferred from the LMP field, which is wrong on both counts.
     pregnancy_status = Column(String, default="")
     spo2 = Column(Integer, default=0)
+    pain_score = Column(Integer, default=0)
+    blood_glucose = Column(Float, default=0)
+    head_circumference = Column(Float, default=0)
     # Nursing intake/output charting — IPD only, left null for an OPD vitals row.
     intake_ml = Column(Integer, nullable=True)
     output_ml = Column(Integer, nullable=True)

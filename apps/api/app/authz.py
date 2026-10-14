@@ -54,11 +54,32 @@ def effective_permissions(
         modules = (hospital.modules or {}) if hospital else {}
 
     resolved: dict[str, Optional[str]] = {}
+    doctor_specialty: Optional[str] = None
+    looked_up = False
     for grant, permission in grants:
         if not is_platform_user and permission.module and not modules.get(permission.module, False):
             continue  # the hospital hasn't bought this feature
+        if permission.requires_specialties and not is_platform_user:
+            # Looked up at most once, and only when a gated permission is held.
+            if not looked_up:
+                doctor_specialty = _doctor_specialty(db, user)
+                looked_up = True
+            # None = not a doctor, or a department with no specialty yet.
+            if doctor_specialty and doctor_specialty not in permission.requires_specialties:
+                continue  # their department does not do this kind of care
         resolved[permission.code] = grant.scope
     return resolved
+
+
+def _doctor_specialty(db: Session, user: models.User) -> Optional[str]:
+    """The specialty of the department the user's doctor record belongs to, or
+    None when they have no doctor record or the department has none set."""
+    return (
+        db.query(models.Department.specialty)
+        .join(models.Doctor, models.Doctor.department_id == models.Department.id)
+        .filter(models.Doctor.user_id == user.id)
+        .scalar()
+    ) or None
 
 
 def caller_patient_id(db: Session, user: models.User) -> Optional[str]:

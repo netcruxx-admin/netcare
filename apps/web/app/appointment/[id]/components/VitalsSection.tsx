@@ -36,6 +36,9 @@ const COLUMNS: { key: keyof VitalsFormValues; head: string }[] = [
   { key: 'bmi', head: 'BMI' },
   { key: 'spo2', head: 'SpO₂' },
   { key: 'respiratoryRate', head: 'Resp.' },
+  { key: 'bloodGlucose', head: 'Glucose' },
+  { key: 'painScore', head: 'Pain' },
+  { key: 'headCircumference', head: 'Head circ.' },
   { key: 'pregnancyStatus', head: 'Status' },
   { key: 'lmp', head: 'LMP' },
   { key: 'edd', head: 'EDD' },
@@ -156,6 +159,9 @@ export function VitalsSection({ vitals, context, patientId, doctorId, canManage,
                   {show('bmi') && <TableCell className="py-3 px-4 text-slate-600 whitespace-normal">{v.bmi ? `${v.bmi}` : '—'}</TableCell>}
                   {show('spo2') && <TableCell className="py-3 px-4 text-slate-600 whitespace-normal">{v.spo2 ? `${v.spo2}%` : '—'}</TableCell>}
                   {show('respiratoryRate') && <TableCell className="py-3 px-4 text-slate-600 whitespace-normal">{v.respiratoryRate ? `${v.respiratoryRate}/min` : '—'}</TableCell>}
+                  {show('bloodGlucose') && <TableCell className="py-3 px-4 text-slate-600 whitespace-normal">{v.bloodGlucose ? `${v.bloodGlucose} mg/dL` : '—'}</TableCell>}
+                  {show('painScore') && <TableCell className="py-3 px-4 text-slate-600 whitespace-normal">{v.painScore ? `${v.painScore}/10` : '—'}</TableCell>}
+                  {show('headCircumference') && <TableCell className="py-3 px-4 text-slate-600 whitespace-normal">{v.headCircumference ? `${v.headCircumference} cm` : '—'}</TableCell>}
                   {show('pregnancyStatus') && <TableCell className="py-3 px-4 text-slate-600 whitespace-normal">{PREGNANCY_LABEL[v.pregnancyStatus] ?? '—'}</TableCell>}
                   {show('lmp') && <TableCell className="py-3 px-4 text-slate-600 whitespace-normal">{fmtDate(v.lmp)}</TableCell>}
                   {show('edd') && <TableCell className="py-3 px-4 text-slate-600 whitespace-normal">{fmtDate(v.edd)}</TableCell>}
@@ -286,6 +292,9 @@ const VITAL_INPUT: Record<keyof VitalsFormValues, { type?: string; placeholder?:
   bmi: { type: 'number', placeholder: 'auto' },
   spo2: { type: 'number', placeholder: '98' },
   respiratoryRate: { type: 'number', placeholder: '16' },
+  bloodGlucose: { type: 'number', placeholder: '110' },
+  painScore: { type: 'number', placeholder: '0-10' },
+  headCircumference: { type: 'number', placeholder: '34' },
   pregnancyStatus: {},
   lmp: { type: 'date' },
   edd: { type: 'date' },

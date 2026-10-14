@@ -32,6 +32,9 @@ VITAL_FIELDS: list[tuple[str, str, str]] = [
     ("bmi", "BMI", "core"),
     ("spo2", "SpO₂", "cardiorespiratory"),
     ("respiratory_rate", "Respiratory rate", "cardiorespiratory"),
+    ("blood_glucose", "Blood glucose", "metabolic"),
+    ("pain_score", "Pain score", "symptoms"),
+    ("head_circumference", "Head circumference", "growth"),
     ("pregnancy_status", "Pregnancy status", "pregnancy"),
     ("lmp", "LMP", "pregnancy"),
     ("edd", "EDD", "pregnancy"),
@@ -66,28 +69,63 @@ def _group(fields: list[tuple[str, str, str]], *groups: str) -> list[str]:
     return [k for k, _, g in fields if g in groups]
 
 
-_OBSTETRIC = {"obstetrics-gynecology"}
-_CARDIORESPIRATORY = {"cardiology", "pulmonology", "emergency"}
+_CORE_VITALS = ["blood_pressure", "heart_rate", "temperature", "weight", "height", "bmi"]
+_PREGNANCY = ["pregnancy_status", "lmp", "edd", "pog"]
+
+# What a visit in each specialty records. Chosen for the examination the
+# specialty actually does: an eye or dental visit does not weigh anyone; a
+# newborn has no blood pressure or BMI to speak of but a head circumference.
+# A specialty not listed gets the core set. A starting point for a clinician to
+# review -- a superadmin overrides it per department.
+_VITALS_BY_SPECIALTY: dict[str, list[str]] = {
+    "general-medicine": _CORE_VITALS + ["spo2", "respiratory_rate", "blood_glucose"],
+    "cardiology": _CORE_VITALS + ["spo2", "respiratory_rate"],
+    "pulmonology": _CORE_VITALS + ["spo2", "respiratory_rate"],
+    "emergency": _CORE_VITALS + ["spo2", "respiratory_rate", "blood_glucose", "pain_score"],
+    "orthopedics": _CORE_VITALS + ["pain_score"],
+    "general-surgery": _CORE_VITALS + ["spo2", "pain_score"],
+    "oncology": _CORE_VITALS + ["spo2", "pain_score"],
+    "gastroenterology": _CORE_VITALS + ["pain_score"],
+    "neurology": _CORE_VITALS + ["blood_glucose"],
+    "endocrinology": _CORE_VITALS + ["blood_glucose"],
+    "nephrology": _CORE_VITALS + ["blood_glucose"],
+    "urology": _CORE_VITALS,
+    "pediatrics": [
+        "heart_rate", "temperature", "weight", "height", "bmi", "head_circumference", "spo2", "respiratory_rate",
+    ],
+    "neonatology": [
+        "heart_rate", "temperature", "weight", "height", "head_circumference", "spo2", "respiratory_rate",
+    ],
+    "obstetrics-gynecology": _CORE_VITALS + _PREGNANCY,
+    "ophthalmology": ["blood_pressure", "heart_rate", "temperature", "weight", "blood_glucose"],
+    "dentistry": ["blood_pressure", "heart_rate", "temperature", "blood_glucose"],
+    "ent": ["blood_pressure", "heart_rate", "temperature", "weight", "spo2"],
+    "dermatology": ["blood_pressure", "heart_rate", "temperature", "weight"],
+    "psychiatry": ["blood_pressure", "heart_rate", "weight", "height", "bmi"],
+}
+
+_OBSTETRIC_NOTES = {"obstetrics-gynecology"}
+# Specialties whose general history is shorter than the full four.
+_NOTES_HISTORY_BY_SPECIALTY: dict[str, list[str]] = {
+    "dentistry": ["chief_complaint", "medical_history", "surgical_history"],
+    "radiology": ["chief_complaint", "medical_history"],
+    "pathology": ["chief_complaint", "medical_history"],
+}
 
 
 def default_vitals(specialty: str) -> list[str]:
     if not specialty:
         return list(VITAL_KEYS)
-    groups = ["core"]
-    if specialty in _CARDIORESPIRATORY:
-        groups.append("cardiorespiratory")
-    if specialty in _OBSTETRIC:
-        groups.append("pregnancy")
-    return _group(VITAL_FIELDS, *groups)
+    return list(_VITALS_BY_SPECIALTY.get(specialty, _CORE_VITALS))
 
 
 def default_notes(specialty: str) -> list[str]:
     if not specialty:
         return list(NOTE_KEYS)
-    groups = ["history", "assessment"]
-    if specialty in _OBSTETRIC:
-        groups += ["obstetric", "gyn_exam"]
-    return _group(NOTE_FIELDS, *groups)
+    keys = list(_NOTES_HISTORY_BY_SPECIALTY.get(specialty, _group(NOTE_FIELDS, "history")))
+    if specialty in _OBSTETRIC_NOTES:
+        keys += _group(NOTE_FIELDS, "obstetric", "gyn_exam")
+    return keys + ALWAYS_NOTES
 
 
 def effective_vitals(specialty: str, override: Optional[list[str]]) -> list[str]:

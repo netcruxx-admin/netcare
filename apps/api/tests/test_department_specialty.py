@@ -34,6 +34,13 @@ def test_every_template_is_a_catalog_specialty():
         ("Labor & Delivery", "obstetrics-gynecology"),
         ("Laboratory", ""),  # contains "labor"; not obstetrics
         ("Sample Collection", ""),
+        ("Cardiac Rehab", "cardiology"),
+        ("Bone & Joint Clinic", "orthopedics"),
+        ("Kidney Care", "nephrology"),
+        ("Ear Nose Throat", "ent"),
+        ("Newborn Unit", "neonatology"),
+        ("Antenatal Clinic", "obstetrics-gynecology"),
+        ("Thyroid Clinic", "endocrinology"),
     ],
 )
 def test_the_name_hint(name, expected):
@@ -45,7 +52,7 @@ def test_admin_can_read_the_catalog(hospital_a):
     assert response.status_code == 200, response.text
     by_id = {s["id"]: s for s in response.json()}
     assert by_id["cardiology"]["hasTemplate"] is True
-    assert by_id["ent"]["hasTemplate"] is False
+    assert by_id["urology"]["hasTemplate"] is False
 
 
 def test_onboarding_seeds_departments_with_a_specialty(hospital_a):
@@ -107,3 +114,78 @@ def test_a_client_cannot_assert_a_doctors_specialty(hospital_d):
     hospital_d.put(f"/doctors/{doctor['id']}", {"specialty": "oncology"})
     after = next(d for d in hospital_d.get("/doctors").json() if d["id"] == doctor["id"])
     assert after["specialty"] == before
+
+
+def test_every_visit_form_is_well_formed():
+    """A template is hand-written clinical content; the mistakes it can hide are
+    structural, so check the structure for all of them at once."""
+    from app.specialties import FIELD_TYPES
+
+    for template in SPECIALTY_TEMPLATES.values():
+        assert template["label"] and template["version"] >= 1
+        # Ends in the assessment, with a required diagnosis.
+        last = template["sections"][-1]
+        assert last["key"] == "assessment", template["id"]
+        assert any(f["key"] == "diagnosis" and f.get("required") for f in last["fields"]), template["id"]
+
+        section_keys = [s["key"] for s in template["sections"]]
+        assert len(section_keys) == len(set(section_keys)), template["id"]
+        for section in template["sections"]:
+            keys = [f["key"] for f in section["fields"]]
+            assert len(keys) == len(set(keys)), (template["id"], section["key"])
+            for field in section["fields"]:
+                assert field["type"] in FIELD_TYPES, (template["id"], field["key"])
+                if field["type"] in ("select", "multiselect"):
+                    assert field.get("options"), (template["id"], field["key"])
+                if field["type"] == "number" and "min" in field and "max" in field:
+                    assert field["min"] < field["max"], (template["id"], field["key"])
+
+
+def test_the_catalog_reports_which_specialties_have_a_form(hospital_a):
+    by_id = {s["id"]: s["hasTemplate"] for s in hospital_a.get("/departments/specialties").json()}
+    assert all(by_id[i] for i in SPECIALTY_TEMPLATES)
+    assert not by_id["urology"]
+
+
+def test_the_wizard_gets_the_catalog_and_a_specialty_per_suggestion(client):
+    """The onboarding step runs before any tenant exists, so the dropdown's
+    options and each suggestion's specialty arrive with the wizard's metadata."""
+    response = client.get(
+        "/hospitals/meta/onboarding",
+        params={"category": "maternity"},
+        headers={"Authorization": f"Bearer {_superadmin_token(client)}"},
+    )
+    assert response.status_code == 200, response.text
+    meta = response.json()
+    assert {s["id"] for s in meta["specialties"]} == SPECIALTY_CATALOG_IDS
+    by_name = {d["name"]: d["specialty"] for d in meta["suggestedDepartments"]}
+    assert by_name["Neonatology"] == "neonatology"
+    assert by_name["Obstetrics & Gynecology"] == "obstetrics-gynecology"
+
+
+def test_a_wizard_department_keeps_the_specialty_it_was_given(client):
+    made = client.post(
+        "/hospitals",
+        headers={"Authorization": f"Bearer {_superadmin_token(client)}"},
+        json={
+            "name": "Specialty Seed Clinic",
+            "subdomain": "seedclinic",
+            "category": "multi-specialty",
+            "adminName": "Seed Admin",
+            "adminEmail": "admin@seedclinic.test",
+            "adminPassword": "Passw0rd!test",
+            "departments": [
+                {"name": "Heart Wing", "specialty": "cardiology"},
+                {"name": "Wellness Hub"},  # no specialty, no hint in the name
+                {"name": "Cardiac Rehab"},  # no specialty given: guessed from the name
+            ],
+        },
+    )
+    assert made.status_code == 201, made.text
+    hospital_id = made.json().get("hospital", made.json())["id"]
+    listed = client.get(
+        "/departments",
+        headers={"Authorization": f"Bearer {_superadmin_token(client)}", "X-Hospital-Id": hospital_id},
+    ).json()
+    by_name = {d["name"]: d["specialty"] for d in listed}
+    assert by_name == {"Heart Wing": "cardiology", "Wellness Hub": "", "Cardiac Rehab": "cardiology"}

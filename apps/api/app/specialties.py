@@ -10,9 +10,8 @@ with code and are reviewed with code. Bump a template's `version` whenever a
 field is removed or its meaning changes; every encounter stores the version it
 was written against, so old rows stay interpretable.
 
-`keywords` mirror the `specialties` match in the frontend's route table
-(lib/roles.ts): a doctor is offered a template when one of them appears in
-their specialization or their department name.
+Which template a visit gets is decided by its department's specialty id, not
+by matching words, so templates carry no keywords.
 """
 
 import re
@@ -43,7 +42,6 @@ class SpecialtyTemplate(TypedDict):
     id: str
     label: str
     version: int
-    keywords: list[str]
     sections: list[Section]
 
 
@@ -58,7 +56,6 @@ SPECIALTY_TEMPLATES: dict[str, SpecialtyTemplate] = {
         "id": "cardiology",
         "label": "Cardiology",
         "version": 1,
-        "keywords": ["cardio", "heart"],
         "sections": [
             {
                 "key": "presentation",
@@ -123,7 +120,6 @@ SPECIALTY_TEMPLATES: dict[str, SpecialtyTemplate] = {
         "id": "orthopedics",
         "label": "Orthopedics",
         "version": 1,
-        "keywords": ["ortho", "bone", "joint", "musculo"],
         "sections": [
             {
                 "key": "presentation",
@@ -193,7 +189,6 @@ SPECIALTY_TEMPLATES: dict[str, SpecialtyTemplate] = {
         "id": "dermatology",
         "label": "Dermatology",
         "version": 1,
-        "keywords": ["dermat", "skin"],
         "sections": [
             {
                 "key": "presentation",
@@ -229,6 +224,318 @@ SPECIALTY_TEMPLATES: dict[str, SpecialtyTemplate] = {
                     _f("dermoscopy", "Dermoscopy findings", "textarea"),
                     _f("biopsy_done", "Biopsy done", "boolean"),
                     _f("patch_test", "Patch test", "text"),
+                ],
+            },
+            {
+                "key": "assessment",
+                "label": "Assessment & plan",
+                "fields": [
+                    _f("diagnosis", "Diagnosis", "text", required=True),
+                    _f("plan", "Plan", "textarea"),
+                    _f("follow_up_date", "Follow-up date", "date"),
+                ],
+            },
+        ],
+    },
+    "general-medicine": {
+        "id": "general-medicine",
+        "label": "General Medicine",
+        "version": 1,
+        "sections": [
+            {
+                "key": "presentation",
+                "label": "Presentation",
+                "fields": [
+                    _f("chief_complaint", "Chief complaint", "textarea", required=True),
+                    _f("duration", "Duration", "text"),
+                    _f(
+                        "symptoms",
+                        "Symptoms",
+                        "multiselect",
+                        options=[
+                            "Fever", "Cough", "Breathlessness", "Chest pain", "Abdominal pain", "Headache",
+                            "Vomiting", "Diarrhoea", "Fatigue", "Weight loss",
+                        ],
+                    ),
+                ],
+            },
+            {
+                "key": "examination",
+                "label": "Examination",
+                "fields": [
+                    _f("general_condition", "General condition", "select", options=["Good", "Fair", "Poor"]),
+                    _f("pallor", "Pallor", "boolean"),
+                    _f("icterus", "Icterus", "boolean"),
+                    _f("edema", "Edema", "boolean"),
+                    _f("lymphadenopathy", "Lymphadenopathy", "boolean"),
+                    _f("systemic_findings", "Systemic findings", "textarea"),
+                ],
+            },
+            {
+                "key": "investigations",
+                "label": "Investigations",
+                "fields": [
+                    _f("investigations_advised", "Advised", "textarea"),
+                    _f("results", "Results", "textarea"),
+                ],
+            },
+            {
+                "key": "assessment",
+                "label": "Assessment & plan",
+                "fields": [
+                    _f("diagnosis", "Diagnosis", "text", required=True),
+                    _f("plan", "Plan", "textarea"),
+                    _f("follow_up_date", "Follow-up date", "date"),
+                ],
+            },
+        ],
+    },
+    "pediatrics": {
+        "id": "pediatrics",
+        "label": "Pediatrics",
+        "version": 1,
+        "sections": [
+            {
+                "key": "presentation",
+                "label": "Presentation",
+                "fields": [
+                    _f("chief_complaint", "Chief complaint", "textarea", required=True),
+                    _f("duration", "Duration", "text"),
+                    _f(
+                        "feeding",
+                        "Feeding",
+                        "select",
+                        options=["Breast", "Formula", "Mixed", "Complementary foods", "Family diet"],
+                    ),
+                    _f("immunization_status", "Immunization", "select", options=["Up to date", "Delayed", "Not started"]),
+                ],
+            },
+            {
+                "key": "growth",
+                "label": "Growth & development",
+                "fields": [
+                    _f("growth_status", "Growth", "select", options=["Normal", "Underweight", "Stunted", "Overweight"]),
+                    _f("milestones", "Developmental milestones", "textarea"),
+                    _f("developmental_concern", "Developmental concern raised", "boolean"),
+                ],
+            },
+            {
+                "key": "examination",
+                "label": "Examination",
+                "fields": [
+                    _f(
+                        "hydration",
+                        "Hydration",
+                        "select",
+                        options=["Well hydrated", "Mild dehydration", "Moderate dehydration", "Severe dehydration"],
+                    ),
+                    _f("general_exam", "General examination", "textarea"),
+                    _f("systemic_findings", "Systemic findings", "textarea"),
+                ],
+            },
+            {
+                "key": "assessment",
+                "label": "Assessment & plan",
+                "fields": [
+                    _f("diagnosis", "Diagnosis", "text", required=True),
+                    _f("plan", "Plan", "textarea"),
+                    _f("follow_up_date", "Follow-up date", "date"),
+                ],
+            },
+        ],
+    },
+    "ent": {
+        "id": "ent",
+        "label": "ENT",
+        "version": 1,
+        "sections": [
+            {
+                "key": "presentation",
+                "label": "Presentation",
+                "fields": [
+                    _f("chief_complaint", "Chief complaint", "textarea", required=True),
+                    _f(
+                        "symptoms",
+                        "Symptoms",
+                        "multiselect",
+                        options=[
+                            "Ear pain", "Hearing loss", "Ear discharge", "Tinnitus", "Vertigo", "Nasal block",
+                            "Sore throat", "Hoarseness", "Epistaxis",
+                        ],
+                    ),
+                    _f("duration", "Duration", "text"),
+                    _f("side", "Side", "select", options=_SIDE),
+                ],
+            },
+            {
+                "key": "examination",
+                "label": "Examination",
+                "fields": [
+                    _f("ear_findings", "Ear", "textarea"),
+                    _f("nose_findings", "Nose", "textarea"),
+                    _f("throat_findings", "Throat & neck", "textarea"),
+                    _f("tuning_fork", "Tuning fork tests", "text"),
+                ],
+            },
+            {
+                "key": "investigations",
+                "label": "Investigations",
+                "fields": [
+                    _f("audiometry", "Audiometry", "textarea"),
+                    _f("endoscopy", "Endoscopy", "textarea"),
+                ],
+            },
+            {
+                "key": "assessment",
+                "label": "Assessment & plan",
+                "fields": [
+                    _f("diagnosis", "Diagnosis", "text", required=True),
+                    _f("plan", "Plan", "textarea"),
+                    _f("follow_up_date", "Follow-up date", "date"),
+                ],
+            },
+        ],
+    },
+    "ophthalmology": {
+        "id": "ophthalmology",
+        "label": "Ophthalmology",
+        "version": 1,
+        "sections": [
+            {
+                "key": "presentation",
+                "label": "Presentation",
+                "fields": [
+                    _f("chief_complaint", "Chief complaint", "textarea", required=True),
+                    _f(
+                        "symptoms",
+                        "Symptoms",
+                        "multiselect",
+                        options=[
+                            "Blurred vision", "Eye pain", "Redness", "Watering", "Floaters", "Flashes",
+                            "Photophobia", "Discharge",
+                        ],
+                    ),
+                    _f("side", "Side", "select", options=_SIDE),
+                    _f("duration", "Duration", "text"),
+                ],
+            },
+            {
+                "key": "vision",
+                "label": "Vision & pressure",
+                "fields": [
+                    _f("visual_acuity_right", "Visual acuity, right", "text"),
+                    _f("visual_acuity_left", "Visual acuity, left", "text"),
+                    _f("iop_right", "IOP, right", "number", unit="mmHg", min=0, max=80),
+                    _f("iop_left", "IOP, left", "number", unit="mmHg", min=0, max=80),
+                    _f("refraction", "Refraction", "textarea"),
+                ],
+            },
+            {
+                "key": "examination",
+                "label": "Examination",
+                "fields": [
+                    _f("anterior_segment", "Anterior segment", "textarea"),
+                    _f("fundus", "Fundus", "textarea"),
+                ],
+            },
+            {
+                "key": "assessment",
+                "label": "Assessment & plan",
+                "fields": [
+                    _f("diagnosis", "Diagnosis", "text", required=True),
+                    _f("plan", "Plan", "textarea"),
+                    _f("follow_up_date", "Follow-up date", "date"),
+                ],
+            },
+        ],
+    },
+    "dentistry": {
+        "id": "dentistry",
+        "label": "Dentistry",
+        "version": 1,
+        "sections": [
+            {
+                "key": "presentation",
+                "label": "Presentation",
+                "fields": [
+                    _f("chief_complaint", "Chief complaint", "textarea", required=True),
+                    _f("tooth_site", "Tooth / site", "text"),
+                    _f("pain_severity", "Pain", "number", unit="/10", min=0, max=10),
+                ],
+            },
+            {
+                "key": "examination",
+                "label": "Examination",
+                "fields": [
+                    _f("oral_hygiene", "Oral hygiene", "select", options=["Good", "Fair", "Poor"]),
+                    _f("caries", "Caries", "boolean"),
+                    _f("gingivitis", "Gingivitis", "boolean"),
+                    _f("mobility", "Tooth mobility", "boolean"),
+                    _f("findings", "Findings", "textarea"),
+                ],
+            },
+            {
+                "key": "procedure",
+                "label": "Procedure",
+                "fields": [
+                    _f("procedure_done", "Procedure done", "text"),
+                    _f("anaesthesia", "Anaesthesia", "select", options=["None", "Topical", "Local"]),
+                    _f("materials", "Materials used", "text"),
+                ],
+            },
+            {
+                "key": "assessment",
+                "label": "Assessment & plan",
+                "fields": [
+                    _f("diagnosis", "Diagnosis", "text", required=True),
+                    _f("plan", "Plan", "textarea"),
+                    _f("follow_up_date", "Follow-up date", "date"),
+                ],
+            },
+        ],
+    },
+    "neurology": {
+        "id": "neurology",
+        "label": "Neurology",
+        "version": 1,
+        "sections": [
+            {
+                "key": "presentation",
+                "label": "Presentation",
+                "fields": [
+                    _f("chief_complaint", "Chief complaint", "textarea", required=True),
+                    _f("onset", "Onset", "select", options=["Sudden", "Gradual"]),
+                    _f("duration", "Duration", "text"),
+                    _f(
+                        "symptoms",
+                        "Symptoms",
+                        "multiselect",
+                        options=[
+                            "Headache", "Seizure", "Weakness", "Numbness", "Dizziness", "Speech difficulty",
+                            "Memory loss", "Tremor",
+                        ],
+                    ),
+                ],
+            },
+            {
+                "key": "examination",
+                "label": "Examination",
+                "fields": [
+                    _f("gcs", "GCS", "number", min=3, max=15),
+                    _f("higher_functions", "Higher functions", "text"),
+                    _f("cranial_nerves", "Cranial nerves", "textarea"),
+                    _f("motor_power", "Motor power", "textarea"),
+                    _f("reflexes", "Reflexes", "textarea"),
+                    _f("sensory", "Sensory", "textarea"),
+                    _f("gait", "Gait & coordination", "text"),
+                ],
+            },
+            {
+                "key": "investigations",
+                "label": "Investigations",
+                "fields": [
+                    _f("imaging", "Imaging (CT / MRI)", "textarea"),
+                    _f("neurophysiology", "EEG / EMG / NCS", "textarea"),
                 ],
             },
             {
@@ -285,21 +592,21 @@ SPECIALTY_CATALOG_IDS = {s["id"] for s in SPECIALTY_CATALOG}
 # matters: dental terms come first because "orthodontics" contains "ortho".
 _NAME_HINTS: list[tuple[tuple[str, ...], str]] = [
     (("dental", "dentist", "orthodont", "endodont", "periodont", "oral surgery"), "dentistry"),
-    (("cardio", "heart"), "cardiology"),
-    (("orthop", "musculo"), "orthopedics"),
+    (("cardio", "cardiac", "heart"), "cardiology"),
+    (("orthop", "musculo", "bone", "joint", "fracture"), "orthopedics"),
     (("dermat", "skin"), "dermatology"),
-    (("neonat", "nicu"), "neonatology"),
+    (("neonat", "nicu", "newborn"), "neonatology"),
     (("pediatric", "paediatric", "child"), "pediatrics"),
-    (("obstetric", "gynec", "gynaec", "maternal", "labor &", "labor and", "labour"), "obstetrics-gynecology"),
+    (("obstetric", "gynec", "gynaec", "maternal", "maternity", "antenatal", "prenatal", "labor &", "labor and", "labour"), "obstetrics-gynecology"),
     (("ophthalm", "optom", "retina", "cornea", "glaucoma", "eye"), "ophthalmology"),
     (("neuro",), "neurology"),
-    (("nephro", "renal", "dialysis"), "nephrology"),
+    (("nephro", "renal", "kidney", "dialysis"), "nephrology"),
     (("urolog",), "urology"),
     (("oncolog", "cancer"), "oncology"),
     (("psychiat", "mental"), "psychiatry"),
-    (("pulmon", "respirat", "chest"), "pulmonology"),
+    (("pulmon", "respirat", "chest", "lung"), "pulmonology"),
     (("gastro",), "gastroenterology"),
-    (("endocrin", "diabet"), "endocrinology"),
+    (("endocrin", "diabet", "thyroid"), "endocrinology"),
     (("surgery", "surgical"), "general-surgery"),
     (("emergency", "casualty"), "emergency"),
     (("radiolog", "imaging"), "radiology"),
@@ -311,7 +618,7 @@ _NAME_HINTS: list[tuple[tuple[str, ...], str]] = [
 def infer_specialty(department_name: str) -> str:
     """A best-guess specialty id for a department name, or "" when none fits."""
     name = (department_name or "").lower()
-    if re.search(r"\bent\b", name) or "otolaryng" in name:
+    if re.search(r"\bent\b", name) or "otolaryng" in name or "ear nose" in name or "ear, nose" in name:
         return "ent"
     for fragments, specialty in _NAME_HINTS:
         if any(f in name for f in fragments):
