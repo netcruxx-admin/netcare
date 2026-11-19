@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { Activity } from 'lucide-react';
 import { authStorage, hasPermission } from '@/lib/auth';
 import { useListSpecialtyEncountersPagedQuery, useListSpecialtyTemplatesQuery } from '@/store/api';
@@ -37,15 +38,17 @@ export function PatientSpecialtyVisits({ patientId }: { patientId: string }) {
                   <span className="text-xs text-slate-500">
                     {' · '}{e.doctorName ? `Dr ${e.doctorName} · ` : ''}{new Date(e.createdAt).toLocaleDateString('en-IN')}
                   </span>
-                  {e.data.assessment?.diagnosis && (
-                    <span className="block text-sm text-slate-600">{String(e.data.assessment.diagnosis)}</span>
-                  )}
                 </span>
                 <span className="text-xs text-cyan-700 shrink-0">{isOpen ? 'Hide' : 'View'}</span>
               </button>
               {isOpen && template && (
-                <div className="mt-3">
+                <div className="mt-3 space-y-3">
                   <EncounterAnswers encounter={e} template={template} />
+                  {e.appointmentId && (
+                    <Link href={`/appointment/${e.appointmentId}`} className="inline-block text-xs font-medium text-cyan-700 hover:text-cyan-800">
+                      Open this visit (diagnosis and notes) →
+                    </Link>
+                  )}
                 </div>
               )}
             </li>

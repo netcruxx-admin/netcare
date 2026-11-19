@@ -36,6 +36,54 @@ the answers as JSON plus the template version they were written against.
   all-or-nothing), a patient-facing view of their own records (the API allows
   it), and the maternity tables stay as they are.
 
+### Changed — specialty forms no longer repeat the general notes
+
+A visit showed two Chief complaint and two Diagnosis boxes: the general Clinical
+Notes and the specialty form. The forms now hold only what is particular to the
+specialty. Chief complaint is gone from all ten, and so is each form's Assessment
+section (diagnosis, plan, follow-up), which the general notes already carry.
+
+- With nothing required any more, a record with no answers is refused -- by the
+  API (422 "Record at least one finding", on create and edit) and by the form.
+- The patient chart's specialty list no longer shows a diagnosis line (it came
+  from the removed section); each record links to its visit, where the diagnosis
+  and notes are.
+- A test now asserts no template contains chief complaint, diagnosis, plan or
+  follow-up, so the duplication cannot creep back.
+- Records written under the earlier shape (development data only; nothing had
+  shipped) keep their old `assessment` answers stored but no longer display them.
+
+### Added — verification: OB-GYN form, migration test, browser walk-through
+
+- **Obstetrics & Gynecology visit form** (the tenth): visit kind, G/P/L/A,
+  risk factors, fundal height, fetal presentation and heart rate, gynecology and
+  investigations. LMP/EDD are deliberately not in it -- Vitals derives them, and a
+  second copy could disagree.
+- **Migrations tested against a populated database** (`tests/test_migration_
+  backfill.py`): builds a throwaway database at the revision before the
+  department changes, fills it like a live hospital, upgrades to head, checks the
+  backfill, the permission restriction and that existing vitals survive, then
+  downgrades and upgrades again.
+- **Clinical review sheet:** `docs/CLINICAL_REVIEW.md`, generated from the code by
+  `apps/api/scripts/clinical_review.py` so a clinician reviews what the app
+  actually does. Re-run the script after changing any profile or form.
+- **Checked in a real browser** (Chrome driving a throwaway stack): a cardiologist
+  sees no Pregnancies/Newborns and no menstrual, obstetric or per-vaginum fields,
+  gets SpO₂ and the cardiology form, and cannot reach the antenatal screens by URL;
+  an obstetrician sees the opposite; a nurse's vitals pop-up follows the
+  appointment's department. 31 checks.
+- **Fixed:** the first-visit history left the left half of the page empty when a
+  department had no obstetric fields; it now uses one column.
+
+### Changed — the multi-specialty template suggests ten departments
+
+General Medicine, Cardiology, Orthopedics, Obstetrics & Gynecology, Pediatrics,
+Dermatology, ENT, Ophthalmology, Emergency and Radiology (it was five, and
+Dermatology and ENT were named in its specializations with no department behind
+them). Every one is recognised as a catalog specialty, which a test now asserts
+for every category's departments. The wizard still lets the operator untick or
+add.
+
 ### Changed — audit: departments decide more, and the server decides it
 
 An audit of every place a department should shape behaviour found the rule held

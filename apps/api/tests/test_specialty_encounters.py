@@ -16,9 +16,9 @@ import pytest
 from tests.conftest import PROVISIONED_PASSWORD, _login, _superadmin_token, unique_date
 
 CARDIO = {
-    "presentation": {"chief_complaint": "Chest tightness on exertion", "symptoms": ["Chest pain"]},
+    "presentation": {"symptoms": ["Chest pain"], "nyha_class": "II"},
     "examination": {"heart_rate": 88, "systolic": 142, "diastolic": 90},
-    "assessment": {"diagnosis": "Stable angina"},
+    "investigations": {"ecg_rhythm": "Normal sinus", "ejection_fraction": 55},
 }
 
 _times = itertools.count(8 * 60)
@@ -165,14 +165,16 @@ def test_only_a_doctor_can_record(world):
 @pytest.mark.parametrize(
     "data,fragment",
     [
-        ({"presentation": {}, "assessment": {"diagnosis": "x"}}, "Chief complaint is required"),
+        ({}, "Record at least one finding"),
+        ({"presentation": {}, "examination": {"heart_rate": None}}, "Record at least one finding"),
         ({**CARDIO, "bogus": {}}, "Unknown section"),
         ({**CARDIO, "examination": {"heart_rate": 5000}}, "at most"),
         ({**CARDIO, "examination": {"heart_rate": "fast"}}, "must be a number"),
         ({**CARDIO, "examination": {"heart_rate": True}}, "must be a number"),
         ({**CARDIO, "examination": {"nope": 1}}, "Unknown field"),
         ({**CARDIO, "presentation": {**CARDIO["presentation"], "nyha_class": "IX"}}, "must be one of"),
-        ({**CARDIO, "assessment": {"diagnosis": "x", "follow_up_date": "tomorrow"}}, "date"),
+        ({**CARDIO, "investigations": {"ecg_rhythm": "Sinus-ish"}}, "must be one of"),
+        ({**CARDIO, "assessment": {"diagnosis": "x"}}, "Unknown section"),
     ],
 )
 def test_the_template_decides_what_is_valid(world, data, fragment):
@@ -257,12 +259,15 @@ def test_author_can_edit_and_specialty_stays_fixed(world):
     t, e = world["t"], world["encounter"]
     edited = t.put(
         f"/specialty-encounters/{e['id']}",
-        {"data": {**CARDIO, "assessment": {"diagnosis": "Unstable angina"}}},
+        {"data": {**CARDIO, "examination": {"heart_rate": 120, "systolic": 90}}},
         token=world["a"][1],
     )
     assert edited.status_code == 200, edited.text
-    assert edited.json()["data"]["assessment"]["diagnosis"] == "Unstable angina"
+    assert edited.json()["data"]["examination"]["heart_rate"] == 120
     assert edited.json()["specialty"] == "cardiology"
+    # An edit cannot empty the record either.
+    emptied = t.put(f"/specialty-encounters/{e['id']}", {"data": {}}, token=world["a"][1])
+    assert emptied.status_code == 422, emptied.text
 
 
 def test_my_patients_includes_patients_seen_in_my_department(world):
@@ -292,3 +297,31 @@ def test_delete_is_platform_only(client, world):
     assert t.get(url, token=t.nurse_token).status_code == 200
     assert client.delete(url, headers=_su(client, t)).status_code == 204
     assert t.get(url, token=t.nurse_token).status_code == 404
+
+
+def test_an_obstetrics_visit_has_its_own_form(client, world):
+    """A multi-specialty hospital's OB-GYN department records an obstetric visit
+    -- with or without the antenatal-tracking module."""
+    t = world["t"]
+    ob = _department(client, t, "Women's Clinic", "obstetrics-gynecology")
+    doctor, token = _doctor(client, t, "ob-visit@gamma.test", ob)
+    visit = _visit(t, ob, doctor)
+    data = {
+        "presentation": {"visit_kind": "Antenatal"},
+        "obstetric": {"gravida": 2, "para": 1, "risk_factors": ["Anemia"]},
+        "examination": {"fundal_height": 28, "fetal_presentation": "Cephalic", "fetal_heart_rate": 142},
+        "investigations": {"hemoglobin": 10.2, "urine_albumin": "Nil"},
+    }
+    made = t.post("/specialty-encounters", {"appointmentId": visit, "data": data}, token=token)
+    assert made.status_code == 201, made.text
+    assert made.json()["specialty"] == "obstetrics-gynecology"
+
+    # The kind of visit is required, and ranges hold (a fetal heart rate of 20 is a typo).
+    other = _visit(t, ob, doctor)
+    missing = {**data, "presentation": {"duration": "2 weeks"}}
+    assert t.post("/specialty-encounters", {"appointmentId": other, "data": missing}, token=token).status_code == 422
+    typo = {**data, "examination": {"fetal_heart_rate": 20}}
+    assert t.post("/specialty-encounters", {"appointmentId": other, "data": typo}, token=token).status_code == 422
+    # LMP/EDD are Vitals' to record; a second copy here could disagree with it.
+    dup = {**data, "obstetric": {"lmp": "2026-06-01"}}
+    assert t.post("/specialty-encounters", {"appointmentId": other, "data": dup}, token=token).status_code == 422

@@ -94,6 +94,8 @@ function SpecialtyVisitForm({
     const data = answersFrom(template, draft, touched);
     const missing = missingRequired(template, data);
     if (missing) return setError(missing);
+    // Nothing in a form is required any more, so an empty one is the mistake.
+    if (Object.keys(data).length === 0) return setError('Record at least one finding');
     setError('');
     setSaving(true);
     try {

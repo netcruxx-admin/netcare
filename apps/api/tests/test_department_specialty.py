@@ -123,10 +123,11 @@ def test_every_visit_form_is_well_formed():
 
     for template in SPECIALTY_TEMPLATES.values():
         assert template["label"] and template["version"] >= 1
-        # Ends in the assessment, with a required diagnosis.
-        last = template["sections"][-1]
-        assert last["key"] == "assessment", template["id"]
-        assert any(f["key"] == "diagnosis" and f.get("required") for f in last["fields"]), template["id"]
+        # The general notes already collect the chief complaint, diagnosis, plan
+        # and follow-up; repeating them put two Diagnosis boxes on one page.
+        every_key = {f["key"] for s in template["sections"] for f in s["fields"]}
+        assert not every_key & {"chief_complaint", "diagnosis", "plan", "follow_up_date"}, template["id"]
+        assert "assessment" not in {s["key"] for s in template["sections"]}, template["id"]
 
         section_keys = [s["key"] for s in template["sections"]]
         assert len(section_keys) == len(set(section_keys)), template["id"]
@@ -189,3 +190,18 @@ def test_a_wizard_department_keeps_the_specialty_it_was_given(client):
     ).json()
     by_name = {d["name"]: d["specialty"] for d in listed}
     assert by_name == {"Heart Wing": "cardiology", "Wellness Hub": "", "Cardiac Rehab": "cardiology"}
+
+
+def test_every_template_department_lands_on_a_specialty():
+    """A department a category seeds must be recognised, or its doctors get the
+    unclassified (everything-on) behaviour the moment the hospital opens."""
+    from app.categories import CATEGORY_TEMPLATES
+
+    blank = {
+        (category, d["name"])
+        for category, template in CATEGORY_TEMPLATES.items()
+        for d in template["departments"]
+        if not infer_specialty(d["name"])
+    }
+    # Sample collection is a service point, not a clinical specialty.
+    assert blank <= {("diagnostic", "Sample Collection")}, blank

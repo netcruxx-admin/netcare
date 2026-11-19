@@ -172,8 +172,17 @@ export function ClinicalNotesSection({ appointmentId, patientId, doctorId, recor
             <Form className="space-y-4">
               {isNewVisit && [...HISTORY_LEFT, ...HISTORY_RIGHT].some(on) && (
                 <div className="grid sm:grid-cols-2 gap-4 pb-4 border-b border-slate-100">
-                  <div className="space-y-4">{HISTORY_LEFT.filter(on).map(input)}</div>
-                  <div className="space-y-4">{HISTORY_RIGHT.filter(on).map(input)}</div>
+                  {/* Two columns only when both have something: a department
+                      with no obstetric history would otherwise leave the left
+                      half of the page empty. */}
+                  {HISTORY_LEFT.some(on) && HISTORY_RIGHT.some(on) ? (
+                    <>
+                      <div className="space-y-4">{HISTORY_LEFT.filter(on).map(input)}</div>
+                      <div className="space-y-4">{HISTORY_RIGHT.filter(on).map(input)}</div>
+                    </>
+                  ) : (
+                    [...HISTORY_LEFT, ...HISTORY_RIGHT].filter(on).map(input)
+                  )}
                 </div>
               )}
               {/* Examination findings -- every visit, not just the first. */}
@@ -209,15 +218,11 @@ export function ClinicalNotesSection({ appointmentId, patientId, doctorId, recor
       ) : record ? (
         <div className="space-y-3">
           {isNewVisit && [...HISTORY_LEFT, ...HISTORY_RIGHT].some(seen) && (
-            <div className="grid sm:grid-cols-2 gap-4 pb-3 border-b border-slate-100">
-              {[HISTORY_LEFT, HISTORY_RIGHT].map((column, i) => (
-                <div key={i} className="space-y-3">
-                  {column.filter(seen).map((key) => (
-                    <div key={key}>
-                      <p className="text-sm text-slate-600">{LABEL[key]}</p>
-                      <p className="text-slate-900 whitespace-pre-line">{value(key)}</p>
-                    </div>
-                  ))}
+            <div className="grid sm:grid-cols-2 gap-x-4 gap-y-3 pb-3 border-b border-slate-100">
+              {[...HISTORY_LEFT, ...HISTORY_RIGHT].filter(seen).map((key) => (
+                <div key={key}>
+                  <p className="text-sm text-slate-600">{LABEL[key]}</p>
+                  <p className="text-slate-900 whitespace-pre-line">{value(key)}</p>
                 </div>
               ))}
             </div>

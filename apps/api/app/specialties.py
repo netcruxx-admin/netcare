@@ -5,6 +5,11 @@ A template is the shape of one clinical encounter: sections of typed fields.
 that knows what a valid answer looks like, so adding a specialty is a data
 change here and never a table, a router or a permission.
 
+A visit already has the general notes -- chief complaint, diagnosis, treatment and
+follow-up advice -- so a template never repeats them: it holds only what is
+particular to the specialty. Nothing in a template is required, which is why a
+record with no answers at all is refused (see `validate_encounter`).
+
 Like `categories.py` this is a static catalog, not a table: templates change
 with code and are reviewed with code. Bump a template's `version` whenever a
 field is removed or its meaning changes; every encounter stores the version it
@@ -61,7 +66,6 @@ SPECIALTY_TEMPLATES: dict[str, SpecialtyTemplate] = {
                 "key": "presentation",
                 "label": "Presentation",
                 "fields": [
-                    _f("chief_complaint", "Chief complaint", "textarea", required=True),
                     _f(
                         "symptoms",
                         "Symptoms",
@@ -105,15 +109,6 @@ SPECIALTY_TEMPLATES: dict[str, SpecialtyTemplate] = {
                     _f("troponin", "Troponin", "text"),
                 ],
             },
-            {
-                "key": "assessment",
-                "label": "Assessment & plan",
-                "fields": [
-                    _f("diagnosis", "Diagnosis", "text", required=True),
-                    _f("plan", "Plan", "textarea"),
-                    _f("follow_up_date", "Follow-up date", "date"),
-                ],
-            },
         ],
     },
     "orthopedics": {
@@ -125,7 +120,6 @@ SPECIALTY_TEMPLATES: dict[str, SpecialtyTemplate] = {
                 "key": "presentation",
                 "label": "Presentation",
                 "fields": [
-                    _f("chief_complaint", "Chief complaint", "textarea", required=True),
                     _f("affected_site", "Affected site", "text", required=True),
                     _f("side", "Side", "select", options=_SIDE),
                     _f(
@@ -168,21 +162,6 @@ SPECIALTY_TEMPLATES: dict[str, SpecialtyTemplate] = {
                     ),
                 ],
             },
-            {
-                "key": "assessment",
-                "label": "Assessment & plan",
-                "fields": [
-                    _f("diagnosis", "Diagnosis", "text", required=True),
-                    _f(
-                        "management",
-                        "Management",
-                        "select",
-                        options=["Conservative", "Cast / splint", "Surgical", "Physiotherapy", "Injection"],
-                    ),
-                    _f("plan", "Plan", "textarea"),
-                    _f("follow_up_date", "Follow-up date", "date"),
-                ],
-            },
         ],
     },
     "dermatology": {
@@ -194,7 +173,6 @@ SPECIALTY_TEMPLATES: dict[str, SpecialtyTemplate] = {
                 "key": "presentation",
                 "label": "Presentation",
                 "fields": [
-                    _f("chief_complaint", "Chief complaint", "textarea", required=True),
                     _f("duration", "Duration", "text"),
                     _f("itching", "Itching", "select", options=["None", "Mild", "Moderate", "Severe"]),
                     _f("previous_treatment", "Previous treatment", "textarea"),
@@ -226,15 +204,6 @@ SPECIALTY_TEMPLATES: dict[str, SpecialtyTemplate] = {
                     _f("patch_test", "Patch test", "text"),
                 ],
             },
-            {
-                "key": "assessment",
-                "label": "Assessment & plan",
-                "fields": [
-                    _f("diagnosis", "Diagnosis", "text", required=True),
-                    _f("plan", "Plan", "textarea"),
-                    _f("follow_up_date", "Follow-up date", "date"),
-                ],
-            },
         ],
     },
     "general-medicine": {
@@ -246,7 +215,6 @@ SPECIALTY_TEMPLATES: dict[str, SpecialtyTemplate] = {
                 "key": "presentation",
                 "label": "Presentation",
                 "fields": [
-                    _f("chief_complaint", "Chief complaint", "textarea", required=True),
                     _f("duration", "Duration", "text"),
                     _f(
                         "symptoms",
@@ -279,15 +247,6 @@ SPECIALTY_TEMPLATES: dict[str, SpecialtyTemplate] = {
                     _f("results", "Results", "textarea"),
                 ],
             },
-            {
-                "key": "assessment",
-                "label": "Assessment & plan",
-                "fields": [
-                    _f("diagnosis", "Diagnosis", "text", required=True),
-                    _f("plan", "Plan", "textarea"),
-                    _f("follow_up_date", "Follow-up date", "date"),
-                ],
-            },
         ],
     },
     "pediatrics": {
@@ -299,7 +258,6 @@ SPECIALTY_TEMPLATES: dict[str, SpecialtyTemplate] = {
                 "key": "presentation",
                 "label": "Presentation",
                 "fields": [
-                    _f("chief_complaint", "Chief complaint", "textarea", required=True),
                     _f("duration", "Duration", "text"),
                     _f(
                         "feeding",
@@ -333,15 +291,6 @@ SPECIALTY_TEMPLATES: dict[str, SpecialtyTemplate] = {
                     _f("systemic_findings", "Systemic findings", "textarea"),
                 ],
             },
-            {
-                "key": "assessment",
-                "label": "Assessment & plan",
-                "fields": [
-                    _f("diagnosis", "Diagnosis", "text", required=True),
-                    _f("plan", "Plan", "textarea"),
-                    _f("follow_up_date", "Follow-up date", "date"),
-                ],
-            },
         ],
     },
     "ent": {
@@ -353,7 +302,6 @@ SPECIALTY_TEMPLATES: dict[str, SpecialtyTemplate] = {
                 "key": "presentation",
                 "label": "Presentation",
                 "fields": [
-                    _f("chief_complaint", "Chief complaint", "textarea", required=True),
                     _f(
                         "symptoms",
                         "Symptoms",
@@ -385,15 +333,6 @@ SPECIALTY_TEMPLATES: dict[str, SpecialtyTemplate] = {
                     _f("endoscopy", "Endoscopy", "textarea"),
                 ],
             },
-            {
-                "key": "assessment",
-                "label": "Assessment & plan",
-                "fields": [
-                    _f("diagnosis", "Diagnosis", "text", required=True),
-                    _f("plan", "Plan", "textarea"),
-                    _f("follow_up_date", "Follow-up date", "date"),
-                ],
-            },
         ],
     },
     "ophthalmology": {
@@ -405,7 +344,6 @@ SPECIALTY_TEMPLATES: dict[str, SpecialtyTemplate] = {
                 "key": "presentation",
                 "label": "Presentation",
                 "fields": [
-                    _f("chief_complaint", "Chief complaint", "textarea", required=True),
                     _f(
                         "symptoms",
                         "Symptoms",
@@ -438,15 +376,6 @@ SPECIALTY_TEMPLATES: dict[str, SpecialtyTemplate] = {
                     _f("fundus", "Fundus", "textarea"),
                 ],
             },
-            {
-                "key": "assessment",
-                "label": "Assessment & plan",
-                "fields": [
-                    _f("diagnosis", "Diagnosis", "text", required=True),
-                    _f("plan", "Plan", "textarea"),
-                    _f("follow_up_date", "Follow-up date", "date"),
-                ],
-            },
         ],
     },
     "dentistry": {
@@ -458,7 +387,6 @@ SPECIALTY_TEMPLATES: dict[str, SpecialtyTemplate] = {
                 "key": "presentation",
                 "label": "Presentation",
                 "fields": [
-                    _f("chief_complaint", "Chief complaint", "textarea", required=True),
                     _f("tooth_site", "Tooth / site", "text"),
                     _f("pain_severity", "Pain", "number", unit="/10", min=0, max=10),
                 ],
@@ -483,15 +411,6 @@ SPECIALTY_TEMPLATES: dict[str, SpecialtyTemplate] = {
                     _f("materials", "Materials used", "text"),
                 ],
             },
-            {
-                "key": "assessment",
-                "label": "Assessment & plan",
-                "fields": [
-                    _f("diagnosis", "Diagnosis", "text", required=True),
-                    _f("plan", "Plan", "textarea"),
-                    _f("follow_up_date", "Follow-up date", "date"),
-                ],
-            },
         ],
     },
     "neurology": {
@@ -503,7 +422,6 @@ SPECIALTY_TEMPLATES: dict[str, SpecialtyTemplate] = {
                 "key": "presentation",
                 "label": "Presentation",
                 "fields": [
-                    _f("chief_complaint", "Chief complaint", "textarea", required=True),
                     _f("onset", "Onset", "select", options=["Sudden", "Gradual"]),
                     _f("duration", "Duration", "text"),
                     _f(
@@ -538,13 +456,90 @@ SPECIALTY_TEMPLATES: dict[str, SpecialtyTemplate] = {
                     _f("neurophysiology", "EEG / EMG / NCS", "textarea"),
                 ],
             },
+        ],
+    },
+    # LMP and EDD are not fields here: they live on Vitals, which derives EDD and
+    # POG from LMP, and a second copy would let the two disagree. Antenatal
+    # *tracking* (the pregnancy record and ANC visits) is the `anc` module's
+    # job; this is the department's visit note and works with or without it.
+    "obstetrics-gynecology": {
+        "id": "obstetrics-gynecology",
+        "label": "Obstetrics & Gynecology",
+        "version": 1,
+        "sections": [
             {
-                "key": "assessment",
-                "label": "Assessment & plan",
+                "key": "presentation",
+                "label": "Presentation",
                 "fields": [
-                    _f("diagnosis", "Diagnosis", "text", required=True),
-                    _f("plan", "Plan", "textarea"),
-                    _f("follow_up_date", "Follow-up date", "date"),
+                    _f(
+                        "visit_kind",
+                        "Visit for",
+                        "select",
+                        options=["Antenatal", "Postnatal", "Gynecological", "Infertility", "Family planning"],
+                        required=True,
+                    ),
+                    _f("duration", "Duration", "text"),
+                ],
+            },
+            {
+                "key": "obstetric",
+                "label": "Obstetric history",
+                "fields": [
+                    _f("gravida", "Gravida", "number", min=0, max=30),
+                    _f("para", "Para", "number", min=0, max=30),
+                    _f("living", "Living children", "number", min=0, max=30),
+                    _f("abortions", "Abortions", "number", min=0, max=30),
+                    _f("previous_cesarean", "Previous cesarean", "boolean"),
+                    _f(
+                        "risk_factors",
+                        "Risk factors",
+                        "multiselect",
+                        options=[
+                            "Advanced maternal age", "Hypertension", "Diabetes", "Anemia", "Previous cesarean",
+                            "Multiple pregnancy", "Previous preterm birth", "Rh negative", "Thyroid disease",
+                        ],
+                    ),
+                ],
+            },
+            {
+                "key": "examination",
+                "label": "Examination",
+                "fields": [
+                    _f("fundal_height", "Fundal height", "number", unit="cm", min=0, max=60),
+                    _f(
+                        "fetal_presentation",
+                        "Fetal presentation",
+                        "select",
+                        options=["Cephalic", "Breech", "Transverse", "Not applicable"],
+                    ),
+                    _f("fetal_heart_rate", "Fetal heart rate", "number", unit="bpm", min=60, max=220),
+                    _f("fetal_movements", "Fetal movements", "select", options=["Present", "Reduced", "Absent"]),
+                    _f("edema", "Pedal edema", "boolean"),
+                    _f("pelvic_findings", "Pelvic / per-vaginal findings", "textarea"),
+                ],
+            },
+            {
+                "key": "gynecology",
+                "label": "Gynecology",
+                "fields": [
+                    _f(
+                        "menstrual_pattern",
+                        "Menstrual pattern",
+                        "select",
+                        options=["Regular", "Irregular", "Amenorrhea", "Heavy bleeding", "Postmenopausal"],
+                    ),
+                    _f("contraception", "Contraception", "text"),
+                    _f("pap_smear", "Pap smear", "select", options=["Not done", "Normal", "Abnormal"]),
+                ],
+            },
+            {
+                "key": "investigations",
+                "label": "Investigations",
+                "fields": [
+                    _f("usg_findings", "Ultrasound findings", "textarea"),
+                    _f("hemoglobin", "Hemoglobin", "number", unit="g/dL", min=2, max=25),
+                    _f("urine_albumin", "Urine albumin", "select", options=["Nil", "Trace", "+", "++", "+++"]),
+                    _f("glucose_test", "Glucose test (OGTT / random)", "text"),
                 ],
             },
         ],
@@ -720,4 +715,6 @@ def validate_encounter(template: SpecialtyTemplate, data: dict) -> dict:
             out[fkey] = value
         if out:
             cleaned[key] = out
+    if not cleaned:
+        raise EncounterDataError("Record at least one finding")
     return cleaned
